@@ -27,6 +27,17 @@ test("desktop extra-work overview uses one lightweight master-detail workspace",
   assert.doesNotMatch(tabSource, /Hauptauftrag/);
 });
 
+test("master rows omit the customer delivery subline while the detail keeps it", () => {
+  const masterRowsStart = tabSource.indexOf("visibleTickets.map");
+  const masterRowsEnd = tabSource.indexOf("<ExtraWorkOverviewDetail", masterRowsStart);
+  const masterRowsSource = tabSource.slice(masterRowsStart, masterRowsEnd);
+
+  assert.notEqual(masterRowsStart, -1);
+  assert.ok(masterRowsEnd > masterRowsStart);
+  assert.doesNotMatch(masterRowsSource, /getCustomerEmailStatus\(ticket\)/);
+  assert.match(tabSource.slice(masterRowsEnd), /getCustomerEmailStatus\(ticket\)/);
+});
+
 test("toolbar contains only create, archive switch and global search", () => {
   assert.match(tabSource, /\+ Zusatzauftrag erstellen/);
   assert.match(tabSource, /Archiv anzeigen/);
@@ -64,6 +75,11 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.notEqual(overviewStyleStart, -1);
   assert.match(styles, /\.project-extra-work-workspace \{/);
   assert.match(styles, /grid-template-columns: minmax\(600px, 48%\) minmax\(0, 1fr\)/);
+  assert.match(styles, /grid-template-columns: 148px minmax\(138px, 1fr\) 88px 104px 70px/);
+  assert.match(styles, /--project-extra-work-control-height: 32px/);
+  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions > \.secondary-action,[\s\S]*\.project-extra-work-search \{[\s\S]*height: var\(--project-extra-work-control-height\)/);
+  assert.match(styles, /\.project-extra-work-search input \{[\s\S]*appearance: none;[\s\S]*height: 100%/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*flex-wrap: wrap/);
   assert.match(styles, /\.project-extra-work-master-row\.is-selected::before/);
   assert.match(styles, /\.project-extra-work-overview \.secondary-action,[\s\S]*border-radius: 2px/);
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-workspace/);

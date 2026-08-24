@@ -2874,9 +2874,6 @@ function ExtraWorkTab({
                       </div>
                       <div className="project-extra-work-master-title" role="gridcell">
                         <strong>{formatExtraWorkOverviewTitle(ticket)}</strong>
-                        <span className={`measurement-review-email-status ${getCustomerEmailStatus(ticket).className}`}>
-                          {getCustomerEmailStatus(ticket).label}
-                        </span>
                       </div>
                       <time role="gridcell" dateTime={ticket.created_at}>
                         <span>{created.date}</span>

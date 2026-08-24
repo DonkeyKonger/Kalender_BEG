@@ -27305,6 +27305,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
+  --project-extra-work-control-height: 32px;
+
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -27317,11 +27319,16 @@ body.mobile-modal-scroll-locked {
   border-radius: 2px;
 }
 
-.project-extra-work-search {
+.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions > .secondary-action,
+.site-detail-page.is-project-file-workspace .project-extra-work-search {
+  height: var(--project-extra-work-control-height);
+  min-height: var(--project-extra-work-control-height);
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px;
   width: 224px;
-  min-height: 32px;
   border: 1px solid var(--pf-border);
   border-radius: 2px;
   background: var(--pf-surface);
@@ -27333,14 +27340,16 @@ body.mobile-modal-scroll-locked {
 }
 
 .project-extra-work-search input {
+  appearance: none;
   width: 100%;
+  height: 100%;
   min-width: 0;
   border: 0;
   background: transparent;
   color: var(--pf-text);
   font: inherit;
   font-size: 0.8rem;
-  padding: 6px 9px;
+  padding: 0 9px;
   outline: none;
 }
 
@@ -27371,7 +27380,7 @@ body.mobile-modal-scroll-locked {
 .project-extra-work-master-head,
 .project-extra-work-master-row {
   display: grid;
-  grid-template-columns: 102px minmax(184px, 1fr) 88px 104px 70px;
+  grid-template-columns: 148px minmax(138px, 1fr) 88px 104px 70px;
   align-items: center;
   min-width: 548px;
 }
@@ -27463,22 +27472,12 @@ body.mobile-modal-scroll-locked {
 
 .project-extra-work-master-title {
   display: grid;
-  gap: 4px;
 }
 
 .project-extra-work-master-title strong {
   overflow: hidden;
   color: #152b49;
   font-size: 0.78rem;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.project-extra-work-master-title .measurement-review-email-status {
-  overflow: hidden;
-  font-size: 0.7rem;
-  font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -27739,6 +27738,14 @@ body.mobile-modal-scroll-locked {
   .project-extra-work-master {
     border-right: 0;
     border-bottom: 1px solid var(--pf-border);
+  }
+}
+
+@media (max-width: 760px) {
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
+    align-self: stretch;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 }
 
