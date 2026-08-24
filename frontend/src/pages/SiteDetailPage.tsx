@@ -3154,10 +3154,6 @@ function ExtraWorkOverviewDetail({
           <div><dt>Etage</dt><dd>{primaryEntry?.floor?.trim() || "–"}</dd></div>
           <div><dt>Raum Nr.</dt><dd>{primaryEntry?.room_number?.trim() || "–"}</dd></div>
           <div><dt>Achse</dt><dd>{primaryEntry?.axis?.trim() || "–"}</dd></div>
-          <div><dt>Material</dt><dd>{formatExtraWorkOverviewMaterial(ticket)}</dd></div>
-          <div><dt>Ausführung</dt><dd>{formatExtraWorkOverviewExecutors(ticket)}</dd></div>
-          <div><dt>Firma</dt><dd>{ticket.ordered_by_company?.trim() || "–"}</dd></div>
-          <div><dt>Monteure</dt><dd>{primaryEntry?.worker_names.join(", ") || "–"}</dd></div>
         </dl>
       </section>
     </aside>
@@ -7724,29 +7720,6 @@ function formatExtraWorkOverviewPeriod(period: { start: string; end: string } | 
     return "–";
   }
   return `${formatDateOnly(period.start)} – ${formatDateOnly(period.end)}`;
-}
-
-function formatExtraWorkOverviewMaterial(ticket: MobileExtraWorkTicket): string {
-  if (ticket.material_separate_attachment) {
-    return "Laut Anlage";
-  }
-  if (ticket.material_required === true) {
-    return "Ja";
-  }
-  if (ticket.material_required === false) {
-    return "Nein";
-  }
-  return "–";
-}
-
-function formatExtraWorkOverviewExecutors(ticket: MobileExtraWorkTicket): string {
-  const values = [
-    ticket.executed_by_lead_monteur ? "Obermonteur" : null,
-    ticket.executed_by_monteur ? "Monteur" : null,
-    ticket.executed_by_helper ? "Helfer" : null,
-    ticket.executor_other_name?.trim() || null,
-  ].filter((value): value is string => Boolean(value));
-  return values.join(", ") || "–";
 }
 
 function formatExtraWorkTicketPdfFilename(site: Site, ticket: MobileExtraWorkTicket): string {

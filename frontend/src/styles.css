@@ -27683,11 +27683,11 @@ body.mobile-modal-scroll-locked {
 .project-extra-work-project-data,
 .project-extra-work-additional-data {
   display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0;
 }
 
 .project-extra-work-key-data {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-bottom: 1px solid var(--pf-border);
   padding: 14px 22px;
 }
@@ -27731,10 +27731,6 @@ body.mobile-modal-scroll-locked {
   font-size: 0.8rem;
 }
 
-.project-extra-work-project-data {
-  grid-template-columns: 1.2fr 1fr 0.6fr 0.55fr;
-}
-
 .project-extra-work-delivery-field dd {
   display: flex;
   align-items: center;
@@ -27752,15 +27748,12 @@ body.mobile-modal-scroll-locked {
 }
 
 .project-extra-work-delivery-status.is-not-sent {
-  color: #8291a5;
+  color: #b42318;
 }
 
-.project-extra-work-delivery-status.is-signature-open {
-  color: #a96f16;
-}
-
+.project-extra-work-delivery-status.is-signature-open,
 .project-extra-work-delivery-status.is-complete {
-  color: #2f6096;
+  color: #22c55e;
 }
 
 .project-extra-work-delivery-status:focus-visible {
@@ -27813,8 +27806,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .project-extra-work-additional-data {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border: 1px solid #dbe4ef;
+  border: solid #dbe4ef;
+  border-width: 1px 0;
   background: #fbfcfe;
 }
 

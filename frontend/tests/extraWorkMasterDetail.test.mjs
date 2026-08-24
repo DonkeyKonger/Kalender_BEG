@@ -103,7 +103,7 @@ test("detail action set stays reduced to open, PDF and archive or restore", () =
   assert.doesNotMatch(tabSource, /Weitere Aktionen/);
 });
 
-test("additional information shows eight fields in two desktop rows without removing form data", () => {
+test("additional information shows only the four location fields without removing form data", () => {
   const headingStart = tabSource.indexOf("<h4>Weitere Informationen</h4>");
   const listEnd = tabSource.indexOf("</dl>", headingStart);
   const additionalInformationSource = tabSource.slice(headingStart, listEnd);
@@ -114,12 +114,12 @@ test("additional information shows eight fields in two desktop rows without remo
     "Etage",
     "Raum Nr.",
     "Achse",
-    "Material",
-    "Ausführung",
-    "Firma",
-    "Monteure",
   ]);
-  assert.match(styles, /\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  for (const removedLabel of ["Material", "Ausführung", "Firma", "Monteure"]) {
+    assert.doesNotMatch(additionalInformationSource, new RegExp(`<dt>${removedLabel}</dt>`));
+  }
+  assert.match(styles, /\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data,[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /\.project-extra-work-additional-data \{[\s\S]*border-width: 1px 0/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
 
@@ -131,6 +131,19 @@ test("additional information shows eight fields in two desktop rows without remo
   assert.match(documentSource, /draft\.billing_type === "flat_rate"/);
   assert.match(documentSource, /label="Stundenvorgabe"[\s\S]*draft\.entry\.estimated_hours/);
   assert.match(documentSource, /label="Geschätzter Auftragswert"[\s\S]*draft\.estimated_order_value/);
+  for (const field of [
+    "ordered_by_company",
+    "material_required",
+    "material_separate_attachment",
+    "executed_by_lead_monteur",
+    "executed_by_monteur",
+    "executed_by_helper",
+    "executor_other_name",
+  ]) {
+    assert.match(typeSource, new RegExp(`${field}:`));
+    assert.match(documentSource, new RegExp(`draft\\.${field}`));
+  }
+  assert.match(typeSource, /worker_names: string\[\]/);
 });
 
 test("list response exposes compact structured entry summaries without per-row loading", () => {
@@ -161,7 +174,12 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /\.site-detail-status-select \{[\s\S]*border-radius: 2px/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px;[\s\S]*padding: 10px 22px/);
   assert.doesNotMatch(styles, /\.project-extra-work-detail-statuses/);
-  assert.match(styles, /\.project-extra-work-project-data \{[\s\S]*grid-template-columns: 1\.2fr 1fr 0\.6fr 0\.55fr/);
+  assert.match(styles, /\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data,[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.doesNotMatch(styles, /\.project-extra-work-project-data \{[\s\S]*grid-template-columns: 1\.2fr/);
+  assert.match(styles, /\.project-extra-work-detail dd \{[\s\S]*overflow-wrap: anywhere/);
+  assert.match(styles, /\.project-extra-work-delivery-status\.is-not-sent \{[\s\S]*color: #b42318/);
+  assert.match(styles, /\.project-extra-work-delivery-status\.is-signature-open,[\s\S]*\.project-extra-work-delivery-status\.is-complete \{[\s\S]*color: #22c55e/);
+  assert.match(styles, /\.project-extra-work-delivery-status:focus-visible \{[\s\S]*outline: 2px solid/);
   assert.match(styles, /\.project-extra-work-delivery-status:hover \.project-extra-work-delivery-tooltip,[\s\S]*\.project-extra-work-delivery-status:focus-visible \.project-extra-work-delivery-tooltip/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
