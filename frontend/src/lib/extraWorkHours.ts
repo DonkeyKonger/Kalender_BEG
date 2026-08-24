@@ -10,10 +10,6 @@ export function parseExtraWorkHoursInput(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function getExtraWorkDailyHoursError(value: string): string | null {
-  return getExtraWorkDailyHoursTotalError([value]);
-}
-
 export function getExtraWorkDailyHoursTotalError(
   values: readonly (string | number | null | undefined)[],
 ): string | null {

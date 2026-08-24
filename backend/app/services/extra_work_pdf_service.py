@@ -131,11 +131,6 @@ SIGNATURE_VALUE_BASELINE_Y = 99.0
 SIGNATURE_VALUE_FONT_SIZE = 6.5
 SIGNATURE_PLACE_MAX_WIDTH = 72.0
 SIGNATURE_DATE_MAX_WIDTH = 58.0
-CUSTOMER_ORDERED_BY_NAME_X = 86.0
-CUSTOMER_ORDERED_BY_NAME_Y = 672.0
-CUSTOMER_ORDERED_BY_NAME_MAX_WIDTH = 345.0
-CUSTOMER_ORDERED_BY_NAME_FONT_SIZE = 8.5
-
 WORKER_NAME_RECTS = (
     FieldRect(57.48, 446.97, 101.76, 45.72),
     FieldRect(57.48, 494.97, 101.76, 45.72),
@@ -1410,10 +1405,6 @@ def _wrap_material_positions(
     return lines
 
 
-def _date_from_datetime(value: datetime | None) -> date:
-    return value.date() if value else date.today()
-
-
 def _format_date(value: date) -> str:
     return value.strftime("%d.%m.%Y")
 
@@ -1441,10 +1432,6 @@ def _decimal(value: Any) -> Decimal:
 def _ticket_number(ticket: ExtraWorkTicket, page_number: int, total_pages: int) -> str:
     number = ticket.display_number or str(ticket.sequence_number)
     return f"{number} / Blatt {page_number}" if total_pages > 1 else number
-
-
-def _ticket_title_suffix(ticket: ExtraWorkTicket) -> str:
-    return _clean_text(ticket.title) or "Hauptauftrag"
 
 
 def _ticket_document_description(ticket: ExtraWorkTicket) -> str:

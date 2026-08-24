@@ -159,6 +159,28 @@ test("opened extra-work records replace the project shell with one exclusive doc
   assert.match(styles, /body\.supplementary-order-document-open \.app-shell > \.sidebar,[\s\S]*visibility:\s*hidden;/);
 });
 
+test("exclusive document mode has no orphaned legacy sidebar or mobile timesheet styles", () => {
+  for (const obsoleteClass of [
+    "additional-workers",
+    "detail-header",
+    "header-actions",
+    "metadata",
+    "sidebar",
+    "sidebar-field",
+    "sidebar-pdf",
+    "sidebar-section",
+    "signature",
+    "status",
+  ]) {
+    assert.doesNotMatch(
+      styles,
+      new RegExp(`\\.supplementary-order-${obsoleteClass}(?![\\w-])`),
+      obsoleteClass,
+    );
+  }
+  assert.doesNotMatch(styles, /\.mobile-extra-work-timesheet-(?:action|message)(?![\w-])/);
+});
+
 test("document toolbar owns back, attachment, PDF and save actions without browser fullscreen", () => {
   assert.match(componentSource, /supplementary-order-document-back[\s\S]*Zurück/);
   assert.match(componentSource, /Anlagen \(\{attachmentCount\}\)/);

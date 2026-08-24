@@ -3,21 +3,20 @@ import test from "node:test";
 
 import {
   formatExtraWorkHours,
-  getExtraWorkDailyHoursError,
   getExtraWorkDailyHoursTotalError,
   parseExtraWorkHoursInput,
 } from "../src/lib/extraWorkHours.ts";
 
 test("daily extra-work hours accept zero, decimals and the inclusive 24-hour limit", () => {
   ["0", "0,25", "1", "8", "12,5", "24", "24,00", "8.5"].forEach((value) => {
-    assert.equal(getExtraWorkDailyHoursError(value), null, value);
+    assert.equal(getExtraWorkDailyHoursTotalError([value]), null, value);
   });
 });
 
 test("daily extra-work hours reject negative and over-24 values without clamping", () => {
-  assert.equal(getExtraWorkDailyHoursError("24,01"), "Maximal 24,00 h pro Tag");
-  assert.equal(getExtraWorkDailyHoursError("55"), "Maximal 24,00 h pro Tag");
-  assert.equal(getExtraWorkDailyHoursError("-1"), "Mindestens 0,00 h pro Tag");
+  assert.equal(getExtraWorkDailyHoursTotalError(["24,01"]), "Maximal 24,00 h pro Tag");
+  assert.equal(getExtraWorkDailyHoursTotalError(["55"]), "Maximal 24,00 h pro Tag");
+  assert.equal(getExtraWorkDailyHoursTotalError(["-1"]), "Mindestens 0,00 h pro Tag");
   assert.equal(parseExtraWorkHoursInput("55"), 55);
   assert.equal(parseExtraWorkHoursInput("-1"), -1);
 });
