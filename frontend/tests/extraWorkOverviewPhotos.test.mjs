@@ -25,6 +25,16 @@ test("the overview always exposes five ordered photo slots and fills the remaind
 
   assert.equal(slots.length, 5);
   assert.deepEqual(slots.map((photo) => photo?.id ?? null), [31, 12, 88, null, null]);
+
+  assert.deepEqual(getExtraWorkOverviewPhotoSlots([]), [null, null, null, null, null]);
+  assert.deepEqual(
+    getExtraWorkOverviewPhotoSlots([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }]).map((photo) => photo?.id ?? null),
+    [1, 2, 3, 4, null],
+  );
+  assert.deepEqual(
+    getExtraWorkOverviewPhotoSlots([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }]).map((photo) => photo?.id ?? null),
+    [1, 2, 3, 4, 5],
+  );
 });
 
 test("preview metadata is in-flight deduplicated and capped at five without becoming stale session data", async () => {
@@ -80,7 +90,7 @@ test("only the selected desktop detail loads thumbnail endpoints and guards rapi
 
   assert.match(pageSource, /<ExtraWorkOverviewPhotos[\s\S]*key=\{`\$\{ticket\.id\}/);
   const emptyCountGuard = previewSource.slice(
-    previewSource.indexOf("if (ticket.photo_count <= 0)"),
+    previewSource.indexOf("if (initialPhotoCountRef.current.count <= 0)"),
     previewSource.indexOf("void loadExtraWorkOverviewPhotoList"),
   );
   assert.match(emptyCountGuard, /setPhotos\(\[\]\)/);
@@ -103,7 +113,7 @@ test("the detail renders exactly five accessible slots with photos first and pla
   assert.match(previewSource, /photoSlots\.map\(\(photo, index\) =>/);
   assert.match(previewSource, /photo \? \([\s\S]*<ExtraWorkOverviewThumbnail/);
   assert.match(previewSource, /project-extra-work-photo-placeholder/);
-  assert.match(previewSource, /aria-label=\{`Freier Fotoplatz \$\{index \+ 1\} von 5`\}/);
+  assert.match(previewSource, /aria-label=\{`Freier Fotoplatz \$\{index \+ 1\} von \$\{MAX_EXTRA_WORK_PHOTOS\}`\}/);
   assert.doesNotMatch(previewSource, /if \(!isLoading && !hasError && photos\.length === 0\)/);
 });
 
@@ -149,14 +159,14 @@ test("original photo bytes are requested only after a real thumbnail opens the m
   assert.match(styles, /\.project-extra-work-photo-modal-stage img \{[^}]*object-fit:\s*contain/s);
 });
 
-test("placeholders remain non-interactive while photo tiles expose a dialog action", () => {
+test("locked placeholders remain non-interactive while editable free slots expose upload buttons", () => {
   const previewStart = pageSource.indexOf("function ExtraWorkOverviewPhotos");
   const thumbnailStart = pageSource.indexOf("function ExtraWorkOverviewThumbnail", previewStart);
   const previewSource = pageSource.slice(previewStart, thumbnailStart);
   const thumbnailSource = pageSource.slice(thumbnailStart, pageSource.indexOf("function ExtraWorkOverviewPhotoModal", thumbnailStart));
 
+  assert.match(previewSource, /canUpload && !isLoading && !hasError \? \([\s\S]*<button[\s\S]*project-extra-work-photo-upload/);
   assert.match(previewSource, /<span[\s\S]*project-extra-work-photo-placeholder[\s\S]*role="img"/);
-  assert.doesNotMatch(previewSource.slice(previewSource.indexOf("project-extra-work-photo-placeholder")), /onClick=/);
   assert.match(thumbnailSource, /<button[\s\S]*aria-haspopup="dialog"/);
 });
 

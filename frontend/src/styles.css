@@ -28059,6 +28059,75 @@ body.mobile-modal-scroll-locked {
   background: #f4f6f8;
 }
 
+.project-extra-work-photo-upload {
+  appearance: none;
+  align-content: center;
+  gap: 5px;
+  justify-items: center;
+  color: #58718c;
+  cursor: pointer;
+  font: inherit;
+  padding: 6px;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
+}
+
+.project-extra-work-photo-upload small {
+  max-width: 100%;
+  color: inherit;
+  font-size: clamp(0.57rem, 0.7vw, 0.68rem);
+  font-weight: 750;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.project-extra-work-photo-upload:hover:not([aria-disabled="true"]),
+.project-extra-work-photo-upload:focus-visible,
+.project-extra-work-photo-upload.is-drag-over {
+  border-color: #7897b7;
+  background: #e9f1f8;
+  color: #285b8d;
+}
+
+.project-extra-work-photo-upload:focus-visible {
+  box-shadow: 0 0 0 3px rgb(53 107 159 / 24%);
+  outline: 0;
+}
+
+.project-extra-work-photo-upload.is-drag-over {
+  border-style: solid;
+  box-shadow: inset 0 0 0 2px rgb(53 107 159 / 16%);
+}
+
+.project-extra-work-photo-upload[aria-disabled="true"] {
+  cursor: default;
+}
+
+.project-extra-work-photo-upload[aria-disabled="true"]:not(.is-uploading) {
+  color: #91a0af;
+}
+
+.project-extra-work-photo-upload.is-uploading {
+  border-style: solid;
+  border-color: #9ab0c6;
+  background: #edf3f8;
+  color: #365f86;
+  cursor: wait;
+}
+
+.project-extra-work-photo-upload.is-error {
+  border-color: #d4a2a2;
+  color: #915050;
+}
+
+.project-extra-work-photo-upload > .project-extra-work-photo-upload-spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgb(54 95 134 / 22%);
+  border-top-color: #365f86;
+  border-radius: 50%;
+  animation: project-extra-work-photo-spin 750ms linear infinite;
+}
+
 .project-extra-work-photo img {
   display: block;
   width: 100%;
@@ -28253,6 +28322,10 @@ body.mobile-modal-scroll-locked {
   }
 
   .project-extra-work-photo-modal-loading > span {
+    animation-duration: 1.5s;
+  }
+
+  .project-extra-work-photo-upload > .project-extra-work-photo-upload-spinner {
     animation-duration: 1.5s;
   }
 }

@@ -17,6 +17,12 @@ import { ApiError, api } from "../lib/api";
 import { containsDraggedFiles } from "../lib/fileDrag";
 import { getCustomerEmailStatus, type CustomerEmailStatusItem } from "../lib/customerEmailStatus";
 import {
+  EXTRA_WORK_PHOTO_ACCEPT,
+  MAX_EXTRA_WORK_PHOTOS,
+  validateExtraWorkPhotoFiles,
+} from "../lib/extraWorkAttachments";
+import { isExtraWorkDocumentLocked } from "../lib/extraWorkDocument";
+import {
   EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE,
   buildExtraWorkOverviewEntrySummary,
   calculateExtraWorkOverviewPageSize,
@@ -1726,6 +1732,11 @@ export function SiteDetailPage() {
             onRestoreTicket={restoreExtraWorkTicket}
             onPromoteStatus={(ticket, status) => void promoteExtraWorkTicketStatus(ticket, status)}
             onToggleInvoiced={(ticket) => void toggleExtraWorkTicketInvoiced(ticket)}
+            onPhotoCountUpdated={(ticketId, photoCount) => {
+              setExtraWorkTickets((current) => current.map((entry) => (
+                entry.id === ticketId ? { ...entry, photo_count: photoCount } : entry
+              )));
+            }}
           />
       ) : null}
       {activeTab === "tools-material" ? (
@@ -2899,6 +2910,7 @@ function ExtraWorkTab({
   onRestoreTicket,
   onPromoteStatus,
   onToggleInvoiced,
+  onPhotoCountUpdated,
 }: {
   site: Site;
   tickets: MobileExtraWorkTicket[];
@@ -2927,6 +2939,7 @@ function ExtraWorkTab({
   onRestoreTicket: (ticket: MobileExtraWorkTicket) => Promise<boolean>;
   onPromoteStatus: (ticket: MobileExtraWorkTicket, status: ExtraWorkManualStatus) => void;
   onToggleInvoiced: (ticket: MobileExtraWorkTicket) => void;
+  onPhotoCountUpdated: (ticketId: number, photoCount: number) => void;
 }) {
   const [openStatusControl, setOpenStatusControl] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -3296,6 +3309,8 @@ function ExtraWorkTab({
             onDownloadPdf={onDownloadPdf}
             onArchiveTicket={(ticket) => void removeSelectedTicket(ticket, onArchiveTicket)}
             onRestoreTicket={(ticket) => void removeSelectedTicket(ticket, onRestoreTicket)}
+            canEdit={canCreate}
+            onPhotoCountUpdated={onPhotoCountUpdated}
           />
         </div>
       ) : null}
@@ -3314,6 +3329,8 @@ function ExtraWorkOverviewDetail({
   onDownloadPdf,
   onArchiveTicket,
   onRestoreTicket,
+  canEdit,
+  onPhotoCountUpdated,
 }: {
   site: Site;
   ticket: MobileExtraWorkTicket | null;
@@ -3325,6 +3342,8 @@ function ExtraWorkOverviewDetail({
   onDownloadPdf: (ticket: MobileExtraWorkTicket) => void;
   onArchiveTicket: (ticket: MobileExtraWorkTicket) => void;
   onRestoreTicket: (ticket: MobileExtraWorkTicket) => void;
+  canEdit: boolean;
+  onPhotoCountUpdated: (ticketId: number, photoCount: number) => void;
 }) {
   const detailRef = useRef<HTMLElement>(null);
 
@@ -3448,6 +3467,8 @@ function ExtraWorkOverviewDetail({
         siteId={site.id}
         ticket={ticket}
         includeDeleted={archiveMode}
+        canUpload={!isExtraWorkDocumentLocked(ticket, canEdit)}
+        onPhotoCountUpdated={onPhotoCountUpdated}
       />
     </aside>
   );
@@ -3457,18 +3478,48 @@ function ExtraWorkOverviewPhotos({
   siteId,
   ticket,
   includeDeleted,
+  canUpload,
+  onPhotoCountUpdated,
 }: {
   siteId: number;
   ticket: MobileExtraWorkTicket;
   includeDeleted: boolean;
+  canUpload: boolean;
+  onPhotoCountUpdated: (ticketId: number, photoCount: number) => void;
 }) {
   const [photos, setPhotos] = useState<MobileExtraWorkTicketPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(ticket.photo_count > 0);
   const [hasError, setHasError] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<MobileExtraWorkTicketPhoto | null>(null);
+  const [uploadingSlotIndex, setUploadingSlotIndex] = useState<number | null>(null);
+  const [dragOverSlotIndex, setDragOverSlotIndex] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadErrorSlotIndex, setUploadErrorSlotIndex] = useState<number | null>(null);
   const openerRef = useRef<HTMLButtonElement | null>(null);
   const focusFrameRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const filePickerSlotRef = useRef<number | null>(null);
+  const photoUploadSequenceRef = useRef(0);
+  const photoUploadOperationRef = useRef<{ token: number; ticketId: number } | null>(null);
+  const activeTicketIdRef = useRef(ticket.id);
+  const isMountedRef = useRef(true);
+  const initialPhotoCountRef = useRef({ ticketId: ticket.id, count: ticket.photo_count });
+  if (activeTicketIdRef.current !== ticket.id) {
+    activeTicketIdRef.current = ticket.id;
+    photoUploadOperationRef.current = null;
+    filePickerSlotRef.current = null;
+  }
+  if (initialPhotoCountRef.current.ticketId !== ticket.id) {
+    initialPhotoCountRef.current = { ticketId: ticket.id, count: ticket.photo_count };
+  }
   const photoSlots = getExtraWorkOverviewPhotoSlots(photos);
+  const isUploadBlocked = (
+    !canUpload
+    || isLoading
+    || hasError
+    || uploadingSlotIndex !== null
+    || photos.length >= MAX_EXTRA_WORK_PHOTOS
+  );
 
   const openPhotoPreview = useCallback((photo: MobileExtraWorkTicketPhoto, opener: HTMLButtonElement) => {
     if (focusFrameRef.current !== null) {
@@ -3491,15 +3542,29 @@ function ExtraWorkOverviewPhotos({
     });
   }, []);
 
-  useEffect(() => () => {
-    if (focusFrameRef.current !== null) {
-      window.cancelAnimationFrame(focusFrameRef.current);
-    }
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (focusFrameRef.current !== null) {
+        window.cancelAnimationFrame(focusFrameRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
+    activeTicketIdRef.current = ticket.id;
+    photoUploadOperationRef.current = null;
+    filePickerSlotRef.current = null;
+    setUploadingSlotIndex(null);
+    setDragOverSlotIndex(null);
+    setUploadError(null);
+    setUploadErrorSlotIndex(null);
+  }, [ticket.id]);
+
+  useEffect(() => {
     let active = true;
-    if (ticket.photo_count <= 0) {
+    if (initialPhotoCountRef.current.count <= 0) {
       setPhotos([]);
       setIsLoading(false);
       setHasError(false);
@@ -3536,12 +3601,140 @@ function ExtraWorkOverviewPhotos({
     return () => {
       active = false;
     };
-  }, [includeDeleted, siteId, ticket.id, ticket.photo_count]);
+  }, [includeDeleted, siteId, ticket.id]);
+
+  function canUseUploadSlot(): boolean {
+    return !isUploadBlocked && photoUploadOperationRef.current === null;
+  }
+
+  function openPhotoFilePicker(slotIndex: number): void {
+    if (!canUseUploadSlot()) {
+      return;
+    }
+    setUploadError(null);
+    setUploadErrorSlotIndex(null);
+    filePickerSlotRef.current = slotIndex;
+    fileInputRef.current?.click();
+  }
+
+  async function uploadPhoto(file: File, slotIndex: number): Promise<void> {
+    if (!canUseUploadSlot()) {
+      return;
+    }
+    const candidate = validateExtraWorkPhotoFiles([file], photos.length)[0];
+    if (!candidate || candidate.error) {
+      setUploadError(candidate?.error ?? "Die Datei konnte nicht ausgewählt werden.");
+      setUploadErrorSlotIndex(slotIndex);
+      return;
+    }
+
+    const uploadSiteId = siteId;
+    const uploadTicketId = ticket.id;
+    const persistedPhotoCount = photos.length;
+    const uploadToken = photoUploadSequenceRef.current + 1;
+    photoUploadSequenceRef.current = uploadToken;
+    photoUploadOperationRef.current = { token: uploadToken, ticketId: uploadTicketId };
+    setUploadingSlotIndex(slotIndex);
+    setDragOverSlotIndex(null);
+    setUploadError(null);
+    setUploadErrorSlotIndex(null);
+    try {
+      const storedPhoto = await api.uploadSiteExtraWorkTicketPhoto(
+        uploadSiteId,
+        uploadTicketId,
+        candidate.file,
+      );
+      const nextPhotoCount = Math.min(persistedPhotoCount + 1, MAX_EXTRA_WORK_PHOTOS);
+      onPhotoCountUpdated(uploadTicketId, nextPhotoCount);
+      if (
+        isMountedRef.current
+        && activeTicketIdRef.current === uploadTicketId
+        && photoUploadOperationRef.current?.token === uploadToken
+      ) {
+        setPhotos((current) => (
+          current.some((photo) => photo.id === storedPhoto.id)
+            ? current
+            : [...current, storedPhoto].slice(0, MAX_EXTRA_WORK_PHOTOS)
+        ));
+      }
+    } catch (requestError) {
+      if (
+        isMountedRef.current
+        && activeTicketIdRef.current === uploadTicketId
+        && photoUploadOperationRef.current?.token === uploadToken
+      ) {
+        setUploadError(readApiError(requestError, `${candidate.file.name} konnte nicht hochgeladen werden.`));
+        setUploadErrorSlotIndex(slotIndex);
+      }
+    } finally {
+      if (photoUploadOperationRef.current?.token === uploadToken) {
+        photoUploadOperationRef.current = null;
+      }
+      if (
+        isMountedRef.current
+        && activeTicketIdRef.current === uploadTicketId
+        && photoUploadOperationRef.current === null
+      ) {
+        setUploadingSlotIndex(null);
+      }
+    }
+  }
+
+  function handlePhotoSlotDragEnter(index: number, event: ReactDragEvent<HTMLButtonElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (!canUseUploadSlot()) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
+    event.dataTransfer.dropEffect = "copy";
+    setDragOverSlotIndex(index);
+  }
+
+  function handlePhotoSlotDragOver(index: number, event: ReactDragEvent<HTMLButtonElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = canUseUploadSlot() ? "copy" : "none";
+    if (canUseUploadSlot() && dragOverSlotIndex !== index) {
+      setDragOverSlotIndex(index);
+    }
+  }
+
+  function handlePhotoSlotDragLeave(event: ReactDragEvent<HTMLButtonElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+    setDragOverSlotIndex(null);
+  }
+
+  function handlePhotoSlotDrop(index: number, event: ReactDragEvent<HTMLButtonElement>): void {
+    if (!containsDraggedFiles(event.dataTransfer.types)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOverSlotIndex(null);
+    const file = event.dataTransfer.files[0];
+    if (file && canUseUploadSlot()) {
+      void uploadPhoto(file, index);
+    }
+  }
 
   return (
     <section
       className="project-extra-work-photo-preview"
-      aria-busy={isLoading}
+      aria-busy={isLoading || uploadingSlotIndex !== null}
       aria-label="Fotos zum Zusatzauftrag"
     >
       <div className="project-extra-work-photo-list">
@@ -3556,17 +3749,64 @@ function ExtraWorkOverviewPhotos({
               onOpen={openPhotoPreview}
             />
           ) : (
-            <span
-              key={`photo-placeholder-${index + 1}`}
-              className="project-extra-work-photo project-extra-work-photo-placeholder"
-              role="img"
-              aria-label={`Freier Fotoplatz ${index + 1} von 5`}
-            />
+            canUpload && !isLoading && !hasError ? (
+              <button
+                key={`photo-placeholder-${index + 1}`}
+                aria-busy={uploadingSlotIndex === index}
+                aria-disabled={isUploadBlocked}
+                aria-label={`Foto hinzufügen, Platz ${index + 1} von ${MAX_EXTRA_WORK_PHOTOS}`}
+                className={`project-extra-work-photo project-extra-work-photo-placeholder project-extra-work-photo-upload${dragOverSlotIndex === index ? " is-drag-over" : ""}${uploadingSlotIndex === index ? " is-uploading" : ""}${uploadErrorSlotIndex === index ? " is-error" : ""}`}
+                type="button"
+                onClick={() => openPhotoFilePicker(index)}
+                onDragEnter={(event) => handlePhotoSlotDragEnter(index, event)}
+                onDragOver={(event) => handlePhotoSlotDragOver(index, event)}
+                onDragLeave={handlePhotoSlotDragLeave}
+                onDragEnd={() => setDragOverSlotIndex(null)}
+                onDrop={(event) => handlePhotoSlotDrop(index, event)}
+              >
+                {uploadingSlotIndex === index ? (
+                  <>
+                    <span className="project-extra-work-photo-upload-spinner" aria-hidden="true" />
+                    <small>Wird hochgeladen…</small>
+                  </>
+                ) : (
+                  <>
+                    <Plus aria-hidden="true" size={24} />
+                    <small>{uploadErrorSlotIndex === index ? "Erneut versuchen" : "Foto hinzufügen"}</small>
+                  </>
+                )}
+              </button>
+            ) : (
+              <span
+                key={`photo-placeholder-${index + 1}`}
+                className="project-extra-work-photo project-extra-work-photo-placeholder"
+                role="img"
+                aria-label={`Freier Fotoplatz ${index + 1} von ${MAX_EXTRA_WORK_PHOTOS}`}
+              />
+            )
           )
         ))}
       </div>
+      <input
+        ref={fileInputRef}
+        accept={EXTRA_WORK_PHOTO_ACCEPT}
+        aria-hidden="true"
+        className="sr-only"
+        tabIndex={-1}
+        type="file"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          const slotIndex = filePickerSlotRef.current ?? photos.length;
+          event.target.value = "";
+          filePickerSlotRef.current = null;
+          if (file) {
+            void uploadPhoto(file, slotIndex);
+          }
+        }}
+      />
       {isLoading ? <span className="sr-only" role="status">Fotovorschau wird geladen…</span> : null}
       {hasError ? <span className="project-extra-work-photo-feedback is-error" role="status">Fotovorschau nicht verfügbar.</span> : null}
+      {uploadError ? <span className="project-extra-work-photo-feedback is-error" role="alert">{uploadError}</span> : null}
       {selectedPhoto ? (
         <ExtraWorkOverviewPhotoModal
           key={selectedPhoto.id}
