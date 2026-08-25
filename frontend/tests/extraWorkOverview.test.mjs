@@ -5,7 +5,7 @@ import {
   EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE,
   calculateExtraWorkOverviewPageSize,
   buildExtraWorkOverviewEntrySummary,
-  compareExtraWorkTicketsOldestFirst,
+  compareExtraWorkTicketsNewestFirst,
   filterExtraWorkOverviewTickets,
   formatExtraWorkOverviewCreatorName,
   formatExtraWorkOverviewIsoWeek,
@@ -101,7 +101,7 @@ test("overview pages stay stable for full and partially filled final pages", () 
   });
 });
 
-test("overview order stays oldest first across status changes and pagination", () => {
+test("overview order stays newest first across status changes and pagination", () => {
   const tickets = [
     ticket({
       id: 15,
@@ -125,26 +125,30 @@ test("overview order stays oldest first across status changes and pagination", (
     })),
   ];
   const expectedNumbers = [
-    "9999.SZ14",
-    "9999.SZ15",
-    "9999.SZ16",
-    "9999.Z17",
-    "9999.Z18",
-    "9999.Z19",
-    "9999.Z20",
-    "9999.Z21",
-    "9999.Z22",
-    "9999.Z23",
-    "9999.Z24",
-    "9999.Z25",
     "9999.Z26",
+    "9999.Z25",
+    "9999.Z24",
+    "9999.Z23",
+    "9999.Z22",
+    "9999.Z21",
+    "9999.Z20",
+    "9999.Z19",
+    "9999.Z18",
+    "9999.Z17",
+    "9999.SZ16",
+    "9999.SZ15",
+    "9999.SZ14",
   ];
-  const sorted = [...tickets].sort(compareExtraWorkTicketsOldestFirst);
+  const sorted = [...tickets].sort(compareExtraWorkTicketsNewestFirst);
   const firstPage = getExtraWorkOverviewPageWindow(sorted.length, 1, 6);
   const secondPage = getExtraWorkOverviewPageWindow(sorted.length, 2, 6);
   const thirdPage = getExtraWorkOverviewPageWindow(sorted.length, 3, 6);
 
   assert.deepEqual(sorted.map((item) => item.display_number), expectedNumbers);
+  assert.deepEqual(
+    sorted.filter((item) => item.sequence_number <= 19).map((item) => item.display_number),
+    ["9999.Z19", "9999.Z18", "9999.Z17", "9999.SZ16", "9999.SZ15", "9999.SZ14"],
+  );
   assert.deepEqual(
     sorted.slice(firstPage.start, firstPage.end).map((item) => item.display_number),
     expectedNumbers.slice(0, 6),
@@ -165,11 +169,14 @@ test("overview order stays oldest first across status changes and pagination", (
         status: "completed",
         total_hours: 27,
         notes: "Status und Inhalt geändert",
+        is_invoiced: true,
         customer_signed_at: "2026-08-26T12:00:00Z",
+        customer_email_sent_at: "2026-08-26T12:02:00Z",
+        worker_signed_at: "2026-08-26T12:03:00Z",
         updated_at: "2026-08-26T12:05:00Z",
       }
     : item);
-  const sortedAfterUpdate = [...updatedTickets].sort(compareExtraWorkTicketsOldestFirst);
+  const sortedAfterUpdate = [...updatedTickets].sort(compareExtraWorkTicketsNewestFirst);
 
   assert.deepEqual(sortedAfterUpdate.map((item) => item.display_number), expectedNumbers);
   assert.equal(
@@ -178,18 +185,22 @@ test("overview order stays oldest first across status changes and pagination", (
   );
 });
 
-test("overview order uses sequence and id as deterministic creation-time tie breakers", () => {
+test("overview order uses immutable descending tie breakers and tolerates missing sequences", () => {
   const commonCreatedAt = "2026-08-24T08:05:00Z";
   const tiedTickets = [
     ticket({ id: 170, sequence_number: 17, display_number: "9999.Z17", created_at: commonCreatedAt }),
+    ticket({ id: 171, sequence_number: 17, display_number: "9999.Z17", created_at: "2026-08-24T08:06:00Z" }),
     ticket({ id: 151, sequence_number: 15, display_number: "9999.SZ15", created_at: commonCreatedAt }),
     ticket({ id: 150, sequence_number: 15, display_number: "9999.SZ15", created_at: commonCreatedAt }),
     ticket({ id: 160, sequence_number: 16, display_number: "9999.SZ16", created_at: commonCreatedAt }),
+    ticket({ id: 502, sequence_number: null, display_number: "9999.ALT502", created_at: "2026-08-24T08:04:00Z" }),
+    ticket({ id: 501, sequence_number: null, display_number: "9999.ALT501", created_at: "2026-08-24T08:07:00Z" }),
+    ticket({ id: 503, sequence_number: null, display_number: "9999.ALT503", created_at: "2026-08-24T08:07:00Z" }),
   ];
 
   assert.deepEqual(
-    [...tiedTickets].sort(compareExtraWorkTicketsOldestFirst).map((item) => item.id),
-    [150, 151, 160, 170],
+    [...tiedTickets].sort(compareExtraWorkTicketsNewestFirst).map((item) => item.id),
+    [171, 170, 160, 151, 150, 503, 501, 502],
   );
 });
 
@@ -220,11 +231,11 @@ test("search and archived ticket data preserve the shared chronological order", 
       deleted_at: "2026-08-24T12:00:00Z",
     }),
   ];
-  const sortedArchive = [...archivedTickets].sort(compareExtraWorkTicketsOldestFirst);
+  const sortedArchive = [...archivedTickets].sort(compareExtraWorkTicketsNewestFirst);
   const searchResult = filterExtraWorkOverviewTickets(sortedArchive, site, "Treffer");
 
-  assert.deepEqual(sortedArchive.map((item) => item.id), [15, 16, 17]);
-  assert.deepEqual(searchResult.map((item) => item.id), [15, 17]);
+  assert.deepEqual(sortedArchive.map((item) => item.id), [17, 16, 15]);
+  assert.deepEqual(searchResult.map((item) => item.id), [17, 15]);
 });
 
 test("resizing keeps the selected row on the page for the new page size", () => {

@@ -13,14 +13,29 @@ export const EXTRA_WORK_OVERVIEW_HEADER_HEIGHT = 42;
 export const EXTRA_WORK_OVERVIEW_PAGINATION_HEIGHT = 48;
 export const EXTRA_WORK_OVERVIEW_CONTAINER_BORDER = 2;
 
-export function compareExtraWorkTicketsOldestFirst(
+export function compareExtraWorkTicketsNewestFirst(
   left: MobileExtraWorkTicket,
   right: MobileExtraWorkTicket,
 ): number {
+  const leftSequenceNumber = parseExtraWorkSequenceNumber(left.sequence_number);
+  const rightSequenceNumber = parseExtraWorkSequenceNumber(right.sequence_number);
+  if (
+    leftSequenceNumber !== null
+    && rightSequenceNumber !== null
+    && leftSequenceNumber !== rightSequenceNumber
+  ) {
+    return rightSequenceNumber - leftSequenceNumber;
+  }
+  if (leftSequenceNumber === null && rightSequenceNumber !== null) {
+    return 1;
+  }
+  if (leftSequenceNumber !== null && rightSequenceNumber === null) {
+    return -1;
+  }
   const leftCreatedAt = parseExtraWorkCreatedAt(left.created_at);
   const rightCreatedAt = parseExtraWorkCreatedAt(right.created_at);
   if (leftCreatedAt !== null && rightCreatedAt !== null && leftCreatedAt !== rightCreatedAt) {
-    return leftCreatedAt - rightCreatedAt;
+    return rightCreatedAt - leftCreatedAt;
   }
   if (leftCreatedAt === null && rightCreatedAt !== null) {
     return 1;
@@ -28,10 +43,7 @@ export function compareExtraWorkTicketsOldestFirst(
   if (leftCreatedAt !== null && rightCreatedAt === null) {
     return -1;
   }
-  if (left.sequence_number !== right.sequence_number) {
-    return left.sequence_number - right.sequence_number;
-  }
-  return left.id - right.id;
+  return right.id - left.id;
 }
 
 export function calculateExtraWorkOverviewPageSize(availableHeight: number): number {
@@ -267,6 +279,10 @@ export function normalizeExtraWorkOverviewSearch(value: unknown): string {
 function parseExtraWorkCreatedAt(value: string): number | null {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function parseExtraWorkSequenceNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 export function resolveExtraWorkOverviewPeriod(

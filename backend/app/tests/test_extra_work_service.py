@@ -1670,7 +1670,7 @@ def test_site_extra_work_tickets_include_customer_email_status():
     assert read_ticket.customer_email_signature_present is True
 
 
-def test_list_site_tickets_orders_oldest_first_before_pagination_and_ignores_mutable_fields():
+def test_list_site_tickets_orders_newest_first_before_pagination_and_ignores_mutable_fields():
     db = db_session()
     site = Site(site_number="9999", name="Testbaustelle Finienweg")
     db.add(site)
@@ -1712,18 +1712,18 @@ def test_list_site_tickets_orders_oldest_first_before_pagination_and_ignores_mut
     service = ExtraWorkService(db)
     initially_ordered = service.list_site_tickets(site.id)
     expected_numbers = [
-        "9999.SZ14",
-        "9999.SZ15",
-        "9999.SZ16",
+        "9999.Z25",
+        "9999.Z24",
+        "9999.Z23",
+        "9999.Z22",
+        "9999.Z21",
+        "9999.Z20",
+        "9999.Z19",
         "9999.Z18",
         "9999.Z17",
-        "9999.Z19",
-        "9999.Z20",
-        "9999.Z21",
-        "9999.Z22",
-        "9999.Z23",
-        "9999.Z24",
-        "9999.Z25",
+        "9999.SZ16",
+        "9999.SZ15",
+        "9999.SZ14",
     ]
 
     assert [ticket.display_number for ticket in initially_ordered] == expected_numbers
@@ -1742,7 +1742,7 @@ def test_list_site_tickets_orders_oldest_first_before_pagination_and_ignores_mut
     assert [ticket.display_number for ticket in after_mutable_update] == expected_numbers
 
 
-def test_list_site_tickets_uses_the_same_oldest_first_order_for_archive():
+def test_list_site_tickets_uses_the_same_newest_first_order_for_archive():
     db = db_session()
     site = Site(site_number="9999", name="Testbaustelle Finienweg")
     db.add(site)
@@ -1771,9 +1771,9 @@ def test_list_site_tickets_uses_the_same_oldest_first_order_for_archive():
     archived = ExtraWorkService(db).list_site_tickets(site.id, archived_only=True)
 
     assert [ticket.display_number for ticket in archived] == [
-        "9999.SZ15",
-        "9999.SZ16",
         "9999.Z17",
+        "9999.SZ16",
+        "9999.SZ15",
     ]
 
 

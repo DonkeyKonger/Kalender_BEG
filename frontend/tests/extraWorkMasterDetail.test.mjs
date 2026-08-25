@@ -28,17 +28,17 @@ test("desktop extra-work overview uses one lightweight master-detail workspace",
   assert.doesNotMatch(tabSource, /Hauptauftrag/);
 });
 
-test("chronological ticket order is applied before shared search and pagination paths", () => {
-  const sortIndex = tabSource.indexOf("sort(compareExtraWorkTicketsOldestFirst)");
+test("newest-first ticket order is applied before shared search and pagination paths", () => {
+  const sortIndex = tabSource.indexOf("sort(compareExtraWorkTicketsNewestFirst)");
   const filterIndex = tabSource.indexOf("filterExtraWorkOverviewTickets(sortedTickets");
   const paginationIndex = tabSource.indexOf("filteredTickets.slice(pageWindow.start, pageWindow.end)");
 
   assert.ok(sortIndex >= 0 && sortIndex < filterIndex && filterIndex < paginationIndex);
-  assert.match(pageSource, /createSiteExtraWorkTicket[\s\S]*sort\(compareExtraWorkTicketsOldestFirst\)/);
-  assert.doesNotMatch(pageSource, /compareExtraWorkTicketsNewestFirst/);
+  assert.match(pageSource, /createSiteExtraWorkTicket[\s\S]*sort\(compareExtraWorkTicketsNewestFirst\)/);
+  assert.doesNotMatch(pageSource, /compareExtraWorkTicketsOldestFirst/);
   assert.match(
     serviceSource,
-    /order_by\([\s\S]*ExtraWorkTicket\.created_at\.asc\(\)[\s\S]*ExtraWorkTicket\.sequence_number\.asc\(\)[\s\S]*ExtraWorkTicket\.id\.asc\(\)/,
+    /order_by\([\s\S]*ExtraWorkTicket\.sequence_number\.desc\(\)\.nulls_last\(\)[\s\S]*ExtraWorkTicket\.created_at\.desc\(\)[\s\S]*ExtraWorkTicket\.id\.desc\(\)/,
   );
 });
 

@@ -119,9 +119,9 @@ class ExtraWorkService:
         tickets = list(
             self.db.scalars(
                 statement.order_by(
-                    ExtraWorkTicket.created_at.asc(),
-                    ExtraWorkTicket.sequence_number.asc(),
-                    ExtraWorkTicket.id.asc(),
+                    ExtraWorkTicket.sequence_number.desc().nulls_last(),
+                    ExtraWorkTicket.created_at.desc(),
+                    ExtraWorkTicket.id.desc(),
                 )
             ).all()
         )

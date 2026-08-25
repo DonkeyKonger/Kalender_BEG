@@ -20,7 +20,7 @@ import {
   EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE,
   buildExtraWorkOverviewEntrySummary,
   calculateExtraWorkOverviewPageSize,
-  compareExtraWorkTicketsOldestFirst,
+  compareExtraWorkTicketsNewestFirst,
   filterExtraWorkOverviewTickets,
   formatExtraWorkOverviewCreatorName,
   formatExtraWorkOverviewIsoWeek,
@@ -650,7 +650,7 @@ export function SiteDetailPage() {
       setExtraWorkTickets((current) => [
         ...current.filter((entry) => entry.id !== created.id),
         created,
-      ].sort(compareExtraWorkTicketsOldestFirst));
+      ].sort(compareExtraWorkTicketsNewestFirst));
       setExtraWorkOverviewTicketId(created.id);
       setSelectedExtraWorkTicket(created);
       setExtraWorkDocumentDirty(false);
@@ -2940,7 +2940,7 @@ function ExtraWorkTab({
   const selectedRowRef = useRef<HTMLDivElement>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const sortedTickets = useMemo(
-    () => [...tickets].sort(compareExtraWorkTicketsOldestFirst),
+    () => [...tickets].sort(compareExtraWorkTicketsNewestFirst),
     [tickets],
   );
   const filteredTickets = useMemo(
