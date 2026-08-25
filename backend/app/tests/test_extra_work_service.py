@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime
 from io import BytesIO
+from time import perf_counter, sleep
 from types import SimpleNamespace
 
 import pytest
@@ -581,6 +582,100 @@ def test_extra_work_invoiced_marker_rolls_back_flag_and_status_when_commit_fails
     assert persisted.status == "signed"
     assert db.query(AuditLog).filter_by(action="extra_work.invoiced_updated").count() == 0
     assert archive_service.calls == []
+
+
+def test_extra_work_invoiced_response_schedules_slow_archive_outside_critical_path():
+    class SlowArchiveService:
+        def __init__(self):
+            self.calls = []
+
+        def archive_completed_ticket(self, *, site_id, ticket_id):
+            self.calls.append((site_id, ticket_id))
+            sleep(0.5)
+
+    db = db_session()
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    actor = User(
+        username="fast-invoiced-office",
+        display_name="Abrechnung Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        office_page_permissions=["sites"],
+    )
+    db.add_all([site, actor])
+    db.commit()
+    archive_service = SlowArchiveService()
+    service = ExtraWorkService(db, archive_service=archive_service)
+    created = service.create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+    scheduled = []
+
+    started_at = perf_counter()
+    marked = service.set_site_ticket_invoiced(
+        site_id=site.id,
+        ticket_id=created.id,
+        is_invoiced=True,
+        current_user=actor,
+        schedule_completed_archive=lambda site_id, ticket_id: scheduled.append(
+            (site_id, ticket_id)
+        ),
+    )
+    elapsed = perf_counter() - started_at
+
+    assert elapsed < 0.4
+    assert marked.is_invoiced is True
+    assert marked.status == "billed"
+    assert scheduled == [(site.id, created.id)]
+    assert archive_service.calls == []
+    persisted = db.get(ExtraWorkTicket, created.id)
+    assert persisted is not None
+    assert persisted.is_invoiced is True
+    assert persisted.status == "billed"
+    assert db.query(AuditLog).filter_by(action="extra_work.invoiced_updated").count() == 1
+
+
+def test_extra_work_invoiced_archive_scheduling_failure_keeps_committed_state(caplog):
+    db = db_session()
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    actor = User(
+        username="schedule-failure-office",
+        display_name="Abrechnung Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        office_page_permissions=["sites"],
+    )
+    db.add_all([site, actor])
+    db.commit()
+    service = ExtraWorkService(db)
+    created = service.create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+
+    def fail_scheduling(_site_id, _ticket_id):
+        raise RuntimeError("scheduler unavailable")
+
+    with caplog.at_level("ERROR", logger="app.services.extra_work_service"):
+        marked = service.set_site_ticket_invoiced(
+            site_id=site.id,
+            ticket_id=created.id,
+            is_invoiced=True,
+            current_user=actor,
+            schedule_completed_archive=fail_scheduling,
+        )
+
+    assert marked.is_invoiced is True
+    assert marked.status == "billed"
+    persisted = db.get(ExtraWorkTicket, created.id)
+    assert persisted is not None
+    assert persisted.is_invoiced is True
+    assert persisted.status == "billed"
+    assert "background archive scheduling failed" in caplog.text
+    assert "scheduler unavailable" in caplog.text
 
 
 def test_extra_work_archive_failure_does_not_revert_completed_status(caplog):

@@ -3,7 +3,7 @@ from hashlib import sha256
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
@@ -62,6 +62,9 @@ from app.services.document_thumbnail_service import (
     is_pdf_document,
 )
 from app.services.extra_work_service import ExtraWorkService
+from app.services.extra_work_archive_service import (
+    archive_completed_extra_work_ticket_after_response,
+)
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.geo_service import search_geocoding_candidates
 from app.services.measurement_pdf_service import MeasurementPdfService
@@ -817,6 +820,7 @@ def update_extra_work_ticket_invoiced(
     site_id: int,
     ticket_id: int,
     payload: ExtraWorkTicketInvoicedUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(CAN_SITES_WRITE),
     db: Session = Depends(get_db),
 ) -> ExtraWorkTicketRead:
@@ -825,6 +829,13 @@ def update_extra_work_ticket_invoiced(
         ticket_id=ticket_id,
         is_invoiced=payload.is_invoiced,
         current_user=current_user,
+        schedule_completed_archive=lambda scheduled_site_id, scheduled_ticket_id: (
+            background_tasks.add_task(
+                archive_completed_extra_work_ticket_after_response,
+                site_id=scheduled_site_id,
+                ticket_id=scheduled_ticket_id,
+            )
+        ),
     )
 
 

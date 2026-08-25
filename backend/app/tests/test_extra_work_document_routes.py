@@ -222,6 +222,7 @@ class FakeExtraWorkService:
         ticket_id,
         is_invoiced,
         current_user,
+        schedule_completed_archive=None,
     ):
         self.calls.append(
             ("invoiced", site_id, ticket_id, is_invoiced, current_user.id)

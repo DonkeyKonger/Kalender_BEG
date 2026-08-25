@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.database import SessionLocal
 from app.models.extra_work_ticket import ExtraWorkTicket
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.project_storage_service import ProjectStorageService
@@ -87,3 +88,24 @@ class ExtraWorkArchiveService:
             document.get("id"),
         )
         return document
+
+
+def archive_completed_extra_work_ticket_after_response(
+    *,
+    site_id: int,
+    ticket_id: int,
+) -> None:
+    """Run the best-effort archive copy outside the completed HTTP response."""
+    with SessionLocal() as db:
+        try:
+            ExtraWorkArchiveService(db).archive_completed_ticket(
+                site_id=site_id,
+                ticket_id=ticket_id,
+            )
+        except Exception:
+            LOGGER.exception(
+                "Extra-work PDF background archive failed after status persistence: "
+                "site_id=%s ticket_id=%s.",
+                site_id,
+                ticket_id,
+            )

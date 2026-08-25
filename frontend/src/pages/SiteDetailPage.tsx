@@ -40,6 +40,7 @@ import {
 } from "../lib/extraWorkOverview";
 import {
   applyExtraWorkTicketInvoicedState,
+  performExtraWorkTicketInvoicedUpdate,
   setExtraWorkTicketInvoicedState,
 } from "../lib/extraWorkInvoiced";
 import {
@@ -251,7 +252,10 @@ export function SiteDetailPage() {
   const [archivingExtraWorkTicketId, setArchivingExtraWorkTicketId] = useState<number | null>(null);
   const [restoringExtraWorkTicketId, setRestoringExtraWorkTicketId] = useState<number | null>(null);
   const [extraWorkStatusActionId, setExtraWorkStatusActionId] = useState<number | null>(null);
-  const [extraWorkInvoicedActionId, setExtraWorkInvoicedActionId] = useState<number | null>(null);
+  const extraWorkInvoicedInFlightRef = useRef<Set<number>>(new Set());
+  const [extraWorkInvoicedActionIds, setExtraWorkInvoicedActionIds] = useState<ReadonlySet<number>>(
+    () => new Set(),
+  );
   const [extraWorkInvoicedError, setExtraWorkInvoicedError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1120,63 +1124,48 @@ export function SiteDetailPage() {
     if (
       !site
       || !canEditSite
-      || extraWorkInvoicedActionId !== null
-      || extraWorkStatusActionId !== null
+      || extraWorkInvoicedInFlightRef.current.has(ticket.id)
+      || extraWorkStatusActionId === ticket.id
     ) {
       return;
     }
-    const previousState = {
-      is_invoiced: ticket.is_invoiced,
-      status: ticket.status,
+    const applyState = (state: Pick<MobileExtraWorkTicket, "is_invoiced" | "status">) => {
+      setExtraWorkTickets((current) => (
+        setExtraWorkTicketInvoicedState(current, ticket.id, state)
+      ));
+      setSelectedExtraWorkTicket((current) => (
+        current?.id === ticket.id
+          ? applyExtraWorkTicketInvoicedState(current, state)
+          : current
+      ));
     };
-    const nextValue = !previousState.is_invoiced;
-    const optimisticState = {
-      is_invoiced: nextValue,
-      status: nextValue ? "billed" : previousState.status,
-    };
-    setExtraWorkInvoicedActionId(ticket.id);
+    extraWorkInvoicedInFlightRef.current.add(ticket.id);
+    setExtraWorkInvoicedActionIds((current) => new Set(current).add(ticket.id));
     setExtraWorkInvoicedError(null);
-    setExtraWorkTickets((current) => (
-      setExtraWorkTicketInvoicedState(current, ticket.id, optimisticState)
-    ));
-    setSelectedExtraWorkTicket((current) => (
-      current?.id === ticket.id
-        ? applyExtraWorkTicketInvoicedState(current, optimisticState)
-        : current
-    ));
     try {
-      const updated = await api.updateSiteExtraWorkTicketInvoiced(
-        site.id,
-        ticket.id,
-        nextValue,
-      );
-      const canonicalState = {
-        is_invoiced: updated.is_invoiced,
-        status: updated.status,
-      };
-      setExtraWorkTickets((current) => (
-        setExtraWorkTicketInvoicedState(current, ticket.id, canonicalState)
-      ));
-      setSelectedExtraWorkTicket((current) => (
-        current?.id === ticket.id
-          ? applyExtraWorkTicketInvoicedState(current, canonicalState)
-          : current
-      ));
+      await performExtraWorkTicketInvoicedUpdate({
+        ticket,
+        request: (isInvoiced) => api.updateSiteExtraWorkTicketInvoiced(
+          site.id,
+          ticket.id,
+          isInvoiced,
+        ),
+        onOptimistic: applyState,
+        onCanonical: applyState,
+        onRollback: applyState,
+      });
     } catch (requestError) {
-      setExtraWorkTickets((current) => (
-        setExtraWorkTicketInvoicedState(current, ticket.id, previousState)
-      ));
-      setSelectedExtraWorkTicket((current) => (
-        current?.id === ticket.id
-          ? applyExtraWorkTicketInvoicedState(current, previousState)
-          : current
-      ));
       setExtraWorkInvoicedError(readApiError(
         requestError,
         "Abrechnungsmarkierung konnte nicht gespeichert werden.",
       ));
     } finally {
-      setExtraWorkInvoicedActionId(null);
+      extraWorkInvoicedInFlightRef.current.delete(ticket.id);
+      setExtraWorkInvoicedActionIds((current) => {
+        const next = new Set(current);
+        next.delete(ticket.id);
+        return next;
+      });
     }
   }
 
@@ -1736,7 +1725,7 @@ export function SiteDetailPage() {
             archivingTicketId={archivingExtraWorkTicketId}
             restoringTicketId={restoringExtraWorkTicketId}
             statusActionId={extraWorkStatusActionId}
-            invoicedActionId={extraWorkInvoicedActionId}
+            invoicedActionIds={extraWorkInvoicedActionIds}
             invoicedError={extraWorkInvoicedError}
             canCreate={canEditSite}
             canPromoteStatus={canEditSite}
@@ -2928,7 +2917,7 @@ function ExtraWorkTab({
   archivingTicketId,
   restoringTicketId,
   statusActionId,
-  invoicedActionId,
+  invoicedActionIds,
   invoicedError,
   canCreate,
   canPromoteStatus,
@@ -2957,7 +2946,7 @@ function ExtraWorkTab({
   archivingTicketId: number | null;
   restoringTicketId: number | null;
   statusActionId: number | null;
-  invoicedActionId: number | null;
+  invoicedActionIds: ReadonlySet<number>;
   invoicedError: string | null;
   canCreate: boolean;
   canPromoteStatus: boolean;
@@ -3278,8 +3267,8 @@ function ExtraWorkTab({
                             checked={ticket.is_invoiced}
                             disabled={
                               !canMarkInvoiced
-                              || invoicedActionId !== null
-                              || statusActionId !== null
+                              || invoicedActionIds.has(ticket.id)
+                              || statusActionId === ticket.id
                             }
                             aria-label={`${formatExtraWorkOverviewTitle(ticket)}: ${ticket.is_invoiced ? "Abrechnungsmarkierung entfernen" : "Als abgerechnet markieren"}`}
                             onChange={() => onToggleInvoiced(ticket)}

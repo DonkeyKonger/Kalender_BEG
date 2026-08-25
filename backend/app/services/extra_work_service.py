@@ -2,6 +2,7 @@ from collections import Counter
 from datetime import UTC, datetime
 from hashlib import sha256
 import logging
+from collections.abc import Callable
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -414,6 +415,7 @@ class ExtraWorkService:
         ticket_id: int,
         is_invoiced: bool,
         current_user: User,
+        schedule_completed_archive: Callable[[int, int], None] | None = None,
     ) -> ExtraWorkTicketRead:
         self._get_site(site_id)
         ticket = self._get_ticket_for_site(
@@ -455,7 +457,18 @@ class ExtraWorkService:
             raise
         self.db.refresh(ticket)
         if status_changed:
-            self._archive_completed_ticket(ticket)
+            if schedule_completed_archive is None:
+                self._archive_completed_ticket(ticket)
+            else:
+                try:
+                    schedule_completed_archive(ticket.site_id, ticket.id)
+                except Exception:
+                    LOGGER.exception(
+                        "Extra-work PDF background archive scheduling failed after "
+                        "status persistence: site_id=%s ticket_id=%s.",
+                        ticket.site_id,
+                        ticket.id,
+                    )
         return self._build_ticket_read(ticket)
 
     def list_mobile_tickets(
