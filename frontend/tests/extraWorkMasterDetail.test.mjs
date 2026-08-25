@@ -175,7 +175,7 @@ test("detail overflow menu preserves archive and restore paths with full keyboar
   assert.doesNotMatch(tabSource, />Löschen</);
 });
 
-test("desktop detail search starts at the split and actions share the create button intrinsic width", () => {
+test("desktop detail search keeps inset from an open-ended split and actions share the create button intrinsic width", () => {
   assert.match(
     styles,
     /\.project-extra-work-overview \{[\s\S]*--project-extra-work-master-column: minmax\(680px, 52%\);/,
@@ -191,11 +191,23 @@ test("desktop detail search starts at the split and actions share the create but
   );
   assert.match(
     styles,
-    /\.project-extra-work-search \{[\s\S]*margin-left: -1px;[\s\S]*margin-right: auto;[\s\S]*width: 224px;/,
+    /\.project-extra-work-search \{[\s\S]*margin-left: 0;[\s\S]*margin-right: auto;[\s\S]*width: 224px;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-toolbar-detail \{[\s\S]*justify-content: flex-end;[\s\S]*border-left: 1px solid var\(--project-extra-work-divider\);[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\) 10px 0;[\s\S]*scrollbar-gutter: stable;/,
+    /\.project-extra-work-toolbar-detail \{[\s\S]*justify-content: flex-end;[\s\S]*border-left: 0;[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\);[\s\S]*scrollbar-gutter: stable;/,
+  );
+  assert.match(
+    styles,
+    /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar::after \{[\s\S]*grid-column: 2;[\s\S]*margin: 10px 0;[\s\S]*background: var\(--project-extra-work-divider\);/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-workspace::after \{[\s\S]*grid-column: 2;[\s\S]*margin: 10px 0;[\s\S]*background: var\(--project-extra-work-divider\);/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-master \{[\s\S]*border-right: 0;/,
   );
   assert.match(
     styles,
@@ -209,6 +221,10 @@ test("desktop detail search starts at the split and actions share the create but
   assert.match(tabSource, /new ResizeObserver\(syncActionRailWidth\)/);
   assert.match(tabSource, /--project-extra-work-action-rail-width/);
   assert.match(tabSource, /ref=\{createActionRef\}/);
+  assert.match(
+    styles,
+    /@media \(max-width: 1180px\) \{[\s\S]*\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar::after,[\s\S]*\.project-extra-work-workspace::after \{[\s\S]*display: none;[\s\S]*\.project-extra-work-toolbar-detail \{[\s\S]*grid-column: 1;[\s\S]*grid-row: 2;/,
+  );
   assert.match(
     styles,
     /@media \(max-width: 760px\) \{[\s\S]*\.project-extra-work-toolbar-master \{[\s\S]*flex-wrap: wrap;[\s\S]*\.project-extra-work-detail-actions \{[\s\S]*max-width: 100%;/,
@@ -382,7 +398,8 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /\.project-extra-work-toolbar-detail > \.primary-action,[\s\S]*\.project-extra-work-search \{[\s\S]*height: var\(--project-extra-work-control-height\)/);
   assert.match(styles, /\.project-extra-work-search input \{[\s\S]*appearance: none;[\s\S]*height: 100%/);
   assert.match(styles, /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*grid-template-columns: var\(--project-extra-work-master-column\) minmax\(0, 1fr\);[\s\S]*border-bottom: 0/);
-  assert.match(styles, /\.project-extra-work-toolbar-detail \{[\s\S]*border-left: 1px solid var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-extra-work-toolbar-detail \{[\s\S]*border-left: 0/);
+  assert.match(styles, /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar::after \{[\s\S]*background: var\(--project-extra-work-divider\)/);
   assert.match(styles, /\.site-detail-status-trigger \{[\s\S]*border-radius: 0/);
   assert.match(styles, /\.site-detail-status-menu \{[\s\S]*border-radius: 0/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px;[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
@@ -413,7 +430,8 @@ test("structural dividers become lighter only inside the extra-work overview", (
   assert.match(styles, /\.site-detail-page\.is-project-file-workspace \.project-record-tabs \{[\s\S]*border-bottom: 1px solid var\(--pf-border\)/);
   assert.match(styles, /\.project-extra-work-overview \{[\s\S]*--project-extra-work-divider: #e3e6eb;[\s\S]*--project-extra-work-divider-soft: #edf0f3/);
   assert.match(styles, /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*border-color: var\(--project-extra-work-divider\)/);
-  assert.match(styles, /\.project-extra-work-toolbar-detail \{[\s\S]*border-left: 1px solid var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar::after \{[\s\S]*margin: 10px 0;[\s\S]*background: var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-extra-work-workspace::after \{[\s\S]*margin: 10px 0;[\s\S]*background: var\(--project-extra-work-divider\)/);
   assert.match(styles, /\.project-extra-work-workspace \{[\s\S]*border: 1px solid var\(--project-extra-work-divider\)/);
   assert.match(styles, /\.project-extra-work-master-row \{[\s\S]*border-bottom: 1px solid var\(--project-extra-work-divider-soft\)/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*border-bottom: 1px solid var\(--project-extra-work-divider\)/);
@@ -422,10 +440,10 @@ test("structural dividers become lighter only inside the extra-work overview", (
   assert.match(styles, /\.project-extra-work-search \{[\s\S]*border: 1px solid var\(--pf-border\)/);
 });
 
-test("detail search reaches the split while detail actions keep the responsive right inset", () => {
+test("detail search and actions keep matching inset from the split and right edge", () => {
   assert.match(styles, /\.project-extra-work-overview \{[\s\S]*--project-extra-work-header-inline-padding: 18px/);
   assert.match(styles, /\.project-extra-work-toolbar-master \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
-  assert.match(styles, /\.project-extra-work-toolbar-detail \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\) 10px 0/);
+  assert.match(styles, /\.project-extra-work-toolbar-detail \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
   assert.match(styles, /@media \(max-width: 900px\)[\s\S]*--project-extra-work-header-inline-padding: 14px/);
 });

@@ -27346,6 +27346,7 @@ body.mobile-modal-scroll-locked {
 .site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar.measurement-review-toolbar {
   --project-extra-work-control-height: 32px;
 
+  position: relative;
   display: grid;
   grid-template-columns: var(--project-extra-work-master-column) minmax(0, 1fr);
   min-height: 54px;
@@ -27358,8 +27359,21 @@ body.mobile-modal-scroll-locked {
   padding: 0;
 }
 
+.site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar.measurement-review-toolbar::after {
+  z-index: 2;
+  grid-column: 2;
+  grid-row: 1;
+  width: 1px;
+  margin: 10px 0;
+  background: var(--project-extra-work-divider);
+  content: "";
+  pointer-events: none;
+}
+
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar-master {
   display: flex;
+  grid-column: 1;
+  grid-row: 1;
   align-items: center;
   min-width: 0;
   gap: 16px;
@@ -27445,12 +27459,14 @@ body.mobile-modal-scroll-locked {
 
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar-detail {
   display: flex;
+  grid-column: 2;
+  grid-row: 1;
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
   gap: 16px;
-  border-left: 1px solid var(--project-extra-work-divider);
-  padding: 10px var(--project-extra-work-header-inline-padding) 10px 0;
+  border-left: 0;
+  padding: 10px var(--project-extra-work-header-inline-padding);
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -27479,7 +27495,7 @@ body.mobile-modal-scroll-locked {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px;
   flex: 0 1 224px;
-  margin-left: -1px;
+  margin-left: 0;
   margin-right: auto;
   width: 224px;
   min-width: 170px;
@@ -27514,6 +27530,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .project-extra-work-workspace {
+  position: relative;
   display: grid;
   grid-template-columns: var(--project-extra-work-master-column) minmax(0, 1fr);
   height: var(--project-extra-work-workspace-height, 618px);
@@ -27525,14 +27542,27 @@ body.mobile-modal-scroll-locked {
   background: var(--pf-surface);
 }
 
+.project-extra-work-workspace::after {
+  z-index: 20;
+  grid-column: 2;
+  grid-row: 1;
+  width: 1px;
+  margin: 10px 0;
+  background: var(--project-extra-work-divider);
+  content: "";
+  pointer-events: none;
+}
+
 .project-extra-work-master {
   --project-extra-work-master-scrollbar-width: 0px;
 
   display: flex;
+  grid-column: 1;
+  grid-row: 1;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid var(--project-extra-work-divider);
+  border-right: 0;
   flex-direction: column;
   overflow-x: auto;
   overflow-y: hidden;
@@ -27853,6 +27883,8 @@ body.mobile-modal-scroll-locked {
 .project-extra-work-detail {
   --project-extra-work-detail-columns: minmax(0, 1fr) 180px 108px 100px;
   height: 100%;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   min-height: 0;
   background: #ffffff;
@@ -28686,7 +28718,19 @@ body.mobile-modal-scroll-locked {
     grid-template-columns: var(--project-extra-work-master-column);
   }
 
+  .site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar.measurement-review-toolbar::after,
+  .project-extra-work-workspace::after {
+    display: none;
+  }
+
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar-master {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
   .site-detail-page.is-project-file-workspace .project-extra-work-toolbar-detail {
+    grid-column: 1;
+    grid-row: 2;
     border-top: 1px solid var(--project-extra-work-divider);
     border-left: 0;
     padding: 10px var(--project-extra-work-header-inline-padding);
@@ -28703,12 +28747,16 @@ body.mobile-modal-scroll-locked {
   }
 
   .project-extra-work-master {
+    grid-column: 1;
+    grid-row: 1;
     height: var(--project-extra-work-master-height, 618px);
     border-right: 0;
     border-bottom: 1px solid var(--project-extra-work-divider);
   }
 
   .project-extra-work-detail {
+    grid-column: 1;
+    grid-row: 2;
     height: auto;
     overflow: visible;
   }
