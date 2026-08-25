@@ -9,7 +9,9 @@ import {
   clampExtraWorkPhotoZoom,
   getExtraWorkPhotoPointerCenter,
   getExtraWorkPhotoPointerDistance,
+  getExtraWorkPhotoSafariGestureZoom,
   getExtraWorkPhotoWheelZoom,
+  resolveExtraWorkPhotoWheelGesture,
   stepExtraWorkPhotoZoom,
 } from "../src/lib/extraWorkPhotoViewer.ts";
 
@@ -31,6 +33,52 @@ test("zoom helpers enforce 1x to 4x bounds for buttons, wheel and trackpad gestu
   assert.ok(getExtraWorkPhotoWheelZoom(2, -100) > 2);
   assert.ok(getExtraWorkPhotoWheelZoom(2, 100) < 2);
   assert.equal(getExtraWorkPhotoWheelZoom(4, -100), 4);
+});
+
+test("small Mac ctrl-wheel pinch deltas are accumulated and always capture browser zoom", () => {
+  const interactions = [-0.08, -0.12, -0.2].map((deltaY) => ({
+    ctrlKey: true,
+    deltaMode: 0,
+    deltaY,
+  }));
+  let zoom = 1;
+  for (const input of interactions) {
+    const result = resolveExtraWorkPhotoWheelGesture(zoom, input);
+    assert.equal(result.preventDefault, true);
+    assert.ok(result.nextZoom > zoom);
+    zoom = result.nextZoom;
+  }
+  assert.ok(zoom > 1.003);
+  assert.deepEqual(
+    resolveExtraWorkPhotoWheelGesture(4, { ctrlKey: true, deltaY: -0.1 }),
+    { nextZoom: 4, preventDefault: true },
+  );
+});
+
+test("mouse wheel and ordinary two-finger scroll zoom only while the image can change", () => {
+  const mouseWheel = resolveExtraWorkPhotoWheelGesture(1, { deltaMode: 1, deltaY: -3 });
+  assert.ok(mouseWheel.nextZoom > 1);
+  assert.equal(mouseWheel.preventDefault, true);
+
+  const trackpadScroll = resolveExtraWorkPhotoWheelGesture(2, { deltaMode: 0, deltaY: 0.5 });
+  assert.ok(trackpadScroll.nextZoom < 2);
+  assert.equal(trackpadScroll.preventDefault, true);
+
+  assert.deepEqual(
+    resolveExtraWorkPhotoWheelGesture(1, { deltaY: 1 }),
+    { nextZoom: 1, preventDefault: false },
+  );
+  assert.deepEqual(
+    resolveExtraWorkPhotoWheelGesture(4, { deltaY: -1 }),
+    { nextZoom: 4, preventDefault: false },
+  );
+});
+
+test("Safari gesture scale follows the captured start zoom and stays bounded", () => {
+  assert.ok(Math.abs(getExtraWorkPhotoSafariGestureZoom(1.5, 1.2) - 1.8) < 0.0001);
+  assert.equal(getExtraWorkPhotoSafariGestureZoom(3, 2), 4);
+  assert.equal(getExtraWorkPhotoSafariGestureZoom(2, 0.1), 1);
+  assert.equal(getExtraWorkPhotoSafariGestureZoom(2, Number.NaN), 2);
 });
 
 test("pan and pinch geometry keeps a zoomed image reachable", () => {
@@ -63,14 +111,20 @@ test("navigation updates filename and alt text while loading just the active ori
   assert.match(modalSource, /window\.URL\.revokeObjectURL\(objectUrl\)/);
 });
 
-test("wheel, pointer pinch and dragging are scoped to the loaded image stage", () => {
-  assert.match(modalSource, /const handleWheel = useCallback[\s\S]*if \(!imageUrl \|\|[\s\S]*event\.preventDefault\(\);[\s\S]*updateZoom/);
+test("wheel, Safari gesture, pointer pinch and dragging stay scoped to the loaded image stage", () => {
+  assert.match(modalSource, /const handleWheel = useCallback[\s\S]*resolveExtraWorkPhotoWheelGesture[\s\S]*event\.preventDefault\(\)[\s\S]*updateZoom/);
   assert.match(modalSource, /event\.target instanceof Element && event\.target\.closest\("button"\)/);
+  assert.match(modalSource, /handleSafariGestureStart[\s\S]*event\.preventDefault\(\)[\s\S]*safariGestureStartZoomRef\.current = zoomRef\.current/);
+  assert.match(modalSource, /handleSafariGestureChange[\s\S]*getExtraWorkPhotoSafariGestureZoom\(startZoom, scale\)/);
   assert.match(modalSource, /pointerPositionsRef\.current\.set\(event\.pointerId, pointer\)/);
   assert.match(modalSource, /getExtraWorkPhotoPointerDistance[\s\S]*pinchGestureRef\.current/);
   assert.match(modalSource, /handlePointerMove[\s\S]*updatePan/);
-  assert.match(modalSource, /addEventListener\("wheel", handleWheel, \{ passive: false \}\)/);
-  assert.match(modalSource, /removeEventListener\("wheel", handleWheel\)/);
+  assert.match(modalSource, /const listenerOptions = \{ capture: true, passive: false \} as const/);
+  assert.match(modalSource, /addEventListener\("wheel", handleWheel, listenerOptions\)/);
+  assert.match(modalSource, /addEventListener\("gesturestart", handleSafariGestureStart, listenerOptions\)/);
+  assert.match(modalSource, /addEventListener\("gesturechange", handleSafariGestureChange, listenerOptions\)/);
+  assert.match(modalSource, /removeEventListener\("wheel", handleWheel, listenerOptions\)/);
+  assert.match(modalSource, /removeEventListener\("gestureend", handleSafariGestureEnd, listenerOptions\)/);
   assert.match(modalSource, /onPointerCancel=\{finishPointerGesture\}[\s\S]*onPointerUp=\{finishPointerGesture\}/);
   assert.match(styles, /\.project-extra-work-photo-modal-stage\.is-interactive \{[^}]*touch-action:\s*none;/s);
   assert.match(styles, /\.project-extra-work-photo-modal-stage\.is-zoomed \{[^}]*cursor:\s*grab;/s);

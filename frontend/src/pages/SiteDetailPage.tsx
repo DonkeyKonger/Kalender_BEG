@@ -61,7 +61,8 @@ import {
   clampExtraWorkPhotoZoom,
   getExtraWorkPhotoPointerCenter,
   getExtraWorkPhotoPointerDistance,
-  getExtraWorkPhotoWheelZoom,
+  getExtraWorkPhotoSafariGestureZoom,
+  resolveExtraWorkPhotoWheelGesture,
   stepExtraWorkPhotoZoom,
   type ExtraWorkPhotoPoint,
 } from "../lib/extraWorkPhotoViewer";
@@ -4197,6 +4198,7 @@ function ExtraWorkOverviewPhotoModal({
     startPan: ExtraWorkPhotoPoint;
     startZoom: number;
   } | null>(null);
+  const safariGestureStartZoomRef = useRef<number | null>(null);
   const titleId = useId();
   const descriptionId = useId();
   const isTopModal = useMobileModalStack(true);
@@ -4232,6 +4234,7 @@ function ExtraWorkOverviewPhotoModal({
     pointerPositionsRef.current.clear();
     panGestureRef.current = null;
     pinchGestureRef.current = null;
+    safariGestureStartZoomRef.current = null;
     setZoom(EXTRA_WORK_PHOTO_MIN_ZOOM);
     setPan({ x: 0, y: 0 });
   }, []);
@@ -4352,22 +4355,70 @@ function ExtraWorkOverviewPhotoModal({
     if (!imageUrl || (event.target instanceof Element && event.target.closest("button"))) {
       return;
     }
-    const nextZoom = getExtraWorkPhotoWheelZoom(zoomRef.current, event.deltaY);
-    if (Math.abs(nextZoom - zoomRef.current) < 0.001) {
+    const interaction = resolveExtraWorkPhotoWheelGesture(zoomRef.current, {
+      ctrlKey: event.ctrlKey,
+      deltaMode: event.deltaMode,
+      deltaY: event.deltaY,
+    });
+    if (interaction.preventDefault && event.cancelable) {
+      event.preventDefault();
+    }
+    if (interaction.nextZoom === zoomRef.current) {
       return;
     }
-    event.preventDefault();
-    updateZoom(nextZoom);
+    updateZoom(interaction.nextZoom);
   }, [imageUrl, updateZoom]);
+
+  const handleSafariGestureStart = useCallback((event: Event): void => {
+    if (!imageUrl || (event.target instanceof Element && event.target.closest("button"))) {
+      return;
+    }
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+    safariGestureStartZoomRef.current = zoomRef.current;
+  }, [imageUrl]);
+
+  const handleSafariGestureChange = useCallback((event: Event): void => {
+    const startZoom = safariGestureStartZoomRef.current;
+    if (startZoom === null || !imageUrl) {
+      return;
+    }
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+    const scale = "scale" in event && typeof event.scale === "number" ? event.scale : 1;
+    updateZoom(getExtraWorkPhotoSafariGestureZoom(startZoom, scale));
+  }, [imageUrl, updateZoom]);
+
+  const handleSafariGestureEnd = useCallback((event: Event): void => {
+    if (safariGestureStartZoomRef.current === null) {
+      return;
+    }
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+    safariGestureStartZoomRef.current = null;
+  }, []);
 
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) {
       return undefined;
     }
-    stage.addEventListener("wheel", handleWheel, { passive: false });
-    return () => stage.removeEventListener("wheel", handleWheel);
-  }, [handleWheel]);
+    const listenerOptions = { capture: true, passive: false } as const;
+    stage.addEventListener("wheel", handleWheel, listenerOptions);
+    stage.addEventListener("gesturestart", handleSafariGestureStart, listenerOptions);
+    stage.addEventListener("gesturechange", handleSafariGestureChange, listenerOptions);
+    stage.addEventListener("gestureend", handleSafariGestureEnd, listenerOptions);
+    return () => {
+      stage.removeEventListener("wheel", handleWheel, listenerOptions);
+      stage.removeEventListener("gesturestart", handleSafariGestureStart, listenerOptions);
+      stage.removeEventListener("gesturechange", handleSafariGestureChange, listenerOptions);
+      stage.removeEventListener("gestureend", handleSafariGestureEnd, listenerOptions);
+      safariGestureStartZoomRef.current = null;
+    };
+  }, [handleSafariGestureChange, handleSafariGestureEnd, handleSafariGestureStart, handleWheel]);
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
     if (

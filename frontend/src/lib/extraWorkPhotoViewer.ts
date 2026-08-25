@@ -7,6 +7,17 @@ export type ExtraWorkPhotoPoint = {
   y: number;
 };
 
+export type ExtraWorkPhotoWheelInput = {
+  ctrlKey?: boolean;
+  deltaMode?: number;
+  deltaY: number;
+};
+
+export type ExtraWorkPhotoWheelResult = {
+  nextZoom: number;
+  preventDefault: boolean;
+};
+
 export function clampExtraWorkPhotoZoom(value: number): number {
   if (!Number.isFinite(value)) {
     return EXTRA_WORK_PHOTO_MIN_ZOOM;
@@ -18,12 +29,38 @@ export function stepExtraWorkPhotoZoom(current: number, direction: -1 | 1): numb
   return clampExtraWorkPhotoZoom(current + (direction * EXTRA_WORK_PHOTO_ZOOM_STEP));
 }
 
-export function getExtraWorkPhotoWheelZoom(current: number, deltaY: number): number {
+export function getExtraWorkPhotoWheelZoom(
+  current: number,
+  deltaY: number,
+  { ctrlKey = false, deltaMode = 0 }: Omit<ExtraWorkPhotoWheelInput, "deltaY"> = {},
+): number {
   if (!Number.isFinite(deltaY) || deltaY === 0) {
     return clampExtraWorkPhotoZoom(current);
   }
-  const factor = Math.exp(-deltaY * 0.0025);
+  const pixelDelta = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 100 : deltaY;
+  const factor = Math.exp(-pixelDelta * (ctrlKey ? 0.01 : 0.0025));
   return clampExtraWorkPhotoZoom(current * factor);
+}
+
+export function resolveExtraWorkPhotoWheelGesture(
+  current: number,
+  input: ExtraWorkPhotoWheelInput,
+): ExtraWorkPhotoWheelResult {
+  const normalizedCurrent = clampExtraWorkPhotoZoom(current);
+  const nextZoom = getExtraWorkPhotoWheelZoom(normalizedCurrent, input.deltaY, input);
+  return {
+    nextZoom,
+    // A ctrl-wheel sequence represents browser/trackpad pinch. It must remain
+    // captured even at the image's zoom bounds or the browser zoom takes over.
+    preventDefault: Boolean(input.ctrlKey) || nextZoom !== normalizedCurrent,
+  };
+}
+
+export function getExtraWorkPhotoSafariGestureZoom(startZoom: number, scale: number): number {
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return clampExtraWorkPhotoZoom(startZoom);
+  }
+  return clampExtraWorkPhotoZoom(startZoom * scale);
 }
 
 export function clampExtraWorkPhotoPan(
