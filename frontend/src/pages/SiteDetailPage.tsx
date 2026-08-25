@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, Pencil, Phone, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Phone, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
@@ -3143,10 +3143,29 @@ function ExtraWorkTab({
   return (
     <section className="project-extra-work-overview">
       <header className="project-record-toolbar project-extra-work-toolbar measurement-review-toolbar">
-        <div className="measurement-review-header-copy">
-          <h2><FileText aria-hidden="true" size={18} />{archiveMode ? "Archivierte Zusatzaufträge" : "Zusatzaufträge"}</h2>
-        </div>
-        <div className="measurement-review-header-actions">
+        <div className="project-extra-work-toolbar-master">
+          <div className="project-extra-work-toolbar-title">
+            <h2><FileText aria-hidden="true" size={18} />{archiveMode ? "Archivierte Zusatzaufträge" : "Zusatzaufträge"}</h2>
+            <div className="project-extra-work-mode-switch" role="group" aria-label="Zusatzauftragsansicht">
+              <button
+                type="button"
+                aria-pressed={!archiveMode}
+                disabled={actionBusy}
+                onClick={() => archiveMode && onToggleArchive()}
+              >
+                Aktiv
+              </button>
+              <span aria-hidden="true">·</span>
+              <button
+                type="button"
+                aria-pressed={archiveMode}
+                disabled={actionBusy}
+                onClick={() => !archiveMode && onToggleArchive()}
+              >
+                Archiv
+              </button>
+            </div>
+          </div>
           <label className="project-extra-work-search">
             <span className="sr-only">Zusatzaufträge durchsuchen</span>
             <input
@@ -3157,14 +3176,8 @@ function ExtraWorkTab({
             />
             <Search aria-hidden="true" size={16} />
           </label>
-          <button
-            type="button"
-            className="secondary-action"
-            disabled={actionBusy}
-            onClick={onToggleArchive}
-          >
-            {archiveMode ? "Aktive Zusatzaufträge anzeigen" : "Archiv anzeigen"}
-          </button>
+        </div>
+        <div className="project-extra-work-toolbar-detail">
           {canCreate && !archiveMode ? (
             <button
               type="button"
@@ -3378,12 +3391,64 @@ function ExtraWorkOverviewDetail({
   onPhotoCountUpdated: (ticketId: number, photoCount: number) => void;
 }) {
   const detailRef = useRef<HTMLElement>(null);
+  const actionMenuRootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuItemRef = useRef<HTMLButtonElement>(null);
+  const actionMenuId = useId();
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+
+  const closeActionMenu = useCallback((restoreFocus: boolean) => {
+    setIsActionMenuOpen(false);
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => triggerRef.current?.focus());
+    }
+  }, []);
 
   useLayoutEffect(() => {
     if (detailRef.current) {
       detailRef.current.scrollTop = 0;
     }
   }, [ticket?.id]);
+
+  useEffect(() => {
+    setIsActionMenuOpen(false);
+  }, [archiveMode, ticket?.id]);
+
+  useEffect(() => {
+    if (!isActionMenuOpen) {
+      return undefined;
+    }
+    const focusFrame = window.requestAnimationFrame(() => menuItemRef.current?.focus());
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !actionMenuRootRef.current?.contains(target)) {
+        closeActionMenu(false);
+      }
+    };
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeActionMenu(true);
+        return;
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        menuItemRef.current?.focus();
+        return;
+      }
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        menuItemRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeActionMenu, isActionMenuOpen]);
 
   if (!ticket) {
     return (
@@ -3393,6 +3458,7 @@ function ExtraWorkOverviewDetail({
     );
   }
 
+  const selectedTicket = ticket;
   const emailStatus = getCustomerEmailStatus(ticket);
   const emailStatusTooltipId = `extra-work-delivery-status-${ticket.id}`;
   const primaryEntry = getExtraWorkOverviewPrimaryEntry(ticket);
@@ -3400,12 +3466,24 @@ function ExtraWorkOverviewDetail({
   const isDownloadingPdf = pdfAction === `${ticket.id}:download`;
   const isArchiving = archivingTicketId === ticket.id;
   const isRestoring = restoringTicketId === ticket.id;
+  const actionMenuBusy = archiveMode
+    ? restoringTicketId !== null
+    : archivingTicketId !== null || pdfAction !== null;
+
+  function runActionMenuCommand(): void {
+    closeActionMenu(true);
+    if (archiveMode) {
+      onRestoreTicket(selectedTicket);
+    } else {
+      onArchiveTicket(selectedTicket);
+    }
+  }
 
   return (
     <aside className="project-extra-work-detail" ref={detailRef} aria-label={`Details zu ${formatExtraWorkOverviewTitle(ticket)}`}>
       <header className="project-extra-work-detail-head">
         <h3>{formatExtraWorkOverviewTitle(ticket)}</h3>
-        <div className="project-extra-work-detail-actions">
+        <div className={`project-extra-work-detail-actions${archiveMode ? " is-archive" : ""}`}>
           <button type="button" className="secondary-action project-extra-work-key-action project-extra-work-key-action--outline" onClick={() => onOpenTicket(ticket)}>Öffnen</button>
           {!archiveMode ? (
             <button
@@ -3417,25 +3495,42 @@ function ExtraWorkOverviewDetail({
               {isDownloadingPdf ? "Lädt..." : "PDF"}
             </button>
           ) : null}
-          {archiveMode ? (
+          <div className="project-extra-work-action-menu-root" ref={actionMenuRootRef}>
             <button
+              ref={triggerRef}
               type="button"
-              className="secondary-action"
-              disabled={restoringTicketId !== null}
-              onClick={() => onRestoreTicket(ticket)}
+              className="secondary-action project-extra-work-action-menu-trigger"
+              aria-label={`${archiveMode ? "Wiederherstellen" : "Archivieren"}: weitere Aktionen für ${formatExtraWorkOverviewTitle(ticket)}`}
+              aria-haspopup="menu"
+              aria-expanded={isActionMenuOpen}
+              aria-controls={isActionMenuOpen ? actionMenuId : undefined}
+              disabled={actionMenuBusy}
+              onClick={() => setIsActionMenuOpen((current) => !current)}
+              onKeyDown={(event) => {
+                if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+                  event.preventDefault();
+                  setIsActionMenuOpen(true);
+                }
+              }}
             >
-              {isRestoring ? "Stellt wieder her..." : "Wiederherstellen"}
+              <MoreHorizontal aria-hidden="true" size={18} />
             </button>
-          ) : (
-            <button
-              type="button"
-              className="secondary-action"
-              disabled={archivingTicketId !== null || pdfAction !== null}
-              onClick={() => onArchiveTicket(ticket)}
-            >
-              {isArchiving ? "Archiviert..." : "Archivieren"}
-            </button>
-          )}
+            {isActionMenuOpen ? (
+              <div className="project-extra-work-action-menu" id={actionMenuId} role="menu" aria-label="Zusatzauftragsaktionen">
+                <button
+                  ref={menuItemRef}
+                  type="button"
+                  role="menuitem"
+                  disabled={actionMenuBusy}
+                  onClick={runActionMenuCommand}
+                >
+                  {archiveMode
+                    ? isRestoring ? "Stellt wieder her..." : "Wiederherstellen"
+                    : isArchiving ? "Archiviert..." : "Archivieren"}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
 

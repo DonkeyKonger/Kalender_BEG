@@ -102,33 +102,104 @@ test("master creator names stay abbreviated and fully accessible", () => {
   assert.match(styles, /\.project-extra-work-master-row > \.project-extra-work-master-creator \{[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap/);
 });
 
-test("toolbar contains only create, archive switch and global search", () => {
+test("toolbar separates master controls from the aligned detail action rail", () => {
   const toolbarStart = tabSource.indexOf('<header className="project-record-toolbar project-extra-work-toolbar');
   const toolbarEnd = tabSource.indexOf("</header>", toolbarStart);
   const toolbarSource = tabSource.slice(toolbarStart, toolbarEnd);
+  const masterIndex = toolbarSource.indexOf('className="project-extra-work-toolbar-master"');
   const searchIndex = toolbarSource.indexOf('className="project-extra-work-search"');
-  const archiveIndex = toolbarSource.indexOf("onClick={onToggleArchive}");
+  const detailIndex = toolbarSource.indexOf('className="project-extra-work-toolbar-detail"');
   const createIndex = toolbarSource.indexOf("onClick={onCreate}");
 
   assert.match(tabSource, /\+ Zusatzauftrag erstellen/);
-  assert.match(tabSource, /Archiv anzeigen/);
   assert.match(tabSource, /type="search"/);
   assert.match(tabSource, /placeholder="Suche\.\.\."/);
   assert.doesNotMatch(toolbarSource, /<p>/);
   assert.doesNotMatch(toolbarSource, /Mobile Stundenzettel und Zusatzaufträge/);
-  assert.ok(searchIndex >= 0 && searchIndex < archiveIndex && archiveIndex < createIndex);
-  assert.match(toolbarSource, /className="secondary-action"[\s\S]*onClick=\{onToggleArchive\}/);
+  assert.ok(masterIndex >= 0 && masterIndex < searchIndex && searchIndex < detailIndex && detailIndex < createIndex);
+  assert.match(toolbarSource, /className="project-extra-work-toolbar-master"[\s\S]*className="project-extra-work-search"/);
+  assert.match(toolbarSource, /className="project-extra-work-toolbar-detail"[\s\S]*onClick=\{onCreate\}/);
   assert.match(toolbarSource, /className="primary-action project-extra-work-key-action project-extra-work-key-action--filled"[\s\S]*onClick=\{onCreate\}/);
   assert.doesNotMatch(tabSource, /Filter/);
 });
 
-test("detail action set stays reduced to open, PDF and archive or restore", () => {
+test("active and archived overview modes use one accessible two-state switch", () => {
+  const toolbarStart = tabSource.indexOf('<header className="project-record-toolbar project-extra-work-toolbar');
+  const toolbarEnd = tabSource.indexOf("</header>", toolbarStart);
+  const toolbarSource = tabSource.slice(toolbarStart, toolbarEnd);
+
+  assert.match(toolbarSource, /archiveMode \? "Archivierte Zusatzaufträge" : "Zusatzaufträge"/);
+  assert.match(toolbarSource, /className="project-extra-work-mode-switch" role="group" aria-label="Zusatzauftragsansicht"/);
+  assert.match(toolbarSource, /aria-pressed=\{!archiveMode\}[\s\S]*onClick=\{\(\) => archiveMode && onToggleArchive\(\)\}[\s\S]*Aktiv/);
+  assert.match(toolbarSource, /aria-pressed=\{archiveMode\}[\s\S]*onClick=\{\(\) => !archiveMode && onToggleArchive\(\)\}[\s\S]*Archiv/);
+  assert.match(toolbarSource, /disabled=\{actionBusy\}/);
+  assert.doesNotMatch(toolbarSource, />Archiv anzeigen</);
+  assert.doesNotMatch(toolbarSource, /Aktive Zusatzaufträge anzeigen/);
+});
+
+test("detail overflow menu preserves archive and restore paths with full keyboard lifecycle", () => {
+  const detailStart = tabSource.indexOf("function ExtraWorkOverviewDetail");
+  const detailSource = tabSource.slice(detailStart);
+
   assert.match(tabSource, />Öffnen</);
   assert.match(tabSource, /"PDF"/);
-  assert.match(tabSource, /"Archivieren"/);
-  assert.match(tabSource, /"Wiederherstellen"/);
+  assert.match(detailSource, /aria-haspopup="menu"/);
+  assert.match(detailSource, /aria-expanded=\{isActionMenuOpen\}/);
+  assert.match(detailSource, /aria-controls=\{isActionMenuOpen \? actionMenuId : undefined\}/);
+  assert.match(detailSource, /<MoreHorizontal aria-hidden="true"/);
+  assert.match(detailSource, /role="menu"/);
+  assert.match(detailSource, /role="menuitem"/);
+  assert.match(detailSource, /archiveMode \? "Wiederherstellen" : "Archivieren"/);
+  assert.match(detailSource, /if \(archiveMode\) \{[\s\S]*onRestoreTicket\(selectedTicket\);[\s\S]*\} else \{[\s\S]*onArchiveTicket\(selectedTicket\);/);
+  assert.match(detailSource, /document\.addEventListener\("pointerdown", handlePointerDown, true\)/);
+  assert.match(detailSource, /document\.addEventListener\("keydown", handleKeyDown\)/);
+  assert.match(detailSource, /event\.key === "Escape"[\s\S]*closeActionMenu\(true\)/);
+  assert.match(detailSource, /event\.key === "Tab"[\s\S]*event\.preventDefault\(\)[\s\S]*menuItemRef\.current\?\.focus\(\)/);
+  assert.match(detailSource, /requestAnimationFrame\(\(\) => menuItemRef\.current\?\.focus\(\)\)/);
+  assert.match(detailSource, /triggerRef\.current\?\.focus\(\)/);
+  assert.match(detailSource, /disabled=\{actionMenuBusy\}/);
+  assert.doesNotMatch(detailSource, /onClick=\{\(\) => onArchiveTicket\(ticket\)\}/);
+  assert.doesNotMatch(detailSource, /onClick=\{\(\) => onRestoreTicket\(ticket\)\}/);
   assert.doesNotMatch(tabSource, />Löschen</);
-  assert.doesNotMatch(tabSource, /Weitere Aktionen/);
+});
+
+test("desktop header and detail actions share the 52-48 grid and one action-rail width", () => {
+  assert.match(
+    styles,
+    /\.project-extra-work-overview \{[\s\S]*--project-extra-work-master-column: minmax\(680px, 52%\);[\s\S]*--project-extra-work-action-rail-width: 264px;/,
+  );
+  assert.match(
+    styles,
+    /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*grid-template-columns: var\(--project-extra-work-master-column\) minmax\(0, 1fr\);/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-toolbar-master \{[\s\S]*display: flex;[\s\S]*padding: 10px 0 10px var\(--project-extra-work-header-inline-padding\);/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-search \{[\s\S]*margin-left: auto;[\s\S]*width: 224px;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-toolbar-detail \{[\s\S]*justify-content: flex-end;[\s\S]*border-left: 1px solid var\(--project-extra-work-divider\);[\s\S]*overflow-y: auto;[\s\S]*scrollbar-gutter: stable;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-toolbar-detail \.project-extra-work-key-action--filled \{[\s\S]*width: var\(--project-extra-work-action-rail-width\);/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-detail-actions \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\) 34px;[\s\S]*width: var\(--project-extra-work-action-rail-width\);/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 760px\) \{[\s\S]*\.project-extra-work-toolbar-master \{[\s\S]*flex-wrap: wrap;[\s\S]*\.project-extra-work-detail-actions \{[\s\S]*max-width: 100%;/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 600px\) \{[\s\S]*\.project-extra-work-toolbar-detail \.project-extra-work-key-action--filled \{[\s\S]*width: 100%;/,
+  );
 });
 
 test("the two key overview actions reuse the selected payroll week blue with clear hierarchy", () => {
@@ -291,11 +362,10 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /\.project-extra-work-workspace \{[\s\S]*grid-template-columns: var\(--project-extra-work-master-column\) minmax\(0, 1fr\)/);
   assert.match(styles, /grid-template-columns: 148px minmax\(152px, 1fr\) 104px 88px 104px 68px/);
   assert.match(styles, /--project-extra-work-control-height: 32px/);
-  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions > \.secondary-action,[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions > \.primary-action,[\s\S]*\.project-extra-work-search \{[\s\S]*height: var\(--project-extra-work-control-height\)/);
+  assert.match(styles, /\.project-extra-work-toolbar-detail > \.primary-action,[\s\S]*\.project-extra-work-search \{[\s\S]*height: var\(--project-extra-work-control-height\)/);
   assert.match(styles, /\.project-extra-work-search input \{[\s\S]*appearance: none;[\s\S]*height: 100%/);
   assert.match(styles, /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*grid-template-columns: var\(--project-extra-work-master-column\) minmax\(0, 1fr\);[\s\S]*border-bottom: 0/);
-  assert.match(styles, /--project-extra-work-header-separator-inset: 8px/);
-  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions::before \{[\s\S]*top: var\(--project-extra-work-header-separator-inset\);[\s\S]*bottom: var\(--project-extra-work-header-separator-inset\);[\s\S]*left: 0;[\s\S]*width: 1px;[\s\S]*background: var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-extra-work-toolbar-detail \{[\s\S]*border-left: 1px solid var\(--project-extra-work-divider\)/);
   assert.match(styles, /\.site-detail-status-trigger \{[\s\S]*border-radius: 0/);
   assert.match(styles, /\.site-detail-status-menu \{[\s\S]*border-radius: 0/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px;[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
@@ -313,9 +383,8 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-delivery-tooltip \{[\s\S]*right: auto;[\s\S]*left: 0/);
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*--project-extra-work-master-column: minmax\(0, 1fr\)/);
-  assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*border-top: 1px solid var\(--project-extra-work-divider\)/);
-  assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions::before \{[\s\S]*display: none/);
-  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*flex-wrap: wrap/);
+  assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-toolbar-detail \{[\s\S]*border-top: 1px solid var\(--project-extra-work-divider\);[\s\S]*border-left: 0/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-toolbar-master \{[\s\S]*flex-wrap: wrap/);
   assert.match(styles, /\.project-extra-work-master-row\.is-selected::before/);
   assert.match(styles, /\.project-extra-work-overview \.secondary-action,[\s\S]*border-radius: 2px/);
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-workspace/);
@@ -327,7 +396,7 @@ test("structural dividers become lighter only inside the extra-work overview", (
   assert.match(styles, /\.site-detail-page\.is-project-file-workspace \.project-record-tabs \{[\s\S]*border-bottom: 1px solid var\(--pf-border\)/);
   assert.match(styles, /\.project-extra-work-overview \{[\s\S]*--project-extra-work-divider: #e3e6eb;[\s\S]*--project-extra-work-divider-soft: #edf0f3/);
   assert.match(styles, /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*border-color: var\(--project-extra-work-divider\)/);
-  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions::before \{[\s\S]*background: var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-extra-work-toolbar-detail \{[\s\S]*border-left: 1px solid var\(--project-extra-work-divider\)/);
   assert.match(styles, /\.project-extra-work-workspace \{[\s\S]*border: 1px solid var\(--project-extra-work-divider\)/);
   assert.match(styles, /\.project-extra-work-master-row \{[\s\S]*border-bottom: 1px solid var\(--project-extra-work-divider-soft\)/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*border-bottom: 1px solid var\(--project-extra-work-divider\)/);
@@ -336,9 +405,10 @@ test("structural dividers become lighter only inside the extra-work overview", (
   assert.match(styles, /\.project-extra-work-search \{[\s\S]*border: 1px solid var\(--pf-border\)/);
 });
 
-test("toolbar and detail action edges share the responsive right inset", () => {
+test("search reaches the split while detail actions share the responsive right inset", () => {
   assert.match(styles, /\.project-extra-work-overview \{[\s\S]*--project-extra-work-header-inline-padding: 18px/);
-  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*overflow-y: auto;[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\);[\s\S]*scrollbar-gutter: stable/);
+  assert.match(styles, /\.project-extra-work-toolbar-master \{[\s\S]*padding: 10px 0 10px var\(--project-extra-work-header-inline-padding\)/);
+  assert.match(styles, /\.project-extra-work-toolbar-detail \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
   assert.match(styles, /@media \(max-width: 900px\)[\s\S]*--project-extra-work-header-inline-padding: 14px/);
 });

@@ -27340,11 +27340,13 @@ body.mobile-modal-scroll-locked {
   --project-extra-work-divider: #e3e6eb;
   --project-extra-work-divider-soft: #edf0f3;
   --project-extra-work-header-inline-padding: 18px;
-  --project-extra-work-header-separator-inset: 8px;
   --project-extra-work-master-column: minmax(680px, 52%);
+  --project-extra-work-action-rail-width: 264px;
 }
 
 .site-detail-page.is-project-file-workspace .project-record-toolbar.project-extra-work-toolbar.measurement-review-toolbar {
+  --project-extra-work-control-height: 32px;
+
   display: grid;
   grid-template-columns: var(--project-extra-work-master-column) minmax(0, 1fr);
   min-height: 54px;
@@ -27357,16 +27359,25 @@ body.mobile-modal-scroll-locked {
   padding: 0;
 }
 
-.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-copy {
+.site-detail-page.is-project-file-workspace .project-extra-work-toolbar-master {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 16px;
+  padding: 10px 0 10px var(--project-extra-work-header-inline-padding);
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-toolbar-title {
   display: flex;
   flex: 0 1 auto;
   align-items: center;
   min-width: 0;
-  gap: 0;
-  padding: 10px var(--project-extra-work-header-inline-padding);
+  gap: 12px;
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar h2 {
+  display: inline-flex;
+  align-items: center;
   margin: 0;
   gap: 9px;
   font-size: 1.05rem;
@@ -27375,35 +27386,74 @@ body.mobile-modal-scroll-locked {
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-toolbar h2 svg {
+  flex: 0 0 auto;
   color: #334155;
 }
 
-.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
-  --project-extra-work-control-height: 32px;
-
-  position: relative;
-  display: flex;
+.site-detail-page.is-project-file-workspace .project-extra-work-mode-switch {
+  display: inline-grid;
   flex: 0 0 auto;
-  flex-wrap: nowrap;
+  grid-template-columns: auto 8px auto;
+  height: 28px;
+  align-items: center;
+  border: 1px solid var(--pf-border);
+  border-radius: 2px;
+  background: #f7f9fc;
+  color: #64748b;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-mode-switch > span {
+  color: #94a3b8;
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-mode-switch button {
+  min-width: 0;
+  height: 26px;
+  min-height: 26px;
+  border: 0;
+  border-radius: 1px;
+  background: transparent;
+  color: #58708e;
+  padding: 0 7px;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-mode-switch button[aria-pressed="true"] {
+  background: #e8eef6;
+  color: #284f76;
+  box-shadow: inset 0 -2px 0 #284f76;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-mode-switch button:hover:not(:disabled) {
+  background: #eff4fa;
+  color: #174678;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-mode-switch button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-mode-switch button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-toolbar-detail {
+  display: flex;
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
-  margin-left: 0;
-  overflow-y: auto;
-  gap: 8px;
+  border-left: 1px solid var(--project-extra-work-divider);
   padding: 10px var(--project-extra-work-header-inline-padding);
+  overflow-x: hidden;
+  overflow-y: auto;
   scrollbar-gutter: stable;
-}
-
-.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions::before {
-  position: absolute;
-  top: var(--project-extra-work-header-separator-inset);
-  bottom: var(--project-extra-work-header-separator-inset);
-  left: 0;
-  width: 1px;
-  background: var(--project-extra-work-divider);
-  content: "";
-  pointer-events: none;
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-overview .secondary-action,
@@ -27413,17 +27463,24 @@ body.mobile-modal-scroll-locked {
   font-weight: 750;
 }
 
-.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions > .secondary-action,
-.site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions > .primary-action,
+.site-detail-page.is-project-file-workspace .project-extra-work-toolbar-detail > .primary-action,
 .site-detail-page.is-project-file-workspace .project-extra-work-search {
   height: var(--project-extra-work-control-height);
   min-height: var(--project-extra-work-control-height);
 }
 
+.site-detail-page.is-project-file-workspace .project-extra-work-toolbar-detail .project-extra-work-key-action--filled {
+  width: var(--project-extra-work-action-rail-width);
+  max-width: 100%;
+}
+
 .site-detail-page.is-project-file-workspace .project-extra-work-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px;
+  flex: 0 1 224px;
+  margin-left: auto;
   width: 224px;
+  min-width: 170px;
   border: 1px solid var(--pf-border);
   border-radius: 2px;
   background: var(--pf-surface);
@@ -27838,14 +27895,74 @@ body.mobile-modal-scroll-locked {
 }
 
 .project-extra-work-detail-actions {
-  display: flex;
+  display: grid;
   flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
+  width: var(--project-extra-work-action-rail-width);
+  max-width: 100%;
 }
 
-.project-extra-work-detail-actions button {
-  min-width: 76px;
+.project-extra-work-detail-actions.is-archive {
+  grid-template-columns: minmax(0, 1fr) 34px;
+}
+
+.project-extra-work-detail-actions > button {
+  width: 100%;
+  min-width: 0;
+}
+
+.project-extra-work-action-menu-root {
+  position: relative;
+  width: 34px;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-action-menu-trigger {
+  display: inline-grid;
+  width: 34px;
+  min-width: 34px;
+  height: 32px;
+  min-height: 32px;
+  place-items: center;
+  padding: 0;
+}
+
+.project-extra-work-action-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 0;
+  width: max-content;
+  min-width: 154px;
+  border: 1px solid #cbd5e1;
+  border-radius: 2px;
+  background: #ffffff;
+  padding: 4px;
+  box-shadow: 0 8px 22px rgb(15 23 42 / 16%);
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-action-menu button {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  align-items: center;
+  border: 0;
+  border-radius: 1px;
+  background: #ffffff;
+  color: #334155;
+  padding: 7px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-action-menu button:hover:not(:disabled),
+.site-detail-page.is-project-file-workspace .project-extra-work-action-menu button:focus-visible {
+  background: #eff4fa;
+  color: #174678;
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
 }
 
 .project-extra-work-detail dt {
@@ -28550,15 +28667,10 @@ body.mobile-modal-scroll-locked {
     grid-template-columns: var(--project-extra-work-master-column);
   }
 
-  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
-    width: 100%;
-    margin-left: 0;
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar-detail {
     border-top: 1px solid var(--project-extra-work-divider);
+    border-left: 0;
     padding: 10px var(--project-extra-work-header-inline-padding);
-  }
-
-  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions::before {
-    display: none;
   }
 
   .project-extra-work-workspace {
@@ -28595,14 +28707,16 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 760px) {
-  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar .measurement-review-header-actions {
-    align-self: stretch;
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar-master {
     flex-wrap: wrap;
-    justify-content: flex-start;
+  }
+
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar-title {
+    flex: 1 1 auto;
   }
 
   .site-detail-page.is-project-file-workspace .project-extra-work-search {
-    flex: 1 1 224px;
+    flex: 1 1 190px;
     width: auto;
     max-width: 100%;
   }
@@ -28616,7 +28730,7 @@ body.mobile-modal-scroll-locked {
   }
 
   .project-extra-work-detail-actions {
-    flex-wrap: wrap;
+    max-width: 100%;
   }
 
   .project-extra-work-master-head,
@@ -28670,6 +28784,15 @@ body.mobile-modal-scroll-locked {
 @media (max-width: 600px) {
   .site-detail-page.is-project-file-workspace .project-extra-work-search {
     flex-basis: 100%;
+    width: 100%;
+  }
+
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar-detail .project-extra-work-key-action--filled {
+    width: 100%;
+  }
+
+  .project-extra-work-detail-actions {
+    width: 100%;
   }
 
   .project-extra-work-pagination {
@@ -28699,6 +28822,16 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 480px) {
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar-title {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .site-detail-page.is-project-file-workspace .project-extra-work-toolbar h2 {
+    white-space: normal;
+  }
+
   .project-extra-work-delivery-tooltip {
     right: auto;
     left: 0;

@@ -27,7 +27,9 @@ test("archive stays inside the master-detail tab and remains visibly separate", 
   assert.match(pageSource, /const \[extraWorkArchiveMode, setExtraWorkArchiveMode\] = useState\(false\)/);
   assert.match(tabSource, /"Archivierte Zusatzaufträge"/);
   assert.doesNotMatch(tabSource, /Archivierte Zusatzaufträge können hier eingesehen und wiederhergestellt werden\./);
-  assert.match(tabSource, /"Aktive Zusatzaufträge anzeigen" : "Archiv anzeigen"/);
+  assert.match(tabSource, /className="project-extra-work-mode-switch" role="group" aria-label="Zusatzauftragsansicht"/);
+  assert.match(tabSource, /aria-pressed=\{!archiveMode\}/);
+  assert.match(tabSource, /aria-pressed=\{archiveMode\}/);
   assert.match(tabSource, /"Keine archivierten Zusatzaufträge vorhanden\."/);
   assert.match(pageSource, /siteExtraWorkTickets\(site\.id, \{ archivedOnly \}\)/);
 });
