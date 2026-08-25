@@ -33,6 +33,10 @@ import {
   getExtraWorkOverviewScrollbarWidth,
 } from "../lib/extraWorkOverview";
 import {
+  loadExtraWorkOverviewPhotoList,
+  loadExtraWorkOverviewThumbnail,
+} from "../lib/extraWorkPhotoPreview";
+import {
   formatGermanDateKey as formatDateOnly,
   formatGermanDateTimeShort as formatDateTime,
 } from "../lib/formatters";
@@ -59,7 +63,7 @@ import { getSiteStatusMenuNavigationIndex } from "../lib/siteStatusMenu";
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import { calendarPersonCode, type Person } from "../types/person";
-import type { ExtraWorkTicketEntrySummary, MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimeAnalysisRow, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
+import type { ExtraWorkTicketEntrySummary, MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimeAnalysisRow, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
 import { SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
@@ -3347,7 +3351,161 @@ function ExtraWorkOverviewDetail({
           <div><dt>Achse</dt><dd>{primaryEntry?.axis?.trim() || "–"}</dd></div>
         </dl>
       </section>
+
+      <ExtraWorkOverviewPhotos
+        key={`${ticket.id}:${archiveMode ? "archived" : "active"}`}
+        siteId={site.id}
+        ticket={ticket}
+        includeDeleted={archiveMode}
+      />
     </aside>
+  );
+}
+
+function ExtraWorkOverviewPhotos({
+  siteId,
+  ticket,
+  includeDeleted,
+}: {
+  siteId: number;
+  ticket: MobileExtraWorkTicket;
+  includeDeleted: boolean;
+}) {
+  const [photos, setPhotos] = useState<MobileExtraWorkTicketPhoto[]>([]);
+  const [isLoading, setIsLoading] = useState(ticket.photo_count > 0);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (ticket.photo_count <= 0) {
+      setPhotos([]);
+      setIsLoading(false);
+      setHasError(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setPhotos([]);
+    setIsLoading(true);
+    setHasError(false);
+    void loadExtraWorkOverviewPhotoList(
+      siteId,
+      ticket.id,
+      includeDeleted,
+      () => api.siteExtraWorkTicketPhotos(siteId, ticket.id, { includeDeleted }),
+    )
+      .then((loadedPhotos) => {
+        if (active) {
+          setPhotos(loadedPhotos);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setHasError(true);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [includeDeleted, siteId, ticket.id, ticket.photo_count]);
+
+  if (ticket.photo_count <= 0) {
+    return null;
+  }
+  if (!isLoading && !hasError && photos.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="project-extra-work-photo-preview" aria-label="Fotos zum Zusatzauftrag">
+      {isLoading ? <span className="project-extra-work-photo-feedback" role="status">Fotovorschau wird geladen…</span> : null}
+      {hasError ? <span className="project-extra-work-photo-feedback is-error" role="status">Fotovorschau nicht verfügbar.</span> : null}
+      {photos.length > 0 ? (
+        <div className="project-extra-work-photo-list">
+          {photos.map((photo) => (
+            <ExtraWorkOverviewThumbnail
+              key={photo.id}
+              siteId={siteId}
+              ticketId={ticket.id}
+              photo={photo}
+              includeDeleted={includeDeleted}
+            />
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ExtraWorkOverviewThumbnail({
+  siteId,
+  ticketId,
+  photo,
+  includeDeleted,
+}: {
+  siteId: number;
+  ticketId: number;
+  photo: MobileExtraWorkTicketPhoto;
+  includeDeleted: boolean;
+}) {
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+    void loadExtraWorkOverviewThumbnail(
+      siteId,
+      ticketId,
+      photo.id,
+      includeDeleted,
+      () => api.siteExtraWorkTicketPhotoThumbnail(
+        siteId,
+        ticketId,
+        photo.id,
+        { includeDeleted },
+      ),
+    )
+      .then((blob) => {
+        if (!active) {
+          return;
+        }
+        objectUrl = window.URL.createObjectURL(blob);
+        setThumbnailUrl(objectUrl);
+      })
+      .catch(() => {
+        if (active) {
+          setHasError(true);
+        }
+      });
+    return () => {
+      active = false;
+      if (objectUrl) {
+        window.URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [includeDeleted, photo.id, siteId, ticketId]);
+
+  const accessibleName = photo.caption?.trim()
+    ? `Foto: ${photo.caption.trim()}`
+    : `Foto: ${photo.filename}`;
+  return (
+    <figure className={`project-extra-work-photo${hasError ? " has-error" : ""}`} title={photo.filename}>
+      {thumbnailUrl ? (
+        <img src={thumbnailUrl} alt={accessibleName} loading="eager" decoding="async" />
+      ) : (
+        <span aria-label={hasError ? `${accessibleName} – Vorschau nicht verfügbar` : `${accessibleName} – wird geladen`} role="img">
+          <FileImage aria-hidden="true" size={20} />
+        </span>
+      )}
+    </figure>
   );
 }
 

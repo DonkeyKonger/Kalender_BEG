@@ -1449,6 +1449,16 @@ export const api = {
     return requestBlob(`/sites/${siteId}/extra-work-tickets/${ticketId}/photos/${photoId}/content${suffix}`);
   },
 
+  async siteExtraWorkTicketPhotoThumbnail(
+    siteId: number,
+    ticketId: number,
+    photoId: number,
+    params: { includeDeleted?: boolean } = {},
+  ): Promise<Blob> {
+    const suffix = params.includeDeleted ? "?include_deleted=true" : "";
+    return requestBlob(`/sites/${siteId}/extra-work-tickets/${ticketId}/photos/${photoId}/thumbnail${suffix}`);
+  },
+
   async deleteSiteExtraWorkTicketPhoto(
     siteId: number,
     ticketId: number,

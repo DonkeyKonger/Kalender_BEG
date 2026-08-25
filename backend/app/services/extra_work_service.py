@@ -29,7 +29,11 @@ from app.schemas.extra_work import (
     ExtraWorkWorkerHours,
     ExtraWorkWorkerSignatureCreate,
 )
-from app.services.document_photo_optimizer import optimize_document_photo
+from app.services.document_photo_optimizer import (
+    OPTIMIZED_PHOTO_CONTENT_TYPE,
+    create_document_photo_thumbnail,
+    optimize_document_photo,
+)
 from app.services.extra_work_archive_service import (
     ExtraWorkArchiveService,
     is_extra_work_completed_status,
@@ -799,6 +803,7 @@ class ExtraWorkService:
             optimized_photo.optimized_height,
             optimized_photo.duration_ms,
         )
+        thumbnail_content = create_document_photo_thumbnail(optimized_photo.content)
 
         folder = ProjectFolderService(self.db).get_project_folder_for_site_by_key(
             ticket.site_id,
@@ -844,6 +849,8 @@ class ExtraWorkService:
             filename=str(uploaded.get("name") or upload_filename),
             content_type=optimized_photo.content_type,
             file_size_bytes=uploaded.get("size") if isinstance(uploaded.get("size"), int) else len(optimized_photo.content),
+            thumbnail_content=thumbnail_content,
+            thumbnail_content_type=OPTIMIZED_PHOTO_CONTENT_TYPE,
         )
         self.db.add(photo)
         self.db.commit()
@@ -892,6 +899,40 @@ class ExtraWorkService:
             str(downloaded.get("content_type") or photo.content_type),
             str(downloaded.get("filename") or photo.filename),
         )
+
+    def get_site_ticket_photo_thumbnail(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        photo_id: int,
+        current_user: User,
+        include_deleted: bool = False,
+    ) -> tuple[bytes, str]:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            site_id,
+            include_deleted=include_deleted,
+        )
+        photo = self._get_photo_for_ticket(photo_id, ticket.id)
+        if photo.thumbnail_content:
+            return (
+                photo.thumbnail_content,
+                photo.thumbnail_content_type or OPTIMIZED_PHOTO_CONTENT_TYPE,
+            )
+
+        downloaded = ProjectStorageService().download_file_from_folder(
+            drive_id=photo.external_drive_id,
+            folder_item_id=self._get_photo_folder_item_id(photo, current_user),
+            item_id=photo.external_item_id,
+        )
+        thumbnail = create_document_photo_thumbnail(bytes(downloaded["content"]))
+        photo.thumbnail_content = thumbnail
+        photo.thumbnail_content_type = OPTIMIZED_PHOTO_CONTENT_TYPE
+        self.db.add(photo)
+        self.db.commit()
+        return thumbnail, OPTIMIZED_PHOTO_CONTENT_TYPE
 
     def delete_mobile_ticket_photo(
         self,

@@ -27940,6 +27940,63 @@ body.mobile-modal-scroll-locked {
   border-bottom: 0;
 }
 
+.project-extra-work-photo-preview {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 22px 18px;
+}
+
+.project-extra-work-photo-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.project-extra-work-photo {
+  display: grid;
+  width: clamp(64px, 6vw, 88px);
+  margin: 0;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--project-extra-work-divider);
+  border-radius: 2px;
+  background: #f8fafc;
+  place-items: center;
+}
+
+.project-extra-work-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.project-extra-work-photo > span {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  color: #71839a;
+  place-items: center;
+}
+
+.project-extra-work-photo.has-error > span {
+  color: #9c5b5b;
+}
+
+.project-extra-work-photo-feedback {
+  color: #71839a;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.project-extra-work-photo-feedback.is-error {
+  color: #9c5b5b;
+}
+
 @media (max-width: 1280px) {
   .site-detail-page.is-project-file-workspace .project-extra-work-overview {
     --project-extra-work-master-column: minmax(560px, 48%);

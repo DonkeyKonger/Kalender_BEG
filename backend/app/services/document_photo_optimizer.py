@@ -11,6 +11,8 @@ from app.services.photo_limits import MAX_PHOTO_DIMENSION, MAX_PHOTO_UPLOAD_BYTE
 
 
 OPTIMIZED_PHOTO_CONTENT_TYPE = "image/jpeg"
+DOCUMENT_PHOTO_THUMBNAIL_SIZE = 320
+DOCUMENT_PHOTO_THUMBNAIL_QUALITY = 72
 
 
 @dataclass(frozen=True)
@@ -63,3 +65,36 @@ def optimize_document_photo(content: bytes) -> OptimizedDocumentPhoto:
         optimized_height=rgb.height,
         duration_ms=duration_ms,
     )
+
+
+def create_document_photo_thumbnail(content: bytes) -> bytes:
+    """Create the small, square preview used outside the document editor."""
+    if not content:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Foto ist leer.")
+
+    try:
+        with Image.open(BytesIO(content)) as source:
+            image = ImageOps.exif_transpose(source)
+            if image.mode not in {"RGB", "RGBA"}:
+                image = image.convert("RGBA")
+            square = ImageOps.fit(
+                image,
+                (DOCUMENT_PHOTO_THUMBNAIL_SIZE, DOCUMENT_PHOTO_THUMBNAIL_SIZE),
+                method=Image.Resampling.LANCZOS,
+            )
+            rgb = Image.new("RGB", square.size, "white")
+            if square.mode == "RGBA":
+                rgb.paste(square, mask=square.getchannel("A"))
+            else:
+                rgb.paste(square)
+            output = BytesIO()
+            rgb.save(
+                output,
+                format="JPEG",
+                quality=DOCUMENT_PHOTO_THUMBNAIL_QUALITY,
+                optimize=True,
+            )
+    except (OSError, UnidentifiedImageError, ValueError) as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte ein gültiges Foto hochladen.") from error
+
+    return output.getvalue()

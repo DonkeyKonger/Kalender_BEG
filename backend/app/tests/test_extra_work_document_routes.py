@@ -182,6 +182,27 @@ class FakeExtraWorkService:
         )
         return b"photo", "image/jpeg", "baustelle.jpg"
 
+    def get_site_ticket_photo_thumbnail(
+        self,
+        *,
+        site_id,
+        ticket_id,
+        photo_id,
+        current_user,
+        include_deleted=False,
+    ):
+        self.calls.append(
+            (
+                "photo-thumbnail",
+                site_id,
+                ticket_id,
+                photo_id,
+                current_user.id,
+                include_deleted,
+            )
+        )
+        return b"thumbnail", "image/jpeg"
+
     def delete_site_ticket_photo(
         self,
         *,
@@ -350,6 +371,13 @@ def test_read_routes_forward_archive_flags_and_serve_sanitized_template(monkeypa
     photo = client.get(
         "/api/sites/8/extra-work-tickets/12/photos/4/content?include_deleted=true"
     )
+    thumbnail = client.get(
+        "/api/sites/8/extra-work-tickets/12/photos/4/thumbnail?include_deleted=true"
+    )
+    cached_thumbnail = client.get(
+        "/api/sites/8/extra-work-tickets/12/photos/4/thumbnail?include_deleted=true",
+        headers={"If-None-Match": thumbnail.headers["etag"]},
+    )
     template = client.get("/api/sites/8/extra-work-template")
 
     assert document.status_code == 200
@@ -357,6 +385,10 @@ def test_read_routes_forward_archive_flags_and_serve_sanitized_template(monkeypa
     assert photos.status_code == 200 and photos.json() == []
     assert photo.status_code == 200 and photo.content == b"photo"
     assert photo.headers["content-type"] == "image/jpeg"
+    assert thumbnail.status_code == 200 and thumbnail.content == b"thumbnail"
+    assert thumbnail.headers["content-type"] == "image/jpeg"
+    assert thumbnail.headers["cache-control"] == "private, max-age=86400, immutable"
+    assert cached_thumbnail.status_code == 304
     assert template.status_code == 200
     assert template.headers["content-type"] == "application/pdf"
     assert template.content == b"%PDF-clean-template"
@@ -364,6 +396,8 @@ def test_read_routes_forward_archive_flags_and_serve_sanitized_template(monkeypa
         ("get-document", 8, 12, True),
         ("photos", 8, 12, True),
         ("photo-content", 8, 12, 4, 7, True),
+        ("photo-thumbnail", 8, 12, 4, 7, True),
+        ("photo-thumbnail", 8, 12, 4, 7, True),
         ("site", 8),
     ]
     assert FakeExtraWorkPdfService.calls == [("template",)]

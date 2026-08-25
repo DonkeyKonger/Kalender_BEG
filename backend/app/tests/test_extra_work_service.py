@@ -809,6 +809,7 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
         content=sample_photo_bytes(),
         content_type="image/jpeg",
     )
+    stored_thumbnail = db.get(ExtraWorkTicketPhoto, photo.id).thumbnail_content
     updated_photo = service.update_mobile_ticket_photo_caption(
         assignment_id=assignment.id,
         ticket_id=ticket.id,
@@ -837,6 +838,7 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
     assert photo.extra_work_ticket_id == ticket.id
     assert photo.file_size_bytes is not None and photo.file_size_bytes > 0
     assert photo.external_web_url == "https://example.invalid/photo-1"
+    assert stored_thumbnail is not None and stored_thumbnail.startswith(b"\xff\xd8")
     assert updated_photo.caption == "Zusätzliche Kabelrinne montiert"
     assert photos[-1].caption == "Zusätzliche Kabelrinne montiert"
     assert [item.id for item in photos] == [existing_photo.id, photo.id]
@@ -848,6 +850,81 @@ def test_mobile_extra_work_ticket_photos_persist_and_use_project_photo_folder(mo
         ticket_id=ticket.id,
         current_user=current_user,
     )] == [existing_photo.id]
+
+
+def test_legacy_extra_work_photo_thumbnail_is_generated_and_persisted_once(monkeypatch):
+    db = db_session()
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add(site)
+    db.commit()
+    folder = ProjectFolder(
+        site_id=site.id,
+        sort_order=14,
+        name="Fotos",
+        folder_key="fotos",
+        is_active=True,
+        external_drive_id="drive-1",
+        external_item_id="folder-1",
+    )
+    ticket = ExtraWorkTicket(
+        site_id=site.id,
+        sequence_number=1,
+        display_number="8007.Z01",
+        kind="billing",
+        status="draft",
+    )
+    db.add_all([folder, ticket])
+    db.commit()
+    photo = ExtraWorkTicketPhoto(
+        site_id=site.id,
+        extra_work_ticket_id=ticket.id,
+        project_folder_key="fotos",
+        external_drive_id="drive-1",
+        external_item_id="legacy-photo",
+        filename="legacy.jpg",
+        content_type="image/jpeg",
+    )
+    db.add(photo)
+    db.commit()
+
+    class FakeProjectStorageService:
+        downloads = 0
+
+        def download_file_from_folder(self, *, drive_id, folder_item_id, item_id):
+            assert (drive_id, folder_item_id, item_id) == (
+                "drive-1",
+                "folder-1",
+                "legacy-photo",
+            )
+            self.__class__.downloads += 1
+            return {
+                "content": sample_photo_bytes(),
+                "content_type": "image/jpeg",
+                "filename": "legacy.jpg",
+            }
+
+    monkeypatch.setattr(extra_work_module, "ProjectStorageService", FakeProjectStorageService)
+    current_user = SimpleNamespace(id=7, role=UserRole.ADMIN)
+    service = ExtraWorkService(db)
+
+    first, first_type = service.get_site_ticket_photo_thumbnail(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        photo_id=photo.id,
+        current_user=current_user,
+    )
+    second, second_type = service.get_site_ticket_photo_thumbnail(
+        site_id=site.id,
+        ticket_id=ticket.id,
+        photo_id=photo.id,
+        current_user=current_user,
+    )
+
+    assert first == second
+    assert first.startswith(b"\xff\xd8")
+    assert first_type == second_type == "image/jpeg"
+    assert FakeProjectStorageService.downloads == 1
+    assert db.get(ExtraWorkTicketPhoto, photo.id).thumbnail_content == first
 
 
 def test_mobile_extra_work_photo_upload_blocks_after_five_photos():
@@ -1514,6 +1591,10 @@ def test_list_site_tickets_eager_loads_entries_and_photos_without_n_plus_one():
     assert len(select_statements) <= 7
     assert sum("FROM extra_work_ticket_entries" in sql for sql in select_statements) == 1
     assert sum("FROM extra_work_ticket_photos" in sql for sql in select_statements) == 1
+    photo_select = next(
+        sql for sql in select_statements if "FROM extra_work_ticket_photos" in sql
+    )
+    assert "extra_work_ticket_photos.thumbnail_content AS" not in photo_select
 
 
 def test_extra_work_ticket_archive_preserves_data_filters_mobile_and_restores_idempotently():

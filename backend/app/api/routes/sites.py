@@ -1,8 +1,9 @@
 import logging
+from hashlib import sha256
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
@@ -650,6 +651,35 @@ def download_extra_work_ticket_photo(
             "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}",
         },
     )
+
+
+@router.get(
+    "/{site_id}/extra-work-tickets/{ticket_id}/photos/{photo_id}/thumbnail",
+)
+def download_extra_work_ticket_photo_thumbnail(
+    site_id: int,
+    ticket_id: int,
+    photo_id: int,
+    include_deleted: bool = Query(default=False),
+    if_none_match: str | None = Header(default=None),
+    current_user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> Response:
+    content, content_type = ExtraWorkService(db).get_site_ticket_photo_thumbnail(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        photo_id=photo_id,
+        current_user=current_user,
+        include_deleted=include_deleted,
+    )
+    etag = f'"{sha256(content).hexdigest()}"'
+    headers = {
+        "Cache-Control": "private, max-age=86400, immutable",
+        "ETag": etag,
+    }
+    if if_none_match == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    return Response(content=content, media_type=content_type, headers=headers)
 
 
 @router.delete(

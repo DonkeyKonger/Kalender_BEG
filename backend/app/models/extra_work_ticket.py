@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     JSON,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -195,6 +196,8 @@ class ExtraWorkTicketPhoto(TimestampMixin, Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str] = mapped_column(String(120), nullable=False)
     file_size_bytes: Mapped[int | None] = mapped_column(Integer)
+    thumbnail_content: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
+    thumbnail_content_type: Mapped[str | None] = mapped_column(String(120))
     caption: Mapped[str | None] = mapped_column(String(500))
     taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
