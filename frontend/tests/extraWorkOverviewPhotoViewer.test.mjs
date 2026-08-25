@@ -55,10 +55,11 @@ test("fixed previous and next controls navigate only real photos and disable at 
 test("navigation updates filename and alt text while loading just the active original", () => {
   assert.match(modalSource, /title=\{activePhoto\.filename\}>\{activePhoto\.filename\}/);
   assert.match(modalSource, /activePhoto\.caption\?\.trim\(\)[\s\S]*activePhoto\.filename/);
-  assert.match(modalSource, /siteExtraWorkTicketPhotoContent\(siteId, ticketId, activePhoto\.id/);
-  assert.match(modalSource, /\[activePhoto\.id, includeDeleted, resetViewer, siteId, ticketId\]/);
+  assert.match(modalSource, /originalPhotoCache\.load\(activePhoto\.id/);
+  assert.match(modalSource, /siteExtraWorkTicketPhotoContent[\s\S]*activePhoto\.id/);
+  assert.match(modalSource, /\[activePhoto\.id, includeDeleted, originalPhotoCache, resetViewer, siteId, ticketId\]/);
   assert.doesNotMatch(modalSource, /Promise\.all/);
-  assert.match(modalSource, /controller\.abort\(\)/);
+  assert.match(modalSource, /originalPhotoCache\.abort\(activePhoto\.id\)/);
   assert.match(modalSource, /window\.URL\.revokeObjectURL\(objectUrl\)/);
 });
 

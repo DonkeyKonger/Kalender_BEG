@@ -49,6 +49,12 @@ import {
   loadExtraWorkOverviewThumbnail,
 } from "../lib/extraWorkPhotoPreview";
 import {
+  ExtraWorkPhotoOriginalCache,
+  orderExtraWorkOriginalPhotoIds,
+  shouldPrefetchExtraWorkOriginalPhotos,
+  type NetworkInformationLike,
+} from "../lib/extraWorkPhotoOriginalCache";
+import {
   EXTRA_WORK_PHOTO_MAX_ZOOM,
   EXTRA_WORK_PHOTO_MIN_ZOOM,
   clampExtraWorkPhotoPan,
@@ -3514,6 +3520,9 @@ function ExtraWorkOverviewPhotos({
   onPhotoCountUpdated: (ticketId: number, photoCount: number) => void;
 }) {
   const [photos, setPhotos] = useState<MobileExtraWorkTicketPhoto[]>([]);
+  const [photoOwnerTicketId, setPhotoOwnerTicketId] = useState<number | null>(
+    ticket.photo_count > 0 ? null : ticket.id,
+  );
   const [isLoading, setIsLoading] = useState(ticket.photo_count > 0);
   const [hasError, setHasError] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<MobileExtraWorkTicketPhoto | null>(null);
@@ -3531,6 +3540,11 @@ function ExtraWorkOverviewPhotos({
   const photoUploadOperationRef = useRef<{ token: number; ticketId: number } | null>(null);
   const activeTicketIdRef = useRef(ticket.id);
   const isMountedRef = useRef(true);
+  const originalPhotoCacheRef = useRef<ExtraWorkPhotoOriginalCache | null>(null);
+  if (originalPhotoCacheRef.current === null) {
+    originalPhotoCacheRef.current = new ExtraWorkPhotoOriginalCache();
+  }
+  const originalPhotoCache = originalPhotoCacheRef.current;
   const initialPhotoCountRef = useRef({ ticketId: ticket.id, count: ticket.photo_count });
   if (activeTicketIdRef.current !== ticket.id) {
     activeTicketIdRef.current = ticket.id;
@@ -3541,6 +3555,7 @@ function ExtraWorkOverviewPhotos({
     initialPhotoCountRef.current = { ticketId: ticket.id, count: ticket.photo_count };
   }
   const photoSlots = getExtraWorkOverviewPhotoSlots(photos);
+  const photoIdentity = photos.map((photo) => photo.id).join(":");
   const isUploadBlocked = (
     !canUpload
     || isLoading
@@ -3594,6 +3609,7 @@ function ExtraWorkOverviewPhotos({
     let active = true;
     if (initialPhotoCountRef.current.count <= 0) {
       setPhotos([]);
+      setPhotoOwnerTicketId(ticket.id);
       setIsLoading(false);
       setHasError(false);
       return () => {
@@ -3602,6 +3618,7 @@ function ExtraWorkOverviewPhotos({
     }
 
     setPhotos([]);
+    setPhotoOwnerTicketId(null);
     setIsLoading(true);
     setHasError(false);
     void loadExtraWorkOverviewPhotoList(
@@ -3613,6 +3630,7 @@ function ExtraWorkOverviewPhotos({
       .then((loadedPhotos) => {
         if (active) {
           setPhotos(loadedPhotos);
+          setPhotoOwnerTicketId(ticket.id);
         }
       })
       .catch(() => {
@@ -3630,6 +3648,53 @@ function ExtraWorkOverviewPhotos({
       active = false;
     };
   }, [includeDeleted, siteId, ticket.id]);
+
+  useEffect(() => {
+    if (isLoading || hasError || photoOwnerTicketId !== ticket.id || photoIdentity.length === 0) {
+      return undefined;
+    }
+    originalPhotoCache.clear();
+    const connection = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
+    if (!shouldPrefetchExtraWorkOriginalPhotos(connection)) {
+      return () => originalPhotoCache.clear();
+    }
+    let cancelled = false;
+    const photoIds = photoIdentity.split(":").filter(Boolean).map(Number);
+    const orderedPhotoIds = orderExtraWorkOriginalPhotoIds(photoIds, photoIds[0]);
+    const prefetch = async () => {
+      for (const photoId of orderedPhotoIds) {
+        if (cancelled) {
+          return;
+        }
+        try {
+          await originalPhotoCache.load(photoId, (signal) => api.siteExtraWorkTicketPhotoContent(
+            siteId,
+            ticket.id,
+            photoId,
+            { includeDeleted, signal },
+          ));
+        } catch {
+          if (cancelled) {
+            return;
+          }
+        }
+      }
+    };
+    const idleCallback = () => void prefetch();
+    const usesIdleCallback = typeof window.requestIdleCallback === "function";
+    const idleId = usesIdleCallback
+      ? window.requestIdleCallback(idleCallback, { timeout: 1500 })
+      : window.setTimeout(idleCallback, 350);
+    return () => {
+      cancelled = true;
+      if (usesIdleCallback) {
+        window.cancelIdleCallback(idleId);
+      } else {
+        window.clearTimeout(idleId);
+      }
+      originalPhotoCache.clear();
+    };
+  }, [hasError, includeDeleted, isLoading, originalPhotoCache, photoIdentity, photoOwnerTicketId, siteId, ticket.id]);
 
   function canUseUploadSlot(): boolean {
     return !isUploadBlocked && photoUploadOperationRef.current === null;
@@ -3882,6 +3947,7 @@ function ExtraWorkOverviewPhotos({
           includeDeleted={includeDeleted}
           initialPhotoId={selectedPhoto.id}
           photos={photos}
+          originalPhotoCache={originalPhotoCache}
           siteId={siteId}
           ticketId={ticket.id}
           onClose={closePhotoPreview}
@@ -3997,6 +4063,7 @@ function ExtraWorkOverviewPhotoModal({
   includeDeleted,
   initialPhotoId,
   photos,
+  originalPhotoCache,
   siteId,
   ticketId,
   onClose,
@@ -4004,6 +4071,7 @@ function ExtraWorkOverviewPhotoModal({
   includeDeleted: boolean;
   initialPhotoId: number;
   photos: MobileExtraWorkTicketPhoto[];
+  originalPhotoCache: ExtraWorkPhotoOriginalCache;
   siteId: number;
   ticketId: number;
   onClose: () => void;
@@ -4013,7 +4081,7 @@ function ExtraWorkOverviewPhotoModal({
     return initialIndex >= 0 ? initialIndex : 0;
   });
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => originalPhotoCache.get(initialPhotoId) === null);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(EXTRA_WORK_PHOTO_MIN_ZOOM);
   const [pan, setPan] = useState<ExtraWorkPhotoPoint>({ x: 0, y: 0 });
@@ -4083,19 +4151,29 @@ function ExtraWorkOverviewPhotoModal({
     });
   }, [photos.length, resetViewer]);
 
-  useEffect(() => {
-    const controller = new AbortController();
+  useLayoutEffect(() => {
     let active = true;
     let objectUrl: string | null = null;
+    const requestWasAlreadyCached = originalPhotoCache.contains(activePhoto.id);
 
     resetViewer();
     setImageUrl(null);
-    setIsLoading(true);
     setError(null);
-    void api.siteExtraWorkTicketPhotoContent(siteId, ticketId, activePhoto.id, {
-      includeDeleted,
-      signal: controller.signal,
-    })
+    const cachedBlob = originalPhotoCache.get(activePhoto.id);
+    if (cachedBlob) {
+      objectUrl = window.URL.createObjectURL(cachedBlob);
+      setImageUrl(objectUrl);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+    if (!cachedBlob) {
+      void originalPhotoCache.load(activePhoto.id, (signal) => api.siteExtraWorkTicketPhotoContent(
+        siteId,
+        ticketId,
+        activePhoto.id,
+        { includeDeleted, signal },
+      ))
       .then((blob) => {
         if (!active) {
           return;
@@ -4104,21 +4182,24 @@ function ExtraWorkOverviewPhotoModal({
         setImageUrl(objectUrl);
         setIsLoading(false);
       })
-      .catch(() => {
-        if (active && !controller.signal.aborted) {
+      .catch((requestError) => {
+        if (active && !(requestError instanceof DOMException && requestError.name === "AbortError")) {
           setError("Das Originalfoto konnte nicht geladen werden.");
           setIsLoading(false);
         }
       });
+    }
 
     return () => {
       active = false;
-      controller.abort();
+      if (!requestWasAlreadyCached && !cachedBlob) {
+        originalPhotoCache.abort(activePhoto.id);
+      }
       if (objectUrl) {
         window.URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [activePhoto.id, includeDeleted, resetViewer, siteId, ticketId]);
+  }, [activePhoto.id, includeDeleted, originalPhotoCache, resetViewer, siteId, ticketId]);
 
   useEffect(() => {
     if (!isTopModal) {

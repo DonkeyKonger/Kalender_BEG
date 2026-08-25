@@ -85,10 +85,11 @@ test("selection changes keep upload ownership on the captured ticket and suppres
   assert.match(pageSource, /entry\.id === ticketId \? \{ \.\.\.entry, photo_count: photoCount \} : entry/);
 });
 
-test("upload refreshes metadata without changing thumbnail or deferred-original behavior", () => {
+test("upload refreshes metadata and schedules its original only through idle prefetch", () => {
   assert.match(previewSource, /initialPhotoCountRef = useRef\(\{ ticketId: ticket\.id, count: ticket\.photo_count \}\)/);
   assert.match(previewSource, /initialPhotoCountRef\.current\.ticketId !== ticket\.id[\s\S]*count: ticket\.photo_count/);
-  assert.doesNotMatch(previewSource, /siteExtraWorkTicketPhotoContent/);
+  assert.match(previewSource, /requestIdleCallback/);
+  assert.match(previewSource, /siteExtraWorkTicketPhotoContent/);
   assert.doesNotMatch(previewSource, /requestBlob/);
   assert.match(pageSource.slice(thumbnailStart, modalStart), /api\.siteExtraWorkTicketPhotoThumbnail/);
   assert.match(modalSource, /api\.siteExtraWorkTicketPhotoContent/);

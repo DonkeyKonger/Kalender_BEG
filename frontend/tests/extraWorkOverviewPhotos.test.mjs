@@ -80,7 +80,7 @@ test("successful thumbnail blobs remain session-cached and failed requests can r
   assert.equal(failures, 2);
 });
 
-test("only the selected desktop detail loads thumbnail endpoints and guards rapid selection changes", () => {
+test("only the selected desktop detail loads metadata before idle original prefetch", () => {
   const previewStart = pageSource.indexOf("function ExtraWorkOverviewPhotos");
   const previewEnd = pageSource.indexOf("function MeasurementTab", previewStart);
   const previewSource = pageSource.slice(previewStart, previewEnd);
@@ -99,7 +99,8 @@ test("only the selected desktop detail loads thumbnail endpoints and guards rapi
   assert.match(gridSource, /api\.siteExtraWorkTicketPhotoThumbnail/);
   assert.match(gridSource, /let active = true/);
   assert.match(gridSource, /if \(active\) \{[\s\S]*setPhotos\(loadedPhotos\)/);
-  assert.doesNotMatch(gridSource, /siteExtraWorkTicketPhotoContent/);
+  assert.match(gridSource, /requestIdleCallback/);
+  assert.match(gridSource, /siteExtraWorkTicketPhotoContent/);
   assert.match(modalSource, /api\.siteExtraWorkTicketPhotoContent/);
   assert.match(apiSource, /siteExtraWorkTicketPhotoThumbnail[\s\S]*\/thumbnail/);
 });
@@ -142,7 +143,7 @@ test("the grid keeps the existing 320-pixel thumbnail API and accessible image n
   assert.match(thumbnailSource, /title=\{`\$\{photo\.filename\} in Großansicht öffnen`\}/);
 });
 
-test("original photo bytes are requested only after a real thumbnail opens the modal", () => {
+test("original photo prefetch waits for loaded metadata and browser idle", () => {
   const previewStart = pageSource.indexOf("function ExtraWorkOverviewPhotos");
   const thumbnailStart = pageSource.indexOf("function ExtraWorkOverviewThumbnail", previewStart);
   const modalStart = pageSource.indexOf("function ExtraWorkOverviewPhotoModal", thumbnailStart);
@@ -152,9 +153,14 @@ test("original photo bytes are requested only after a real thumbnail opens the m
 
   assert.match(previewSource, /selectedPhoto \? \([\s\S]*<ExtraWorkOverviewPhotoModal/);
   assert.match(thumbnailSource, /type="button"[\s\S]*onClick=\{\(event\) => onOpen\(photo, event\.currentTarget\)\}/);
-  assert.doesNotMatch(previewSource, /siteExtraWorkTicketPhotoContent/);
+  assert.match(
+    previewSource,
+    /if \(isLoading \|\| hasError \|\| photoOwnerTicketId !== ticket\.id \|\| photoIdentity\.length === 0\)/,
+  );
+  assert.match(previewSource, /requestIdleCallback/);
+  assert.match(previewSource, /siteExtraWorkTicketPhotoContent/);
   assert.doesNotMatch(thumbnailSource, /siteExtraWorkTicketPhotoContent/);
-  assert.match(modalSource, /siteExtraWorkTicketPhotoContent\(siteId, ticketId, activePhoto\.id/);
+  assert.match(modalSource, /originalPhotoCache\.load\(activePhoto\.id/);
   assert.match(modalSource, /<img[\s\S]*alt=\{accessibleName\}[\s\S]*src=\{imageUrl\}/);
   assert.match(styles, /\.project-extra-work-photo-modal-stage img \{[^}]*object-fit:\s*contain/s);
 });
@@ -193,11 +199,10 @@ test("the modal exposes loading and failure states and rejects stale original re
 
   assert.match(modalSource, /Originalfoto wird geladen…/);
   assert.match(modalSource, /Das Originalfoto konnte nicht geladen werden\./);
-  assert.match(modalSource, /const controller = new AbortController\(\)/);
   assert.match(modalSource, /let active = true/);
   assert.match(modalSource, /if \(!active\) \{[\s\S]*return;/);
-  assert.match(modalSource, /signal: controller\.signal/);
-  assert.match(modalSource, /active = false;[\s\S]*controller\.abort\(\)/);
+  assert.match(modalSource, /originalPhotoCache\.load\(activePhoto\.id/);
+  assert.match(modalSource, /active = false;[\s\S]*originalPhotoCache\.abort\(activePhoto\.id\)/);
   assert.match(modalSource, /window\.URL\.revokeObjectURL\(objectUrl\)/);
   assert.match(pageSource, /<ExtraWorkOverviewPhotoModal[\s\S]*key=\{ticket\.id\}[\s\S]*initialPhotoId=\{selectedPhoto\.id\}/);
   assert.match(apiSource, /requestBlob\(path: string, signal\?: AbortSignal\)/);
