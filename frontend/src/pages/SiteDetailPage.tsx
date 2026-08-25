@@ -3174,7 +3174,7 @@ function ExtraWorkTab({
           {canCreate && !archiveMode ? (
             <button
               type="button"
-              className="primary-action project-extra-work-primary-action"
+              className="primary-action project-extra-work-key-action project-extra-work-key-action--filled"
               disabled={actionBusy}
               onClick={onCreate}
             >
@@ -3412,7 +3412,7 @@ function ExtraWorkOverviewDetail({
       <header className="project-extra-work-detail-head">
         <h3>{formatExtraWorkOverviewTitle(ticket)}</h3>
         <div className="project-extra-work-detail-actions">
-          <button type="button" className="primary-action project-extra-work-primary-action" onClick={() => onOpenTicket(ticket)}>Öffnen</button>
+          <button type="button" className="secondary-action project-extra-work-key-action project-extra-work-key-action--outline" onClick={() => onOpenTicket(ticket)}>Öffnen</button>
           {!archiveMode ? (
             <button
               type="button"

@@ -118,7 +118,7 @@ test("toolbar contains only create, archive switch and global search", () => {
   assert.doesNotMatch(toolbarSource, /Mobile Stundenzettel und Zusatzaufträge/);
   assert.ok(searchIndex >= 0 && searchIndex < archiveIndex && archiveIndex < createIndex);
   assert.match(toolbarSource, /className="secondary-action"[\s\S]*onClick=\{onToggleArchive\}/);
-  assert.match(toolbarSource, /className="primary-action project-extra-work-primary-action"[\s\S]*onClick=\{onCreate\}/);
+  assert.match(toolbarSource, /className="primary-action project-extra-work-key-action project-extra-work-key-action--filled"[\s\S]*onClick=\{onCreate\}/);
   assert.doesNotMatch(tabSource, /Filter/);
 });
 
@@ -131,55 +131,72 @@ test("detail action set stays reduced to open, PDF and archive or restore", () =
   assert.doesNotMatch(tabSource, /Weitere Aktionen/);
 });
 
-test("only the two primary overview actions use the active sidebar blue variant", () => {
+test("the two key overview actions reuse the selected payroll week blue with clear hierarchy", () => {
   const genericWorkspacePrimaryIndex = styles.indexOf(
     ".site-detail-page.is-project-file-workspace .primary-action {",
   );
-  const extraWorkPrimaryIndex = styles.indexOf(
-    ".site-detail-page.is-project-file-workspace .project-extra-work-primary-action {",
+  const genericWorkspaceSecondaryIndex = styles.indexOf(
+    ".site-detail-page.is-project-file-workspace .secondary-action {",
+  );
+  const extraWorkFilledIndex = styles.indexOf(
+    ".site-detail-page.is-project-file-workspace .project-extra-work-key-action--filled {",
   );
 
-  assert.equal(tabSource.match(/project-extra-work-primary-action/g)?.length, 2);
+  assert.equal(tabSource.match(/project-extra-work-key-action(?:\s|")/g)?.length, 2);
+  assert.doesNotMatch(tabSource, /project-extra-work-primary-action/);
   assert.match(
     tabSource,
-    /className="primary-action project-extra-work-primary-action"[\s\S]*onClick=\{onCreate\}/,
+    /className="primary-action project-extra-work-key-action project-extra-work-key-action--filled"[\s\S]*onClick=\{onCreate\}/,
   );
   assert.match(
     tabSource,
-    /className="primary-action project-extra-work-primary-action"[\s\S]*onClick=\{\(\) => onOpenTicket\(ticket\)\}>Öffnen/,
+    /className="secondary-action project-extra-work-key-action project-extra-work-key-action--outline"[\s\S]*onClick=\{\(\) => onOpenTicket\(ticket\)\}>Öffnen/,
   );
-  assert.doesNotMatch(
-    tabSource,
-    /className="secondary-action project-extra-work-primary-action"/,
-  );
-  assert.ok(extraWorkPrimaryIndex > genericWorkspacePrimaryIndex);
+  assert.ok(extraWorkFilledIndex > genericWorkspacePrimaryIndex);
+  assert.ok(extraWorkFilledIndex > genericWorkspaceSecondaryIndex);
   assert.match(
     styles,
-    /:root \{[\s\S]*--sidebar-active-blue-rgb: 42 116 191;/,
+    /:root \{[\s\S]*--time-week-active-blue: #284f76;/,
   );
   assert.match(
     styles,
-    /\.nav-list a\.active,[\s\S]*\.nav-list a:hover \{[\s\S]*background: rgb\(var\(--sidebar-active-blue-rgb\) \/ 42%\);/,
+    /\.time-week-strip button\.is-active \{[\s\S]*border-color: var\(--time-week-active-blue\);[\s\S]*background: var\(--time-week-active-blue\);[\s\S]*color: #ffffff;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-primary-action \{[\s\S]*border-color: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*background: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*color: #ffffff;/,
+    /\.time-entries-page\.is-figma-times-workspace \.time-week-strip button\.is-active \{[\s\S]*border-color: var\(--time-week-active-blue\);[\s\S]*background: var\(--time-week-active-blue\);[\s\S]*color: #ffffff;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-primary-action:hover:not\(:disabled\) \{[\s\S]*border-color: #1b6fbb;[\s\S]*background: #1b6fbb;/,
+    /\.project-extra-work-key-action--filled \{[\s\S]*border-color: var\(--time-week-active-blue\);[\s\S]*background: var\(--time-week-active-blue\);[\s\S]*color: #ffffff;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-primary-action:active:not\(:disabled\) \{[\s\S]*border-color: #0b4b8f;[\s\S]*background: #0b4b8f;/,
+    /\.project-extra-work-key-action--filled:hover:not\(:disabled\) \{[\s\S]*border-color: #174678;[\s\S]*background: #174678;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-primary-action:focus-visible \{[\s\S]*border-color: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*background: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*outline: 2px solid #041d38;[\s\S]*outline-offset: 2px;/,
+    /\.project-extra-work-key-action--filled:active:not\(:disabled\) \{[\s\S]*border-color: #0f172a;[\s\S]*background: #0f172a;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-primary-action:disabled \{[\s\S]*border-color: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*background: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*cursor: not-allowed;[\s\S]*opacity: 0\.58;/,
+    /\.project-extra-work-key-action--outline \{[\s\S]*border-color: var\(--time-week-active-blue\);[\s\S]*background: #ffffff;[\s\S]*color: var\(--time-week-active-blue\);/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-key-action--outline:hover:not\(:disabled\) \{[\s\S]*border-color: #9bbce0;[\s\S]*background: #f3f8ff;[\s\S]*color: #174678;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-key-action--outline:active:not\(:disabled\) \{[\s\S]*border-color: #3b82f6;[\s\S]*background: #eff6ff;[\s\S]*color: #1e40af;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-key-action:focus-visible \{[\s\S]*outline: 2px solid #3b82f6;[\s\S]*outline-offset: 2px;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-key-action:disabled \{[\s\S]*cursor: not-allowed;[\s\S]*opacity: 0\.58;/,
   );
 });
 
