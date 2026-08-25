@@ -102,7 +102,7 @@ test("master creator names stay abbreviated and fully accessible", () => {
   assert.match(styles, /\.project-extra-work-master-row > \.project-extra-work-master-creator \{[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap/);
 });
 
-test("toolbar separates master controls from the aligned detail action rail", () => {
+test("toolbar keeps the mode switch with the title and moves search into the detail rail", () => {
   const toolbarStart = tabSource.indexOf('<header className="project-record-toolbar project-extra-work-toolbar');
   const toolbarEnd = tabSource.indexOf("</header>", toolbarStart);
   const toolbarSource = tabSource.slice(toolbarStart, toolbarEnd);
@@ -116,9 +116,9 @@ test("toolbar separates master controls from the aligned detail action rail", ()
   assert.match(tabSource, /placeholder="Suche\.\.\."/);
   assert.doesNotMatch(toolbarSource, /<p>/);
   assert.doesNotMatch(toolbarSource, /Mobile Stundenzettel und Zusatzaufträge/);
-  assert.ok(masterIndex >= 0 && masterIndex < searchIndex && searchIndex < detailIndex && detailIndex < createIndex);
-  assert.match(toolbarSource, /className="project-extra-work-toolbar-master"[\s\S]*className="project-extra-work-search"/);
-  assert.match(toolbarSource, /className="project-extra-work-toolbar-detail"[\s\S]*onClick=\{onCreate\}/);
+  assert.ok(masterIndex >= 0 && masterIndex < detailIndex && detailIndex < searchIndex && searchIndex < createIndex);
+  assert.match(toolbarSource, /className="project-extra-work-toolbar-master"[\s\S]*className="project-extra-work-toolbar-title"/);
+  assert.match(toolbarSource, /className="project-extra-work-toolbar-detail"[\s\S]*className="project-extra-work-search"[\s\S]*onClick=\{onCreate\}/);
   assert.match(toolbarSource, /className="primary-action project-extra-work-key-action project-extra-work-key-action--filled"[\s\S]*onClick=\{onCreate\}/);
   assert.doesNotMatch(tabSource, /Filter/);
 });
@@ -135,6 +135,18 @@ test("active and archived overview modes use one accessible two-state switch", (
   assert.match(toolbarSource, /disabled=\{actionBusy\}/);
   assert.doesNotMatch(toolbarSource, />Archiv anzeigen</);
   assert.doesNotMatch(toolbarSource, /Aktive Zusatzaufträge anzeigen/);
+  assert.match(
+    styles,
+    /\.project-extra-work-mode-switch \{[\s\S]*border: 0;[\s\S]*background: transparent;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-mode-switch button\[aria-pressed="true"\] \{[\s\S]*background: transparent;[\s\S]*box-shadow: inset 0 -1px 0/,
+  );
+  assert.doesNotMatch(
+    styles,
+    /\.project-extra-work-mode-switch button\[aria-pressed="true"\] \{[\s\S]*background: #e8eef6;/,
+  );
 });
 
 test("detail overflow menu preserves archive and restore paths with full keyboard lifecycle", () => {
@@ -163,35 +175,40 @@ test("detail overflow menu preserves archive and restore paths with full keyboar
   assert.doesNotMatch(tabSource, />Löschen</);
 });
 
-test("desktop header and detail actions share the 52-48 grid and one action-rail width", () => {
+test("desktop detail search starts at the split and actions share the create button intrinsic width", () => {
   assert.match(
     styles,
-    /\.project-extra-work-overview \{[\s\S]*--project-extra-work-master-column: minmax\(680px, 52%\);[\s\S]*--project-extra-work-action-rail-width: 264px;/,
+    /\.project-extra-work-overview \{[\s\S]*--project-extra-work-master-column: minmax\(680px, 52%\);/,
   );
+  assert.doesNotMatch(styles, /--project-extra-work-action-rail-width: 264px/);
   assert.match(
     styles,
     /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*grid-template-columns: var\(--project-extra-work-master-column\) minmax\(0, 1fr\);/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-toolbar-master \{[\s\S]*display: flex;[\s\S]*padding: 10px 0 10px var\(--project-extra-work-header-inline-padding\);/,
+    /\.project-extra-work-toolbar-master \{[\s\S]*display: flex;[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\);/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-search \{[\s\S]*margin-left: auto;[\s\S]*width: 224px;/,
+    /\.project-extra-work-search \{[\s\S]*margin-left: -1px;[\s\S]*margin-right: auto;[\s\S]*width: 224px;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-toolbar-detail \{[\s\S]*justify-content: flex-end;[\s\S]*border-left: 1px solid var\(--project-extra-work-divider\);[\s\S]*overflow-y: auto;[\s\S]*scrollbar-gutter: stable;/,
+    /\.project-extra-work-toolbar-detail \{[\s\S]*justify-content: flex-end;[\s\S]*border-left: 1px solid var\(--project-extra-work-divider\);[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\) 10px 0;[\s\S]*scrollbar-gutter: stable;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-toolbar-detail \.project-extra-work-key-action--filled \{[\s\S]*width: var\(--project-extra-work-action-rail-width\);/,
+    /\.project-extra-work-toolbar-detail \.project-extra-work-key-action--filled \{[\s\S]*flex: 0 0 auto;[\s\S]*width: auto;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-detail-actions \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\) 34px;[\s\S]*width: var\(--project-extra-work-action-rail-width\);/,
+    /\.project-extra-work-detail-actions \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\) 34px;[\s\S]*width: var\(--project-extra-work-action-rail-width, max-content\);/,
   );
+  assert.match(tabSource, /const createActionRef = useRef<HTMLButtonElement>\(null\)/);
+  assert.match(tabSource, /new ResizeObserver\(syncActionRailWidth\)/);
+  assert.match(tabSource, /--project-extra-work-action-rail-width/);
+  assert.match(tabSource, /ref=\{createActionRef\}/);
   assert.match(
     styles,
     /@media \(max-width: 760px\) \{[\s\S]*\.project-extra-work-toolbar-master \{[\s\S]*flex-wrap: wrap;[\s\S]*\.project-extra-work-detail-actions \{[\s\S]*max-width: 100%;/,
@@ -405,10 +422,10 @@ test("structural dividers become lighter only inside the extra-work overview", (
   assert.match(styles, /\.project-extra-work-search \{[\s\S]*border: 1px solid var\(--pf-border\)/);
 });
 
-test("search reaches the split while detail actions share the responsive right inset", () => {
+test("detail search reaches the split while detail actions keep the responsive right inset", () => {
   assert.match(styles, /\.project-extra-work-overview \{[\s\S]*--project-extra-work-header-inline-padding: 18px/);
-  assert.match(styles, /\.project-extra-work-toolbar-master \{[\s\S]*padding: 10px 0 10px var\(--project-extra-work-header-inline-padding\)/);
-  assert.match(styles, /\.project-extra-work-toolbar-detail \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
+  assert.match(styles, /\.project-extra-work-toolbar-master \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
+  assert.match(styles, /\.project-extra-work-toolbar-detail \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\) 10px 0/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
   assert.match(styles, /@media \(max-width: 900px\)[\s\S]*--project-extra-work-header-inline-padding: 14px/);
 });

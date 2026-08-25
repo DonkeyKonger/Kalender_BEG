@@ -2973,6 +2973,7 @@ function ExtraWorkTab({
   const [openStatusControl, setOpenStatusControl] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [actionRailWidth, setActionRailWidth] = useState<number | null>(null);
   const [overviewLayout, setOverviewLayout] = useState(() => ({
     pageSize: EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE,
     workspaceHeight: getExtraWorkOverviewMasterHeight(EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE),
@@ -2980,6 +2981,7 @@ function ExtraWorkTab({
   const workspaceRef = useRef<HTMLDivElement>(null);
   const masterBodyRef = useRef<HTMLDivElement>(null);
   const selectedRowRef = useRef<HTMLDivElement>(null);
+  const createActionRef = useRef<HTMLButtonElement>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const sortedTickets = useMemo(
     () => [...tickets].sort(compareExtraWorkTicketsNewestFirst),
@@ -3003,7 +3005,29 @@ function ExtraWorkTab({
   const workspaceStyle = {
     "--project-extra-work-workspace-height": `${overviewLayout.workspaceHeight}px`,
     "--project-extra-work-master-height": `${getExtraWorkOverviewMasterHeight(overviewLayout.pageSize)}px`,
+    ...(actionRailWidth === null
+      ? {}
+      : { "--project-extra-work-action-rail-width": `${actionRailWidth}px` }),
   } as CSSProperties;
+
+  useLayoutEffect(() => {
+    const createAction = createActionRef.current;
+    if (!createAction) {
+      return undefined;
+    }
+    const syncActionRailWidth = () => {
+      const nextWidth = createAction.getBoundingClientRect().width;
+      setActionRailWidth((current) => (
+        current !== null && Math.abs(current - nextWidth) < 0.01 ? current : nextWidth
+      ));
+    };
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(syncActionRailWidth);
+    syncActionRailWidth();
+    resizeObserver?.observe(createAction);
+    return () => resizeObserver?.disconnect();
+  }, [archiveMode, canCreate]);
 
   useLayoutEffect(() => {
     const workspace = workspaceRef.current;
@@ -3167,6 +3191,8 @@ function ExtraWorkTab({
               </button>
             </div>
           </div>
+        </div>
+        <div className="project-extra-work-toolbar-detail">
           <label className="project-extra-work-search">
             <span className="sr-only">Zusatzaufträge durchsuchen</span>
             <input
@@ -3177,10 +3203,9 @@ function ExtraWorkTab({
             />
             <Search aria-hidden="true" size={16} />
           </label>
-        </div>
-        <div className="project-extra-work-toolbar-detail">
           {canCreate && !archiveMode ? (
             <button
+              ref={createActionRef}
               type="button"
               className="primary-action project-extra-work-key-action project-extra-work-key-action--filled"
               disabled={actionBusy}
