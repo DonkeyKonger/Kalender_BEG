@@ -246,8 +246,14 @@ class ExtraWorkTicketPhotoRead(BaseModel):
     uploaded_by_name: str | None = None
     caption: str | None = None
     taken_at: datetime | None
+    customer_document_selected: bool = True
+    signed_document_member: bool = False
     created_at: datetime
     updated_at: datetime
+
+
+class ExtraWorkTicketPhotoSelectionUpdate(BaseModel):
+    selected: bool
 
 
 class ExtraWorkTicketEntrySummaryRead(BaseModel):

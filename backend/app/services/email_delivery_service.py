@@ -24,7 +24,8 @@ class EmailDeliveryService:
         recipients: list[str],
         subject: str,
         body: str,
-        attachment: EmailAttachment,
+        attachment: EmailAttachment | None = None,
+        attachments: list[EmailAttachment] | None = None,
     ) -> None:
         if not recipients:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Keine E-Mail-Empfänger hinterlegt.")
@@ -36,13 +37,17 @@ class EmailDeliveryService:
         message["To"] = ", ".join(recipients)
         message["Subject"] = subject
         message.set_content(body)
-        maintype, subtype = attachment.content_type.split("/", 1)
-        message.add_attachment(
-            attachment.content,
-            maintype=maintype,
-            subtype=subtype,
-            filename=attachment.filename,
-        )
+        document_attachments = [*([attachment] if attachment else []), *(attachments or [])]
+        if not document_attachments:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mindestens ein Anhang ist erforderlich.")
+        for document_attachment in document_attachments:
+            maintype, subtype = document_attachment.content_type.split("/", 1)
+            message.add_attachment(
+                document_attachment.content,
+                maintype=maintype,
+                subtype=subtype,
+                filename=document_attachment.filename,
+            )
 
         try:
             with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
+from hashlib import sha256
 from io import BytesIO
 import logging
 from pathlib import Path
@@ -48,6 +49,8 @@ PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
 EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v13-full-remarks"
+EXTRA_WORK_SIGNED_SNAPSHOT_VERSION = "extra-work-signed-snapshot-v1"
+EXTRA_WORK_SUPPLEMENTAL_PHOTO_VERSION = "extra-work-supplemental-photos-v1"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
@@ -173,6 +176,8 @@ class ExtraWorkPdfService:
     ) -> tuple[bytes, str]:
         assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket(ticket_id, assignment.site_id)
+        if ticket.customer_signed_at is not None:
+            return self._get_or_freeze_signed_pdf(ticket, assignment)
         started_at = perf_counter()
         filename = self._build_filename(ticket)
         version_hash = self._build_ticket_pdf_version_hash(ticket, assignment)
@@ -199,6 +204,8 @@ class ExtraWorkPdfService:
     ) -> tuple[bytes, str]:
         ticket = self._get_ticket(ticket_id, site_id)
         assignment = self._get_site_assignment_context(ticket)
+        if ticket.customer_signed_at is not None:
+            return self._get_or_freeze_signed_pdf(ticket, assignment)
         started_at = perf_counter()
         filename = self._build_filename(ticket)
         version_hash = self._build_ticket_pdf_version_hash(ticket, assignment)
@@ -216,6 +223,105 @@ class ExtraWorkPdfService:
             (perf_counter() - started_at) * 1000,
         )
         return content, filename
+
+    def create_signed_snapshot(
+        self,
+        *,
+        ticket: ExtraWorkTicket,
+        assignment: Assignment | None,
+        snapshot_kind: str = "verified_signature_snapshot",
+        photos: list[ExtraWorkTicketPhoto] | None = None,
+    ) -> tuple[bytes, str]:
+        if ticket.signed_pdf_content is not None:
+            return self._verified_stored_signed_pdf(ticket)
+        snapshot_photos = sorted(
+            photos if photos is not None else [
+                photo for photo in ticket.photos or [] if photo.customer_document_selected
+            ],
+            key=lambda photo: (photo.created_at, photo.id),
+        )
+        manifest, photo_contents = self._build_photo_manifest(ticket, snapshot_photos)
+        content = self._build_ticket_pdf(
+            ticket=ticket,
+            assignment=assignment,
+            photos=snapshot_photos,
+            photo_contents=photo_contents,
+        )
+        filename = self._build_filename(ticket)
+        ticket.signed_pdf_content = content
+        ticket.signed_pdf_filename = filename
+        ticket.signed_pdf_sha256 = sha256(content).hexdigest()
+        ticket.signed_pdf_version = EXTRA_WORK_SIGNED_SNAPSHOT_VERSION
+        ticket.signed_photo_manifest = {
+            "version": EXTRA_WORK_SIGNED_SNAPSHOT_VERSION,
+            "snapshot_kind": snapshot_kind,
+            "customer_signed_at": ticket.customer_signed_at.isoformat() if ticket.customer_signed_at else None,
+            "photos": manifest,
+        }
+        ticket.signed_snapshot_kind = snapshot_kind
+        ticket.signed_snapshot_created_at = datetime.now(UTC)
+        self.db.add(ticket)
+        self.db.flush()
+        return content, filename
+
+    def build_mobile_ticket_supplemental_photo_pdf(
+        self,
+        *,
+        assignment_id: int,
+        ticket_id: int,
+        current_user: User,
+    ) -> tuple[bytes, str] | None:
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
+        ticket = self._get_ticket(ticket_id, assignment.site_id)
+        if ticket.customer_signed_at is None:
+            return None
+        self._get_or_freeze_signed_pdf(ticket, assignment)
+        photos = self._supplemental_photos(ticket)
+        if not photos:
+            return None
+        version_hash = build_pdf_version_hash({
+            "type": "extra_work_supplemental_photos",
+            "generator_version": EXTRA_WORK_SUPPLEMENTAL_PHOTO_VERSION,
+            "signed_pdf_sha256": ticket.signed_pdf_sha256,
+            "photos": [self._photo_cache_identity(photo) for photo in photos],
+        })
+        filename = self._build_supplemental_filename(ticket)
+        content, _cache_hit = DocumentPdfCache().get_or_build(
+            cache_key=f"extra-work-supplemental-{ticket.id}",
+            version_hash=version_hash,
+            build=lambda: self._build_standalone_photo_document(ticket, photos),
+        )
+        return content, filename
+
+    def _get_or_freeze_signed_pdf(
+        self,
+        ticket: ExtraWorkTicket,
+        assignment: Assignment | None,
+    ) -> tuple[bytes, str]:
+        if ticket.signed_pdf_content is not None:
+            return self._verified_stored_signed_pdf(ticket)
+        locked_ticket = self._get_ticket(ticket.id, ticket.site_id, for_update=True)
+        if locked_ticket.signed_pdf_content is None:
+            self.create_signed_snapshot(
+                ticket=locked_ticket,
+                assignment=assignment,
+                snapshot_kind="legacy_frozen_current_state",
+                photos=sorted(locked_ticket.photos or [], key=lambda photo: (photo.created_at, photo.id)),
+            )
+            self.db.commit()
+            self.db.refresh(locked_ticket)
+        return self._verified_stored_signed_pdf(locked_ticket)
+
+    @staticmethod
+    def _verified_stored_signed_pdf(ticket: ExtraWorkTicket) -> tuple[bytes, str]:
+        content = bytes(ticket.signed_pdf_content or b"")
+        expected_hash = ticket.signed_pdf_sha256 or ""
+        if not content or not expected_hash or sha256(content).hexdigest() != expected_hash:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "Der unveränderliche signierte Dokumentstand ist beschädigt.",
+            )
+        return content, ticket.signed_pdf_filename or ExtraWorkPdfService._build_filename(ticket)
 
     def build_clean_template_pdf(self) -> bytes:
         """Return the shared visual master without interactive PDF state."""
@@ -316,13 +422,22 @@ class ExtraWorkPdfService:
                     "external_item_id": photo.external_item_id,
                     "file_size_bytes": photo.file_size_bytes,
                     "caption": photo.caption,
+                    "customer_document_selected": photo.customer_document_selected,
+                    "content_sha256": photo.content_sha256,
                     "updated_at": photo.updated_at,
                 }
                 for photo in sorted(ticket.photos or [], key=lambda photo: photo.id)
             ],
         })
 
-    def _build_ticket_pdf(self, *, ticket: ExtraWorkTicket, assignment: Assignment | None) -> bytes:
+    def _build_ticket_pdf(
+        self,
+        *,
+        ticket: ExtraWorkTicket,
+        assignment: Assignment | None,
+        photos: list[ExtraWorkTicketPhoto] | None = None,
+        photo_contents: dict[int, bytes] | None = None,
+    ) -> bytes:
         if not TEMPLATE_PATH.exists():
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Zusatzauftrag-Vorlage fehlt.")
         started_at = perf_counter()
@@ -343,7 +458,10 @@ class ExtraWorkPdfService:
             writer.add_page(template_reader.pages[0])
             page = writer.pages[-1]
             page.merge_page(overlay_reader.pages[index])
-        self._append_photo_pages(writer, ticket)
+        document_photos = photos if photos is not None else [
+            photo for photo in ticket.photos or [] if photo.customer_document_selected
+        ]
+        self._append_photo_pages(writer, ticket, document_photos, photo_contents=photo_contents)
         output = BytesIO()
         _remove_interactive_pdf_state(writer)
         writer.write(output)
@@ -357,55 +475,51 @@ class ExtraWorkPdfService:
         )
         return content
 
-    def _append_photo_pages(self, writer: PdfWriter, ticket: ExtraWorkTicket) -> None:
-        photos = sorted(ticket.photos or [], key=lambda photo: (photo.created_at, photo.id))
+    def _append_photo_pages(
+        self,
+        writer: PdfWriter,
+        ticket: ExtraWorkTicket,
+        selected_photos: list[ExtraWorkTicketPhoto] | None = None,
+        *,
+        photo_contents: dict[int, bytes] | None = None,
+    ) -> None:
+        photos = sorted(
+            selected_photos if selected_photos is not None else ticket.photos or [],
+            key=lambda photo: (photo.created_at, photo.id),
+        )
         if not photos:
             return
-        folder_item_id = self._get_photo_folder_item_id(ticket.site_id)
-        if folder_item_id is None:
-            LOGGER.warning("Extra work photo folder is not connected for site %s.", ticket.site_id)
-            return
-
-        download_started_at = perf_counter()
-        storage = ProjectStorageService()
-        download_results = download_photo_files(
-            storage,
-            [
-                PhotoDownloadRequest(
+        appendix_photos: list[PhotoAppendixPhoto] = []
+        if photo_contents is None:
+            folder_item_id = self._get_photo_folder_item_id(ticket.site_id)
+            if folder_item_id is None:
+                LOGGER.warning("Extra work photo folder is not connected for site %s.", ticket.site_id)
+                return
+            results = download_photo_files(
+                ProjectStorageService(),
+                [PhotoDownloadRequest(
                     drive_id=photo.external_drive_id,
                     folder_item_id=folder_item_id,
                     item_id=photo.external_item_id,
-                )
-                for photo in photos
-            ],
-        )
-        LOGGER.info(
-            "Extra work PDF photos downloaded: ticket_id=%s photos=%s bytes=%s duration_ms=%.1f",
-            ticket.id,
-            len(download_results),
-            sum(len(result.content) for result in download_results),
-            (perf_counter() - download_started_at) * 1000,
-        )
-
-        appendix_photos: list[PhotoAppendixPhoto] = []
-        for photo, result in zip(photos, download_results, strict=True):
-            if result.error is not None:
-                LOGGER.warning(
-                    "Extra work photo %s could not be downloaded for PDF: %s",
-                    photo.id,
-                    result.error,
-                )
-            LOGGER.info(
-                "Extra work PDF photo loaded: ticket_id=%s photo_id=%s source_bytes=%s duration_ms=%.1f",
-                ticket.id,
-                photo.id,
-                len(result.content),
-                result.duration_ms,
+                ) for photo in photos],
             )
+            contents = {photo.id: result.content for photo, result in zip(photos, results, strict=True)}
+        else:
+            contents = photo_contents
+        for photo in photos:
+            content = contents.get(photo.id, b"")
+            if not content:
+                if photo_contents is not None:
+                    raise HTTPException(
+                        status.HTTP_502_BAD_GATEWAY,
+                        f"Foto {photo.filename} konnte für den Dokumentstand nicht geladen werden.",
+                    )
+                LOGGER.warning("Extra work photo %s could not be downloaded for PDF.", photo.id)
+                continue
             appendix_photos.append(
                 PhotoAppendixPhoto(
                     filename=photo.filename,
-                    content=result.content,
+                    content=content,
                     caption=photo.caption,
                     uploaded_at=photo.created_at,
                     monteur=_format_user(photo.uploaded_by),
@@ -433,6 +547,132 @@ class ExtraWorkPdfService:
         appendix_reader = PdfReader(BytesIO(appendix_content))
         for page in appendix_reader.pages:
             writer.add_page(page)
+
+    def _build_photo_manifest(
+        self,
+        ticket: ExtraWorkTicket,
+        photos: list[ExtraWorkTicketPhoto],
+    ) -> tuple[list[dict[str, Any]], dict[int, bytes]]:
+        if not photos:
+            return [], {}
+        folder_item_id = self._get_photo_folder_item_id(ticket.site_id)
+        if folder_item_id is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Fotoordner ist nicht verbunden.")
+        results = download_photo_files(
+            ProjectStorageService(),
+            [
+                PhotoDownloadRequest(
+                    drive_id=photo.external_drive_id,
+                    folder_item_id=folder_item_id,
+                    item_id=photo.external_item_id,
+                )
+                for photo in photos
+            ],
+        )
+        manifest: list[dict[str, Any]] = []
+        contents: dict[int, bytes] = {}
+        for order, (photo, result) in enumerate(zip(photos, results, strict=True), start=1):
+            if result.error is not None or not result.content:
+                raise HTTPException(
+                    status.HTTP_502_BAD_GATEWAY,
+                    f"Foto {photo.filename} konnte für den signierten Dokumentstand nicht geladen werden.",
+                )
+            content_hash = sha256(result.content).hexdigest()
+            if photo.content_sha256 is not None and photo.content_sha256 != content_hash:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    f"Foto {photo.filename} stimmt nicht mehr mit dem gespeicherten Original überein.",
+                )
+            if photo.content_sha256 is None:
+                photo.content_sha256 = content_hash
+                self.db.add(photo)
+            contents[photo.id] = result.content
+            manifest.append({
+                "photo_id": photo.id,
+                "order": order,
+                "filename": photo.filename,
+                "content_sha256": content_hash,
+                "external_drive_id": photo.external_drive_id,
+                "external_item_id": photo.external_item_id,
+                "file_size_bytes": len(result.content),
+                "created_at": photo.created_at.isoformat(),
+            })
+        return manifest, contents
+
+    def _supplemental_photos(self, ticket: ExtraWorkTicket) -> list[ExtraWorkTicketPhoto]:
+        manifest_ids = {
+            item.get("photo_id")
+            for item in (ticket.signed_photo_manifest or {}).get("photos", [])
+            if isinstance(item, dict)
+        }
+        return sorted(
+            [
+                photo for photo in ticket.photos or []
+                if photo.customer_document_selected and photo.id not in manifest_ids
+            ],
+            key=lambda photo: (photo.created_at, photo.id),
+        )
+
+    def _build_standalone_photo_document(
+        self,
+        ticket: ExtraWorkTicket,
+        photos: list[ExtraWorkTicketPhoto],
+    ) -> bytes:
+        folder_item_id = self._get_photo_folder_item_id(ticket.site_id)
+        if folder_item_id is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Fotoordner ist nicht verbunden.")
+        results = download_photo_files(
+            ProjectStorageService(),
+            [
+                PhotoDownloadRequest(
+                    drive_id=photo.external_drive_id,
+                    folder_item_id=folder_item_id,
+                    item_id=photo.external_item_id,
+                )
+                for photo in photos
+            ],
+        )
+        appendix_photos: list[PhotoAppendixPhoto] = []
+        for photo, result in zip(photos, results, strict=True):
+            if result.error is not None or not result.content:
+                raise HTTPException(
+                    status.HTTP_502_BAD_GATEWAY,
+                    f"Foto {photo.filename} konnte für die Fotodokumentation nicht geladen werden.",
+                )
+            appendix_photos.append(PhotoAppendixPhoto(
+                filename=photo.filename,
+                content=result.content,
+                caption=photo.caption,
+                uploaded_at=photo.created_at,
+                monteur=_format_user(photo.uploaded_by),
+            ))
+        site = ticket.site
+        return PhotoAppendixPdfService().build(
+            context=PhotoAppendixContext(
+                document_type="Ergänzende Fotodokumentation",
+                site_name=site.name,
+                site_number=site.site_number,
+                site_address=_format_site_signature_location(site),
+                process_title=_ticket_document_description(ticket),
+                document_number_label="Zusatzauftrag Nr.",
+                document_number=ticket.display_number or str(ticket.sequence_number),
+                generated_at=datetime.now(),
+                uploaded_at=max(photo.created_at for photo in photos),
+                monteur=_common_photo_monteur(photos),
+            ),
+            photos=appendix_photos,
+        )
+
+    @staticmethod
+    def _photo_cache_identity(photo: ExtraWorkTicketPhoto) -> dict[str, Any]:
+        return {
+            "id": photo.id,
+            "selected": photo.customer_document_selected,
+            "filename": photo.filename,
+            "external_item_id": photo.external_item_id,
+            "content_sha256": photo.content_sha256,
+            "updated_at": photo.updated_at,
+        }
 
     def _get_photo_folder_item_id(self, site_id: int) -> str | None:
         folder = self.db.scalar(
@@ -700,8 +940,14 @@ class ExtraWorkPdfService:
             place=customer_place,
         )
 
-    def _get_ticket(self, ticket_id: int, site_id: int) -> ExtraWorkTicket:
-        ticket = self.db.scalar(
+    def _get_ticket(
+        self,
+        ticket_id: int,
+        site_id: int,
+        *,
+        for_update: bool = False,
+    ) -> ExtraWorkTicket:
+        statement = (
             select(ExtraWorkTicket)
             .options(
                 selectinload(ExtraWorkTicket.created_by).selectinload(User.person),
@@ -718,6 +964,9 @@ class ExtraWorkPdfService:
                 ExtraWorkTicket.deleted_at.is_(None),
             )
         )
+        if for_update:
+            statement = statement.with_for_update()
+        ticket = self.db.scalar(statement)
         if ticket is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Stundenzettel nicht gefunden.")
         return ticket
@@ -730,6 +979,12 @@ class ExtraWorkPdfService:
         site_number = _safe_filename_part(ticket.site.site_number or "ohne-komnr")
         ticket_number = _safe_filename_part(ticket.display_number or str(ticket.sequence_number))
         return f"Zusatzauftrag_{site_number}_{ticket_number}.pdf"
+
+    @staticmethod
+    def _build_supplemental_filename(ticket: ExtraWorkTicket) -> str:
+        site_number = _safe_filename_part(ticket.site.site_number or "ohne-komnr")
+        ticket_number = _safe_filename_part(ticket.display_number or str(ticket.sequence_number))
+        return f"Ergaenzende_Fotodokumentation_{site_number}_{ticket_number}.pdf"
 
 
 @lru_cache(maxsize=2)

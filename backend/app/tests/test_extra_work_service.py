@@ -34,6 +34,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketCreate,
     ExtraWorkTicketDetailsUpdate,
     ExtraWorkTicketEntryPayload,
+    ExtraWorkTicketPhotoSelectionUpdate,
     ExtraWorkTicketTitleUpdate,
     ExtraWorkWorkerSignatureCreate,
     ExtraWorkWorkerHours,
@@ -716,6 +717,94 @@ def test_customer_signature_status_alone_does_not_archive_pdf():
 
     assert signed.status == "signed"
     assert archive_service.calls == []
+    stored = db.get(ExtraWorkTicket, ticket.id)
+    assert stored is not None
+    assert stored.signed_snapshot_kind == "verified_signature_snapshot"
+    assert stored.signed_pdf_content.startswith(b"%PDF")
+    original_content = bytes(stored.signed_pdf_content)
+    original_hash = stored.signed_pdf_sha256
+    stored.title = "Später geänderter interner Titel"
+    db.commit()
+    rebuilt, _filename = ExtraWorkPdfService(db).build_mobile_ticket_pdf(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+    assert rebuilt == original_content
+    assert stored.signed_pdf_sha256 == original_hash
+
+
+def test_photo_customer_document_selection_defaults_true_and_toggles_before_signature():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="9999", name="Testbaustelle")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 8, 25), end_date=date(2026, 8, 25))
+    db.add(assignment)
+    db.commit()
+    user = SimpleNamespace(id=7, person_id=person.id)
+    ticket = ExtraWorkService(db).create_mobile_ticket(assignment_id=assignment.id, current_user=user)
+    photo = ExtraWorkTicketPhoto(
+        site_id=site.id,
+        extra_work_ticket_id=ticket.id,
+        project_folder_key="fotos",
+        external_drive_id="drive",
+        external_item_id="item",
+        filename="foto.jpg",
+        content_type="image/jpeg",
+    )
+    db.add(photo)
+    db.commit()
+
+    assert photo.customer_document_selected is True
+    result = ExtraWorkService(db).update_mobile_ticket_photo_selection(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        photo_id=photo.id,
+        payload=ExtraWorkTicketPhotoSelectionUpdate(selected=False),
+        current_user=user,
+    )
+
+    assert result.customer_document_selected is False
+    assert result.signed_document_member is False
+
+
+def test_legacy_signed_ticket_freezes_current_pdf_once_without_user_facing_marker():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="9999", name="Legacy Baustelle")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 8, 25), end_date=date(2026, 8, 25))
+    db.add(assignment)
+    db.commit()
+    user = SimpleNamespace(id=7, person_id=person.id)
+    created = ExtraWorkService(db).create_mobile_ticket(assignment_id=assignment.id, current_user=user)
+    ticket = db.get(ExtraWorkTicket, created.id)
+    assert ticket is not None
+    ticket.customer_signed_at = datetime(2026, 8, 1, tzinfo=UTC)
+    ticket.customer_signature_name = "Bestandskunde"
+    ticket.customer_signature_strokes = [[{"x": 0.1, "y": 0.1}, {"x": 0.2, "y": 0.2}]]
+    db.commit()
+
+    frozen, _filename = ExtraWorkPdfService(db).build_mobile_ticket_pdf(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=user,
+    )
+    db.refresh(ticket)
+    assert ticket.signed_snapshot_kind == "legacy_frozen_current_state"
+    assert ticket.signed_photo_manifest["snapshot_kind"] == "legacy_frozen_current_state"
+    assert "legacy" not in _filename.lower()
+    ticket.title = "Nachträglich geändert"
+    db.commit()
+    again, _ = ExtraWorkPdfService(db).build_mobile_ticket_pdf(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=user,
+    )
+    assert again == frozen
 
 
 def test_mobile_extra_work_ticket_uses_approval_kind_when_site_requires_approval():
@@ -1657,14 +1746,15 @@ def test_mobile_extra_work_email_send_delivers_signed_pdf_and_records_audit(monk
         def build_mobile_ticket_pdf(self, *, assignment_id, ticket_id, current_user):
             return b"%PDF-test", "Stundenzettel_3_Hauptauftrag.pdf"
 
+        def build_mobile_ticket_supplemental_photo_pdf(self, *, assignment_id, ticket_id, current_user):
+            return b"%PDF-photo", "Ergaenzende_Fotodokumentation_3.pdf"
+
     class FakeEmailDeliveryService:
-        def send_document_email(self, *, recipients, subject, body, attachment):
+        def send_document_email(self, *, recipients, subject, body, attachments):
             deliveries.append({
                 "recipients": recipients,
                 "subject": subject,
-                "filename": attachment.filename,
-                "content": attachment.content,
-                "content_type": attachment.content_type,
+                "attachments": attachments,
             })
 
     monkeypatch.setattr(extra_work_email_module, "ExtraWorkPdfService", FakePdfService)
@@ -1680,8 +1770,18 @@ def test_mobile_extra_work_email_send_delivers_signed_pdf_and_records_audit(monk
     assert result.recipients == ["kunde@example.de"]
     assert result.filename == "Stundenzettel_3_Hauptauftrag.pdf"
     assert deliveries[0]["recipients"] == ["kunde@example.de"]
-    assert deliveries[0]["content"] == b"%PDF-test"
-    assert deliveries[0]["content_type"] == "application/pdf"
+    assert [attachment.content for attachment in deliveries[0]["attachments"]] == [
+        b"%PDF-test",
+        b"%PDF-photo",
+    ]
+    assert [attachment.content_type for attachment in deliveries[0]["attachments"]] == [
+        "application/pdf",
+        "application/pdf",
+    ]
+    assert audit_log.new_value_json["attachment_filenames"] == [
+        "Stundenzettel_3_Hauptauftrag.pdf",
+        "Ergaenzende_Fotodokumentation_3.pdf",
+    ]
     assert audit_log.entity_type == "extra_work_ticket"
     assert audit_log.entity_id == ticket.id
     assert audit_log.new_value_json["customer_signature_present"] is True

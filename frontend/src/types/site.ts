@@ -483,6 +483,8 @@ export type MobileExtraWorkTicketPhoto = {
   uploaded_by_name: string | null;
   caption: string | null;
   taken_at: string | null;
+  customer_document_selected: boolean;
+  signed_document_member: boolean;
   created_at: string;
   updated_at: string;
 };

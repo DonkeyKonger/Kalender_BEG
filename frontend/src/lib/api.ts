@@ -1439,6 +1439,21 @@ export const api = {
     });
   },
 
+  async updateSiteExtraWorkTicketPhotoSelection(
+    siteId: number,
+    ticketId: number,
+    photoId: number,
+    selected: boolean,
+  ): Promise<MobileExtraWorkTicketPhoto> {
+    return request<MobileExtraWorkTicketPhoto>(
+      `/sites/${siteId}/extra-work-tickets/${ticketId}/photos/${photoId}/customer-document-selection`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ selected }),
+      },
+    );
+  },
+
   async siteExtraWorkTicketPhotoContent(
     siteId: number,
     ticketId: number,

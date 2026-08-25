@@ -1,5 +1,6 @@
 from collections import Counter
 from datetime import UTC, datetime
+from hashlib import sha256
 import logging
 
 from fastapi import HTTPException, status
@@ -7,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.audit_log import AuditLog
+from app.models.assignment import Assignment
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.person import Person
 from app.models.site import Site
@@ -24,6 +26,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketEntryRead,
     ExtraWorkTicketEntrySummaryRead,
     ExtraWorkTicketPhotoRead,
+    ExtraWorkTicketPhotoSelectionUpdate,
     ExtraWorkTicketRead,
     ExtraWorkTicketTitleUpdate,
     ExtraWorkWorkerHours,
@@ -48,6 +51,7 @@ from app.services.extra_work_number import (
     build_extra_work_display_number,
     next_extra_work_sequence,
 )
+from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.extra_work_remarks import extra_work_remarks_fit
 from app.services.photo_filename import (
     build_photo_filename,
@@ -657,7 +661,7 @@ class ExtraWorkService:
         payload: ExtraWorkCustomerSignatureCreate,
     ) -> ExtraWorkTicketRead:
         assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
-        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id)
+        ticket = self._get_ticket_for_site(ticket_id, assignment.site_id, for_update=True)
         if ticket.customer_signed_at is not None or (ticket.status or "").strip().lower() in {
             "signed",
             "customer_signed",
@@ -691,9 +695,13 @@ class ExtraWorkService:
         ticket.customer_signed_at = datetime.now(UTC)
         ticket.status = "signed"
         self.db.add(ticket)
+        self.db.flush()
+        ExtraWorkPdfService(self.db).create_signed_snapshot(
+            ticket=ticket,
+            assignment=assignment,
+        )
         self.db.commit()
         self.db.refresh(ticket)
-        self._archive_completed_ticket(ticket)
         return self._build_ticket_read(ticket)
 
     def sign_mobile_ticket_worker(
@@ -771,7 +779,7 @@ class ExtraWorkService:
                 .order_by(ExtraWorkTicketPhoto.created_at, ExtraWorkTicketPhoto.id)
             )
         )
-        return [self._build_mobile_photo(photo) for photo in photos]
+        return [self._build_mobile_photo(photo, ticket) for photo in photos]
 
     def upload_mobile_ticket_photo(
         self,
@@ -789,7 +797,8 @@ class ExtraWorkService:
             assignment.site_id,
             for_update=True,
         )
-        self._ensure_ticket_content_editable(ticket)
+        self._ensure_photo_upload_allowed(ticket)
+        self._freeze_legacy_snapshot_before_photo_change(ticket, assignment)
         return self._upload_ticket_photo(
             ticket=ticket,
             current_user=current_user,
@@ -815,7 +824,11 @@ class ExtraWorkService:
             include_deleted=True,
             for_update=True,
         )
-        self._ensure_ticket_content_editable(ticket)
+        self._ensure_photo_upload_allowed(ticket)
+        self._freeze_legacy_snapshot_before_photo_change(
+            ticket,
+            get_extra_work_assignment_context(self.db, ticket),
+        )
         return self._upload_ticket_photo(
             ticket=ticket,
             current_user=current_user,
@@ -906,11 +919,13 @@ class ExtraWorkService:
             file_size_bytes=uploaded.get("size") if isinstance(uploaded.get("size"), int) else len(optimized_photo.content),
             thumbnail_content=thumbnail_content,
             thumbnail_content_type=OPTIMIZED_PHOTO_CONTENT_TYPE,
+            content_sha256=sha256(optimized_photo.content).hexdigest(),
+            customer_document_selected=True,
         )
         self.db.add(photo)
         self.db.commit()
         self.db.refresh(photo)
-        return self._build_mobile_photo(photo)
+        return self._build_mobile_photo(photo, ticket)
 
     def get_mobile_ticket_photo_content(
         self,
@@ -1064,6 +1079,67 @@ class ExtraWorkService:
         self.db.commit()
         self.db.refresh(photo)
         return self._build_mobile_photo(photo)
+
+    def update_mobile_ticket_photo_selection(
+        self,
+        *,
+        assignment_id: int,
+        ticket_id: int,
+        photo_id: int,
+        payload: ExtraWorkTicketPhotoSelectionUpdate,
+        current_user: User,
+    ) -> ExtraWorkTicketPhotoRead:
+        assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
+        return self._update_ticket_photo_selection(
+            site_id=assignment.site_id,
+            ticket_id=ticket_id,
+            photo_id=photo_id,
+            selected=payload.selected,
+            assignment=assignment,
+        )
+
+    def update_site_ticket_photo_selection(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        photo_id: int,
+        payload: ExtraWorkTicketPhotoSelectionUpdate,
+    ) -> ExtraWorkTicketPhotoRead:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(ticket_id, site_id)
+        return self._update_ticket_photo_selection(
+            site_id=site_id,
+            ticket_id=ticket_id,
+            photo_id=photo_id,
+            selected=payload.selected,
+            assignment=get_extra_work_assignment_context(self.db, ticket),
+        )
+
+    def _update_ticket_photo_selection(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        photo_id: int,
+        selected: bool,
+        assignment: Assignment | None,
+    ) -> ExtraWorkTicketPhotoRead:
+        ticket = self._get_ticket_for_site(ticket_id, site_id, include_deleted=True, for_update=True)
+        if ticket.deleted_at is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Archivierte Zusatzaufträge können nicht bearbeitet werden.")
+        self._freeze_legacy_snapshot_before_photo_change(ticket, assignment)
+        photo = self._get_photo_for_ticket(photo_id, ticket.id)
+        if self._photo_is_signed_member(ticket, photo.id):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Dieses Foto ist Bestandteil des unveränderlichen unterschriebenen Dokuments.",
+            )
+        photo.customer_document_selected = selected
+        self.db.add(photo)
+        self.db.commit()
+        self.db.refresh(photo)
+        return self._build_mobile_photo(photo, ticket)
 
     def _delete_ticket_photo(
         self,
@@ -1322,7 +1398,12 @@ class ExtraWorkService:
             )
         return statuses
 
-    def _build_mobile_photo(self, photo: ExtraWorkTicketPhoto) -> ExtraWorkTicketPhotoRead:
+    def _build_mobile_photo(
+        self,
+        photo: ExtraWorkTicketPhoto,
+        ticket: ExtraWorkTicket | None = None,
+    ) -> ExtraWorkTicketPhotoRead:
+        owner = ticket or photo.ticket
         return ExtraWorkTicketPhotoRead(
             id=photo.id,
             site_id=photo.site_id,
@@ -1336,7 +1417,34 @@ class ExtraWorkService:
             taken_at=photo.taken_at,
             created_at=photo.created_at,
             updated_at=photo.updated_at,
+            customer_document_selected=photo.customer_document_selected,
+            signed_document_member=self._photo_is_signed_member(owner, photo.id),
         )
+
+    @staticmethod
+    def _photo_is_signed_member(ticket: ExtraWorkTicket, photo_id: int) -> bool:
+        return any(
+            isinstance(item, dict) and item.get("photo_id") == photo_id
+            for item in (ticket.signed_photo_manifest or {}).get("photos", [])
+        )
+
+    @staticmethod
+    def _ensure_photo_upload_allowed(ticket: ExtraWorkTicket) -> None:
+        if ticket.deleted_at is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Archivierte Zusatzaufträge können nicht bearbeitet werden.")
+
+    def _freeze_legacy_snapshot_before_photo_change(
+        self,
+        ticket: ExtraWorkTicket,
+        assignment: Assignment | None,
+    ) -> None:
+        if ticket.customer_signed_at is not None and ticket.signed_pdf_content is None:
+            ExtraWorkPdfService(self.db).create_signed_snapshot(
+                ticket=ticket,
+                assignment=assignment,
+                snapshot_kind="legacy_frozen_current_state",
+                photos=sorted(ticket.photos or [], key=lambda photo: (photo.created_at, photo.id)),
+            )
 
     def _get_photo_for_ticket(self, photo_id: int, ticket_id: int) -> ExtraWorkTicketPhoto:
         photo = self.db.scalar(

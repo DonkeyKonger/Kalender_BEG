@@ -210,3 +210,17 @@ test("the large view stays a centered, bounded popup and grows responsively on p
   assert.match(styles, /\.project-extra-work-photo-modal-stage img \{[^}]*position:\s*absolute;[^}]*inset:\s*14px;[^}]*object-fit:\s*contain;/s);
   assert.match(styles, /@media \(max-width: 600px\) \{[\s\S]*\.project-extra-work-photo-modal \{[^}]*width:\s*calc\(100vw - 28px\);[^}]*height:\s*min\(92dvh, calc\(100dvh - 28px\)\);/s);
 });
+
+test("photo document selection is a separate accessible control with signed locks and rollback", () => {
+  assert.match(apiSource, /updateSiteExtraWorkTicketPhotoSelection[\s\S]*customer-document-selection[\s\S]*method: "PATCH"/);
+  assert.match(pageSource, /project-extra-work-photo-selection-badge/);
+  assert.match(pageSource, /event\.stopPropagation\(\);[\s\S]*onToggleSelection\(photo\)/);
+  assert.match(pageSource, /disabled=\{photo\.signed_document_member \|\| selectionPending\}/);
+  assert.match(pageSource, /Im unterschriebenen Dokument/);
+  assert.match(pageSource, /Nicht im Dokument/);
+  assert.match(pageSource, /Nicht mitsenden/);
+  assert.match(pageSource, /setSelectionError\(readApiError/);
+  assert.match(pageSource, /Fotos im unterschriebenen Dokument ·/);
+  assert.match(styles, /\.project-extra-work-photo-wrap\.is-excluded[\s\S]*opacity:\s*0\.55/);
+  assert.match(styles, /\.project-extra-work-photo-selection-badge:focus-visible/);
+});

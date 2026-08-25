@@ -38,7 +38,8 @@ class ExtraWorkEmailService:
 
         recipients = self._required_recipients(assignment.site_id)
 
-        content, filename = ExtraWorkPdfService(self.db).build_mobile_ticket_pdf(
+        pdf_service = ExtraWorkPdfService(self.db)
+        content, filename = pdf_service.build_mobile_ticket_pdf(
             assignment_id=assignment_id,
             ticket_id=ticket_id,
             current_user=current_user,
@@ -46,12 +47,21 @@ class ExtraWorkEmailService:
         site_name = _clean_text(ticket.site.name if ticket.site else None) or "Baustelle"
         document_title = _email_document_title(ticket, site_name, filename)
         worker_name = _worker_name(assignment, current_user)
+        supplemental_builder = getattr(pdf_service, "build_mobile_ticket_supplemental_photo_pdf", None)
+        supplemental = supplemental_builder(
+            assignment_id=assignment_id,
+            ticket_id=ticket_id,
+            current_user=current_user,
+        ) if callable(supplemental_builder) else None
+        attachments = [EmailAttachment(filename, content, "application/pdf")]
+        if supplemental is not None:
+            supplemental_content, supplemental_filename = supplemental
+            attachments.append(EmailAttachment(supplemental_filename, supplemental_content, "application/pdf"))
         sent_at = _deliver_pdf_email(
             recipients=recipients,
             document_title=document_title,
             worker_name=worker_name,
-            filename=filename,
-            content=content,
+            attachments=attachments,
         )
         AuditService(self.db).record(
             user_id=current_user.id,
@@ -64,6 +74,7 @@ class ExtraWorkEmailService:
                 "site_id": assignment.site_id,
                 "recipients": recipients,
                 "filename": filename,
+                "attachment_filenames": [attachment.filename for attachment in attachments],
                 "sent_at": sent_at.isoformat(),
                 "customer_signature_present": ticket.customer_signed_at is not None,
             },
@@ -180,8 +191,9 @@ def _deliver_pdf_email(
     recipients: list[str],
     document_title: str,
     worker_name: str,
-    filename: str,
-    content: bytes,
+    filename: str | None = None,
+    content: bytes | None = None,
+    attachments: list[EmailAttachment] | None = None,
 ) -> datetime:
     subject = f"Anliegend erhalten Sie {document_title}"
     body = (
@@ -195,16 +207,24 @@ def _deliver_pdf_email(
         "Eingetragen: Amtsgericht Walsrode – HRB 120028\n"
         "Geschäftsführer: Axel Biesewig · Kerstin Erichsen"
     )
-    EmailDeliveryService().send_document_email(
-        recipients=recipients,
-        subject=subject,
-        body=body,
-        attachment=EmailAttachment(
-            filename=filename,
-            content=content,
-            content_type="application/pdf",
-        ),
-    )
+    document_attachments = attachments or [
+        EmailAttachment(filename or "Dokument.pdf", content or b"", "application/pdf")
+    ]
+    delivery = EmailDeliveryService()
+    if len(document_attachments) == 1:
+        delivery.send_document_email(
+            recipients=recipients,
+            subject=subject,
+            body=body,
+            attachment=document_attachments[0],
+        )
+    else:
+        delivery.send_document_email(
+            recipients=recipients,
+            subject=subject,
+            body=body,
+            attachments=document_attachments,
+        )
     return datetime.now(UTC)
 
 

@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Minus, Pencil, Phone, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, Pencil, Phone, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
@@ -21,7 +21,6 @@ import {
   MAX_EXTRA_WORK_PHOTOS,
   validateExtraWorkPhotoFiles,
 } from "../lib/extraWorkAttachments";
-import { isExtraWorkDocumentLocked } from "../lib/extraWorkDocument";
 import {
   EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE,
   buildExtraWorkOverviewEntrySummary,
@@ -3505,7 +3504,7 @@ function ExtraWorkOverviewDetail({
         siteId={site.id}
         ticket={ticket}
         includeDeleted={archiveMode}
-        canUpload={!isExtraWorkDocumentLocked(ticket, canEdit)}
+        canUpload={canEdit && !archiveMode}
         onPhotoCountUpdated={onPhotoCountUpdated}
       />
     </aside>
@@ -3533,6 +3532,8 @@ function ExtraWorkOverviewPhotos({
   const [dragOverSlotIndex, setDragOverSlotIndex] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadErrorSlotIndex, setUploadErrorSlotIndex] = useState<number | null>(null);
+  const [selectionPendingPhotoId, setSelectionPendingPhotoId] = useState<number | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const openerRef = useRef<HTMLButtonElement | null>(null);
   const focusFrameRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -3643,6 +3644,34 @@ function ExtraWorkOverviewPhotos({
 
   function canUseUploadSlot(): boolean {
     return !isUploadBlocked && photoUploadOperationRef.current === null;
+  }
+
+  async function togglePhotoSelection(photo: MobileExtraWorkTicketPhoto): Promise<void> {
+    if (selectionPendingPhotoId !== null || photo.signed_document_member) {
+      return;
+    }
+    const uploadTicketId = ticket.id;
+    setSelectionPendingPhotoId(photo.id);
+    setSelectionError(null);
+    try {
+      const updated = await api.updateSiteExtraWorkTicketPhotoSelection(
+        siteId,
+        uploadTicketId,
+        photo.id,
+        !photo.customer_document_selected,
+      );
+      if (activeTicketIdRef.current === uploadTicketId) {
+        setPhotos((current) => current.map((item) => item.id === updated.id ? updated : item));
+      }
+    } catch (requestError) {
+      if (activeTicketIdRef.current === uploadTicketId) {
+        setSelectionError(readApiError(requestError, "Die Fotoauswahl konnte nicht gespeichert werden."));
+      }
+    } finally {
+      if (activeTicketIdRef.current === uploadTicketId) {
+        setSelectionPendingPhotoId(null);
+      }
+    }
   }
 
   function openPhotoFilePicker(slotIndex: number): void {
@@ -3785,6 +3814,9 @@ function ExtraWorkOverviewPhotos({
               photo={photo}
               includeDeleted={includeDeleted}
               onOpen={openPhotoPreview}
+              onToggleSelection={togglePhotoSelection}
+              selectionPending={selectionPendingPhotoId === photo.id}
+              signed={Boolean(ticket.customer_signed_at)}
             />
           ) : (
             canUpload && !isLoading && !hasError ? (
@@ -3845,6 +3877,16 @@ function ExtraWorkOverviewPhotos({
       {isLoading ? <span className="sr-only" role="status">Fotovorschau wird geladen…</span> : null}
       {hasError ? <span className="project-extra-work-photo-feedback is-error" role="status">Fotovorschau nicht verfügbar.</span> : null}
       {uploadError ? <span className="project-extra-work-photo-feedback is-error" role="alert">{uploadError}</span> : null}
+      {photos.length > 0 ? (
+        <p className="project-extra-work-photo-selection-summary">
+          {ticket.customer_signed_at ? (
+            <>{photos.filter((photo) => photo.signed_document_member).length} Fotos im unterschriebenen Dokument · {photos.filter((photo) => !photo.signed_document_member && photo.customer_document_selected).length} zusätzliche Fotos werden mitgesendet</>
+          ) : (
+            <>{photos.filter((photo) => photo.customer_document_selected).length} von {photos.length} Fotos werden im Dokument verwendet</>
+          )}
+        </p>
+      ) : null}
+      {selectionError ? <span className="project-extra-work-photo-feedback is-error" role="alert">{selectionError}</span> : null}
       {selectedPhoto ? (
         <ExtraWorkOverviewPhotoModal
           key={ticket.id}
@@ -3866,12 +3908,18 @@ function ExtraWorkOverviewThumbnail({
   photo,
   includeDeleted,
   onOpen,
+  onToggleSelection,
+  selectionPending,
+  signed,
 }: {
   siteId: number;
   ticketId: number;
   photo: MobileExtraWorkTicketPhoto;
   includeDeleted: boolean;
   onOpen: (photo: MobileExtraWorkTicketPhoto, opener: HTMLButtonElement) => void;
+  onToggleSelection: (photo: MobileExtraWorkTicketPhoto) => void;
+  selectionPending: boolean;
+  signed: boolean;
 }) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
@@ -3914,7 +3962,13 @@ function ExtraWorkOverviewThumbnail({
   const accessibleName = photo.caption?.trim()
     ? `Foto: ${photo.caption.trim()}`
     : `Foto: ${photo.filename}`;
+  const selectionLabel = photo.signed_document_member
+    ? "Im unterschriebenen Dokument"
+    : photo.customer_document_selected
+      ? (signed ? "Nicht als zusätzliche Fotodokumentation mitsenden" : "Aus Dokument ausschließen")
+      : (signed ? "Als zusätzliche Fotodokumentation mitsenden" : "Im Dokument verwenden");
   return (
+    <div className={`project-extra-work-photo-wrap${photo.customer_document_selected || photo.signed_document_member ? "" : " is-excluded"}`}>
     <button
       aria-haspopup="dialog"
       className={`project-extra-work-photo project-extra-work-photo-trigger${hasError ? " has-error" : ""}`}
@@ -3930,6 +3984,23 @@ function ExtraWorkOverviewThumbnail({
         </span>
       )}
     </button>
+      <button
+        aria-label={`${selectionLabel}: ${photo.filename}`}
+        aria-busy={selectionPending}
+        aria-pressed={photo.signed_document_member ? undefined : photo.customer_document_selected}
+        className="project-extra-work-photo-selection-badge"
+        disabled={photo.signed_document_member || selectionPending}
+        title={selectionLabel}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleSelection(photo);
+        }}
+      >
+        {selectionPending ? "…" : photo.signed_document_member ? <Lock aria-hidden="true" size={13} /> : photo.customer_document_selected ? <Check aria-hidden="true" size={15} /> : "○"}
+      </button>
+      {!photo.signed_document_member && !photo.customer_document_selected ? <span className="project-extra-work-photo-selection-label">{signed ? "Nicht mitsenden" : "Nicht im Dokument"}</span> : null}
+    </div>
   );
 }
 

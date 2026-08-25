@@ -96,8 +96,8 @@ test("upload refreshes metadata without changing thumbnail or deferred-original 
   assert.doesNotMatch(apiSource.slice(apiSource.indexOf("async siteExtraWorkTicketPhotos"), apiSource.indexOf("async uploadSiteExtraWorkTicketPhoto")), /requestBlob/);
 });
 
-test("the existing document lock and responsive slot styles gate upload permissions", () => {
-  assert.match(pageSource, /canUpload=\{!isExtraWorkDocumentLocked\(ticket, canEdit\)\}/);
+test("photo upload stays available after signature but not in archive mode", () => {
+  assert.match(pageSource, /canUpload=\{canEdit && !archiveMode\}/);
   assert.match(previewSource, /canUpload && !isLoading && !hasError \? \([\s\S]*project-extra-work-photo-upload/);
   assert.match(previewSource, /aria-disabled=\{isUploadBlocked\}/);
   assert.match(styles, /\.project-extra-work-photo-upload \{[^}]*justify-items:\s*center;[^}]*cursor:\s*pointer;/s);

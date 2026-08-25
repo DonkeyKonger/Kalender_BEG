@@ -84,6 +84,13 @@ class ExtraWorkTicket(TimestampMixin, Base):
     customer_signature_place: Mapped[str | None] = mapped_column(String(160))
     customer_signature_strokes: Mapped[list[list[dict[str, float]]] | None] = mapped_column(JSON)
     customer_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    signed_pdf_content: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
+    signed_pdf_filename: Mapped[str | None] = mapped_column(String(255))
+    signed_pdf_sha256: Mapped[str | None] = mapped_column(String(64))
+    signed_pdf_version: Mapped[str | None] = mapped_column(String(80))
+    signed_photo_manifest: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    signed_snapshot_kind: Mapped[str | None] = mapped_column(String(48), index=True)
+    signed_snapshot_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     worker_signature_name: Mapped[str | None] = mapped_column(String(160))
     worker_signature_place: Mapped[str | None] = mapped_column(String(160))
     worker_signature_date: Mapped[date | None] = mapped_column(Date)
@@ -206,6 +213,13 @@ class ExtraWorkTicketPhoto(TimestampMixin, Base):
     thumbnail_content_type: Mapped[str | None] = mapped_column(String(120))
     caption: Mapped[str | None] = mapped_column(String(500))
     taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    customer_document_selected: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+    content_sha256: Mapped[str | None] = mapped_column(String(64))
 
     ticket = relationship("ExtraWorkTicket", back_populates="photos")
     site = relationship("Site")

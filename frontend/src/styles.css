@@ -28028,6 +28028,71 @@ body.mobile-modal-scroll-locked {
   gap: clamp(6px, 0.8vw, 10px);
 }
 
+.project-extra-work-photo-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.project-extra-work-photo-wrap.is-excluded .project-extra-work-photo-trigger img {
+  opacity: 0.55;
+}
+
+.project-extra-work-photo-selection-badge {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: 999px;
+  background: #356b9f;
+  box-shadow: 0 1px 5px rgb(20 40 65 / 28%);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  place-items: center;
+}
+
+.project-extra-work-photo-selection-badge[aria-pressed="false"] {
+  background: rgb(255 255 255 / 92%);
+  color: #52677e;
+}
+
+.project-extra-work-photo-selection-badge:focus-visible {
+  outline: 3px solid rgb(53 107 159 / 35%);
+  outline-offset: 2px;
+}
+
+.project-extra-work-photo-selection-badge:disabled {
+  cursor: default;
+}
+
+.project-extra-work-photo-selection-label {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  left: 4px;
+  padding: 2px 3px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 90%);
+  color: #40546a;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.project-extra-work-photo-selection-summary {
+  margin: 0;
+  color: #52677e;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .project-extra-work-photo {
   display: grid;
   width: 100%;

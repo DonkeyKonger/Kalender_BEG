@@ -18,6 +18,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketInvoicedUpdate,
     ExtraWorkTicketManualStatusUpdate,
     ExtraWorkTicketPhotoRead,
+    ExtraWorkTicketPhotoSelectionUpdate,
     ExtraWorkTicketRead,
 )
 from app.schemas.measurement import (
@@ -719,6 +720,26 @@ def update_extra_work_ticket_photo_caption(
         ticket_id=ticket_id,
         photo_id=photo_id,
         caption=payload.caption,
+    )
+
+
+@router.patch(
+    "/{site_id}/extra-work-tickets/{ticket_id}/photos/{photo_id}/customer-document-selection",
+    response_model=ExtraWorkTicketPhotoRead,
+)
+def update_extra_work_ticket_photo_selection(
+    site_id: int,
+    ticket_id: int,
+    photo_id: int,
+    payload: ExtraWorkTicketPhotoSelectionUpdate,
+    _current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketPhotoRead:
+    return ExtraWorkService(db).update_site_ticket_photo_selection(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        photo_id=photo_id,
+        payload=payload,
     )
 
 

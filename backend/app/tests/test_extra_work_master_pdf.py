@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 from io import BytesIO
+from hashlib import sha256
 import re
 
 from fastapi import HTTPException
@@ -12,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from app.models import Base
 from app.models.assignment import Assignment
 from app.models.enums import UserRole
-from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry
+from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
@@ -59,6 +60,47 @@ def _repeated_word_at_remarks_capacity(word: str = "Test") -> str:
     while extra_work_remarks_fit(" ".join([*words, word])):
         words.append(word)
     return " ".join(words)
+
+
+def test_signed_snapshot_binds_manifest_and_pdf_to_the_same_original_bytes(monkeypatch):
+    db = db_session()
+    site = Site(site_number="9999", name="Snapshot Baustelle")
+    ticket = ExtraWorkTicket(
+        site=site,
+        sequence_number=1,
+        display_number="9999.Z01",
+        kind="billing",
+        status="signed",
+        customer_signed_at=datetime(2026, 8, 25, tzinfo=timezone.utc),
+    )
+    photo = ExtraWorkTicketPhoto(
+        site=site,
+        ticket=ticket,
+        project_folder_key="fotos",
+        external_drive_id="drive",
+        external_item_id="item",
+        filename="beweisfoto.jpg",
+        content_type="image/jpeg",
+    )
+    db.add_all([site, ticket, photo])
+    db.commit()
+    original_bytes = b"original-photo-bytes"
+    manifest = [{"photo_id": photo.id, "order": 1, "content_sha256": sha256(original_bytes).hexdigest()}]
+    captured = {}
+    service = ExtraWorkPdfService(db)
+    monkeypatch.setattr(service, "_build_photo_manifest", lambda _ticket, _photos: (manifest, {photo.id: original_bytes}))
+
+    def fake_build_ticket_pdf(**kwargs):
+        captured.update(kwargs)
+        return b"%PDF-signed-snapshot"
+
+    monkeypatch.setattr(service, "_build_ticket_pdf", fake_build_ticket_pdf)
+    content, _filename = service.create_signed_snapshot(ticket=ticket, assignment=None, photos=[photo])
+
+    assert content == b"%PDF-signed-snapshot"
+    assert captured["photo_contents"] == {photo.id: original_bytes}
+    assert ticket.signed_photo_manifest["photos"] == manifest
+    assert ticket.signed_pdf_sha256 == sha256(content).hexdigest()
 
 
 def test_remarks_capacity_uses_all_18_real_pdf_lines_with_exact_helvetica_metrics():
