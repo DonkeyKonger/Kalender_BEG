@@ -28163,20 +28163,38 @@ body.mobile-modal-scroll-locked {
   width: 26px;
   height: 26px;
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 88%);
+  border: 1px solid rgb(23 50 79 / 28%);
   border-radius: 999px;
-  background: #356b9f;
-  box-shadow: 0 1px 5px rgb(20 40 65 / 28%);
-  color: #fff;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 70%), 0 1px 5px rgb(20 40 65 / 28%);
+  color: #17324f;
   cursor: pointer;
   font: inherit;
   font-size: 14px;
   place-items: center;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.project-extra-work-photo-selection-badge::before {
+  position: absolute;
+  inset: -9px;
+  content: "";
+}
+
+.project-extra-work-photo-selection-badge[aria-pressed="true"] {
+  background: rgb(255 255 255 / 96%);
+  color: #17324f;
 }
 
 .project-extra-work-photo-selection-badge[aria-pressed="false"] {
-  background: rgb(255 255 255 / 92%);
+  background: rgb(255 255 255 / 96%);
   color: #52677e;
+}
+
+.project-extra-work-photo-selection-badge:hover:not(:disabled) {
+  border-color: #7894b1;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 82%), 0 2px 7px rgb(20 40 65 / 34%);
 }
 
 .project-extra-work-photo-selection-badge:focus-visible {
@@ -28186,6 +28204,12 @@ body.mobile-modal-scroll-locked {
 
 .project-extra-work-photo-selection-badge:disabled {
   cursor: default;
+}
+
+.project-extra-work-photo-selection-badge.is-locked {
+  border-color: rgb(255 255 255 / 88%);
+  background: #356b9f;
+  color: #ffffff;
 }
 
 .project-extra-work-photo-selection-label {
@@ -28201,13 +28225,6 @@ body.mobile-modal-scroll-locked {
   font-weight: 650;
   line-height: 1.2;
   text-align: center;
-}
-
-.project-extra-work-photo-selection-summary {
-  margin: 0;
-  color: #52677e;
-  font-size: 12px;
-  line-height: 1.35;
 }
 
 .project-extra-work-photo {

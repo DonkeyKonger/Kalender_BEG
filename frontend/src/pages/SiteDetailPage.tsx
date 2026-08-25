@@ -4028,13 +4028,13 @@ function ExtraWorkOverviewPhotos({
       {hasError ? <span className="project-extra-work-photo-feedback is-error" role="status">Fotovorschau nicht verfügbar.</span> : null}
       {uploadError ? <span className="project-extra-work-photo-feedback is-error" role="alert">{uploadError}</span> : null}
       {photos.length > 0 ? (
-        <p className="project-extra-work-photo-selection-summary">
+        <span aria-live="polite" className="sr-only" role="status">
           {ticket.customer_signed_at ? (
             <>{photos.filter((photo) => photo.signed_document_member).length} Fotos im unterschriebenen Dokument · {photos.filter((photo) => !photo.signed_document_member && photo.customer_document_selected).length} zusätzliche Fotos werden mitgesendet</>
           ) : (
             <>{photos.filter((photo) => photo.customer_document_selected).length} von {photos.length} Fotos werden im Dokument verwendet</>
           )}
-        </p>
+        </span>
       ) : null}
       {selectionError ? <span className="project-extra-work-photo-feedback is-error" role="alert">{selectionError}</span> : null}
       {selectedPhoto ? (
@@ -4139,7 +4139,7 @@ function ExtraWorkOverviewThumbnail({
         aria-label={`${selectionLabel}: ${photo.filename}`}
         aria-busy={selectionPending}
         aria-pressed={photo.signed_document_member ? undefined : photo.customer_document_selected}
-        className="project-extra-work-photo-selection-badge"
+        className={`project-extra-work-photo-selection-badge${photo.signed_document_member ? " is-locked" : ""}`}
         disabled={photo.signed_document_member || selectionPending}
         title={selectionLabel}
         type="button"

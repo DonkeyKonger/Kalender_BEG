@@ -229,3 +229,16 @@ test("photo document selection is a separate accessible control with signed lock
   assert.match(styles, /\.project-extra-work-photo-wrap\.is-excluded[\s\S]*opacity:\s*0\.55/);
   assert.match(styles, /\.project-extra-work-photo-selection-badge:focus-visible/);
 });
+
+test("photo selection badges stay quiet and the count is available only to assistive technology", () => {
+  assert.match(pageSource, /className=\{`project-extra-work-photo-selection-badge\$\{photo\.signed_document_member \? " is-locked" : ""\}`\}/);
+  assert.match(pageSource, /aria-pressed=\{photo\.signed_document_member \? undefined : photo\.customer_document_selected\}/);
+  assert.match(pageSource, /<span aria-live="polite" className="sr-only" role="status">[\s\S]*Fotos werden im Dokument verwendet[\s\S]*<\/span>/);
+  assert.doesNotMatch(pageSource, /project-extra-work-photo-selection-summary/);
+  assert.match(styles, /\.project-extra-work-photo-selection-badge \{[^}]*background:\s*rgb\(255 255 255 \/ 96%\);[^}]*color:\s*#17324f;/s);
+  assert.match(styles, /\.project-extra-work-photo-selection-badge\[aria-pressed="true"\] \{[^}]*background:\s*rgb\(255 255 255 \/ 96%\);[^}]*color:\s*#17324f;/s);
+  assert.match(styles, /\.project-extra-work-photo-selection-badge\[aria-pressed="false"\] \{[^}]*background:\s*rgb\(255 255 255 \/ 96%\);[^}]*color:\s*#52677e;/s);
+  assert.match(styles, /\.project-extra-work-photo-selection-badge\.is-locked \{[^}]*background:\s*#356b9f;[^}]*color:\s*#ffffff;/s);
+  assert.match(styles, /\.project-extra-work-photo-selection-badge::before \{[^}]*inset:\s*-9px;/s);
+  assert.match(styles, /\.project-extra-work-photo-selection-badge:hover:not\(:disabled\)/);
+});
