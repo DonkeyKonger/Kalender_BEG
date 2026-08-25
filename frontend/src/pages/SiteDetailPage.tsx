@@ -39,7 +39,10 @@ import {
   getExtraWorkOverviewPrimaryEntry,
   getExtraWorkOverviewScrollbarWidth,
 } from "../lib/extraWorkOverview";
-import { setExtraWorkTicketInvoicedValue } from "../lib/extraWorkInvoiced";
+import {
+  applyExtraWorkTicketInvoicedState,
+  setExtraWorkTicketInvoicedState,
+} from "../lib/extraWorkInvoiced";
 import {
   getExtraWorkOverviewPhotoSlots,
   loadExtraWorkOverviewPhotoList,
@@ -1115,18 +1118,32 @@ export function SiteDetailPage() {
   }
 
   async function toggleExtraWorkTicketInvoiced(ticket: MobileExtraWorkTicket): Promise<void> {
-    if (!site || !canEditSite || extraWorkInvoicedActionId !== null) {
+    if (
+      !site
+      || !canEditSite
+      || extraWorkInvoicedActionId !== null
+      || extraWorkStatusActionId !== null
+    ) {
       return;
     }
-    const previousValue = ticket.is_invoiced;
-    const nextValue = !previousValue;
+    const previousState = {
+      is_invoiced: ticket.is_invoiced,
+      status: ticket.status,
+    };
+    const nextValue = !previousState.is_invoiced;
+    const optimisticState = {
+      is_invoiced: nextValue,
+      status: nextValue ? "billed" : previousState.status,
+    };
     setExtraWorkInvoicedActionId(ticket.id);
     setExtraWorkInvoicedError(null);
     setExtraWorkTickets((current) => (
-      setExtraWorkTicketInvoicedValue(current, ticket.id, nextValue)
+      setExtraWorkTicketInvoicedState(current, ticket.id, optimisticState)
     ));
     setSelectedExtraWorkTicket((current) => (
-      current?.id === ticket.id ? { ...current, is_invoiced: nextValue } : current
+      current?.id === ticket.id
+        ? applyExtraWorkTicketInvoicedState(current, optimisticState)
+        : current
     ));
     try {
       const updated = await api.updateSiteExtraWorkTicketInvoiced(
@@ -1134,20 +1151,26 @@ export function SiteDetailPage() {
         ticket.id,
         nextValue,
       );
+      const canonicalState = {
+        is_invoiced: updated.is_invoiced,
+        status: updated.status,
+      };
       setExtraWorkTickets((current) => (
-        setExtraWorkTicketInvoicedValue(current, ticket.id, updated.is_invoiced)
+        setExtraWorkTicketInvoicedState(current, ticket.id, canonicalState)
       ));
       setSelectedExtraWorkTicket((current) => (
         current?.id === ticket.id
-          ? { ...current, is_invoiced: updated.is_invoiced }
+          ? applyExtraWorkTicketInvoicedState(current, canonicalState)
           : current
       ));
     } catch (requestError) {
       setExtraWorkTickets((current) => (
-        setExtraWorkTicketInvoicedValue(current, ticket.id, previousValue)
+        setExtraWorkTicketInvoicedState(current, ticket.id, previousState)
       ));
       setSelectedExtraWorkTicket((current) => (
-        current?.id === ticket.id ? { ...current, is_invoiced: previousValue } : current
+        current?.id === ticket.id
+          ? applyExtraWorkTicketInvoicedState(current, previousState)
+          : current
       ));
       setExtraWorkInvoicedError(readApiError(
         requestError,
@@ -3254,7 +3277,11 @@ function ExtraWorkTab({
                           <input
                             type="checkbox"
                             checked={ticket.is_invoiced}
-                            disabled={!canMarkInvoiced || invoicedActionId !== null}
+                            disabled={
+                              !canMarkInvoiced
+                              || invoicedActionId !== null
+                              || statusActionId !== null
+                            }
                             aria-label={`${formatExtraWorkOverviewTitle(ticket)}: ${ticket.is_invoiced ? "Abrechnungsmarkierung entfernen" : "Als abgerechnet markieren"}`}
                             onChange={() => onToggleInvoiced(ticket)}
                           />

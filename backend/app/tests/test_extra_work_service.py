@@ -373,7 +373,18 @@ def test_manual_extra_work_status_promotion_only_moves_up_and_preserves_signatur
     assert db.query(AuditLog).filter_by(action="extra_work.status_promoted").count() == 2
 
 
-def test_extra_work_invoiced_marker_defaults_false_and_persists_without_business_side_effects():
+@pytest.mark.parametrize("initial_status", ["draft", "submitted", "signed", "billed"])
+def test_extra_work_invoiced_marker_completes_every_starting_status_directionally(
+    initial_status,
+):
+    class RecordingArchiveService:
+        def __init__(self):
+            self.calls = []
+
+        def archive_completed_ticket(self, *, site_id, ticket_id):
+            self.calls.append((site_id, ticket_id))
+            return {"id": "archived-pdf"}
+
     db = db_session()
     site = Site(site_number="8007", name="Schüchtermann Klinik")
     actor = User(
@@ -385,7 +396,8 @@ def test_extra_work_invoiced_marker_defaults_false_and_persists_without_business
     )
     db.add_all([site, actor])
     db.commit()
-    service = ExtraWorkService(db)
+    archive_service = RecordingArchiveService()
+    service = ExtraWorkService(db, archive_service=archive_service)
     created = service.create_site_ticket(
         site_id=site.id,
         current_user=actor,
@@ -395,7 +407,7 @@ def test_extra_work_invoiced_marker_defaults_false_and_persists_without_business
 
     stored = db.get(ExtraWorkTicket, created.id)
     assert stored is not None
-    stored.status = "signed"
+    stored.status = initial_status
     stored.manual_order_date = date(2026, 8, 25)
     stored.customer_signature_name = "Kunde Beispiel"
     stored.customer_signed_at = datetime(2026, 8, 25, 12, 0, tzinfo=UTC)
@@ -412,7 +424,7 @@ def test_extra_work_invoiced_marker_defaults_false_and_persists_without_business
 
     assert marked.is_invoiced is True
     assert reloaded.is_invoiced is True
-    assert reloaded.status == "signed"
+    assert reloaded.status == "billed"
     assert reloaded.notes == "Bleibt im PDF erhalten"
     assert reloaded.manual_order_date == date(2026, 8, 25)
     assert reloaded.customer_signature_name == "Kunde Beispiel"
@@ -425,6 +437,19 @@ def test_extra_work_invoiced_marker_defaults_false_and_persists_without_business
         0,
         tzinfo=UTC,
     )
+    expected_archive_calls = [] if initial_status == "billed" else [(site.id, created.id)]
+    assert archive_service.calls == expected_archive_calls
+
+    repeated = service.set_site_ticket_invoiced(
+        site_id=site.id,
+        ticket_id=created.id,
+        is_invoiced=True,
+        current_user=actor,
+    )
+    assert repeated.is_invoiced is True
+    assert repeated.status == "billed"
+    assert archive_service.calls == expected_archive_calls
+    assert db.query(AuditLog).filter_by(action="extra_work.invoiced_updated").count() == 1
 
     service.delete_site_ticket(site_id=site.id, ticket_id=created.id, current_user=actor)
     cleared = service.set_site_ticket_invoiced(
@@ -437,9 +462,124 @@ def test_extra_work_invoiced_marker_defaults_false_and_persists_without_business
 
     assert cleared.is_invoiced is False
     assert archived.is_invoiced is False
-    assert archived.status == "signed"
+    assert archived.status == "billed"
     assert archived.notes == "Bleibt im PDF erhalten"
     assert db.query(AuditLog).filter_by(action="extra_work.invoiced_updated").count() == 2
+
+    audit_logs = (
+        db.query(AuditLog)
+        .filter_by(action="extra_work.invoiced_updated")
+        .order_by(AuditLog.id)
+        .all()
+    )
+    assert audit_logs[0].old_value_json == {
+        "is_invoiced": False,
+        "status": initial_status,
+    }
+    assert audit_logs[0].new_value_json == {
+        "is_invoiced": True,
+        "status": "billed",
+    }
+    assert audit_logs[1].old_value_json == {
+        "is_invoiced": True,
+        "status": "billed",
+    }
+    assert audit_logs[1].new_value_json == {
+        "is_invoiced": False,
+        "status": "billed",
+    }
+
+
+def test_manual_extra_work_completion_does_not_mark_ticket_invoiced():
+    class RecordingArchiveService:
+        def archive_completed_ticket(self, *, site_id, ticket_id):
+            return {"id": f"{site_id}:{ticket_id}"}
+
+    db = db_session()
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    actor = User(
+        username="manual-completion-office",
+        display_name="Status Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        office_page_permissions=["sites"],
+    )
+    db.add_all([site, actor])
+    db.commit()
+    service = ExtraWorkService(db, archive_service=RecordingArchiveService())
+    created = service.create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+
+    completed = service.promote_site_ticket_status(
+        site_id=site.id,
+        ticket_id=created.id,
+        target_status="billed",
+        current_user=actor,
+    )
+
+    assert completed.status == "billed"
+    assert completed.is_invoiced is False
+    persisted = db.get(ExtraWorkTicket, created.id)
+    assert persisted is not None
+    assert persisted.is_invoiced is False
+
+
+def test_extra_work_invoiced_marker_rolls_back_flag_and_status_when_commit_fails():
+    class RecordingArchiveService:
+        def __init__(self):
+            self.calls = []
+
+        def archive_completed_ticket(self, *, site_id, ticket_id):
+            self.calls.append((site_id, ticket_id))
+
+    db = db_session()
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    actor = User(
+        username="failed-invoiced-office",
+        display_name="Abrechnung Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        office_page_permissions=["sites"],
+    )
+    db.add_all([site, actor])
+    db.commit()
+    archive_service = RecordingArchiveService()
+    service = ExtraWorkService(db, archive_service=archive_service)
+    created = service.create_site_ticket(
+        site_id=site.id,
+        current_user=actor,
+        payload=ExtraWorkTicketCreate(),
+    )
+    stored = db.get(ExtraWorkTicket, created.id)
+    assert stored is not None
+    stored.status = "signed"
+    db.commit()
+
+    def fail_commit(_session):
+        raise RuntimeError("database unavailable")
+
+    event.listen(db, "before_commit", fail_commit)
+    try:
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            service.set_site_ticket_invoiced(
+                site_id=site.id,
+                ticket_id=created.id,
+                is_invoiced=True,
+                current_user=actor,
+            )
+    finally:
+        event.remove(db, "before_commit", fail_commit)
+
+    db.expire_all()
+    persisted = db.get(ExtraWorkTicket, created.id)
+    assert persisted is not None
+    assert persisted.is_invoiced is False
+    assert persisted.status == "signed"
+    assert db.query(AuditLog).filter_by(action="extra_work.invoiced_updated").count() == 0
+    assert archive_service.calls == []
 
 
 def test_extra_work_archive_failure_does_not_revert_completed_status(caplog):

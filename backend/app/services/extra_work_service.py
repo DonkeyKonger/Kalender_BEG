@@ -421,18 +421,37 @@ class ExtraWorkService:
         previous_value = ticket.is_invoiced
         if previous_value == is_invoiced:
             return self._build_ticket_read(ticket)
+        previous_status = ticket.status
         ticket.is_invoiced = is_invoiced
+        status_changed = (
+            is_invoiced
+            and not is_extra_work_completed_status(previous_status)
+        )
+        if status_changed:
+            ticket.status = "billed"
         AuditService(self.db).record(
             user_id=current_user.id,
             action="extra_work.invoiced_updated",
             entity_type="extra_work_ticket",
             entity_id=ticket.id,
-            old_value={"is_invoiced": previous_value},
-            new_value={"is_invoiced": is_invoiced},
+            old_value={
+                "is_invoiced": previous_value,
+                "status": previous_status,
+            },
+            new_value={
+                "is_invoiced": is_invoiced,
+                "status": ticket.status,
+            },
         )
         self.db.add(ticket)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
         self.db.refresh(ticket)
+        if status_changed:
+            self._archive_completed_ticket(ticket)
         return self._build_ticket_read(ticket)
 
     def list_mobile_tickets(

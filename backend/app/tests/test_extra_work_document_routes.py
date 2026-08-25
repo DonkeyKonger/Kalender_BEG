@@ -226,7 +226,10 @@ class FakeExtraWorkService:
         self.calls.append(
             ("invoiced", site_id, ticket_id, is_invoiced, current_user.id)
         )
-        return ticket_read().model_copy(update={"is_invoiced": is_invoiced})
+        update = {"is_invoiced": is_invoiced}
+        if is_invoiced:
+            update["status"] = "billed"
+        return ticket_read().model_copy(update=update)
 
 
 class FakeExtraWorkPdfService:
@@ -339,6 +342,7 @@ def test_invoiced_marker_uses_existing_sites_write_permission(monkeypatch, user)
 
     assert marked.status_code == 200
     assert marked.json()["is_invoiced"] is True
+    assert marked.json()["status"] == "billed"
     assert cleared.status_code == 200
     assert cleared.json()["is_invoiced"] is False
     assert FakeExtraWorkService.calls == [

@@ -1,13 +1,25 @@
 import type { MobileExtraWorkTicket } from "../types/site";
 
-export function setExtraWorkTicketInvoicedValue(
+export type ExtraWorkTicketInvoicedState = Pick<
+  MobileExtraWorkTicket,
+  "is_invoiced" | "status"
+>;
+
+export function applyExtraWorkTicketInvoicedState(
+  ticket: MobileExtraWorkTicket,
+  state: ExtraWorkTicketInvoicedState,
+): MobileExtraWorkTicket {
+  return { ...ticket, ...state };
+}
+
+export function setExtraWorkTicketInvoicedState(
   tickets: MobileExtraWorkTicket[],
   ticketId: number,
-  isInvoiced: boolean,
+  state: ExtraWorkTicketInvoicedState,
 ): MobileExtraWorkTicket[] {
   return tickets.map((ticket) => (
     ticket.id === ticketId
-      ? { ...ticket, is_invoiced: isInvoiced }
+      ? applyExtraWorkTicketInvoicedState(ticket, state)
       : ticket
   ));
 }
