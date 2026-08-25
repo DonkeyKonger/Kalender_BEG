@@ -270,6 +270,30 @@ export function resolveExtraWorkOverviewPeriod(
   return { start: toDateKey(created), end: toDateKey(end) };
 }
 
+export function formatExtraWorkOverviewIsoWeek(ticket: MobileExtraWorkTicket): string {
+  const period = resolveExtraWorkOverviewPeriod(ticket);
+  if (!period) {
+    return "–";
+  }
+  const week = getIsoWeekFromDateKey(period.start);
+  return week === null ? "–" : `KW ${week}`;
+}
+
+function getIsoWeekFromDateKey(value: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || toDateKey(date) !== value) {
+    return null;
+  }
+  const weekday = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - weekday);
+  const isoYear = date.getUTCFullYear();
+  const isoYearStart = new Date(Date.UTC(isoYear, 0, 1));
+  return Math.ceil(((date.getTime() - isoYearStart.getTime()) / 86_400_000 + 1) / 7);
+}
+
 function isoWeekRange(year: number, week: number): { start: string; end: string } | null {
   if (!Number.isInteger(year) || !Number.isInteger(week) || week < 1 || week > 53) {
     return null;

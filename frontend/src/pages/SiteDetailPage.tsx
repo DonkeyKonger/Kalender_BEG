@@ -22,6 +22,7 @@ import {
   calculateExtraWorkOverviewPageSize,
   filterExtraWorkOverviewTickets,
   formatExtraWorkOverviewCreatorName,
+  formatExtraWorkOverviewIsoWeek,
   formatExtraWorkOverviewTitle,
   getExtraWorkOverviewDescription,
   getExtraWorkOverviewMasterHeight,
@@ -30,7 +31,6 @@ import {
   getExtraWorkOverviewPageWindow,
   getExtraWorkOverviewPrimaryEntry,
   getExtraWorkOverviewScrollbarWidth,
-  resolveExtraWorkOverviewPeriod,
 } from "../lib/extraWorkOverview";
 import {
   formatGermanDateKey as formatDateOnly,
@@ -3250,7 +3250,6 @@ function ExtraWorkOverviewDetail({
   const emailStatus = getCustomerEmailStatus(ticket);
   const emailStatusTooltipId = `extra-work-delivery-status-${ticket.id}`;
   const primaryEntry = getExtraWorkOverviewPrimaryEntry(ticket);
-  const executionPeriod = resolveExtraWorkOverviewPeriod(ticket);
   const description = getExtraWorkOverviewDescription(ticket);
   const isDownloadingPdf = pdfAction === `${ticket.id}:download`;
   const isArchiving = archivingTicketId === ticket.id;
@@ -3304,7 +3303,7 @@ function ExtraWorkOverviewDetail({
       <dl className="project-extra-work-key-data">
         <div><dt>Ersteller</dt><dd>{ticket.created_by_name || "–"}</dd></div>
         <div><dt>Erstelldatum</dt><dd>{formatDateTime(ticket.created_at)}</dd></div>
-        <div><dt>Zeitraum</dt><dd>{formatExtraWorkOverviewPeriod(executionPeriod)}</dd></div>
+        <div><dt>Zeitraum</dt><dd>{formatExtraWorkOverviewIsoWeek(ticket)}</dd></div>
         <div><dt>Gesamtstunden</dt><dd>{formatExtraWorkTicketHours(ticket)}</dd></div>
       </dl>
 
@@ -7905,13 +7904,6 @@ function formatExtraWorkOverviewCreatedDate(value: string): string {
     month: "2-digit",
     year: "2-digit",
   }).format(parsed);
-}
-
-function formatExtraWorkOverviewPeriod(period: { start: string; end: string } | null): string {
-  if (!period) {
-    return "–";
-  }
-  return `${formatDateOnly(period.start)} – ${formatDateOnly(period.end)}`;
 }
 
 function formatExtraWorkTicketPdfFilename(site: Site, ticket: MobileExtraWorkTicket): string {

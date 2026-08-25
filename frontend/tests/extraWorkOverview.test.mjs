@@ -7,6 +7,7 @@ import {
   buildExtraWorkOverviewEntrySummary,
   filterExtraWorkOverviewTickets,
   formatExtraWorkOverviewCreatorName,
+  formatExtraWorkOverviewIsoWeek,
   formatExtraWorkOverviewTitle,
   getExtraWorkOverviewMasterHeight,
   getExtraWorkOverviewDescription,
@@ -225,6 +226,35 @@ test("description and execution period reuse the existing structured fields", ()
     start: "2027-01-04",
     end: "2027-01-10",
   });
+});
+
+test("detail period formatting shows the effective ISO calendar week only", () => {
+  assert.equal(formatExtraWorkOverviewIsoWeek(ticket()), "KW 35");
+  assert.equal(formatExtraWorkOverviewIsoWeek(ticket({
+    manual_execution_start: null,
+    manual_execution_end: null,
+    manual_execution_week: 1,
+    manual_execution_week_year: 2027,
+  })), "KW 1");
+  assert.equal(formatExtraWorkOverviewIsoWeek(ticket({
+    manual_execution_start: "2020-12-28",
+    manual_execution_end: "2021-01-03",
+    manual_execution_week: null,
+    manual_execution_week_year: null,
+  })), "KW 53");
+  assert.equal(formatExtraWorkOverviewIsoWeek(ticket({
+    manual_execution_start: "2021-01-01",
+    manual_execution_end: "2021-01-03",
+    manual_execution_week: null,
+    manual_execution_week_year: null,
+  })), "KW 53");
+  assert.equal(formatExtraWorkOverviewIsoWeek(ticket({
+    created_at: "ungültig",
+    manual_execution_start: null,
+    manual_execution_end: null,
+    manual_execution_week: null,
+    manual_execution_week_year: null,
+  })), "–");
 });
 
 test("a saved document entry refreshes the compact overview data without another request", () => {

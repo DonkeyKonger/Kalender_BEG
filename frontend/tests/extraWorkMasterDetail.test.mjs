@@ -74,6 +74,14 @@ test("master rows show only the creation date while the detail keeps date and ti
   assert.match(tabSource.slice(masterRowsEnd), /<dt>Erstelldatum<\/dt><dd>\{formatDateTime\(ticket\.created_at\)\}<\/dd>/);
 });
 
+test("detail shows the effective ISO week without changing its period field position", () => {
+  const detailStart = tabSource.indexOf("function ExtraWorkOverviewDetail");
+  const detailSource = tabSource.slice(detailStart);
+  assert.match(detailSource, /<div><dt>Zeitraum<\/dt><dd>\{formatExtraWorkOverviewIsoWeek\(ticket\)\}<\/dd><\/div>/);
+  assert.doesNotMatch(detailSource, /formatExtraWorkOverviewPeriod/);
+  assert.doesNotMatch(detailSource, /formatDateOnly\(period\.start\)/);
+});
+
 test("master creator names stay abbreviated and fully accessible", () => {
   assert.match(tabSource, /formatExtraWorkOverviewCreatorName\(ticket\.created_by_name\)/);
   assert.match(tabSource, /className="project-extra-work-master-creator"[\s\S]*aria-label=\{creatorName\.accessibleName\}[\s\S]*title=\{creatorName\.fullName \|\| undefined\}[\s\S]*creatorName\.shortName/);
