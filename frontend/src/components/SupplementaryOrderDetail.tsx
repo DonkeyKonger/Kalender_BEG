@@ -1,5 +1,4 @@
 import { ArrowLeft, Download, ExternalLink, File as FileIcon, FileImage, FileText, LoaderCircle, LockKeyhole, Paperclip, Save, Trash2, UploadCloud, X } from "lucide-react";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
   memo,
   useCallback,
@@ -53,6 +52,7 @@ import {
 import { containsDraggedFiles } from "../lib/fileDrag";
 import { formatExtraWorkDocumentMaterialText } from "../lib/extraWorkMaterial";
 import { formatProjectFileSize } from "../lib/projectFiles";
+import { loadCompatiblePdfJs } from "../lib/pdfJsCompatibility";
 import {
   SUPPLEMENTARY_ORDER_DOCUMENT_ZOOM_LEVELS,
   getSupplementaryOrderAutoFitWidth,
@@ -80,7 +80,6 @@ import type {
   Site,
 } from "../types/site";
 
-let supplementaryOrderPdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
 let supplementaryOrderTemplateLoader: Promise<ArrayBuffer> | null = null;
 const supplementaryOrderDocumentLoaders = new Map<string, Promise<ExtraWorkTicketDocumentRead>>();
 const supplementaryOrderAttachmentContentLoaders = new Map<string, Promise<Blob>>();
@@ -94,16 +93,6 @@ type ExtraWorkAttachmentUpload = {
   status: "queued" | "uploading" | "error";
   error: string | null;
 };
-
-function loadSupplementaryOrderPdfJs(): Promise<typeof import("pdfjs-dist")> {
-  if (!supplementaryOrderPdfJsLoader) {
-    supplementaryOrderPdfJsLoader = import("pdfjs-dist").then((pdfjsLib) => {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-      return pdfjsLib;
-    });
-  }
-  return supplementaryOrderPdfJsLoader;
-}
 
 function loadSupplementaryOrderTemplate(siteId: number): Promise<ArrayBuffer> {
   if (!supplementaryOrderTemplateLoader) {
@@ -186,7 +175,7 @@ function loadSupplementaryOrderTemplatePreview(data: ArrayBuffer): Promise<strin
 }
 
 async function renderSupplementaryOrderTemplatePreview(data: ArrayBuffer): Promise<string> {
-  const pdfjsLib = await loadSupplementaryOrderPdfJs();
+  const pdfjsLib = await loadCompatiblePdfJs();
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data.slice(0)) });
   try {
     const pdfDocument = await loadingTask.promise;

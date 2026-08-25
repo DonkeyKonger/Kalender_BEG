@@ -26618,6 +26618,13 @@ body.mobile-modal-scroll-locked {
   min-height: 100%;
 }
 
+.mobile-customer-signature-pdf-error {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 12px;
+}
+
 .mobile-customer-signature-pdf-viewport {
   flex: 1 1 auto;
   min-height: 0;

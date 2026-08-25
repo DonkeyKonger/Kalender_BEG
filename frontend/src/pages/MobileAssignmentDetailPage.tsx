@@ -34,7 +34,6 @@ import {
 import { FileOpener } from "@capacitor-community/file-opener";
 import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -50,6 +49,12 @@ import { formatExtraWorkMaterialQuantity, parseExtraWorkMaterialInput, parseExtr
 import { formatExtraWorkSequenceLabel } from "../lib/extraWorkNumber";
 import { formatGermanDateKey, formatGermanDateKeyRange, formatGermanDayMonth } from "../lib/formatters";
 import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPositionGroups";
+import { loadCompatiblePdfJs } from "../lib/pdfJsCompatibility";
+import {
+  PDF_PREVIEW_RENDER_ERROR_MESSAGE,
+  getPdfPreviewRenderScale,
+  renderPdfPagesSequentially,
+} from "../lib/pdfPreview";
 import { formatProjectDocumentMeta, getProjectDocumentKind, type ProjectDocumentKind } from "../lib/projectFiles";
 import { drawSignatureCanvas, getNormalizedSignaturePoint } from "../lib/signatureCanvas";
 import { useMobileModalStack } from "../lib/useMobileModalStack";
@@ -58,17 +63,6 @@ import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, Measure
 import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear, toDateInputValue } from "../utils/dateRange";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
-let pdfJsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
-
-function loadPdfJs(): Promise<typeof import("pdfjs-dist")> {
-  if (!pdfJsLoader) {
-    pdfJsLoader = import("pdfjs-dist").then((pdfjsLib) => {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-      return pdfjsLib;
-    });
-  }
-  return pdfJsLoader;
-}
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => {
@@ -126,9 +120,6 @@ const MOBILE_MEASUREMENT_TABLE_TRAILING_ADD_ROW_ANCHOR = "__trailing_area_add__"
 const MOBILE_MEASUREMENT_TABLE_PLACEHOLDER_ITEM_ID_BASE = -1_000_000;
 const PDF_MIN_ZOOM = 0.75;
 const PDF_MAX_ZOOM = 2.5;
-const PDF_RENDER_QUALITY_MULTIPLIER = 1.6;
-const PDF_MAX_RENDER_PIXEL_RATIO = 3.5;
-const PDF_MAX_CANVAS_PIXELS = 8_000_000;
 const MOBILE_DOCUMENT_PHOTO_LIMIT = 5;
 const MAX_PHOTO_DIMENSION = 1600;
 const PHOTO_JPEG_QUALITY = 0.8;
@@ -6962,13 +6953,17 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
     let isCancelled = false;
     let loadingTask: PDFDocumentLoadingTask | null = null;
     let pdfDocument: PDFDocumentProxy | null = null;
-    setIsRendering(renderTarget.childElementCount === 0);
+    releasePdfPreviewCanvases(renderTarget);
+    baseContentSizeRef.current = { width: 0, height: 0 };
+    surfaceNode.style.width = "";
+    surfaceNode.style.height = "";
+    setIsRendering(true);
     setRenderError(null);
     renderTarget.style.width = "";
 
     async function renderPdf(): Promise<void> {
       try {
-        const pdfjsLib = await loadPdfJs();
+        const pdfjsLib = await loadCompatiblePdfJs();
         if (isCancelled) {
           return;
         }
@@ -6977,44 +6972,68 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
         if (isCancelled || !pdfDocument) {
           return;
         }
+        const activePdfDocument = pdfDocument;
 
-        const nextPageElements: HTMLDivElement[] = [];
-        for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
-          const page = await pdfDocument.getPage(pageNumber);
-          if (isCancelled) {
-            return;
-          }
+        const completed = await renderPdfPagesSequentially({
+          pageCount: activePdfDocument.numPages,
+          isCancelled: () => isCancelled,
+          renderPage: async (pageNumber) => {
+            const page = await activePdfDocument.getPage(pageNumber);
+            let canvas: HTMLCanvasElement | null = null;
+            try {
+              if (isCancelled) {
+                throw new Error("PDF rendering cancelled.");
+              }
+              const baseViewport = page.getViewport({ scale: 1 });
+              const availableWidth = Math.max(viewportNode.clientWidth - 16, 260);
+              const scale = Math.min(Math.max(availableWidth / baseViewport.width, 0.35), 3.5);
+              const viewport = page.getViewport({ scale });
+              const renderPixelRatio = getPdfPreviewRenderScale(
+                viewport.width,
+                viewport.height,
+                activePdfDocument.numPages,
+                window.devicePixelRatio || 1,
+              );
+              const renderViewport = page.getViewport({ scale: scale * renderPixelRatio });
+              canvas = document.createElement("canvas");
+              const canvasContext = canvas.getContext("2d", { alpha: false });
 
-          const baseViewport = page.getViewport({ scale: 1 });
-          const availableWidth = Math.max(viewportNode.clientWidth - 16, 260);
-          const scale = Math.min(Math.max(availableWidth / baseViewport.width, 0.35), 3.5);
-          const viewport = page.getViewport({ scale });
-          const renderPixelRatio = getPdfCanvasRenderScale(viewport.width, viewport.height);
-          const renderViewport = page.getViewport({ scale: scale * renderPixelRatio });
-          const canvas = document.createElement("canvas");
-          const canvasContext = canvas.getContext("2d", { alpha: false });
+              if (!canvasContext) {
+                throw new Error("Canvas konnte nicht initialisiert werden.");
+              }
 
-          if (!canvasContext) {
-            throw new Error("Canvas konnte nicht initialisiert werden.");
-          }
+              canvas.className = "mobile-customer-signature-canvas-page";
+              canvas.width = Math.floor(renderViewport.width);
+              canvas.height = Math.floor(renderViewport.height);
+              canvas.style.width = `${viewport.width}px`;
+              canvas.style.height = `${viewport.height}px`;
 
-          canvas.className = "mobile-customer-signature-canvas-page";
-          canvas.width = Math.floor(renderViewport.width);
-          canvas.height = Math.floor(renderViewport.height);
-          canvas.style.width = `${viewport.width}px`;
-          canvas.style.height = `${viewport.height}px`;
+              const pageElement = document.createElement("div");
+              pageElement.className = "mobile-customer-signature-pdf-page";
+              pageElement.appendChild(canvas);
 
-          const pageElement = document.createElement("div");
-          pageElement.className = "mobile-customer-signature-pdf-page";
-          pageElement.appendChild(canvas);
-          nextPageElements.push(pageElement);
+              const renderTask = page.render({ canvas, canvasContext, viewport: renderViewport });
+              await renderTask.promise;
+              return pageElement;
+            } catch (error) {
+              if (canvas) {
+                canvas.width = 0;
+                canvas.height = 0;
+              }
+              throw error;
+            } finally {
+              page.cleanup();
+            }
+          },
+          onPageRendered: (pageElement) => {
+            renderTarget.appendChild(pageElement);
+          },
+          onPageDiscarded: (pageElement) => {
+            releasePdfPreviewCanvases(pageElement);
+          },
+        });
 
-          const renderTask = page.render({ canvas, canvasContext, viewport: renderViewport });
-          await renderTask.promise;
-        }
-
-        if (!isCancelled) {
-          renderTarget.replaceChildren(...nextPageElements);
+        if (completed && !isCancelled) {
           const nextSize = {
             width: Math.ceil(renderTarget.scrollWidth),
             height: Math.ceil(renderTarget.scrollHeight),
@@ -7028,8 +7047,9 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
         }
       } catch (error) {
         if (!isCancelled) {
-          console.error("Measurement PDF render failed", error);
-          setRenderError("Aufmaß-PDF konnte nicht angezeigt werden.");
+          releasePdfPreviewCanvases(renderTarget);
+          console.error("PDF preview render failed", error);
+          setRenderError(PDF_PREVIEW_RENDER_ERROR_MESSAGE);
           setIsRendering(false);
         }
       }
@@ -7038,6 +7058,7 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
     void renderPdf();
     return () => {
       isCancelled = true;
+      releasePdfPreviewCanvases(renderTarget);
       void loadingTask?.destroy();
       void pdfDocument?.cleanup();
     };
@@ -7093,7 +7114,18 @@ function PdfCanvasPreview({ data }: { data: ArrayBuffer }) {
       aria-label="Aufmaß-PDF"
     >
       {isRendering ? <div className="empty-panel">PDF wird vorbereitet...</div> : null}
-      {renderError ? <div className="form-error">{renderError}</div> : null}
+      {renderError ? (
+        <div className="mobile-customer-signature-pdf-error">
+          <div className="form-error">{renderError}</div>
+          <button
+            className="secondary-action"
+            type="button"
+            onClick={() => setRenderVersion((currentVersion) => currentVersion + 1)}
+          >
+            PDF erneut anzeigen
+          </button>
+        </div>
+      ) : null}
       <div
         className="mobile-customer-signature-pdf-viewport"
         ref={viewportRef}
@@ -7516,14 +7548,12 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function getPdfCanvasRenderScale(cssWidth: number, cssHeight: number): number {
-  const deviceScale = window.devicePixelRatio || 1;
-  const targetScale = Math.min(
-    Math.max(deviceScale * PDF_RENDER_QUALITY_MULTIPLIER, 2.5),
-    PDF_MAX_RENDER_PIXEL_RATIO,
-  );
-  const pixelCapScale = Math.sqrt(PDF_MAX_CANVAS_PIXELS / Math.max(cssWidth * cssHeight, 1));
-  return Math.max(1, Math.min(targetScale, pixelCapScale));
+function releasePdfPreviewCanvases(container: HTMLElement): void {
+  for (const canvas of container.querySelectorAll("canvas")) {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+  container.replaceChildren();
 }
 
 function getTouchDistance(touches: ReactTouchEvent<HTMLDivElement>["touches"]): number {
