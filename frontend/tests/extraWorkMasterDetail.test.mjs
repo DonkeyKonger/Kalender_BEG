@@ -183,7 +183,7 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /\.project-extra-work-search input \{[\s\S]*appearance: none;[\s\S]*height: 100%/);
   assert.match(styles, /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*grid-template-columns: var\(--project-extra-work-master-column\) minmax\(0, 1fr\);[\s\S]*border-bottom: 0/);
   assert.match(styles, /--project-extra-work-header-separator-inset: 8px/);
-  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions::before \{[\s\S]*top: var\(--project-extra-work-header-separator-inset\);[\s\S]*bottom: var\(--project-extra-work-header-separator-inset\);[\s\S]*left: 0;[\s\S]*width: 1px;[\s\S]*background: var\(--pf-border\)/);
+  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions::before \{[\s\S]*top: var\(--project-extra-work-header-separator-inset\);[\s\S]*bottom: var\(--project-extra-work-header-separator-inset\);[\s\S]*left: 0;[\s\S]*width: 1px;[\s\S]*background: var\(--project-extra-work-divider\)/);
   assert.match(styles, /\.site-detail-status-trigger \{[\s\S]*border-radius: 0/);
   assert.match(styles, /\.site-detail-status-menu \{[\s\S]*border-radius: 0/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*height: 60px;[\s\S]*padding: 10px var\(--project-extra-work-header-inline-padding\)/);
@@ -201,13 +201,27 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-delivery-tooltip \{[\s\S]*right: auto;[\s\S]*left: 0/);
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*--project-extra-work-master-column: minmax\(0, 1fr\)/);
-  assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*border-top: 1px solid var\(--pf-border\)/);
+  assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*border-top: 1px solid var\(--project-extra-work-divider\)/);
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions::before \{[\s\S]*display: none/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions \{[\s\S]*flex-wrap: wrap/);
   assert.match(styles, /\.project-extra-work-master-row\.is-selected::before/);
   assert.match(styles, /\.project-extra-work-overview \.secondary-action,[\s\S]*border-radius: 2px/);
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.project-extra-work-workspace/);
   assert.doesNotMatch(overviewStyles, /\nbutton\s*\{/);
+});
+
+test("structural dividers become lighter only inside the extra-work overview", () => {
+  assert.match(styles, /\.site-detail-page\.is-project-file-workspace \{[\s\S]*--pf-border: #d1d9e6/);
+  assert.match(styles, /\.site-detail-page\.is-project-file-workspace \.project-record-tabs \{[\s\S]*border-bottom: 1px solid var\(--pf-border\)/);
+  assert.match(styles, /\.project-extra-work-overview \{[\s\S]*--project-extra-work-divider: #e3e6eb;[\s\S]*--project-extra-work-divider-soft: #edf0f3/);
+  assert.match(styles, /\.project-record-toolbar\.project-extra-work-toolbar\.measurement-review-toolbar \{[\s\S]*border-color: var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions::before \{[\s\S]*background: var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-extra-work-workspace \{[\s\S]*border: 1px solid var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-extra-work-master-row \{[\s\S]*border-bottom: 1px solid var\(--project-extra-work-divider-soft\)/);
+  assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*border-bottom: 1px solid var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-extra-work-key-data > div \+ div,[\s\S]*border-left: 1px solid var\(--project-extra-work-divider-soft\)/);
+  assert.match(styles, /\.project-extra-work-description \{[\s\S]*border: 1px solid var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-extra-work-search \{[\s\S]*border: 1px solid var\(--pf-border\)/);
 });
 
 test("toolbar and detail action edges share the responsive right inset", () => {
