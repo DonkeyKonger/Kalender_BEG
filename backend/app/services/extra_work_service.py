@@ -403,6 +403,38 @@ class ExtraWorkService:
         self._archive_completed_ticket(ticket)
         return self._build_ticket_read(ticket)
 
+    def set_site_ticket_invoiced(
+        self,
+        *,
+        site_id: int,
+        ticket_id: int,
+        is_invoiced: bool,
+        current_user: User,
+    ) -> ExtraWorkTicketRead:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(
+            ticket_id,
+            site_id,
+            include_deleted=True,
+            for_update=True,
+        )
+        previous_value = ticket.is_invoiced
+        if previous_value == is_invoiced:
+            return self._build_ticket_read(ticket)
+        ticket.is_invoiced = is_invoiced
+        AuditService(self.db).record(
+            user_id=current_user.id,
+            action="extra_work.invoiced_updated",
+            entity_type="extra_work_ticket",
+            entity_id=ticket.id,
+            old_value={"is_invoiced": previous_value},
+            new_value={"is_invoiced": is_invoiced},
+        )
+        self.db.add(ticket)
+        self.db.commit()
+        self.db.refresh(ticket)
+        return self._build_ticket_read(ticket)
+
     def list_mobile_tickets(
         self,
         *,

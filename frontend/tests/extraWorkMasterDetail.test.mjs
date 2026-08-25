@@ -218,9 +218,9 @@ test("new visual rules stay scoped and keep square Office geometry", () => {
 
   assert.notEqual(overviewStyleStart, -1);
   assert.match(styles, /\.project-extra-work-workspace \{/);
-  assert.match(styles, /--project-extra-work-master-column: minmax\(600px, 48%\)/);
+  assert.match(styles, /--project-extra-work-master-column: minmax\(680px, 52%\)/);
   assert.match(styles, /\.project-extra-work-workspace \{[\s\S]*grid-template-columns: var\(--project-extra-work-master-column\) minmax\(0, 1fr\)/);
-  assert.match(styles, /grid-template-columns: 148px minmax\(138px, 1fr\) 88px 104px 70px/);
+  assert.match(styles, /grid-template-columns: 148px minmax\(152px, 1fr\) 104px 88px 104px 68px/);
   assert.match(styles, /--project-extra-work-control-height: 32px/);
   assert.match(styles, /\.project-extra-work-toolbar \.measurement-review-header-actions > \.secondary-action,[\s\S]*\.project-extra-work-toolbar \.measurement-review-header-actions > \.primary-action,[\s\S]*\.project-extra-work-search \{[\s\S]*height: var\(--project-extra-work-control-height\)/);
   assert.match(styles, /\.project-extra-work-search input \{[\s\S]*appearance: none;[\s\S]*height: 100%/);
@@ -285,14 +285,14 @@ test("extra-work typography is locally strengthened without changing compact geo
   assert.match(styles, /--project-extra-work-detail-columns: minmax\(0, 1fr\) 180px 108px 100px/);
 });
 
-test("the three right master columns align headers and values on shared axes", () => {
-  assert.match(styles, /\.project-extra-work-master-head > span:nth-child\(3\),[\s\S]*\.project-extra-work-master-row > time:nth-child\(3\),[\s\S]*\.project-extra-work-master-row > span:nth-child\(4\) \{[\s\S]*justify-self: stretch;[\s\S]*text-align: left/);
-  assert.match(styles, /\.project-extra-work-master-head > span:nth-child\(5\),[\s\S]*\.project-extra-work-master-row > strong:nth-child\(5\) \{[\s\S]*justify-self: stretch;[\s\S]*text-align: right/);
+test("the right master columns align headers and values on shared axes", () => {
+  assert.match(styles, /\.project-extra-work-master-head > span:nth-child\(4\),[\s\S]*\.project-extra-work-master-row > time:nth-child\(4\),[\s\S]*\.project-extra-work-master-row > span:nth-child\(5\) \{[\s\S]*justify-self: stretch;[\s\S]*text-align: left/);
+  assert.match(styles, /\.project-extra-work-master-head > span:nth-child\(6\),[\s\S]*\.project-extra-work-master-row > strong:nth-child\(6\) \{[\s\S]*justify-self: stretch;[\s\S]*text-align: right/);
   assert.match(styles, /\.project-extra-work-master-head > span:nth-child\(n \+ 3\) \{[\s\S]*white-space: nowrap/);
   assert.match(styles, /\.project-extra-work-master-head > span,[\s\S]*\.project-extra-work-master-row > \* \{[\s\S]*padding: 0 10px/);
   assert.match(styles, /\.project-extra-work-master \{[\s\S]*--project-extra-work-master-scrollbar-width: 0px/);
   assert.match(styles, /\.project-extra-work-master-head \{[\s\S]*padding-right: var\(--project-extra-work-master-scrollbar-width\)/);
   assert.match(styles, /\.project-extra-work-master-body \{[\s\S]*overflow-y: auto/);
   assert.doesNotMatch(styles, /\.project-extra-work-master-body \{[^}]*scrollbar-gutter: stable/s);
-  assert.match(styles, /grid-template-columns: 148px minmax\(138px, 1fr\) 88px 104px 70px/);
+  assert.match(styles, /grid-template-columns: 148px minmax\(152px, 1fr\) 104px 88px 104px 68px/);
 });

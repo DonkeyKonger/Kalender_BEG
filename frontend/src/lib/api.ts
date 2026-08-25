@@ -1499,6 +1499,17 @@ export const api = {
     });
   },
 
+  async updateSiteExtraWorkTicketInvoiced(
+    siteId: number,
+    ticketId: number,
+    isInvoiced: boolean,
+  ): Promise<MobileExtraWorkTicket> {
+    return request<MobileExtraWorkTicket>(`/sites/${siteId}/extra-work-tickets/${ticketId}/invoiced`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_invoiced: isInvoiced }),
+    });
+  },
+
   async createSiteMeasurementEntry(
     siteId: number,
     batchId: number,

@@ -48,6 +48,12 @@ class ExtraWorkTicket(TimestampMixin, Base):
         ForeignKey("extra_work_tickets.id", ondelete="SET NULL"), index=True
     )
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="draft", index=True)
+    is_invoiced: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

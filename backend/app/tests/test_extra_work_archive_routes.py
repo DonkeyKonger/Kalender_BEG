@@ -34,6 +34,7 @@ def archived_ticket() -> ExtraWorkTicketRead:
         kind="billing",
         approval_ticket_id=None,
         status="signed",
+        is_invoiced=True,
         created_by_user_id=7,
         created_by_name="Max Monteur",
         submitted_by_user_id=7,
@@ -107,6 +108,7 @@ def test_archive_list_forwards_archived_only_query(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()[0]["deleted_by_name"] == "Archiv Admin"
+    assert response.json()[0]["is_invoiced"] is True
     assert FakeExtraWorkService.calls == [("list", 8, True, True)]
 
 

@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, ChevronDown, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
@@ -33,6 +33,7 @@ import {
   getExtraWorkOverviewPrimaryEntry,
   getExtraWorkOverviewScrollbarWidth,
 } from "../lib/extraWorkOverview";
+import { setExtraWorkTicketInvoicedValue } from "../lib/extraWorkInvoiced";
 import {
   getExtraWorkOverviewPhotoSlots,
   loadExtraWorkOverviewPhotoList,
@@ -231,6 +232,8 @@ export function SiteDetailPage() {
   const [archivingExtraWorkTicketId, setArchivingExtraWorkTicketId] = useState<number | null>(null);
   const [restoringExtraWorkTicketId, setRestoringExtraWorkTicketId] = useState<number | null>(null);
   const [extraWorkStatusActionId, setExtraWorkStatusActionId] = useState<number | null>(null);
+  const [extraWorkInvoicedActionId, setExtraWorkInvoicedActionId] = useState<number | null>(null);
+  const [extraWorkInvoicedError, setExtraWorkInvoicedError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSite() {
@@ -623,6 +626,7 @@ export function SiteDetailPage() {
     }
     setExtraWorkLoading(true);
     setExtraWorkError(null);
+    setExtraWorkInvoicedError(null);
     try {
       setExtraWorkTickets(await api.siteExtraWorkTickets(site.id, { archivedOnly }));
       setExtraWorkLoaded(true);
@@ -1090,6 +1094,50 @@ export function SiteDetailPage() {
       setExtraWorkError(readApiError(requestError, "Status konnte nicht aufgewertet werden."));
     } finally {
       setExtraWorkStatusActionId(null);
+    }
+  }
+
+  async function toggleExtraWorkTicketInvoiced(ticket: MobileExtraWorkTicket): Promise<void> {
+    if (!site || !canEditSite || extraWorkInvoicedActionId !== null) {
+      return;
+    }
+    const previousValue = ticket.is_invoiced;
+    const nextValue = !previousValue;
+    setExtraWorkInvoicedActionId(ticket.id);
+    setExtraWorkInvoicedError(null);
+    setExtraWorkTickets((current) => (
+      setExtraWorkTicketInvoicedValue(current, ticket.id, nextValue)
+    ));
+    setSelectedExtraWorkTicket((current) => (
+      current?.id === ticket.id ? { ...current, is_invoiced: nextValue } : current
+    ));
+    try {
+      const updated = await api.updateSiteExtraWorkTicketInvoiced(
+        site.id,
+        ticket.id,
+        nextValue,
+      );
+      setExtraWorkTickets((current) => (
+        setExtraWorkTicketInvoicedValue(current, ticket.id, updated.is_invoiced)
+      ));
+      setSelectedExtraWorkTicket((current) => (
+        current?.id === ticket.id
+          ? { ...current, is_invoiced: updated.is_invoiced }
+          : current
+      ));
+    } catch (requestError) {
+      setExtraWorkTickets((current) => (
+        setExtraWorkTicketInvoicedValue(current, ticket.id, previousValue)
+      ));
+      setSelectedExtraWorkTicket((current) => (
+        current?.id === ticket.id ? { ...current, is_invoiced: previousValue } : current
+      ));
+      setExtraWorkInvoicedError(readApiError(
+        requestError,
+        "Abrechnungsmarkierung konnte nicht gespeichert werden.",
+      ));
+    } finally {
+      setExtraWorkInvoicedActionId(null);
     }
   }
 
@@ -1649,18 +1697,23 @@ export function SiteDetailPage() {
             archivingTicketId={archivingExtraWorkTicketId}
             restoringTicketId={restoringExtraWorkTicketId}
             statusActionId={extraWorkStatusActionId}
+            invoicedActionId={extraWorkInvoicedActionId}
+            invoicedError={extraWorkInvoicedError}
             canCreate={canEditSite}
             canPromoteStatus={canEditSite}
+            canMarkInvoiced={canEditSite}
             onCreate={() => void createExtraWorkTicket()}
             onRetry={() => {
               setExtraWorkLoaded(false);
               setExtraWorkError(null);
+              setExtraWorkInvoicedError(null);
             }}
             onToggleArchive={() => {
               setExtraWorkArchiveMode((current) => !current);
               setExtraWorkTickets([]);
               setExtraWorkLoaded(false);
               setExtraWorkError(null);
+              setExtraWorkInvoicedError(null);
               setExtraWorkMessage(null);
               setExtraWorkOverviewTicketId(null);
               setSelectedExtraWorkTicket(null);
@@ -1672,6 +1725,7 @@ export function SiteDetailPage() {
             onArchiveTicket={archiveExtraWorkTicket}
             onRestoreTicket={restoreExtraWorkTicket}
             onPromoteStatus={(ticket, status) => void promoteExtraWorkTicketStatus(ticket, status)}
+            onToggleInvoiced={(ticket) => void toggleExtraWorkTicketInvoiced(ticket)}
           />
       ) : null}
       {activeTab === "tools-material" ? (
@@ -2830,8 +2884,11 @@ function ExtraWorkTab({
   archivingTicketId,
   restoringTicketId,
   statusActionId,
+  invoicedActionId,
+  invoicedError,
   canCreate,
   canPromoteStatus,
+  canMarkInvoiced,
   onCreate,
   onRetry,
   onToggleArchive,
@@ -2841,6 +2898,7 @@ function ExtraWorkTab({
   onArchiveTicket,
   onRestoreTicket,
   onPromoteStatus,
+  onToggleInvoiced,
 }: {
   site: Site;
   tickets: MobileExtraWorkTicket[];
@@ -2854,8 +2912,11 @@ function ExtraWorkTab({
   archivingTicketId: number | null;
   restoringTicketId: number | null;
   statusActionId: number | null;
+  invoicedActionId: number | null;
+  invoicedError: string | null;
   canCreate: boolean;
   canPromoteStatus: boolean;
+  canMarkInvoiced: boolean;
   onCreate: () => void;
   onRetry: () => void;
   onToggleArchive: () => void;
@@ -2865,6 +2926,7 @@ function ExtraWorkTab({
   onArchiveTicket: (ticket: MobileExtraWorkTicket) => Promise<boolean>;
   onRestoreTicket: (ticket: MobileExtraWorkTicket) => Promise<boolean>;
   onPromoteStatus: (ticket: MobileExtraWorkTicket, status: ExtraWorkManualStatus) => void;
+  onToggleInvoiced: (ticket: MobileExtraWorkTicket) => void;
 }) {
   const [openStatusControl, setOpenStatusControl] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -3075,6 +3137,9 @@ function ExtraWorkTab({
         </div>
       </header>
       {message ? <div className="project-record-empty-state is-success">{message}</div> : null}
+      {invoicedError ? (
+        <div className="project-extra-work-invoiced-error" role="alert">{invoicedError}</div>
+      ) : null}
       {isLoading ? <div className="matrix-state">Zusatzaufträge werden geladen...</div> : null}
       {error ? (
         <div className="project-record-empty-state is-error">
@@ -3093,6 +3158,7 @@ function ExtraWorkTab({
             <div className="project-extra-work-master-head" role="row">
               <span role="columnheader">Status</span>
               <span role="columnheader">Titel / Nummer</span>
+              <span role="columnheader">Abgerechnet</span>
               <span role="columnheader">Erstellt am</span>
               <span role="columnheader">Ersteller</span>
               <span role="columnheader">Stunden</span>
@@ -3150,6 +3216,28 @@ function ExtraWorkTab({
                       </div>
                       <div className="project-extra-work-master-title" role="gridcell">
                         <strong>{formatExtraWorkOverviewTitle(ticket)}</strong>
+                      </div>
+                      <div
+                        className="project-extra-work-master-invoiced"
+                        role="gridcell"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <label
+                          className="project-extra-work-invoiced-control"
+                          title={ticket.is_invoiced ? "Abgerechnet" : "Nicht abgerechnet"}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={ticket.is_invoiced}
+                            disabled={!canMarkInvoiced || invoicedActionId !== null}
+                            aria-label={`${formatExtraWorkOverviewTitle(ticket)}: ${ticket.is_invoiced ? "Abrechnungsmarkierung entfernen" : "Als abgerechnet markieren"}`}
+                            onChange={() => onToggleInvoiced(ticket)}
+                          />
+                          <span className="project-extra-work-invoiced-box" aria-hidden="true">
+                            {ticket.is_invoiced ? <Check size={14} strokeWidth={3} /> : null}
+                          </span>
+                        </label>
                       </div>
                       <time role="gridcell" dateTime={ticket.created_at}>{createdDate}</time>
                       <span

@@ -22,6 +22,10 @@ class ExtraWorkTicketManualStatusUpdate(BaseModel):
     status: str = Field(min_length=1, max_length=32)
 
 
+class ExtraWorkTicketInvoicedUpdate(BaseModel):
+    is_invoiced: bool
+
+
 class ExtraWorkTicketTitleUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=160)
 
@@ -272,6 +276,7 @@ class ExtraWorkTicketRead(BaseModel):
     kind: str
     approval_ticket_id: int | None
     status: str
+    is_invoiced: bool = False
     created_by_user_id: int | None
     created_by_name: str | None = None
     submitted_by_user_id: int | None

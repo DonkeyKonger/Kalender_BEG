@@ -215,6 +215,19 @@ class FakeExtraWorkService:
             ("delete-photo", site_id, ticket_id, photo_id, current_user.id)
         )
 
+    def set_site_ticket_invoiced(
+        self,
+        *,
+        site_id,
+        ticket_id,
+        is_invoiced,
+        current_user,
+    ):
+        self.calls.append(
+            ("invoiced", site_id, ticket_id, is_invoiced, current_user.id)
+        )
+        return ticket_read().model_copy(update={"is_invoiced": is_invoiced})
+
 
 class FakeExtraWorkPdfService:
     calls: list[tuple] = []
@@ -302,6 +315,56 @@ def test_calendar_only_office_keeps_legacy_create_but_cannot_update_document(mon
             {"title": None, "kind": None, "approval_ticket_id": None, "notes": None},
         )
     ]
+
+
+@pytest.mark.parametrize(
+    "user",
+    [
+        current_user(UserRole.ADMIN),
+        current_user(UserRole.PROJECT_MANAGER),
+        current_user(UserRole.OFFICE, "sites"),
+    ],
+)
+def test_invoiced_marker_uses_existing_sites_write_permission(monkeypatch, user):
+    client = api_client(monkeypatch, user)
+
+    marked = client.patch(
+        "/api/sites/8/extra-work-tickets/12/invoiced",
+        json={"is_invoiced": True},
+    )
+    cleared = client.patch(
+        "/api/sites/8/extra-work-tickets/12/invoiced",
+        json={"is_invoiced": False},
+    )
+
+    assert marked.status_code == 200
+    assert marked.json()["is_invoiced"] is True
+    assert cleared.status_code == 200
+    assert cleared.json()["is_invoiced"] is False
+    assert FakeExtraWorkService.calls == [
+        ("invoiced", 8, 12, True, 7),
+        ("invoiced", 8, 12, False, 7),
+    ]
+
+
+@pytest.mark.parametrize(
+    "user",
+    [
+        current_user(UserRole.OFFICE),
+        current_user(UserRole.OFFICE, "calendar"),
+        current_user(UserRole.MONTEUR),
+    ],
+)
+def test_invoiced_marker_rejects_users_without_sites_write_permission(monkeypatch, user):
+    client = api_client(monkeypatch, user)
+
+    response = client.patch(
+        "/api/sites/8/extra-work-tickets/12/invoiced",
+        json={"is_invoiced": True},
+    )
+
+    assert response.status_code == 403
+    assert FakeExtraWorkService.calls == []
 
 
 @pytest.mark.parametrize(

@@ -15,6 +15,7 @@ from app.schemas.extra_work import (
     ExtraWorkTicketCreate,
     ExtraWorkTicketDocumentRead,
     ExtraWorkTicketDocumentUpdate,
+    ExtraWorkTicketInvoicedUpdate,
     ExtraWorkTicketManualStatusUpdate,
     ExtraWorkTicketPhotoRead,
     ExtraWorkTicketRead,
@@ -783,6 +784,25 @@ def promote_extra_work_ticket_status(
         site_id=site_id,
         ticket_id=ticket_id,
         target_status=payload.status,
+        current_user=current_user,
+    )
+
+
+@router.patch(
+    "/{site_id}/extra-work-tickets/{ticket_id}/invoiced",
+    response_model=ExtraWorkTicketRead,
+)
+def update_extra_work_ticket_invoiced(
+    site_id: int,
+    ticket_id: int,
+    payload: ExtraWorkTicketInvoicedUpdate,
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> ExtraWorkTicketRead:
+    return ExtraWorkService(db).set_site_ticket_invoiced(
+        site_id=site_id,
+        ticket_id=ticket_id,
+        is_invoiced=payload.is_invoiced,
         current_user=current_user,
     )
 

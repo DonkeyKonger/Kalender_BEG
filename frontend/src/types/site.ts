@@ -379,6 +379,7 @@ export type MobileExtraWorkTicket = {
   kind: "billing" | "approval" | string;
   approval_ticket_id: number | null;
   status: "draft" | "submitted" | "reviewed" | "signed" | string;
+  is_invoiced: boolean;
   created_by_user_id: number | null;
   created_by_name: string | null;
   submitted_by_user_id: number | null;
