@@ -131,7 +131,7 @@ test("detail action set stays reduced to open, PDF and archive or restore", () =
   assert.doesNotMatch(tabSource, /Weitere Aktionen/);
 });
 
-test("only the two primary overview actions use the established calendar blue variant", () => {
+test("only the two primary overview actions use the active sidebar blue variant", () => {
   const genericWorkspacePrimaryIndex = styles.indexOf(
     ".site-detail-page.is-project-file-workspace .primary-action {",
   );
@@ -155,23 +155,31 @@ test("only the two primary overview actions use the established calendar blue va
   assert.ok(extraWorkPrimaryIndex > genericWorkspacePrimaryIndex);
   assert.match(
     styles,
-    /\.project-extra-work-primary-action \{[\s\S]*border-color: #1d5c99;[\s\S]*background: #1d5c99;[\s\S]*color: #ffffff;/,
+    /:root \{[\s\S]*--sidebar-active-blue-rgb: 42 116 191;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-primary-action:hover:not\(:disabled\) \{[\s\S]*border-color: #143c6d;[\s\S]*background: #143c6d;/,
+    /\.nav-list a\.active,[\s\S]*\.nav-list a:hover \{[\s\S]*background: rgb\(var\(--sidebar-active-blue-rgb\) \/ 42%\);/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-primary-action:active:not\(:disabled\) \{[\s\S]*border-color: #0f3d6b;[\s\S]*background: #0f3d6b;/,
+    /\.project-extra-work-primary-action \{[\s\S]*border-color: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*background: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*color: #ffffff;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-primary-action:focus-visible \{[\s\S]*border-color: #1d5c99;[\s\S]*background: #1d5c99;[\s\S]*outline: 2px solid var\(--pf-active\);[\s\S]*outline-offset: 2px;/,
+    /\.project-extra-work-primary-action:hover:not\(:disabled\) \{[\s\S]*border-color: #1b6fbb;[\s\S]*background: #1b6fbb;/,
   );
   assert.match(
     styles,
-    /\.project-extra-work-primary-action:disabled \{[\s\S]*cursor: not-allowed;[\s\S]*opacity: 0\.58;/,
+    /\.project-extra-work-primary-action:active:not\(:disabled\) \{[\s\S]*border-color: #0b4b8f;[\s\S]*background: #0b4b8f;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-primary-action:focus-visible \{[\s\S]*border-color: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*background: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*outline: 2px solid #041d38;[\s\S]*outline-offset: 2px;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-primary-action:disabled \{[\s\S]*border-color: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*background: rgb\(var\(--sidebar-active-blue-rgb\)\);[\s\S]*cursor: not-allowed;[\s\S]*opacity: 0\.58;/,
   );
 });
 
