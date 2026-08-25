@@ -74,6 +74,9 @@ test("only the selected desktop detail loads thumbnail endpoints and guards rapi
   const previewStart = pageSource.indexOf("function ExtraWorkOverviewPhotos");
   const previewEnd = pageSource.indexOf("function MeasurementTab", previewStart);
   const previewSource = pageSource.slice(previewStart, previewEnd);
+  const modalStart = previewSource.indexOf("function ExtraWorkOverviewPhotoModal");
+  const gridSource = previewSource.slice(0, modalStart);
+  const modalSource = previewSource.slice(modalStart);
 
   assert.match(pageSource, /<ExtraWorkOverviewPhotos[\s\S]*key=\{`\$\{ticket\.id\}/);
   const emptyCountGuard = previewSource.slice(
@@ -82,11 +85,12 @@ test("only the selected desktop detail loads thumbnail endpoints and guards rapi
   );
   assert.match(emptyCountGuard, /setPhotos\(\[\]\)/);
   assert.doesNotMatch(emptyCountGuard, /siteExtraWorkTicketPhotos/);
-  assert.match(previewSource, /api\.siteExtraWorkTicketPhotos\(siteId, ticket\.id/);
-  assert.match(previewSource, /api\.siteExtraWorkTicketPhotoThumbnail/);
-  assert.match(previewSource, /let active = true/);
-  assert.match(previewSource, /if \(active\) \{[\s\S]*setPhotos\(loadedPhotos\)/);
-  assert.doesNotMatch(previewSource, /siteExtraWorkTicketPhotoContent/);
+  assert.match(gridSource, /api\.siteExtraWorkTicketPhotos\(siteId, ticket\.id/);
+  assert.match(gridSource, /api\.siteExtraWorkTicketPhotoThumbnail/);
+  assert.match(gridSource, /let active = true/);
+  assert.match(gridSource, /if \(active\) \{[\s\S]*setPhotos\(loadedPhotos\)/);
+  assert.doesNotMatch(gridSource, /siteExtraWorkTicketPhotoContent/);
+  assert.match(modalSource, /api\.siteExtraWorkTicketPhotoContent/);
   assert.match(apiSource, /siteExtraWorkTicketPhotoThumbnail[\s\S]*\/thumbnail/);
 });
 
@@ -120,10 +124,79 @@ test("the preview uses five equal responsive columns and square cover-cropped ti
 
 test("the grid keeps the existing 320-pixel thumbnail API and accessible image names", () => {
   const thumbnailStart = pageSource.indexOf("function ExtraWorkOverviewThumbnail");
-  const thumbnailSource = pageSource.slice(thumbnailStart, pageSource.indexOf("function MeasurementTab", thumbnailStart));
+  const thumbnailSource = pageSource.slice(thumbnailStart, pageSource.indexOf("function ExtraWorkOverviewPhotoModal", thumbnailStart));
 
   assert.match(optimizerSource, /DOCUMENT_PHOTO_THUMBNAIL_SIZE = 320/);
   assert.match(apiSource, /siteExtraWorkTicketPhotoThumbnail[\s\S]*\/thumbnail/);
   assert.match(thumbnailSource, /<img src=\{thumbnailUrl\} alt=\{accessibleName\} loading="eager" decoding="async" \/>/);
-  assert.match(thumbnailSource, /title=\{photo\.filename\}/);
+  assert.match(thumbnailSource, /title=\{`\$\{photo\.filename\} in Großansicht öffnen`\}/);
+});
+
+test("original photo bytes are requested only after a real thumbnail opens the modal", () => {
+  const previewStart = pageSource.indexOf("function ExtraWorkOverviewPhotos");
+  const thumbnailStart = pageSource.indexOf("function ExtraWorkOverviewThumbnail", previewStart);
+  const modalStart = pageSource.indexOf("function ExtraWorkOverviewPhotoModal", thumbnailStart);
+  const previewSource = pageSource.slice(previewStart, thumbnailStart);
+  const thumbnailSource = pageSource.slice(thumbnailStart, modalStart);
+  const modalSource = pageSource.slice(modalStart, pageSource.indexOf("function MeasurementTab", modalStart));
+
+  assert.match(previewSource, /selectedPhoto \? \([\s\S]*<ExtraWorkOverviewPhotoModal/);
+  assert.match(thumbnailSource, /type="button"[\s\S]*onClick=\{\(event\) => onOpen\(photo, event\.currentTarget\)\}/);
+  assert.doesNotMatch(previewSource, /siteExtraWorkTicketPhotoContent/);
+  assert.doesNotMatch(thumbnailSource, /siteExtraWorkTicketPhotoContent/);
+  assert.match(modalSource, /siteExtraWorkTicketPhotoContent\(siteId, ticketId, photo\.id/);
+  assert.match(modalSource, /<img alt=\{accessibleName\} src=\{imageUrl\} \/>/);
+  assert.match(styles, /\.project-extra-work-photo-modal-stage img \{[^}]*object-fit:\s*contain/s);
+});
+
+test("placeholders remain non-interactive while photo tiles expose a dialog action", () => {
+  const previewStart = pageSource.indexOf("function ExtraWorkOverviewPhotos");
+  const thumbnailStart = pageSource.indexOf("function ExtraWorkOverviewThumbnail", previewStart);
+  const previewSource = pageSource.slice(previewStart, thumbnailStart);
+  const thumbnailSource = pageSource.slice(thumbnailStart, pageSource.indexOf("function ExtraWorkOverviewPhotoModal", thumbnailStart));
+
+  assert.match(previewSource, /<span[\s\S]*project-extra-work-photo-placeholder[\s\S]*role="img"/);
+  assert.doesNotMatch(previewSource.slice(previewSource.indexOf("project-extra-work-photo-placeholder")), /onClick=/);
+  assert.match(thumbnailSource, /<button[\s\S]*aria-haspopup="dialog"/);
+});
+
+test("the photo modal supports close button, backdrop, Escape, focus containment and focus return", () => {
+  const previewStart = pageSource.indexOf("function ExtraWorkOverviewPhotos");
+  const modalStart = pageSource.indexOf("function ExtraWorkOverviewPhotoModal", previewStart);
+  const previewSource = pageSource.slice(previewStart, modalStart);
+  const modalSource = pageSource.slice(modalStart, pageSource.indexOf("function MeasurementTab", modalStart));
+
+  assert.match(modalSource, /aria-modal="true"[\s\S]*role="dialog"/);
+  assert.match(modalSource, /aria-labelledby=\{titleId\}/);
+  assert.match(modalSource, /aria-label="Fotoansicht schließen"/);
+  assert.match(modalSource, /event\.target === event\.currentTarget[\s\S]*onClose\(\)/);
+  assert.match(modalSource, /event\.key === "Escape"[\s\S]*onClose\(\)/);
+  assert.match(modalSource, /event\.key === "Tab"[\s\S]*closeButtonRef\.current\?\.focus\(\)/);
+  assert.match(modalSource, /requestAnimationFrame\(\(\) => closeButtonRef\.current\?\.focus\(\)\)/);
+  assert.match(previewSource, /opener\?\.isConnected[\s\S]*opener\.focus\(\)/);
+  assert.match(modalSource, /useMobileModalStack\(true\)/);
+});
+
+test("the modal exposes loading and failure states and rejects stale original requests", () => {
+  const modalStart = pageSource.indexOf("function ExtraWorkOverviewPhotoModal");
+  const modalSource = pageSource.slice(modalStart, pageSource.indexOf("function MeasurementTab", modalStart));
+
+  assert.match(modalSource, /Originalfoto wird geladen…/);
+  assert.match(modalSource, /Das Originalfoto konnte nicht geladen werden\./);
+  assert.match(modalSource, /const controller = new AbortController\(\)/);
+  assert.match(modalSource, /let active = true/);
+  assert.match(modalSource, /if \(!active\) \{[\s\S]*return;/);
+  assert.match(modalSource, /signal: controller\.signal/);
+  assert.match(modalSource, /active = false;[\s\S]*controller\.abort\(\)/);
+  assert.match(modalSource, /window\.URL\.revokeObjectURL\(objectUrl\)/);
+  assert.match(pageSource, /<ExtraWorkOverviewPhotoModal[\s\S]*key=\{selectedPhoto\.id\}/);
+  assert.match(apiSource, /requestBlob\(path: string, signal\?: AbortSignal\)/);
+  assert.match(apiSource, /fetch\(`\$\{API_BASE_URL\}\$\{path\}`, \{ headers, signal \}\)/);
+});
+
+test("the large view stays a centered, bounded popup and grows responsively on phones", () => {
+  assert.match(styles, /\.project-extra-work-photo-modal-backdrop \{[^}]*position:\s*fixed;[^}]*place-items:\s*center;[^}]*background:\s*rgb\(8 18 31 \/ 58%\);/s);
+  assert.match(styles, /\.project-extra-work-photo-modal \{[^}]*width:\s*clamp\(420px, 56vw, 920px\);[^}]*height:\s*clamp\(360px, 58dvh, 720px\);/s);
+  assert.match(styles, /\.project-extra-work-photo-modal-stage img \{[^}]*position:\s*absolute;[^}]*inset:\s*14px;[^}]*object-fit:\s*contain;/s);
+  assert.match(styles, /@media \(max-width: 600px\) \{[\s\S]*\.project-extra-work-photo-modal \{[^}]*width:\s*calc\(100vw - 28px\);[^}]*height:\s*min\(76dvh, calc\(100dvh - 28px\)\);/s);
 });

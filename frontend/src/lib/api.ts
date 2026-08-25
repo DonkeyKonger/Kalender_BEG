@@ -319,7 +319,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-async function requestBlob(path: string): Promise<Blob> {
+async function requestBlob(path: string, signal?: AbortSignal): Promise<Blob> {
   const token = localStorage.getItem("kb_access_token");
   const headers = new Headers();
   headers.set("Accept", "*/*");
@@ -327,7 +327,7 @@ async function requestBlob(path: string): Promise<Blob> {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers, signal });
   if (!response.ok) {
     const contentType = response.headers.get("content-type") ?? "";
     const payload = contentType.includes("application/json")
@@ -1443,10 +1443,13 @@ export const api = {
     siteId: number,
     ticketId: number,
     photoId: number,
-    params: { includeDeleted?: boolean } = {},
+    params: { includeDeleted?: boolean; signal?: AbortSignal } = {},
   ): Promise<Blob> {
     const suffix = params.includeDeleted ? "?include_deleted=true" : "";
-    return requestBlob(`/sites/${siteId}/extra-work-tickets/${ticketId}/photos/${photoId}/content${suffix}`);
+    return requestBlob(
+      `/sites/${siteId}/extra-work-tickets/${ticketId}/photos/${photoId}/content${suffix}`,
+      params.signal,
+    );
   },
 
   async siteExtraWorkTicketPhotoThumbnail(

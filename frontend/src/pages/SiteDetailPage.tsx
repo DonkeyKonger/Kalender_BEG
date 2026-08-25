@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CalendarClock, ChevronDown, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, ChevronDown, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
@@ -38,6 +38,7 @@ import {
   loadExtraWorkOverviewPhotoList,
   loadExtraWorkOverviewThumbnail,
 } from "../lib/extraWorkPhotoPreview";
+import { useMobileModalStack } from "../lib/useMobileModalStack";
 import {
   formatGermanDateKey as formatDateOnly,
   formatGermanDateTimeShort as formatDateTime,
@@ -3376,7 +3377,37 @@ function ExtraWorkOverviewPhotos({
   const [photos, setPhotos] = useState<MobileExtraWorkTicketPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(ticket.photo_count > 0);
   const [hasError, setHasError] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<MobileExtraWorkTicketPhoto | null>(null);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
+  const focusFrameRef = useRef<number | null>(null);
   const photoSlots = getExtraWorkOverviewPhotoSlots(photos);
+
+  const openPhotoPreview = useCallback((photo: MobileExtraWorkTicketPhoto, opener: HTMLButtonElement) => {
+    if (focusFrameRef.current !== null) {
+      window.cancelAnimationFrame(focusFrameRef.current);
+      focusFrameRef.current = null;
+    }
+    openerRef.current = opener;
+    setSelectedPhoto(photo);
+  }, []);
+
+  const closePhotoPreview = useCallback(() => {
+    const opener = openerRef.current;
+    openerRef.current = null;
+    setSelectedPhoto(null);
+    focusFrameRef.current = window.requestAnimationFrame(() => {
+      focusFrameRef.current = null;
+      if (opener?.isConnected) {
+        opener.focus();
+      }
+    });
+  }, []);
+
+  useEffect(() => () => {
+    if (focusFrameRef.current !== null) {
+      window.cancelAnimationFrame(focusFrameRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -3434,6 +3465,7 @@ function ExtraWorkOverviewPhotos({
               ticketId={ticket.id}
               photo={photo}
               includeDeleted={includeDeleted}
+              onOpen={openPhotoPreview}
             />
           ) : (
             <span
@@ -3447,6 +3479,16 @@ function ExtraWorkOverviewPhotos({
       </div>
       {isLoading ? <span className="sr-only" role="status">Fotovorschau wird geladen…</span> : null}
       {hasError ? <span className="project-extra-work-photo-feedback is-error" role="status">Fotovorschau nicht verfügbar.</span> : null}
+      {selectedPhoto ? (
+        <ExtraWorkOverviewPhotoModal
+          key={selectedPhoto.id}
+          includeDeleted={includeDeleted}
+          photo={selectedPhoto}
+          siteId={siteId}
+          ticketId={ticket.id}
+          onClose={closePhotoPreview}
+        />
+      ) : null}
     </section>
   );
 }
@@ -3456,11 +3498,13 @@ function ExtraWorkOverviewThumbnail({
   ticketId,
   photo,
   includeDeleted,
+  onOpen,
 }: {
   siteId: number;
   ticketId: number;
   photo: MobileExtraWorkTicketPhoto;
   includeDeleted: boolean;
+  onOpen: (photo: MobileExtraWorkTicketPhoto, opener: HTMLButtonElement) => void;
 }) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
@@ -3504,7 +3548,13 @@ function ExtraWorkOverviewThumbnail({
     ? `Foto: ${photo.caption.trim()}`
     : `Foto: ${photo.filename}`;
   return (
-    <figure className={`project-extra-work-photo${hasError ? " has-error" : ""}`} title={photo.filename}>
+    <button
+      aria-haspopup="dialog"
+      className={`project-extra-work-photo project-extra-work-photo-trigger${hasError ? " has-error" : ""}`}
+      title={`${photo.filename} in Großansicht öffnen`}
+      type="button"
+      onClick={(event) => onOpen(photo, event.currentTarget)}
+    >
       {thumbnailUrl ? (
         <img src={thumbnailUrl} alt={accessibleName} loading="eager" decoding="async" />
       ) : (
@@ -3512,7 +3562,145 @@ function ExtraWorkOverviewThumbnail({
           <FileImage aria-hidden="true" size={20} />
         </span>
       )}
-    </figure>
+    </button>
+  );
+}
+
+function ExtraWorkOverviewPhotoModal({
+  includeDeleted,
+  photo,
+  siteId,
+  ticketId,
+  onClose,
+}: {
+  includeDeleted: boolean;
+  photo: MobileExtraWorkTicketPhoto;
+  siteId: number;
+  ticketId: number;
+  onClose: () => void;
+}) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const titleId = useId();
+  const isTopModal = useMobileModalStack(true);
+  const accessibleName = photo.caption?.trim()
+    ? `Foto: ${photo.caption.trim()}`
+    : `Foto: ${photo.filename}`;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    let objectUrl: string | null = null;
+
+    setImageUrl(null);
+    setIsLoading(true);
+    setError(null);
+    void api.siteExtraWorkTicketPhotoContent(siteId, ticketId, photo.id, {
+      includeDeleted,
+      signal: controller.signal,
+    })
+      .then((blob) => {
+        if (!active) {
+          return;
+        }
+        objectUrl = window.URL.createObjectURL(blob);
+        setImageUrl(objectUrl);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (active && !controller.signal.aborted) {
+          setError("Das Originalfoto konnte nicht geladen werden.");
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+      if (objectUrl) {
+        window.URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [includeDeleted, photo.id, siteId, ticketId]);
+
+  useEffect(() => {
+    if (!isTopModal) {
+      return undefined;
+    }
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        closeButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isTopModal, onClose]);
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      aria-hidden={!isTopModal}
+      className="project-extra-work-photo-modal-backdrop"
+      data-mobile-modal-active={isTopModal}
+      inert={!isTopModal}
+      role="presentation"
+      onPointerDown={(event) => {
+        if (isTopModal && event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        aria-labelledby={titleId}
+        aria-modal="true"
+        className="project-extra-work-photo-modal"
+        role="dialog"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <header className="project-extra-work-photo-modal-header">
+          <div>
+            <h2 id={titleId}>Fotoansicht</h2>
+            <p title={photo.filename}>{photo.filename}</p>
+          </div>
+          <button
+            aria-label="Fotoansicht schließen"
+            className="project-extra-work-photo-modal-close"
+            ref={closeButtonRef}
+            title="Schließen"
+            type="button"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" size={22} />
+          </button>
+        </header>
+        <div className="project-extra-work-photo-modal-stage" aria-busy={isLoading}>
+          {isLoading ? (
+            <span className="project-extra-work-photo-modal-loading" role="status">
+              <span aria-hidden="true" />
+              Originalfoto wird geladen…
+            </span>
+          ) : null}
+          {error ? <p className="project-extra-work-photo-modal-error" role="alert">{error}</p> : null}
+          {imageUrl ? <img alt={accessibleName} src={imageUrl} /> : null}
+        </div>
+      </section>
+    </div>,
+    document.body,
   );
 }
 
