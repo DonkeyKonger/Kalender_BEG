@@ -149,7 +149,6 @@ test("additional information shows only the four location fields without removin
   assert.match(styles, /\.project-extra-work-detail \{[\s\S]*--project-extra-work-detail-columns: minmax\(0, 1fr\) 180px 108px 100px/);
   assert.match(styles, /\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: var\(--project-extra-work-detail-columns\)/);
   assert.match(styles, /\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
-  assert.match(styles, /\.project-extra-work-additional-data \{[\s\S]*border-width: 1px 0/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-additional-data \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-key-data,[\s\S]*\.project-extra-work-project-data \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
@@ -176,6 +175,28 @@ test("additional information shows only the four location fields without removin
     assert.match(documentSource, new RegExp(`draft\\.${field}`));
   }
   assert.match(typeSource, /worker_names: string\[\]/);
+});
+
+test("additional information keeps closed outer edges and single responsive separators", () => {
+  const gridRule = [...styles.matchAll(/(?:^|\n)\.project-extra-work-additional-data \{([^}]*)\}/g)]
+    .map((match) => match[1])
+    .find((rule) => rule.includes("border: solid")) ?? "";
+
+  assert.match(gridRule, /border: solid var\(--project-extra-work-divider\)/);
+  assert.match(gridRule, /border-width: 1px/);
+  assert.doesNotMatch(gridRule, /border-width: 1px 0/);
+  assert.match(
+    styles,
+    /\.project-extra-work-additional-data > div:not\(:nth-child\(4n \+ 1\)\) \{[\s\S]*border-left: 1px solid var\(--project-extra-work-divider-soft\)/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 760px\)[\s\S]*\.project-extra-work-additional-data > div:nth-child\(n\) \{[\s\S]*border-left: 0[\s\S]*\.project-extra-work-additional-data > div:nth-child\(2n\) \{[\s\S]*border-left: 1px solid var\(--project-extra-work-divider-soft\)/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 480px\)[\s\S]*\.project-extra-work-additional-data > div:nth-child\(n\) \{[\s\S]*border-left: 0/,
+  );
 });
 
 test("list response exposes compact structured entry summaries without per-row loading", () => {

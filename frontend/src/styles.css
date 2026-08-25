@@ -27926,7 +27926,7 @@ body.mobile-modal-scroll-locked {
 .project-extra-work-additional-data {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border: solid var(--project-extra-work-divider);
-  border-width: 1px 0;
+  border-width: 1px;
   background: #fbfcfe;
 }
 
