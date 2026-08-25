@@ -37,6 +37,11 @@ from app.services.photo_appendix_pdf_service import (
 )
 from app.services.photo_download_service import PhotoDownloadRequest, download_photo_files
 from app.services.project_storage_service import ProjectStorageService
+from app.services.user_display import (
+    common_user_document_attribution,
+    user_display_name,
+    user_document_attribution,
+)
 
 
 PAGE_WIDTH = 841.89
@@ -95,7 +100,7 @@ MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
 MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
-MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-logical-row-blocks-v6-optimized-photo-appendix"
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-logical-row-blocks-v7-photo-uploader-role"
 OFFICE_PDF_CONTENT_Y_OFFSET = 32
 LOGGER = logging.getLogger(__name__)
 
@@ -454,6 +459,8 @@ class MeasurementPdfService:
                     "external_item_id": photo.external_item_id,
                     "file_size_bytes": photo.file_size_bytes,
                     "caption": photo.caption,
+                    "uploader_name": user_display_name(photo.uploaded_by),
+                    "uploader_role": getattr(photo.uploaded_by, "role", None),
                     "updated_at": photo.updated_at,
                 }
                 for photo in sorted(batch.photos or [], key=lambda photo: photo.id)
@@ -504,19 +511,24 @@ class MeasurementPdfService:
                 len(result.content),
                 result.duration_ms,
             )
+            attribution = user_document_attribution(photo.uploaded_by)
             appendix_photos.append(
                 PhotoAppendixPhoto(
                     filename=photo.filename,
                     content=result.content,
                     caption=photo.caption,
                     uploaded_at=photo.created_at,
-                    monteur=_format_user(photo.uploaded_by),
+                    creator_name=attribution.name if attribution else None,
+                    creator_role_label=attribution.role_label if attribution else None,
                 )
             )
         if not appendix_photos:
             return base_content
 
         site = batch.site
+        common_attribution = common_user_document_attribution(
+            photo.uploaded_by for photo in photos
+        )
         appendix_content = PhotoAppendixPdfService().build(
             context=PhotoAppendixContext(
                 document_type="Aufmaß",
@@ -528,7 +540,8 @@ class MeasurementPdfService:
                 document_number=_format_batch_number(site.site_number, batch.number),
                 generated_at=datetime.now(),
                 uploaded_at=max(photo.created_at for photo in photos),
-                monteur=_common_measurement_photo_monteur(photos),
+                creator_name=common_attribution.name if common_attribution else None,
+                creator_role_label=common_attribution.role_label if common_attribution else None,
             ),
             photos=appendix_photos,
         )
@@ -796,7 +809,7 @@ class MeasurementPdfService:
         submitted_by = (
             batch.assigned_employee.display_name
             if is_office_batch and batch.assigned_employee is not None
-            else _format_user(batch.submitted_by) or "-"
+            else user_display_name(batch.submitted_by) or "-"
         )
         submitted_at = _format_datetime(batch.submitted_at)
         address = " ".join(part for part in [site.street, site.house_number] if part)
@@ -1442,27 +1455,6 @@ def _format_decimal(value: Decimal) -> str:
 
 def _format_optional_decimal(value: Decimal | None) -> str:
     return "-" if value is None else _format_decimal(value)
-
-
-def _format_user(user: User | None) -> str | None:
-    if user is None:
-        return None
-    if user.person and user.person.display_name:
-        return user.person.display_name
-    return user.display_name
-
-
-def _common_measurement_photo_monteur(photos: list[SiteMeasurementBatchPhoto]) -> str | None:
-    names = {
-        name
-        for photo in photos
-        if (name := _format_user(photo.uploaded_by))
-    }
-    if len(names) == 1:
-        return next(iter(names))
-    if len(names) > 1:
-        return "Mehrere Monteure"
-    return None
 
 
 def _format_datetime(value: datetime | None) -> str | None:

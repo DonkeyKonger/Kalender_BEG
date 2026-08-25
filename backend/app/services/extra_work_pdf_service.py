@@ -44,13 +44,18 @@ from app.services.photo_appendix_pdf_service import (
 )
 from app.services.photo_download_service import PhotoDownloadRequest, download_photo_files
 from app.services.project_storage_service import ProjectStorageService
+from app.services.user_display import (
+    common_user_document_attribution,
+    user_display_name,
+    user_document_attribution,
+)
 
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v13-full-remarks"
-EXTRA_WORK_SIGNED_SNAPSHOT_VERSION = "extra-work-signed-snapshot-v1"
-EXTRA_WORK_SUPPLEMENTAL_PHOTO_VERSION = "extra-work-supplemental-photos-v1"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v14-photo-uploader-role"
+EXTRA_WORK_SIGNED_SNAPSHOT_VERSION = "extra-work-signed-snapshot-v2-photo-uploader-role"
+EXTRA_WORK_SUPPLEMENTAL_PHOTO_VERSION = "extra-work-supplemental-photos-v2-uploader-role"
 LOGGER = logging.getLogger(__name__)
 BEG_PDF_RED = (0.78, 0.05, 0.05)
 TEMPLATE_PATH = (
@@ -424,6 +429,8 @@ class ExtraWorkPdfService:
                     "caption": photo.caption,
                     "customer_document_selected": photo.customer_document_selected,
                     "content_sha256": photo.content_sha256,
+                    "uploader_name": user_display_name(photo.uploaded_by),
+                    "uploader_role": getattr(photo.uploaded_by, "role", None),
                     "updated_at": photo.updated_at,
                 }
                 for photo in sorted(ticket.photos or [], key=lambda photo: photo.id)
@@ -516,19 +523,24 @@ class ExtraWorkPdfService:
                     )
                 LOGGER.warning("Extra work photo %s could not be downloaded for PDF.", photo.id)
                 continue
+            attribution = user_document_attribution(photo.uploaded_by)
             appendix_photos.append(
                 PhotoAppendixPhoto(
                     filename=photo.filename,
                     content=content,
                     caption=photo.caption,
                     uploaded_at=photo.created_at,
-                    monteur=_format_user(photo.uploaded_by),
+                    creator_name=attribution.name if attribution else None,
+                    creator_role_label=attribution.role_label if attribution else None,
                 )
             )
         if not appendix_photos:
             return
 
         site = ticket.site
+        common_attribution = common_user_document_attribution(
+            photo.uploaded_by for photo in photos
+        )
         appendix_content = PhotoAppendixPdfService().build(
             context=PhotoAppendixContext(
                 document_type="Zusatzauftrag",
@@ -540,7 +552,8 @@ class ExtraWorkPdfService:
                 document_number=ticket.display_number or str(ticket.sequence_number),
                 generated_at=datetime.now(),
                 uploaded_at=max(photo.created_at for photo in photos),
-                monteur=_common_photo_monteur(photos),
+                creator_name=common_attribution.name if common_attribution else None,
+                creator_role_label=common_attribution.role_label if common_attribution else None,
             ),
             photos=appendix_photos,
         )
@@ -639,14 +652,19 @@ class ExtraWorkPdfService:
                     status.HTTP_502_BAD_GATEWAY,
                     f"Foto {photo.filename} konnte für die Fotodokumentation nicht geladen werden.",
                 )
+            attribution = user_document_attribution(photo.uploaded_by)
             appendix_photos.append(PhotoAppendixPhoto(
                 filename=photo.filename,
                 content=result.content,
                 caption=photo.caption,
                 uploaded_at=photo.created_at,
-                monteur=_format_user(photo.uploaded_by),
+                creator_name=attribution.name if attribution else None,
+                creator_role_label=attribution.role_label if attribution else None,
             ))
         site = ticket.site
+        common_attribution = common_user_document_attribution(
+            photo.uploaded_by for photo in photos
+        )
         return PhotoAppendixPdfService().build(
             context=PhotoAppendixContext(
                 document_type="Ergänzende Fotodokumentation",
@@ -658,7 +676,8 @@ class ExtraWorkPdfService:
                 document_number=ticket.display_number or str(ticket.sequence_number),
                 generated_at=datetime.now(),
                 uploaded_at=max(photo.created_at for photo in photos),
-                monteur=_common_photo_monteur(photos),
+                creator_name=common_attribution.name if common_attribution else None,
+                creator_role_label=common_attribution.role_label if common_attribution else None,
             ),
             photos=appendix_photos,
         )
@@ -671,6 +690,8 @@ class ExtraWorkPdfService:
             "filename": photo.filename,
             "external_item_id": photo.external_item_id,
             "content_sha256": photo.content_sha256,
+            "uploader_name": user_display_name(photo.uploaded_by),
+            "uploader_role": getattr(photo.uploaded_by, "role", None),
             "updated_at": photo.updated_at,
         }
 
@@ -1344,27 +1365,6 @@ def _draw_signature(
             path_parts.extend([_number(next_x), _number(next_y), b"l"])
         path_parts.append(b"S")
         commands.append(b"q 1.25 w 0.05 0.12 0.24 RG " + b" ".join(path_parts) + b" Q")
-
-
-def _format_user(user: User | None) -> str | None:
-    if user is None:
-        return None
-    if user.person and user.person.display_name:
-        return user.person.display_name
-    return user.display_name
-
-
-def _common_photo_monteur(photos: list[ExtraWorkTicketPhoto]) -> str | None:
-    names = {
-        name
-        for photo in photos
-        if (name := _format_user(photo.uploaded_by))
-    }
-    if len(names) == 1:
-        return next(iter(names))
-    if len(names) > 1:
-        return "Mehrere Monteure"
-    return None
 
 
 def _format_signature_date(value: date | None) -> str:

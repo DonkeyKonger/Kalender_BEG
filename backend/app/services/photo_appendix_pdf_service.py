@@ -63,7 +63,8 @@ class PhotoAppendixContext:
     document_number_label: str | None = None
     document_number: str | None = None
     uploaded_at: datetime | None = None
-    monteur: str | None = None
+    creator_name: str | None = None
+    creator_role_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,8 @@ class PhotoAppendixPhoto:
     content: bytes
     caption: str | None = None
     uploaded_at: datetime | None = None
-    monteur: str | None = None
+    creator_name: str | None = None
+    creator_role_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -234,7 +236,11 @@ def _prepare_photo(photo: PhotoAppendixPhoto) -> PreparedPhoto:
     filename_lines = tuple(
         _wrap_text(photo.filename.strip() or "Unbenanntes Foto", 250, "Helvetica", 7.2)
     )
-    value_line_count = max(len(filename_lines), 2 if photo.uploaded_at else 1, 2 if photo.monteur else 1)
+    value_line_count = max(
+        len(filename_lines),
+        2 if photo.uploaded_at else 1,
+        2 if photo.creator_name else 1,
+    )
     metadata_height = 16.0 + value_line_count * 9.0
     try:
         with Image.open(BytesIO(photo.content)) as source:
@@ -413,8 +419,11 @@ def _prepare_information_block(context: PhotoAppendixContext) -> InformationBloc
     )
     if process_values:
         items.append(("Vorgang", process_values))
-    if _clean(context.monteur):
-        items.append(("Monteur", ((_clean(context.monteur), True),)))
+    if _clean(context.creator_name):
+        items.append((
+            _clean(context.creator_role_label) or "Erstellt von",
+            ((_clean(context.creator_name), True),),
+        ))
     if not items:
         return InformationBlockLayout(columns=(), height=0.0)
 
@@ -529,7 +538,12 @@ def _draw_photo_metadata(pdf: Canvas, photo: PreparedPhoto, *, top_y: float) -> 
     columns = (
         (PAGE_MARGIN, 260.0, "Dateiname", photo.filename_lines),
         (PAGE_MARGIN + 275, 112.0, "Hochgeladen am", (_format_datetime(photo.source.uploaded_at),) if photo.source.uploaded_at else ()),
-        (PAGE_MARGIN + 405, 122.0, "Monteur", (_clean(photo.source.monteur),) if _clean(photo.source.monteur) else ()),
+        (
+            PAGE_MARGIN + 405,
+            122.0,
+            _clean(photo.source.creator_role_label) or "Erstellt von",
+            (_clean(photo.source.creator_name),) if _clean(photo.source.creator_name) else (),
+        ),
     )
     for x, width, label, values in columns:
         if not values:

@@ -1,10 +1,13 @@
+from dataclasses import replace
 from datetime import datetime, timezone
 from io import BytesIO
 from types import SimpleNamespace
 
+import pytest
 from PIL import Image, ImageDraw
 from pypdf import PdfReader, PdfWriter
 
+from app.models.enums import UserRole
 from app.services import extra_work_pdf_service as extra_work_pdf_module
 from app.services import measurement_pdf_service as measurement_pdf_module
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
@@ -23,6 +26,7 @@ from app.services.photo_appendix_pdf_service import (
     _pdf_image_target_size,
     normalize_photo_caption,
 )
+from app.services.user_display import user_document_attribution
 
 
 def _image_bytes(width: int, height: int, color: tuple[int, int, int]) -> bytes:
@@ -71,7 +75,8 @@ def _context(document_type: str = "Zusatzauftrag") -> PhotoAppendixContext:
         document_number="9999.SZ08",
         generated_at=datetime(2026, 8, 21, 12, 35, tzinfo=timezone.utc),
         uploaded_at=datetime(2026, 8, 21, 12, 35, tzinfo=timezone.utc),
-        monteur="Christopher Monteur",
+        creator_name="Christopher Ehrichsen",
+        creator_role_label="Projektleiter",
     )
 
 
@@ -85,11 +90,12 @@ def test_photo_appendix_renders_landscape_caption_and_professional_document_stru
         context=_context(),
         photos=[
             PhotoAppendixPhoto(
-                filename="260821_Testbaustelle_Finienweg_ZusatzauftragSZ08_Christopher_Monteur.jpg",
+                filename="260821_Testbaustelle_Finienweg_ZusatzauftragSZ08_Christopher_Ehrichsen.jpg",
                 content=_image_bytes(1600, 700, (185, 192, 200)),
                 caption="2. OG - zusätzliche Kabelrinne im Flur Süd",
                 uploaded_at=datetime(2026, 8, 21, 12, 35, tzinfo=timezone.utc),
-                monteur="Christopher Monteur",
+                creator_name="Christopher Ehrichsen",
+                creator_role_label="Projektleiter",
             )
         ],
     )
@@ -108,6 +114,8 @@ def test_photo_appendix_renders_landscape_caption_and_professional_document_stru
     assert "BEG - Abrechnungsdokumentation" in text
     assert text.count("Hochgeladen am") == 1
     assert text.count("21.08.2026, 14:35") == 2
+    assert text.count("Projektleiter") == 2
+    assert "Monteur" not in text
     assert b"/ASCII85Decode" not in content
     assert b"/DCTDecode" in content
 
@@ -123,7 +131,8 @@ def test_photo_appendix_information_block_has_three_columns_and_wraps_full_site_
         document_number="8007.SZ12",
         generated_at=datetime(2026, 8, 21, 12, 35, tzinfo=timezone.utc),
         uploaded_at=datetime(2026, 8, 19, 11, 51, tzinfo=timezone.utc),
-        monteur="Christopher Monteur",
+        creator_name="Christopher Ehrichsen",
+        creator_role_label="Projektleiter",
     )
     layout = _prepare_information_block(context)
     content = PhotoAppendixPdfService().build(
@@ -133,14 +142,15 @@ def test_photo_appendix_information_block_has_three_columns_and_wraps_full_site_
                 filename="baustelle.jpg",
                 content=_image_bytes(1600, 700, (185, 192, 200)),
                 uploaded_at=datetime(2026, 8, 17, 10, 52, tzinfo=timezone.utc),
-                monteur="Christopher Monteur",
+                creator_name="Christopher Ehrichsen",
+                creator_role_label="Projektleiter",
             )
         ],
     )
     text = _text(content)
     normalized_text = " ".join(text.split())
 
-    assert [column.label for column in layout.columns] == ["Baustelle", "Vorgang", "Monteur"]
+    assert [column.label for column in layout.columns] == ["Baustelle", "Vorgang", "Projektleiter"]
     assert layout.height > 58
     assert "Hochgeladen am" not in [column.label for column in layout.columns]
     assert "Ulmenallee 5," in text
@@ -149,6 +159,50 @@ def test_photo_appendix_information_block_has_three_columns_and_wraps_full_site_
     assert "…" not in text
     assert "19.08.2026, 13:51" not in text
     assert "17.08.2026, 12:52" in text
+
+
+@pytest.mark.parametrize(
+    ("role", "expected_label"),
+    [
+        (UserRole.PROJECT_MANAGER, "Projektleiter"),
+        (UserRole.MONTEUR, "Monteur"),
+        (UserRole.OFFICE, "Büromitarbeiter"),
+        (None, "Erstellt von"),
+        ("historical_unknown", "Erstellt von"),
+    ],
+)
+def test_photo_appendix_uses_uploader_role_for_both_visible_creator_labels(
+    role,
+    expected_label,
+):
+    uploader = SimpleNamespace(
+        role=role,
+        person=SimpleNamespace(display_name="Christopher Ehrichsen"),
+        display_name="Fallback Name",
+    )
+    attribution = user_document_attribution(uploader)
+    assert attribution is not None
+    context = replace(
+        _context(),
+        creator_name=attribution.name,
+        creator_role_label=attribution.role_label,
+    )
+    content = PhotoAppendixPdfService().build(
+        context=context,
+        photos=[PhotoAppendixPhoto(
+            filename="rollenpruefung.jpg",
+            content=_image_bytes(1200, 800, (80, 100, 120)),
+            uploaded_at=datetime(2026, 8, 21, 12, 35, tzinfo=timezone.utc),
+            creator_name=attribution.name,
+            creator_role_label=attribution.role_label,
+        )],
+    )
+    text = _text(content)
+
+    assert text.count(expected_label) == 2
+    assert text.count("Christopher Ehrichsen") == 2
+    if expected_label != "Monteur":
+        assert "Monteur" not in text
 
 
 def test_photo_appendix_omits_empty_caption_blocks_for_none_whitespace_and_newlines():
@@ -239,7 +293,8 @@ def test_photo_appendix_handles_five_mixed_photos_long_caption_and_long_filename
                 "mit Lage, Ausführung und technischem Bezug. " * 3
             ) if index in {1, 4} else None,
             uploaded_at=datetime(2026, 8, 21, 12, 30 + index, tzinfo=timezone.utc),
-            monteur="Christopher Monteur",
+            creator_name="Christopher Ehrichsen",
+            creator_role_label="Projektleiter",
         )
         for index in range(1, 6)
     ]
@@ -266,8 +321,9 @@ def test_photo_appendix_keeps_document_alive_when_one_image_cannot_be_decoded():
 def test_extra_work_caller_uses_shared_photo_appendix(monkeypatch):
     uploaded_at = datetime(2026, 8, 21, 12, 35, tzinfo=timezone.utc)
     uploader = SimpleNamespace(
-        person=SimpleNamespace(display_name="Christopher Monteur"),
-        display_name="Christopher Monteur",
+        role=UserRole.PROJECT_MANAGER,
+        person=SimpleNamespace(display_name="Christopher Ehrichsen"),
+        display_name="Christopher Ehrichsen",
     )
     photo = SimpleNamespace(
         id=1,
@@ -316,13 +372,16 @@ def test_extra_work_caller_uses_shared_photo_appendix(monkeypatch):
     assert "Fotoanlage" in appendix_text
     assert "Zusatzauftrag Nr.:" in appendix_text
     assert "Zusätzliche Kabelrinne montiert" in appendix_text
+    assert appendix_text.count("Projektleiter") == 2
+    assert "Monteur" not in appendix_text
 
 
 def test_measurement_caller_uses_shared_photo_appendix(monkeypatch):
     uploaded_at = datetime(2026, 8, 21, 12, 35, tzinfo=timezone.utc)
     uploader = SimpleNamespace(
-        person=SimpleNamespace(display_name="Christopher Monteur"),
-        display_name="Christopher Monteur",
+        role=UserRole.OFFICE,
+        person=SimpleNamespace(display_name="Büro Test"),
+        display_name="Büro Test",
     )
     photo = SimpleNamespace(
         id=2,
@@ -363,3 +422,4 @@ def test_measurement_caller_uses_shared_photo_appendix(monkeypatch):
     assert "Fotoanlage" in appendix_text
     assert "Aufmaß Nr.:" in appendix_text
     assert "Deckendurchbruch dokumentiert" in appendix_text
+    assert appendix_text.count("Büromitarbeiter") == 2
