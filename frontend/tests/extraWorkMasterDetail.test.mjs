@@ -118,7 +118,7 @@ test("toolbar contains only create, archive switch and global search", () => {
   assert.doesNotMatch(toolbarSource, /Mobile Stundenzettel und Zusatzaufträge/);
   assert.ok(searchIndex >= 0 && searchIndex < archiveIndex && archiveIndex < createIndex);
   assert.match(toolbarSource, /className="secondary-action"[\s\S]*onClick=\{onToggleArchive\}/);
-  assert.match(toolbarSource, /className="primary-action"[\s\S]*onClick=\{onCreate\}/);
+  assert.match(toolbarSource, /className="primary-action project-extra-work-primary-action"[\s\S]*onClick=\{onCreate\}/);
   assert.doesNotMatch(tabSource, /Filter/);
 });
 
@@ -129,6 +129,50 @@ test("detail action set stays reduced to open, PDF and archive or restore", () =
   assert.match(tabSource, /"Wiederherstellen"/);
   assert.doesNotMatch(tabSource, />Löschen</);
   assert.doesNotMatch(tabSource, /Weitere Aktionen/);
+});
+
+test("only the two primary overview actions use the established calendar blue variant", () => {
+  const genericWorkspacePrimaryIndex = styles.indexOf(
+    ".site-detail-page.is-project-file-workspace .primary-action {",
+  );
+  const extraWorkPrimaryIndex = styles.indexOf(
+    ".site-detail-page.is-project-file-workspace .project-extra-work-primary-action {",
+  );
+
+  assert.equal(tabSource.match(/project-extra-work-primary-action/g)?.length, 2);
+  assert.match(
+    tabSource,
+    /className="primary-action project-extra-work-primary-action"[\s\S]*onClick=\{onCreate\}/,
+  );
+  assert.match(
+    tabSource,
+    /className="primary-action project-extra-work-primary-action"[\s\S]*onClick=\{\(\) => onOpenTicket\(ticket\)\}>Öffnen/,
+  );
+  assert.doesNotMatch(
+    tabSource,
+    /className="secondary-action project-extra-work-primary-action"/,
+  );
+  assert.ok(extraWorkPrimaryIndex > genericWorkspacePrimaryIndex);
+  assert.match(
+    styles,
+    /\.project-extra-work-primary-action \{[\s\S]*border-color: #1d5c99;[\s\S]*background: #1d5c99;[\s\S]*color: #ffffff;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-primary-action:hover:not\(:disabled\) \{[\s\S]*border-color: #143c6d;[\s\S]*background: #143c6d;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-primary-action:active:not\(:disabled\) \{[\s\S]*border-color: #0f3d6b;[\s\S]*background: #0f3d6b;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-primary-action:focus-visible \{[\s\S]*border-color: #1d5c99;[\s\S]*background: #1d5c99;[\s\S]*outline: 2px solid var\(--pf-active\);[\s\S]*outline-offset: 2px;/,
+  );
+  assert.match(
+    styles,
+    /\.project-extra-work-primary-action:disabled \{[\s\S]*cursor: not-allowed;[\s\S]*opacity: 0\.58;/,
+  );
 });
 
 test("additional information shows only the four location fields without removing form data", () => {

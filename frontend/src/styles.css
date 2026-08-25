@@ -28504,6 +28504,37 @@ body.mobile-modal-scroll-locked {
   background: var(--pf-primary-hover);
 }
 
+.site-detail-page.is-project-file-workspace .project-extra-work-primary-action {
+  border-color: #1d5c99;
+  background: #1d5c99;
+  color: #ffffff;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-primary-action:hover:not(:disabled) {
+  border-color: #143c6d;
+  background: #143c6d;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-primary-action:active:not(:disabled) {
+  border-color: #0f3d6b;
+  background: #0f3d6b;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-primary-action:focus-visible {
+  border-color: #1d5c99;
+  background: #1d5c99;
+  outline: 2px solid var(--pf-active);
+  outline-offset: 2px;
+}
+
+.site-detail-page.is-project-file-workspace .project-extra-work-primary-action:disabled {
+  border-color: #1d5c99;
+  background: #1d5c99;
+  color: #ffffff;
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .site-detail-page.is-project-file-workspace .site-detail-grid {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 12px;
