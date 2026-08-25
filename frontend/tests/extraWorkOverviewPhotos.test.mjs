@@ -154,8 +154,8 @@ test("original photo bytes are requested only after a real thumbnail opens the m
   assert.match(thumbnailSource, /type="button"[\s\S]*onClick=\{\(event\) => onOpen\(photo, event\.currentTarget\)\}/);
   assert.doesNotMatch(previewSource, /siteExtraWorkTicketPhotoContent/);
   assert.doesNotMatch(thumbnailSource, /siteExtraWorkTicketPhotoContent/);
-  assert.match(modalSource, /siteExtraWorkTicketPhotoContent\(siteId, ticketId, photo\.id/);
-  assert.match(modalSource, /<img alt=\{accessibleName\} src=\{imageUrl\} \/>/);
+  assert.match(modalSource, /siteExtraWorkTicketPhotoContent\(siteId, ticketId, activePhoto\.id/);
+  assert.match(modalSource, /<img[\s\S]*alt=\{accessibleName\}[\s\S]*src=\{imageUrl\}/);
   assert.match(styles, /\.project-extra-work-photo-modal-stage img \{[^}]*object-fit:\s*contain/s);
 });
 
@@ -199,14 +199,14 @@ test("the modal exposes loading and failure states and rejects stale original re
   assert.match(modalSource, /signal: controller\.signal/);
   assert.match(modalSource, /active = false;[\s\S]*controller\.abort\(\)/);
   assert.match(modalSource, /window\.URL\.revokeObjectURL\(objectUrl\)/);
-  assert.match(pageSource, /<ExtraWorkOverviewPhotoModal[\s\S]*key=\{selectedPhoto\.id\}/);
+  assert.match(pageSource, /<ExtraWorkOverviewPhotoModal[\s\S]*key=\{ticket\.id\}[\s\S]*initialPhotoId=\{selectedPhoto\.id\}/);
   assert.match(apiSource, /requestBlob\(path: string, signal\?: AbortSignal\)/);
   assert.match(apiSource, /fetch\(`\$\{API_BASE_URL\}\$\{path\}`, \{ headers, signal \}\)/);
 });
 
 test("the large view stays a centered, bounded popup and grows responsively on phones", () => {
   assert.match(styles, /\.project-extra-work-photo-modal-backdrop \{[^}]*position:\s*fixed;[^}]*place-items:\s*center;[^}]*background:\s*rgb\(8 18 31 \/ 58%\);/s);
-  assert.match(styles, /\.project-extra-work-photo-modal \{[^}]*width:\s*clamp\(420px, 56vw, 920px\);[^}]*height:\s*clamp\(360px, 58dvh, 720px\);/s);
+  assert.match(styles, /\.project-extra-work-photo-modal \{[^}]*width:\s*clamp\(420px, 56vw, 920px\);[^}]*height:\s*clamp\(450px, 72\.5dvh, 900px\);/s);
   assert.match(styles, /\.project-extra-work-photo-modal-stage img \{[^}]*position:\s*absolute;[^}]*inset:\s*14px;[^}]*object-fit:\s*contain;/s);
-  assert.match(styles, /@media \(max-width: 600px\) \{[\s\S]*\.project-extra-work-photo-modal \{[^}]*width:\s*calc\(100vw - 28px\);[^}]*height:\s*min\(76dvh, calc\(100dvh - 28px\)\);/s);
+  assert.match(styles, /@media \(max-width: 600px\) \{[\s\S]*\.project-extra-work-photo-modal \{[^}]*width:\s*calc\(100vw - 28px\);[^}]*height:\s*min\(92dvh, calc\(100dvh - 28px\)\);/s);
 });

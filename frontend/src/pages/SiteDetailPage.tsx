@@ -1,7 +1,7 @@
-import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Pencil, Phone, Plus, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Minus, Pencil, Phone, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
@@ -45,6 +45,17 @@ import {
   loadExtraWorkOverviewPhotoList,
   loadExtraWorkOverviewThumbnail,
 } from "../lib/extraWorkPhotoPreview";
+import {
+  EXTRA_WORK_PHOTO_MAX_ZOOM,
+  EXTRA_WORK_PHOTO_MIN_ZOOM,
+  clampExtraWorkPhotoPan,
+  clampExtraWorkPhotoZoom,
+  getExtraWorkPhotoPointerCenter,
+  getExtraWorkPhotoPointerDistance,
+  getExtraWorkPhotoWheelZoom,
+  stepExtraWorkPhotoZoom,
+  type ExtraWorkPhotoPoint,
+} from "../lib/extraWorkPhotoViewer";
 import { useMobileModalStack } from "../lib/useMobileModalStack";
 import {
   formatGermanDateKey as formatDateOnly,
@@ -3809,9 +3820,10 @@ function ExtraWorkOverviewPhotos({
       {uploadError ? <span className="project-extra-work-photo-feedback is-error" role="alert">{uploadError}</span> : null}
       {selectedPhoto ? (
         <ExtraWorkOverviewPhotoModal
-          key={selectedPhoto.id}
+          key={ticket.id}
           includeDeleted={includeDeleted}
-          photo={selectedPhoto}
+          initialPhotoId={selectedPhoto.id}
+          photos={photos}
           siteId={siteId}
           ticketId={ticket.id}
           onClose={closePhotoPreview}
@@ -3896,36 +3908,104 @@ function ExtraWorkOverviewThumbnail({
 
 function ExtraWorkOverviewPhotoModal({
   includeDeleted,
-  photo,
+  initialPhotoId,
+  photos,
   siteId,
   ticketId,
   onClose,
 }: {
   includeDeleted: boolean;
-  photo: MobileExtraWorkTicketPhoto;
+  initialPhotoId: number;
+  photos: MobileExtraWorkTicketPhoto[];
   siteId: number;
   ticketId: number;
   onClose: () => void;
 }) {
+  const [activePhotoIndex, setActivePhotoIndex] = useState(() => {
+    const initialIndex = photos.findIndex((photo) => photo.id === initialPhotoId);
+    return initialIndex >= 0 ? initialIndex : 0;
+  });
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(EXTRA_WORK_PHOTO_MIN_ZOOM);
+  const [pan, setPan] = useState<ExtraWorkPhotoPoint>({ x: 0, y: 0 });
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const zoomRef = useRef(EXTRA_WORK_PHOTO_MIN_ZOOM);
+  const panRef = useRef<ExtraWorkPhotoPoint>({ x: 0, y: 0 });
+  const pointerPositionsRef = useRef(new Map<number, ExtraWorkPhotoPoint>());
+  const panGestureRef = useRef<{
+    pointerId: number;
+    startPointer: ExtraWorkPhotoPoint;
+    startPan: ExtraWorkPhotoPoint;
+  } | null>(null);
+  const pinchGestureRef = useRef<{
+    startCenter: ExtraWorkPhotoPoint;
+    startDistance: number;
+    startPan: ExtraWorkPhotoPoint;
+    startZoom: number;
+  } | null>(null);
   const titleId = useId();
+  const descriptionId = useId();
   const isTopModal = useMobileModalStack(true);
-  const accessibleName = photo.caption?.trim()
-    ? `Foto: ${photo.caption.trim()}`
-    : `Foto: ${photo.filename}`;
+  const activePhoto = photos[activePhotoIndex] ?? photos[0];
+  const accessibleName = activePhoto.caption?.trim()
+    ? `Foto: ${activePhoto.caption.trim()}`
+    : `Foto: ${activePhoto.filename}`;
+  const canShowPrevious = activePhotoIndex > 0;
+  const canShowNext = activePhotoIndex < photos.length - 1;
+
+  const updatePan = useCallback((nextPan: ExtraWorkPhotoPoint, nextZoom = zoomRef.current) => {
+    const stageBounds = stageRef.current?.getBoundingClientRect();
+    const clamped = clampExtraWorkPhotoPan(
+      nextPan,
+      nextZoom,
+      stageBounds?.width ?? 0,
+      stageBounds?.height ?? 0,
+    );
+    panRef.current = clamped;
+    setPan(clamped);
+  }, []);
+
+  const updateZoom = useCallback((nextZoom: number) => {
+    const clamped = clampExtraWorkPhotoZoom(nextZoom);
+    zoomRef.current = clamped;
+    setZoom(clamped);
+    updatePan(panRef.current, clamped);
+  }, [updatePan]);
+
+  const resetViewer = useCallback(() => {
+    zoomRef.current = EXTRA_WORK_PHOTO_MIN_ZOOM;
+    panRef.current = { x: 0, y: 0 };
+    pointerPositionsRef.current.clear();
+    panGestureRef.current = null;
+    pinchGestureRef.current = null;
+    setZoom(EXTRA_WORK_PHOTO_MIN_ZOOM);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
+  const navigatePhoto = useCallback((direction: -1 | 1) => {
+    setActivePhotoIndex((current) => {
+      const next = Math.min(photos.length - 1, Math.max(0, current + direction));
+      if (next !== current) {
+        resetViewer();
+      }
+      return next;
+    });
+  }, [photos.length, resetViewer]);
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
     let objectUrl: string | null = null;
 
+    resetViewer();
     setImageUrl(null);
     setIsLoading(true);
     setError(null);
-    void api.siteExtraWorkTicketPhotoContent(siteId, ticketId, photo.id, {
+    void api.siteExtraWorkTicketPhotoContent(siteId, ticketId, activePhoto.id, {
       includeDeleted,
       signal: controller.signal,
     })
@@ -3951,7 +4031,7 @@ function ExtraWorkOverviewPhotoModal({
         window.URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [includeDeleted, photo.id, siteId, ticketId]);
+  }, [activePhoto.id, includeDeleted, resetViewer, siteId, ticketId]);
 
   useEffect(() => {
     if (!isTopModal) {
@@ -3964,9 +4044,38 @@ function ExtraWorkOverviewPhotoModal({
         onClose();
         return;
       }
-      if (event.key === "Tab") {
+      if (event.key === "ArrowLeft" && !event.altKey && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
-        closeButtonRef.current?.focus();
+        if (canShowPrevious) {
+          navigatePhoto(-1);
+        }
+        return;
+      }
+      if (event.key === "ArrowRight" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        if (canShowNext) {
+          navigatePhoto(1);
+        }
+        return;
+      }
+      if (event.key === "Tab") {
+        const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        ) ?? []).filter((element) => !element.hasAttribute("inert"));
+        if (focusable.length === 0) {
+          event.preventDefault();
+          closeButtonRef.current?.focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
     document.addEventListener("keydown", handleKeyDown);
@@ -3974,7 +4083,119 @@ function ExtraWorkOverviewPhotoModal({
       window.cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isTopModal, onClose]);
+  }, [canShowNext, canShowPrevious, isTopModal, navigatePhoto, onClose]);
+
+  const handleWheel = useCallback((event: globalThis.WheelEvent): void => {
+    if (!imageUrl || (event.target instanceof Element && event.target.closest("button"))) {
+      return;
+    }
+    const nextZoom = getExtraWorkPhotoWheelZoom(zoomRef.current, event.deltaY);
+    if (Math.abs(nextZoom - zoomRef.current) < 0.001) {
+      return;
+    }
+    event.preventDefault();
+    updateZoom(nextZoom);
+  }, [imageUrl, updateZoom]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) {
+      return undefined;
+    }
+    stage.addEventListener("wheel", handleWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
+    if (
+      !imageUrl
+      || (event.target instanceof Element && event.target.closest("button"))
+      || (event.pointerType === "mouse" && event.button !== 0)
+    ) {
+      return;
+    }
+    const pointer = { x: event.clientX, y: event.clientY };
+    pointerPositionsRef.current.set(event.pointerId, pointer);
+    if (event.pointerType === "touch") {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    const pointers = Array.from(pointerPositionsRef.current.values());
+    if (pointers.length >= 2) {
+      const [first, second] = pointers;
+      const startDistance = getExtraWorkPhotoPointerDistance(first, second);
+      if (startDistance > 0) {
+        event.preventDefault();
+        pinchGestureRef.current = {
+          startCenter: getExtraWorkPhotoPointerCenter(first, second),
+          startDistance,
+          startPan: panRef.current,
+          startZoom: zoomRef.current,
+        };
+        panGestureRef.current = null;
+      }
+      return;
+    }
+    if (zoomRef.current > EXTRA_WORK_PHOTO_MIN_ZOOM) {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      panGestureRef.current = {
+        pointerId: event.pointerId,
+        startPointer: pointer,
+        startPan: panRef.current,
+      };
+    }
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>): void {
+    if (!pointerPositionsRef.current.has(event.pointerId)) {
+      return;
+    }
+    const pointer = { x: event.clientX, y: event.clientY };
+    pointerPositionsRef.current.set(event.pointerId, pointer);
+    const pointers = Array.from(pointerPositionsRef.current.values());
+    const pinchGesture = pinchGestureRef.current;
+    if (pinchGesture && pointers.length >= 2) {
+      const [first, second] = pointers;
+      event.preventDefault();
+      const center = getExtraWorkPhotoPointerCenter(first, second);
+      const distance = getExtraWorkPhotoPointerDistance(first, second);
+      const nextZoom = clampExtraWorkPhotoZoom(
+        pinchGesture.startZoom * distance / pinchGesture.startDistance,
+      );
+      zoomRef.current = nextZoom;
+      setZoom(nextZoom);
+      updatePan({
+        x: pinchGesture.startPan.x + center.x - pinchGesture.startCenter.x,
+        y: pinchGesture.startPan.y + center.y - pinchGesture.startCenter.y,
+      }, nextZoom);
+      return;
+    }
+    const panGesture = panGestureRef.current;
+    if (panGesture?.pointerId === event.pointerId && zoomRef.current > EXTRA_WORK_PHOTO_MIN_ZOOM) {
+      event.preventDefault();
+      updatePan({
+        x: panGesture.startPan.x + pointer.x - panGesture.startPointer.x,
+        y: panGesture.startPan.y + pointer.y - panGesture.startPointer.y,
+      });
+    }
+  }
+
+  function finishPointerGesture(event: ReactPointerEvent<HTMLDivElement>): void {
+    pointerPositionsRef.current.delete(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    pinchGestureRef.current = null;
+    panGestureRef.current = null;
+    const remaining = Array.from(pointerPositionsRef.current.entries())[0];
+    if (remaining && zoomRef.current > EXTRA_WORK_PHOTO_MIN_ZOOM) {
+      panGestureRef.current = {
+        pointerId: remaining[0],
+        startPointer: remaining[1],
+        startPan: panRef.current,
+      };
+    }
+  }
 
   if (typeof document === "undefined") {
     return null;
@@ -3994,16 +4215,18 @@ function ExtraWorkOverviewPhotoModal({
       }}
     >
       <section
+        aria-describedby={descriptionId}
         aria-labelledby={titleId}
         aria-modal="true"
         className="project-extra-work-photo-modal"
+        ref={dialogRef}
         role="dialog"
         onPointerDown={(event) => event.stopPropagation()}
       >
         <header className="project-extra-work-photo-modal-header">
           <div>
             <h2 id={titleId}>Fotoansicht</h2>
-            <p title={photo.filename}>{photo.filename}</p>
+            <p id={descriptionId} title={activePhoto.filename}>{activePhoto.filename}</p>
           </div>
           <button
             aria-label="Fotoansicht schließen"
@@ -4016,7 +4239,17 @@ function ExtraWorkOverviewPhotoModal({
             <X aria-hidden="true" size={22} />
           </button>
         </header>
-        <div className="project-extra-work-photo-modal-stage" aria-busy={isLoading}>
+        <div
+          aria-busy={isLoading}
+          aria-label="Bildfläche – Mausrad oder Zwei-Finger-Geste zum Zoomen, Ziehen zum Verschieben"
+          className={`project-extra-work-photo-modal-stage${imageUrl ? " is-interactive" : ""}${zoom > EXTRA_WORK_PHOTO_MIN_ZOOM ? " is-zoomed" : ""}`}
+          ref={stageRef}
+          role="group"
+          onPointerCancel={finishPointerGesture}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={finishPointerGesture}
+        >
           {isLoading ? (
             <span className="project-extra-work-photo-modal-loading" role="status">
               <span aria-hidden="true" />
@@ -4024,7 +4257,66 @@ function ExtraWorkOverviewPhotoModal({
             </span>
           ) : null}
           {error ? <p className="project-extra-work-photo-modal-error" role="alert">{error}</p> : null}
-          {imageUrl ? <img alt={accessibleName} src={imageUrl} /> : null}
+          {imageUrl ? (
+            <img
+              alt={accessibleName}
+              draggable={false}
+              src={imageUrl}
+              style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})` }}
+              onDragStart={(event) => event.preventDefault()}
+            />
+          ) : null}
+          <button
+            aria-label="Vorheriges Foto"
+            className="project-extra-work-photo-modal-nav is-previous"
+            disabled={!canShowPrevious}
+            title="Vorheriges Foto (Pfeiltaste links)"
+            type="button"
+            onClick={() => navigatePhoto(-1)}
+          >
+            <ChevronLeft aria-hidden="true" size={24} />
+          </button>
+          <button
+            aria-label="Nächstes Foto"
+            className="project-extra-work-photo-modal-nav is-next"
+            disabled={!canShowNext}
+            title="Nächstes Foto (Pfeiltaste rechts)"
+            type="button"
+            onClick={() => navigatePhoto(1)}
+          >
+            <ChevronRight aria-hidden="true" size={24} />
+          </button>
+          <div className="project-extra-work-photo-modal-zoom-controls" aria-label="Bildvergrößerung" role="group">
+            <button
+              aria-label="Verkleinern"
+              disabled={zoom <= EXTRA_WORK_PHOTO_MIN_ZOOM}
+              title="Verkleinern"
+              type="button"
+              onClick={() => updateZoom(stepExtraWorkPhotoZoom(zoomRef.current, -1))}
+            >
+              <Minus aria-hidden="true" size={17} />
+            </button>
+            <button
+              aria-label={`Zoom zurücksetzen, aktuell ${Math.round(zoom * 100)} Prozent`}
+              disabled={zoom <= EXTRA_WORK_PHOTO_MIN_ZOOM && pan.x === 0 && pan.y === 0}
+              className="project-extra-work-photo-modal-zoom-reset"
+              title="Auf Einpassen zurücksetzen"
+              type="button"
+              onClick={resetViewer}
+            >
+              <RotateCcw aria-hidden="true" size={15} />
+              <span>{Math.round(zoom * 100)} %</span>
+            </button>
+            <button
+              aria-label="Vergrößern"
+              disabled={zoom >= EXTRA_WORK_PHOTO_MAX_ZOOM}
+              title="Vergrößern"
+              type="button"
+              onClick={() => updateZoom(stepExtraWorkPhotoZoom(zoomRef.current, 1))}
+            >
+              <Plus aria-hidden="true" size={17} />
+            </button>
+          </div>
         </div>
       </section>
     </div>,
