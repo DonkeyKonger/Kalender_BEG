@@ -33,6 +33,7 @@ import {
   getExtraWorkOverviewScrollbarWidth,
 } from "../lib/extraWorkOverview";
 import {
+  getExtraWorkOverviewPhotoSlots,
   loadExtraWorkOverviewPhotoList,
   loadExtraWorkOverviewThumbnail,
 } from "../lib/extraWorkPhotoPreview";
@@ -3374,6 +3375,7 @@ function ExtraWorkOverviewPhotos({
   const [photos, setPhotos] = useState<MobileExtraWorkTicketPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(ticket.photo_count > 0);
   const [hasError, setHasError] = useState(false);
+  const photoSlots = getExtraWorkOverviewPhotoSlots(photos);
 
   useEffect(() => {
     let active = true;
@@ -3416,20 +3418,15 @@ function ExtraWorkOverviewPhotos({
     };
   }, [includeDeleted, siteId, ticket.id, ticket.photo_count]);
 
-  if (ticket.photo_count <= 0) {
-    return null;
-  }
-  if (!isLoading && !hasError && photos.length === 0) {
-    return null;
-  }
-
   return (
-    <section className="project-extra-work-photo-preview" aria-label="Fotos zum Zusatzauftrag">
-      {isLoading ? <span className="project-extra-work-photo-feedback" role="status">Fotovorschau wird geladen…</span> : null}
-      {hasError ? <span className="project-extra-work-photo-feedback is-error" role="status">Fotovorschau nicht verfügbar.</span> : null}
-      {photos.length > 0 ? (
-        <div className="project-extra-work-photo-list">
-          {photos.map((photo) => (
+    <section
+      className="project-extra-work-photo-preview"
+      aria-busy={isLoading}
+      aria-label="Fotos zum Zusatzauftrag"
+    >
+      <div className="project-extra-work-photo-list">
+        {photoSlots.map((photo, index) => (
+          photo ? (
             <ExtraWorkOverviewThumbnail
               key={photo.id}
               siteId={siteId}
@@ -3437,9 +3434,18 @@ function ExtraWorkOverviewPhotos({
               photo={photo}
               includeDeleted={includeDeleted}
             />
-          ))}
-        </div>
-      ) : null}
+          ) : (
+            <span
+              key={`photo-placeholder-${index + 1}`}
+              className="project-extra-work-photo project-extra-work-photo-placeholder"
+              role="img"
+              aria-label={`Freier Fotoplatz ${index + 1} von 5`}
+            />
+          )
+        ))}
+      </div>
+      {isLoading ? <span className="sr-only" role="status">Fotovorschau wird geladen…</span> : null}
+      {hasError ? <span className="project-extra-work-photo-feedback is-error" role="status">Fotovorschau nicht verfügbar.</span> : null}
     </section>
   );
 }

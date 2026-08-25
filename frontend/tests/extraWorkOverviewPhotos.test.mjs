@@ -4,17 +4,28 @@ import test from "node:test";
 
 import {
   MAX_EXTRA_WORK_OVERVIEW_PHOTOS,
+  getExtraWorkOverviewPhotoSlots,
   loadExtraWorkOverviewPhotoList,
   loadExtraWorkOverviewThumbnail,
 } from "../src/lib/extraWorkPhotoPreview.ts";
 
-const [pageSource, apiSource, styles, modelSource, serviceSource] = await Promise.all([
+const [pageSource, apiSource, styles, modelSource, serviceSource, optimizerSource] = await Promise.all([
   readFile(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
   readFile(new URL("../../backend/app/models/extra_work_ticket.py", import.meta.url), "utf8"),
   readFile(new URL("../../backend/app/services/extra_work_service.py", import.meta.url), "utf8"),
+  readFile(new URL("../../backend/app/services/document_photo_optimizer.py", import.meta.url), "utf8"),
 ]);
+
+test("the overview always exposes five ordered photo slots and fills the remainder with null", () => {
+  const photos = [{ id: 31 }, { id: 12 }, { id: 88 }];
+
+  const slots = getExtraWorkOverviewPhotoSlots(photos);
+
+  assert.equal(slots.length, 5);
+  assert.deepEqual(slots.map((photo) => photo?.id ?? null), [31, 12, 88, null, null]);
+});
 
 test("preview metadata is in-flight deduplicated and capped at five without becoming stale session data", async () => {
   let calls = 0;
@@ -65,13 +76,31 @@ test("only the selected desktop detail loads thumbnail endpoints and guards rapi
   const previewSource = pageSource.slice(previewStart, previewEnd);
 
   assert.match(pageSource, /<ExtraWorkOverviewPhotos[\s\S]*key=\{`\$\{ticket\.id\}/);
-  assert.match(previewSource, /if \(ticket\.photo_count <= 0\) \{[\s\S]*return null/);
+  const emptyCountGuard = previewSource.slice(
+    previewSource.indexOf("if (ticket.photo_count <= 0)"),
+    previewSource.indexOf("void loadExtraWorkOverviewPhotoList"),
+  );
+  assert.match(emptyCountGuard, /setPhotos\(\[\]\)/);
+  assert.doesNotMatch(emptyCountGuard, /siteExtraWorkTicketPhotos/);
   assert.match(previewSource, /api\.siteExtraWorkTicketPhotos\(siteId, ticket\.id/);
   assert.match(previewSource, /api\.siteExtraWorkTicketPhotoThumbnail/);
   assert.match(previewSource, /let active = true/);
   assert.match(previewSource, /if \(active\) \{[\s\S]*setPhotos\(loadedPhotos\)/);
   assert.doesNotMatch(previewSource, /siteExtraWorkTicketPhotoContent/);
   assert.match(apiSource, /siteExtraWorkTicketPhotoThumbnail[\s\S]*\/thumbnail/);
+});
+
+test("the detail renders exactly five accessible slots with photos first and placeholders after them", () => {
+  const previewStart = pageSource.indexOf("function ExtraWorkOverviewPhotos");
+  const previewEnd = pageSource.indexOf("function ExtraWorkOverviewThumbnail", previewStart);
+  const previewSource = pageSource.slice(previewStart, previewEnd);
+
+  assert.match(previewSource, /const photoSlots = getExtraWorkOverviewPhotoSlots\(photos\)/);
+  assert.match(previewSource, /photoSlots\.map\(\(photo, index\) =>/);
+  assert.match(previewSource, /photo \? \([\s\S]*<ExtraWorkOverviewThumbnail/);
+  assert.match(previewSource, /project-extra-work-photo-placeholder/);
+  assert.match(previewSource, /aria-label=\{`Freier Fotoplatz \$\{index \+ 1\} von 5`\}/);
+  assert.doesNotMatch(previewSource, /if \(!isLoading && !hasError && photos\.length === 0\)/);
 });
 
 test("stored thumbnail bytes stay deferred from ticket-list photo loading", () => {
@@ -81,10 +110,20 @@ test("stored thumbnail bytes stay deferred from ticket-list photo loading", () =
   assert.match(serviceSource, /if photo\.thumbnail_content:[\s\S]*return \([\s\S]*photo\.thumbnail_content/);
 });
 
-test("the quiet preview is square, cover-cropped, right-aligned and responsive", () => {
-  assert.match(styles, /\.project-extra-work-photo-preview \{[^}]*justify-content:\s*flex-end/s);
-  assert.match(styles, /\.project-extra-work-photo-list \{[^}]*flex-wrap:\s*wrap;[^}]*gap:\s*8px/s);
-  assert.match(styles, /\.project-extra-work-photo \{[^}]*width:\s*clamp\(64px, 6vw, 88px\);[^}]*aspect-ratio:\s*1;/s);
+test("the preview uses five equal responsive columns and square cover-cropped tiles", () => {
+  assert.match(styles, /\.project-extra-work-photo-list \{[^}]*width:\s*100%;[^}]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\);[^}]*gap:\s*clamp\(6px, 0\.8vw, 10px\);/s);
+  assert.match(styles, /\.project-extra-work-photo \{[^}]*width:\s*100%;[^}]*aspect-ratio:\s*1;/s);
   assert.match(styles, /\.project-extra-work-photo img \{[^}]*object-fit:\s*cover/s);
-  assert.doesNotMatch(styles, /project-extra-work-photo-preview[^}]*min-height:/s);
+  assert.match(styles, /\.project-extra-work-photo-placeholder \{[^}]*border-style:\s*dashed;[^}]*background:\s*#f4f6f8;/s);
+  assert.doesNotMatch(styles, /\.project-extra-work-photo-list \{[^}]*flex-wrap:/s);
+});
+
+test("the grid keeps the existing 320-pixel thumbnail API and accessible image names", () => {
+  const thumbnailStart = pageSource.indexOf("function ExtraWorkOverviewThumbnail");
+  const thumbnailSource = pageSource.slice(thumbnailStart, pageSource.indexOf("function MeasurementTab", thumbnailStart));
+
+  assert.match(optimizerSource, /DOCUMENT_PHOTO_THUMBNAIL_SIZE = 320/);
+  assert.match(apiSource, /siteExtraWorkTicketPhotoThumbnail[\s\S]*\/thumbnail/);
+  assert.match(thumbnailSource, /<img src=\{thumbnailUrl\} alt=\{accessibleName\} loading="eager" decoding="async" \/>/);
+  assert.match(thumbnailSource, /title=\{photo\.filename\}/);
 });

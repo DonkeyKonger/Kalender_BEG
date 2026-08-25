@@ -5,6 +5,15 @@ export const MAX_EXTRA_WORK_OVERVIEW_PHOTOS = 5;
 const photoListLoaders = new Map<string, Promise<MobileExtraWorkTicketPhoto[]>>();
 const thumbnailLoaders = new Map<string, Promise<Blob>>();
 
+export function getExtraWorkOverviewPhotoSlots(
+  photos: MobileExtraWorkTicketPhoto[],
+): Array<MobileExtraWorkTicketPhoto | null> {
+  return Array.from(
+    { length: MAX_EXTRA_WORK_OVERVIEW_PHOTOS },
+    (_, index) => photos[index] ?? null,
+  );
+}
+
 export function loadExtraWorkOverviewPhotoList(
   siteId: number,
   ticketId: number,
