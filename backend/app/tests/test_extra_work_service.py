@@ -1514,6 +1514,113 @@ def test_site_extra_work_tickets_include_customer_email_status():
     assert read_ticket.customer_email_signature_present is True
 
 
+def test_list_site_tickets_orders_oldest_first_before_pagination_and_ignores_mutable_fields():
+    db = db_session()
+    site = Site(site_number="9999", name="Testbaustelle Finienweg")
+    db.add(site)
+    db.commit()
+
+    creation_times = {
+        14: datetime(2026, 8, 24, 8, 0, tzinfo=UTC),
+        15: datetime(2026, 8, 24, 8, 5, tzinfo=UTC),
+        16: datetime(2026, 8, 24, 8, 5, tzinfo=UTC),
+        17: datetime(2026, 8, 24, 8, 15, tzinfo=UTC),
+        18: datetime(2026, 8, 24, 8, 10, tzinfo=UTC),
+        19: datetime(2026, 8, 24, 8, 20, tzinfo=UTC),
+        20: datetime(2026, 8, 24, 8, 25, tzinfo=UTC),
+        21: datetime(2026, 8, 24, 8, 30, tzinfo=UTC),
+        22: datetime(2026, 8, 24, 8, 35, tzinfo=UTC),
+        23: datetime(2026, 8, 24, 8, 40, tzinfo=UTC),
+        24: datetime(2026, 8, 24, 8, 45, tzinfo=UTC),
+        25: datetime(2026, 8, 24, 8, 50, tzinfo=UTC),
+    }
+    tickets = [
+        ExtraWorkTicket(
+            site_id=site.id,
+            sequence_number=sequence_number,
+            display_number=(
+                f"9999.SZ{sequence_number}"
+                if sequence_number <= 16
+                else f"9999.Z{sequence_number}"
+            ),
+            kind="billing",
+            status="draft",
+            created_at=creation_times[sequence_number],
+            updated_at=creation_times[sequence_number],
+        )
+        for sequence_number in reversed(range(14, 26))
+    ]
+    db.add_all(tickets)
+    db.commit()
+
+    service = ExtraWorkService(db)
+    initially_ordered = service.list_site_tickets(site.id)
+    expected_numbers = [
+        "9999.SZ14",
+        "9999.SZ15",
+        "9999.SZ16",
+        "9999.Z18",
+        "9999.Z17",
+        "9999.Z19",
+        "9999.Z20",
+        "9999.Z21",
+        "9999.Z22",
+        "9999.Z23",
+        "9999.Z24",
+        "9999.Z25",
+    ]
+
+    assert [ticket.display_number for ticket in initially_ordered] == expected_numbers
+    assert [ticket.display_number for ticket in initially_ordered[:8]] == expected_numbers[:8]
+    assert [ticket.display_number for ticket in initially_ordered[8:]] == expected_numbers[8:]
+
+    changed_ticket = next(ticket for ticket in tickets if ticket.sequence_number == 15)
+    changed_ticket.status = "completed"
+    changed_ticket.title = "Nachträglich bearbeitet"
+    changed_ticket.submitted_at = datetime(2026, 8, 25, 14, 0, tzinfo=UTC)
+    changed_ticket.customer_signed_at = datetime(2026, 8, 25, 14, 5, tzinfo=UTC)
+    changed_ticket.updated_at = datetime(2026, 8, 25, 14, 10, tzinfo=UTC)
+    db.commit()
+
+    after_mutable_update = service.list_site_tickets(site.id)
+    assert [ticket.display_number for ticket in after_mutable_update] == expected_numbers
+
+
+def test_list_site_tickets_uses_the_same_oldest_first_order_for_archive():
+    db = db_session()
+    site = Site(site_number="9999", name="Testbaustelle Finienweg")
+    db.add(site)
+    db.commit()
+    common_created_at = datetime(2026, 8, 24, 8, 0, tzinfo=UTC)
+    archived_tickets = [
+        ExtraWorkTicket(
+            site_id=site.id,
+            sequence_number=sequence_number,
+            display_number=display_number,
+            kind="billing",
+            status="completed",
+            created_at=common_created_at,
+            updated_at=datetime(2026, 8, 25, 8, sequence_number, tzinfo=UTC),
+            deleted_at=datetime(2026, 8, 25, 9, 30 - sequence_number, tzinfo=UTC),
+        )
+        for sequence_number, display_number in [
+            (17, "9999.Z17"),
+            (15, "9999.SZ15"),
+            (16, "9999.SZ16"),
+        ]
+    ]
+    db.add_all(archived_tickets)
+    db.commit()
+
+    archived = ExtraWorkService(db).list_site_tickets(site.id, archived_only=True)
+
+    assert [ticket.display_number for ticket in archived] == [
+        "9999.SZ15",
+        "9999.SZ16",
+        "9999.Z17",
+    ]
+
+
 def test_list_site_tickets_eager_loads_entries_and_photos_without_n_plus_one():
     db = db_session()
     site = Site(site_number="8007", name="Schüchtermann Klinik")

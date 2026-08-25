@@ -20,6 +20,7 @@ import {
   EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE,
   buildExtraWorkOverviewEntrySummary,
   calculateExtraWorkOverviewPageSize,
+  compareExtraWorkTicketsOldestFirst,
   filterExtraWorkOverviewTickets,
   formatExtraWorkOverviewCreatorName,
   formatExtraWorkOverviewIsoWeek,
@@ -642,9 +643,9 @@ export function SiteDetailPage() {
     try {
       const created = await api.createSiteExtraWorkTicket(site.id);
       setExtraWorkTickets((current) => [
-        created,
         ...current.filter((entry) => entry.id !== created.id),
-      ]);
+        created,
+      ].sort(compareExtraWorkTicketsOldestFirst));
       setExtraWorkOverviewTicketId(created.id);
       setSelectedExtraWorkTicket(created);
       setExtraWorkDocumentDirty(false);
@@ -2876,7 +2877,7 @@ function ExtraWorkTab({
   const selectedRowRef = useRef<HTMLDivElement>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const sortedTickets = useMemo(
-    () => [...tickets].sort(compareExtraWorkTicketsNewestFirst),
+    () => [...tickets].sort(compareExtraWorkTicketsOldestFirst),
     [tickets],
   );
   const filteredTickets = useMemo(
@@ -8003,21 +8004,6 @@ function getProjectManagerInlineOptions(
     });
   }
   return options;
-}
-
-function compareExtraWorkTicketsNewestFirst(left: MobileExtraWorkTicket, right: MobileExtraWorkTicket): number {
-  const rightTime = getExtraWorkTicketSortTime(right);
-  const leftTime = getExtraWorkTicketSortTime(left);
-  if (rightTime !== leftTime) {
-    return rightTime - leftTime;
-  }
-  return right.sequence_number - left.sequence_number;
-}
-
-function getExtraWorkTicketSortTime(ticket: MobileExtraWorkTicket): number {
-  const value = ticket.submitted_at ?? ticket.customer_signed_at ?? ticket.updated_at ?? ticket.created_at;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function getExtraWorkTicketStatusBadge(ticket: MobileExtraWorkTicket): {

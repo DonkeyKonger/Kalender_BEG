@@ -28,6 +28,20 @@ test("desktop extra-work overview uses one lightweight master-detail workspace",
   assert.doesNotMatch(tabSource, /Hauptauftrag/);
 });
 
+test("chronological ticket order is applied before shared search and pagination paths", () => {
+  const sortIndex = tabSource.indexOf("sort(compareExtraWorkTicketsOldestFirst)");
+  const filterIndex = tabSource.indexOf("filterExtraWorkOverviewTickets(sortedTickets");
+  const paginationIndex = tabSource.indexOf("filteredTickets.slice(pageWindow.start, pageWindow.end)");
+
+  assert.ok(sortIndex >= 0 && sortIndex < filterIndex && filterIndex < paginationIndex);
+  assert.match(pageSource, /createSiteExtraWorkTicket[\s\S]*sort\(compareExtraWorkTicketsOldestFirst\)/);
+  assert.doesNotMatch(pageSource, /compareExtraWorkTicketsNewestFirst/);
+  assert.match(
+    serviceSource,
+    /order_by\([\s\S]*ExtraWorkTicket\.created_at\.asc\(\)[\s\S]*ExtraWorkTicket\.sequence_number\.asc\(\)[\s\S]*ExtraWorkTicket\.id\.asc\(\)/,
+  );
+});
+
 test("master rows keep their status control while the detail removes its duplicate status row", () => {
   const masterRowsStart = tabSource.indexOf("visibleTickets.map");
   const masterRowsEnd = tabSource.indexOf("<ExtraWorkOverviewDetail", masterRowsStart);

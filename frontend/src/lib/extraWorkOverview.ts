@@ -13,6 +13,27 @@ export const EXTRA_WORK_OVERVIEW_HEADER_HEIGHT = 42;
 export const EXTRA_WORK_OVERVIEW_PAGINATION_HEIGHT = 48;
 export const EXTRA_WORK_OVERVIEW_CONTAINER_BORDER = 2;
 
+export function compareExtraWorkTicketsOldestFirst(
+  left: MobileExtraWorkTicket,
+  right: MobileExtraWorkTicket,
+): number {
+  const leftCreatedAt = parseExtraWorkCreatedAt(left.created_at);
+  const rightCreatedAt = parseExtraWorkCreatedAt(right.created_at);
+  if (leftCreatedAt !== null && rightCreatedAt !== null && leftCreatedAt !== rightCreatedAt) {
+    return leftCreatedAt - rightCreatedAt;
+  }
+  if (leftCreatedAt === null && rightCreatedAt !== null) {
+    return 1;
+  }
+  if (leftCreatedAt !== null && rightCreatedAt === null) {
+    return -1;
+  }
+  if (left.sequence_number !== right.sequence_number) {
+    return left.sequence_number - right.sequence_number;
+  }
+  return left.id - right.id;
+}
+
 export function calculateExtraWorkOverviewPageSize(availableHeight: number): number {
   const rowAreaHeight = Math.max(
     0,
@@ -241,6 +262,11 @@ export function normalizeExtraWorkOverviewSearch(value: unknown): string {
     .replace(/oe/g, "o")
     .replace(/ue/g, "u")
     .replace(/\s+/g, " ");
+}
+
+function parseExtraWorkCreatedAt(value: string): number | null {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 export function resolveExtraWorkOverviewPeriod(

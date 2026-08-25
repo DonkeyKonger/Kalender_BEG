@@ -118,7 +118,11 @@ class ExtraWorkService:
             statement = statement.where(ExtraWorkTicket.deleted_at.is_(None))
         tickets = list(
             self.db.scalars(
-                statement.order_by(ExtraWorkTicket.sequence_number, ExtraWorkTicket.id)
+                statement.order_by(
+                    ExtraWorkTicket.created_at.asc(),
+                    ExtraWorkTicket.sequence_number.asc(),
+                    ExtraWorkTicket.id.asc(),
+                )
             ).all()
         )
         customer_email_statuses = self._latest_customer_email_statuses([ticket.id for ticket in tickets])
