@@ -355,6 +355,8 @@ test("the ruled material editor shares the final PDF typography and three-line c
 });
 
 test("the material textarea scales with the paper, preserves wrapping and warns without clipping data", () => {
+  assert.match(componentSource, /formatExtraWorkDocumentMaterialText\(draft\.entry\.material_text, draft\.entry\.material_items\)/);
+  assert.match(componentSource, /onEntryChange\(\{ material_text: value, material_items: \[\] \}\)/);
   assert.match(componentSource, /layout=\{EXTRA_WORK_PDF_TEXTAREA_LAYOUTS\.materialText\}/);
   assert.match(componentSource, /--pdf-textarea-font-size[\s\S]*extraWorkPdfPointsToCqw\(layout\.fontSize\)/);
   assert.match(componentSource, /textarea\.scrollHeight > textarea\.clientHeight \+ 1/);

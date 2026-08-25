@@ -51,6 +51,7 @@ import {
   type ExtraWorkPdfTextareaLayout,
 } from "../lib/extraWorkDocument";
 import { containsDraggedFiles } from "../lib/fileDrag";
+import { formatExtraWorkDocumentMaterialText } from "../lib/extraWorkMaterial";
 import { formatProjectFileSize } from "../lib/projectFiles";
 import {
   SUPPLEMENTARY_ORDER_DOCUMENT_ZOOM_LEVELS,
@@ -1174,7 +1175,14 @@ function SupplementaryOrderPaperPage({
         ))}
         <PaperValue rect={EXTRA_WORK_PDF_FIELD_RECTS.overallHours} label="Gesamtstunden dieses Blatts" value={formatPaperHours(pageHours)} />
         <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.remarks} layout={EXTRA_WORK_PDF_TEXTAREA_LAYOUTS.remarks} pdfCapacity="remarks" label="Bemerkungen" value={draft.entry.remarks ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ remarks: value })} />
-        <PaperTextarea rect={EXTRA_WORK_PDF_FIELD_RECTS.materialText} layout={EXTRA_WORK_PDF_TEXTAREA_LAYOUTS.materialText} label="Material" value={draft.entry.material_text ?? ""} readOnly={readOnly} onChange={(value) => onEntryChange({ material_text: value })} />
+        <PaperTextarea
+          rect={EXTRA_WORK_PDF_FIELD_RECTS.materialText}
+          layout={EXTRA_WORK_PDF_TEXTAREA_LAYOUTS.materialText}
+          label="Material"
+          value={formatExtraWorkDocumentMaterialText(draft.entry.material_text, draft.entry.material_items)}
+          readOnly={readOnly}
+          onChange={(value) => onEntryChange({ material_text: value, material_items: [] })}
+        />
 
         {isLastPage ? (
           <>

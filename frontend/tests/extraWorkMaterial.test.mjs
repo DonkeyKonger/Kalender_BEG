@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  formatExtraWorkDocumentMaterialText,
   formatExtraWorkMaterialQuantity,
   parseExtraWorkMaterialInput,
+  rehydrateExtraWorkMaterialItems,
 } from "../src/lib/extraWorkMaterial.ts";
 
 test("material quick input recognizes common German construction quantities", () => {
@@ -119,4 +121,28 @@ test("ten quick material rows can be parsed locally without API coordination", (
   ));
   assert.equal(items.length, 10);
   assert.equal(items.every((item) => item?.description.startsWith("Material ")), true);
+});
+
+test("saved material items rehydrate exactly and match the PDF-backed document field", () => {
+  const storedItems = [
+    { quantity: 2, unit: "x", description: "Stiel US 5 bis 500" },
+    { quantity: 2.555, unit: "m", description: "Kabelrinne Ä/Ö & Dübel\nTyp B" },
+    { quantity: 0, unit: null, description: "Leere Menge zulässig" },
+    { quantity: null, unit: null, description: "Kleinmaterial" },
+  ];
+  let nextId = 0;
+
+  assert.deepEqual(rehydrateExtraWorkMaterialItems(storedItems, () => `row-${++nextId}`), [
+    { id: "row-1", quantity: 2, unit: "x", description: "Stiel US 5 bis 500" },
+    { id: "row-2", quantity: 2.555, unit: "m", description: "Kabelrinne Ä/Ö & Dübel\nTyp B" },
+    { id: "row-3", quantity: 0, unit: null, description: "Leere Menge zulässig" },
+    { id: "row-4", quantity: null, unit: null, description: "Kleinmaterial" },
+  ]);
+  assert.deepEqual(rehydrateExtraWorkMaterialItems(null, () => "unused"), []);
+  assert.equal(formatExtraWorkDocumentMaterialText("Altmaterial\r\nZeile 2", storedItems), (
+    "Altmaterial\nZeile 2\n"
+    + "2x Stiel US 5 bis 500; "
+    + "2,56 m Kabelrinne Ä/Ö & Dübel Typ B; "
+    + "0 Leere Menge zulässig; Kleinmaterial"
+  ));
 });

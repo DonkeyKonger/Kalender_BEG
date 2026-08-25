@@ -46,7 +46,7 @@ import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { formatExtraWorkHours, getExtraWorkDailyHoursTotalError, parseExtraWorkHoursInput } from "../lib/extraWorkHours";
 import { constrainExtraWorkRemarksChange, extraWorkRemarksFit } from "../lib/extraWorkDocument";
-import { formatExtraWorkMaterialQuantity, parseExtraWorkMaterialInput, parseExtraWorkMaterialQuantity } from "../lib/extraWorkMaterial";
+import { formatExtraWorkMaterialQuantity, parseExtraWorkMaterialInput, parseExtraWorkMaterialQuantity, rehydrateExtraWorkMaterialItems } from "../lib/extraWorkMaterial";
 import { formatExtraWorkSequenceLabel } from "../lib/extraWorkNumber";
 import { formatGermanDateKey, formatGermanDateKeyRange, formatGermanDayMonth } from "../lib/formatters";
 import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPositionGroups";
@@ -8378,12 +8378,7 @@ function mapExtraWorkEntryToForm(
     axis: entry.axis ?? "",
     remarks: entry.remarks ?? "",
     material_text: entry.material_text ?? "",
-    material_items: (entry.material_items ?? []).map((item) => ({
-      id: createClientRowId(),
-      quantity: item.quantity ?? null,
-      unit: item.unit ?? null,
-      description: item.description,
-    })),
+    material_items: rehydrateExtraWorkMaterialItems(entry.material_items, createClientRowId),
     estimated_hours: formatExtraWorkInputValue(entry.estimated_hours),
     worker_rows: entry.worker_rows.length > 0
       ? entry.worker_rows.map((row, index) => ({

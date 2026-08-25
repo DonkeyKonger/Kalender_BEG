@@ -4,6 +4,10 @@ export type ExtraWorkMaterialItem = {
   description: string;
 };
 
+export type RehydratedExtraWorkMaterialItem = ExtraWorkMaterialItem & {
+  id: string;
+};
+
 const EXTRA_WORK_MATERIAL_UNIT_GROUPS = [
   { canonical: "Stk", aliases: ["st", "stk", "stck", "stück", "stueck", "stückzahl", "stueckzahl"] },
   { canonical: "x", aliases: ["x"] },
@@ -79,6 +83,62 @@ export function formatExtraWorkMaterialQuantity(
   return unit?.toLocaleLowerCase("de-DE") === "x"
     ? `${formatted}×`
     : [formatted, unit?.trim()].filter(Boolean).join(" ");
+}
+
+export function rehydrateExtraWorkMaterialItems(
+  items: readonly ExtraWorkMaterialItem[] | null | undefined,
+  createId: () => string,
+): RehydratedExtraWorkMaterialItem[] {
+  return (items ?? []).map((item) => ({
+    id: createId(),
+    quantity: item.quantity ?? null,
+    unit: item.unit ?? null,
+    description: item.description,
+  }));
+}
+
+export function formatExtraWorkDocumentMaterialText(
+  materialText: string | null | undefined,
+  materialItems: readonly ExtraWorkMaterialItem[] | null | undefined,
+): string {
+  const sections: string[] = [];
+  const legacyText = (materialText ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
+  if (legacyText) {
+    sections.push(legacyText);
+  }
+  const itemLines = (materialItems ?? []).flatMap((item) => {
+    const description = cleanExtraWorkMaterialInlineText(item.description);
+    if (!description) {
+      return [];
+    }
+    if (item.quantity === null || !Number.isFinite(item.quantity)) {
+      return [description];
+    }
+    const quantity = formatExtraWorkPdfMaterialQuantity(item.quantity);
+    const unit = cleanExtraWorkMaterialInlineText(item.unit ?? "");
+    const quantityLabel = unit.toLocaleLowerCase("de-DE") === "x"
+      ? `${quantity}x`
+      : [quantity, unit].filter(Boolean).join(" ");
+    return [`${quantityLabel} ${description}`];
+  });
+  if (itemLines.length > 0) {
+    sections.push(itemLines.join("; "));
+  }
+  return sections.join("\n");
+}
+
+function formatExtraWorkPdfMaterialQuantity(quantity: number): string {
+  return new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Number(quantity.toFixed(2)));
+}
+
+function cleanExtraWorkMaterialInlineText(value: string): string {
+  return value.replace(/\r/g, " ").trim().replace(/\s+/g, " ");
 }
 
 function normalizeExtraWorkMaterialUnit(value: string): string {

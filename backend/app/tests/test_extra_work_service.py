@@ -621,6 +621,93 @@ def test_mobile_extra_work_ticket_entry_persists_and_updates_ticket_summary():
     assert reloaded_ticket.total_hours == 6.75
 
 
+def test_mobile_material_roundtrip_rehydrates_after_pdf_export_without_data_loss():
+    db = db_session()
+    person = Person(
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    site = Site(site_number="8007", name="Schüchtermann Klinik")
+    db.add_all([person, site])
+    db.commit()
+    assignment = Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=date(2026, 6, 11),
+        end_date=date(2026, 6, 11),
+    )
+    db.add(assignment)
+    db.commit()
+    current_user = SimpleNamespace(id=7, person_id=person.id)
+    service = ExtraWorkService(db)
+    ticket = service.create_mobile_ticket(
+        assignment_id=assignment.id,
+        current_user=current_user,
+    )
+    expected_items = [
+        ExtraWorkMaterialItem(
+            quantity=2,
+            unit="x",
+            description="Stiel US 5 bis 500",
+        ),
+        ExtraWorkMaterialItem(
+            quantity=2.5,
+            unit="m",
+            description="Kabelrinne Ä/Ö & Dübel\nTyp B",
+        ),
+        ExtraWorkMaterialItem(
+            quantity=None,
+            unit=None,
+            description="Kleinmaterial",
+        ),
+    ]
+
+    service.upsert_mobile_ticket_entry(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+        payload=ExtraWorkTicketEntryPayload(
+            component="BT A",
+            floor="2. OG",
+            material_text="Altmaterial\nzweite Zeile",
+            material_items=expected_items,
+            worker_rows=[
+                ExtraWorkWorkerHours(worker_name="Max Monteur", monday_hours=2.5)
+            ],
+        ),
+    )
+    pdf_content, _filename = ExtraWorkPdfService(db).build_mobile_ticket_pdf(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+    reloaded = service.get_mobile_ticket_entry(
+        assignment_id=assignment.id,
+        ticket_id=ticket.id,
+        current_user=current_user,
+    )
+    document = service.get_site_ticket_document(site_id=site.id, ticket_id=ticket.id)
+    pdf_reader = PdfReader(BytesIO(pdf_content))
+    pdf_text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+
+    assert len(pdf_reader.pages) == 1
+    assert reloaded is not None
+    assert reloaded.material_text == "Altmaterial\nzweite Zeile"
+    assert reloaded.material_items == expected_items
+    assert document.entry is not None
+    assert document.entry.material_items == expected_items
+    for text in (
+        "Altmaterial",
+        "zweite Zeile",
+        "2x Stiel US 5 bis 500",
+        "2,5 m Kabelrinne Ä/Ö & Dübel Typ B",
+        "Kleinmaterial",
+    ):
+        assert text in pdf_text
+
+
 def test_older_mobile_payload_preserves_existing_structured_material_items():
     db = db_session()
     person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
