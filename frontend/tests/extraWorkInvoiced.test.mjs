@@ -105,12 +105,12 @@ test("API and read models expose one independent persistent invoiced field", () 
   assert.match(serviceSource, /def set_site_ticket_invoiced[\s\S]*include_deleted=True[\s\S]*ticket\.is_invoiced = is_invoiced/);
 });
 
-test("active and archived lists keep stable server order instead of updated-at resorting", () => {
-  assert.match(serviceSource, /if archived_only:[\s\S]*statement\.order_by\([\s\S]*ExtraWorkTicket\.created_at\.asc\(\),[\s\S]*ExtraWorkTicket\.sequence_number\.asc\(\),[\s\S]*ExtraWorkTicket\.id\.asc\(\)/);
-  assert.match(tabSource, /\[\.\.\.tickets\]\.sort\(compareExtraWorkTicketsOldestFirst\)/);
-  assert.match(overviewSource, /function compareExtraWorkTicketsOldestFirst/);
+test("active and archived lists keep stable newest-first order instead of updated-at resorting", () => {
+  assert.match(serviceSource, /if archived_only:[\s\S]*statement\.order_by\([\s\S]*ExtraWorkTicket\.sequence_number\.desc\(\)\.nulls_last\(\),[\s\S]*ExtraWorkTicket\.created_at\.desc\(\),[\s\S]*ExtraWorkTicket\.id\.desc\(\)/);
+  assert.match(tabSource, /\[\.\.\.tickets\]\.sort\(compareExtraWorkTicketsNewestFirst\)/);
+  assert.match(overviewSource, /function compareExtraWorkTicketsNewestFirst/);
   const comparatorSource = overviewSource.slice(
-    overviewSource.indexOf("export function compareExtraWorkTicketsOldestFirst"),
+    overviewSource.indexOf("export function compareExtraWorkTicketsNewestFirst"),
     overviewSource.indexOf("export function calculateExtraWorkOverviewPageSize"),
   );
   assert.doesNotMatch(comparatorSource, /updated_at|submitted_at|customer_signed_at/);
