@@ -70,6 +70,21 @@ test("blank measurements expose ten lazy free columns and append one after the l
   assert.match(pageSource, /\|\| \(item\.unit \?\? ""\)\.trim\(\)\.length > 0/);
 });
 
+test("offer-based measurements append one writable position column as soon as the previous draft is used", () => {
+  assert.match(pageSource, /const freeInputColumnCount = freePositionOnly[\s\S]*?: Math\.max\(highestActiveFreeColumnIndex \+ 1, 1\);/);
+  assert.match(pageSource, /: Math\.max\(MEASUREMENT_TABLE_MIN_COLUMNS, items\.length \+ freeInputColumnCount, viewportColumnCount\);/);
+  assert.match(pageSource, /: Math\.max\(0, displayColumnCount - items\.length - freeInputColumnCount\);/);
+
+  const columnsStart = pageSource.indexOf("const displayColumns:");
+  const columnsEnd = pageSource.indexOf("const displayAreaRows:", columnsStart);
+  const columnsSource = pageSource.slice(columnsStart, columnsEnd);
+  const standardColumnsStart = columnsSource.lastIndexOf("return [");
+  const standardColumnsSource = columnsSource.slice(standardColumnsStart);
+
+  assert.match(standardColumnsSource, /Array\.from\(\{ length: freeInputColumnCount \}/);
+  assert.match(standardColumnsSource, /key: `\$\{MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY\}-\$\{index \+ 1\}`/);
+});
+
 test("measurement columns use only the persisted order and append new office positions on the right", () => {
   assert.match(pageSource, /function orderMeasurementItemsByColumnPosition\(items: MobileMeasurementItem\[\]\)/);
   assert.match(pageSource, /left\.sort_order - right\.sort_order \|\| left\.id - right\.id/);
@@ -84,20 +99,20 @@ test("measurement columns use only the persisted order and append new office pos
   assert.doesNotMatch(replaceSource, /position\.localeCompare/);
 });
 
-test("mobile measurement positions place the writable office column before viewport fillers", () => {
+test("mobile measurement positions place all writable office columns before viewport fillers", () => {
   const columnsStart = pageSource.indexOf("const displayColumns:");
   const columnsEnd = pageSource.indexOf("const displayAreaRows:", columnsStart);
   const columnsSource = pageSource.slice(columnsStart, columnsEnd);
   const standardColumnsStart = columnsSource.lastIndexOf("return [");
   const standardColumnsSource = columnsSource.slice(standardColumnsStart);
 
-  const officeColumnIndex = standardColumnsSource.indexOf("kind: \"office-extra\" as const");
+  const officeColumnsIndex = standardColumnsSource.indexOf("Array.from({ length: freeInputColumnCount }");
   const fillerColumnsIndex = standardColumnsSource.indexOf("Array.from({ length: fillerColumnCount }");
 
-  assert.notEqual(officeColumnIndex, -1);
+  assert.notEqual(officeColumnsIndex, -1);
   assert.notEqual(fillerColumnsIndex, -1);
-  assert.ok(officeColumnIndex < fillerColumnsIndex);
-  assert.match(standardColumnsSource, /kind: "office-extra" as const,\s*index: 1,/);
+  assert.ok(officeColumnsIndex < fillerColumnsIndex);
+  assert.match(standardColumnsSource, /kind: "office-extra" as const,\s*index: index \+ 1,/);
 });
 
 test("measurement position suggestions flip left only when their right edge would leave the viewport", () => {

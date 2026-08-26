@@ -6821,13 +6821,13 @@ function MeasurementReviewTable({
   const highestActiveFreeColumnIndex = Math.max(0, ...activeManualColumnIndexes, ...activeQuantityColumnIndexes);
   const freeInputColumnCount = freePositionOnly
     ? Math.max(MEASUREMENT_FREE_INPUT_MIN_COLUMNS - items.length, highestActiveFreeColumnIndex + 1, 1)
-    : 1;
+    : Math.max(highestActiveFreeColumnIndex + 1, 1);
   const displayColumnCount = freePositionOnly
     ? items.length + freeInputColumnCount
-    : Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length + 1, viewportColumnCount);
+    : Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, items.length + freeInputColumnCount, viewportColumnCount);
   const fillerColumnCount = freePositionOnly
     ? 0
-    : Math.max(0, displayColumnCount - items.length - 1);
+    : Math.max(0, displayColumnCount - items.length - freeInputColumnCount);
   const displayColumns: Array<
     | { key: string; kind: "item"; item: MobileMeasurementItem }
     | { key: string; kind: "placeholder"; index: number }
@@ -6846,11 +6846,11 @@ function MeasurementReviewTable({
     }
     return [
       ...itemColumns,
-      {
-        key: MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY,
+      ...Array.from({ length: freeInputColumnCount }, (_, index) => ({
+        key: `${MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY}-${index + 1}`,
         kind: "office-extra" as const,
-        index: 1,
-      },
+        index: index + 1,
+      })),
       ...Array.from({ length: fillerColumnCount }, (_, index) => ({
         key: `placeholder-column-${index + 1}`,
         kind: "placeholder" as const,
