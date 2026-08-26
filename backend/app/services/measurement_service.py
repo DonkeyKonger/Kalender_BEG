@@ -91,12 +91,7 @@ MEASUREMENT_COMPLETED_BATCH_STATUSES = frozenset({
     "finalized",
     "abgeschlossen",
 })
-MEASUREMENT_OFFICE_EDIT_LOCKED_BATCH_STATUSES = MEASUREMENT_COMPLETED_BATCH_STATUSES | frozenset({
-    "archived",
-    "customer_signed",
-    "signed",
-    "unterschrieben",
-})
+MEASUREMENT_OFFICE_EDIT_LOCKED_BATCH_STATUSES = MEASUREMENT_COMPLETED_BATCH_STATUSES | frozenset({"archived"})
 MEASUREMENT_PHOTO_CONTENT_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -534,11 +529,7 @@ class MeasurementService:
     ) -> MeasurementEntryRead:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        if batch.status == "draft" and batch.origin != MeasurementBatchOrigin.OFFICE.value:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Entwürfe werden mobil bearbeitet.",
-            )
+        self._ensure_site_batch_can_be_edited_in_office(batch)
 
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
         item_belongs_to_batch = item is not None and self._measurement_item_is_available_for_batch(
@@ -582,11 +573,7 @@ class MeasurementService:
     ) -> MobileMeasurementItemRead:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        if batch.status == "draft" and batch.origin != MeasurementBatchOrigin.OFFICE.value:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Entwürfe werden mobil bearbeitet.",
-            )
+        self._ensure_site_batch_can_be_edited_in_office(batch)
 
         description = " ".join(payload.description.split())
         unit = payload.unit.strip()
@@ -780,6 +767,7 @@ class MeasurementService:
     ) -> None:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
+        self._ensure_site_batch_can_be_edited_in_office(batch)
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
         if (
             batch.position_mode != MeasurementPositionMode.BLANK.value
@@ -1840,11 +1828,7 @@ class MeasurementService:
     ) -> MeasurementEntryRead:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
-        if batch.status == "draft" and batch.origin != MeasurementBatchOrigin.OFFICE.value:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Entwürfe werden mobil bearbeitet.",
-            )
+        self._ensure_site_batch_can_be_edited_in_office(batch)
 
         entry = self.db.get(SiteMeasurementEntry, entry_id)
         if (
@@ -2671,13 +2655,10 @@ class MeasurementService:
                 status.HTTP_409_CONFLICT,
                 "Archivierte Aufmaße können nicht bearbeitet werden.",
             )
-        if (
-            batch.customer_signed_at is not None
-            or batch.status.casefold() in MEASUREMENT_OFFICE_EDIT_LOCKED_BATCH_STATUSES
-        ):
+        if batch.status.casefold() in MEASUREMENT_OFFICE_EDIT_LOCKED_BATCH_STATUSES:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                "Unterschriebene oder abgeschlossene Aufmaße können nicht bearbeitet werden.",
+                "Abgeschlossene Aufmaße können nicht bearbeitet werden.",
             )
 
     def _delete_existing_entries_for_cell(

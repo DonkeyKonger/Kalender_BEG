@@ -1822,7 +1822,8 @@ def test_blank_position_persists_project_link_and_uses_it_before_position_fallba
         site=site,
         number=1,
         title="Verknüpftes Büro-Aufmaß",
-        status="billed",
+        status="customer_signed",
+        customer_signed_at=datetime.now(timezone.utc),
         origin=MeasurementBatchOrigin.OFFICE.value,
         position_mode=MeasurementPositionMode.BLANK.value,
         creator_role_at_creation=UserRole.OFFICE.value,
@@ -1844,6 +1845,9 @@ def test_blank_position_persists_project_link_and_uses_it_before_position_fallba
             area_or_comment="EG",
         ),
     )
+
+    batch.status = "billed"
+    db.commit()
 
     timesheet = service.get_site_measurement_timesheet(site.id)
     listed_batch = next(item for item in service.list_site_batches(site.id) if item.id == batch.id)
@@ -2797,6 +2801,16 @@ def test_multiple_free_measurements_can_share_a_used_target_and_keep_status_guar
     batch.status = "customer_signed"
     batch.customer_signed_at = datetime.now(timezone.utc)
     db.commit()
+    signed_update = service.update_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=free_item.id,
+        payload=MeasurementItemUpdate(linked_measurement_item_id=target_item.id),
+    )
+    assert signed_update.linked_measurement_item_id == target_item.id
+
+    batch.status = "billed"
+    db.commit()
     with pytest.raises(HTTPException) as locked_error:
         service.update_site_free_item(
             site_id=site.id,
@@ -2805,7 +2819,7 @@ def test_multiple_free_measurements_can_share_a_used_target_and_keep_status_guar
             payload=MeasurementItemUpdate(linked_measurement_item_id=target_item.id),
         )
     assert locked_error.value.status_code == 409
-    assert "Unterschriebene oder abgeschlossene" in locked_error.value.detail
+    assert "Abgeschlossene Aufmaße" in locked_error.value.detail
 
 
 def test_measurement_time_analysis_groups_work_times_and_extra_work_by_submitted_batches():
@@ -3558,6 +3572,14 @@ def test_measurement_pdf_matrix_separates_original_and_checked_values():
     assert signed_checked_cell.original_quantity == Decimal("10.00")
     assert signed_checked_cell.is_corrected is True
     assert signed_checked_totals[item.id] == Decimal("12.00")
+
+    from app.services.measurement_pdf_service import _draw_quantity_cell
+
+    commands: list[bytes] = []
+    _draw_quantity_cell(commands, 0, 40, 20, signed_checked_cell)
+    assert any(b"0.7 0 0 rg" in command and b"(10,00)" in command for command in commands)
+    assert any(b"0.7 0 0 RG" in command and b" l S" in command for command in commands)
+    assert any(b"0.7 0 0 rg" in command and b"(12,00)" in command for command in commands)
 
 
 def test_measurement_pdf_does_not_add_extra_customer_signature_notice_when_unsigned():

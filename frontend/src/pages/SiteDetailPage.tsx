@@ -82,6 +82,7 @@ import {
 import { getProjectDocumentKind } from "../lib/projectFiles";
 import { buildMeasurementPositionCatalog, getMeasurementPositionCatalogKey } from "../lib/measurementPositionCatalog";
 import { buildDesktopMeasurementPositionGroups } from "../lib/measurementPositionGroups";
+import { getMeasurementSuggestionAlignment, type MeasurementSuggestionAlignment } from "../lib/measurementSuggestionPlacement";
 import {
   extraWorkStatusPromotionOptions,
   measurementStatusPromotionOptions,
@@ -5798,6 +5799,7 @@ type MeasurementSuggestionState = {
   columnKey: string;
   query: string;
   activeIndex: number;
+  alignment: MeasurementSuggestionAlignment;
 } | null;
 
 
@@ -6361,7 +6363,6 @@ function MeasurementReviewPanel({
     const showUnsubmittedWarning = isMeasurementBatchBeforeSubmitted(selectedBatch.status);
     const canEditRows = (!isDraft || selectedBatch.origin === "OFFICE")
       && !isBilled
-      && !isCustomerSigned
       && selectedBatch.deleted_at === null;
     const displayTitle = formatMeasurementPackageNumber(siteNumber, selectedBatch.number, selectedBatch.title);
     const updatedLabel = selectedBatch.updated_at ? formatDateTime(selectedBatch.updated_at) : null;
@@ -6845,16 +6846,16 @@ function MeasurementReviewTable({
     }
     return [
       ...itemColumns,
+      {
+        key: MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY,
+        kind: "office-extra" as const,
+        index: 1,
+      },
       ...Array.from({ length: fillerColumnCount }, (_, index) => ({
         key: `placeholder-column-${index + 1}`,
         kind: "placeholder" as const,
         index: index + 1,
       })),
-      {
-        key: MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY,
-        kind: "office-extra" as const,
-        index: fillerColumnCount + 1,
-      },
     ];
   }, [items, fillerColumnCount, freeInputColumnCount, freePositionOnly]);
   const displayAreaRows: Array<MeasurementMatrixAreaRow & { isPlaceholder?: boolean }> = useMemo(() => {
@@ -6936,6 +6937,36 @@ function MeasurementReviewTable({
     document.addEventListener("pointerdown", closeSuggestionOnOutsidePointer);
     return () => document.removeEventListener("pointerdown", closeSuggestionOnOutsidePointer);
   }, [suggestionState]);
+
+  useLayoutEffect(() => {
+    if (!suggestionState) {
+      return undefined;
+    }
+    const updateSuggestionAlignment = () => {
+      const anchor = Array.from(
+        tableWrapRef.current?.querySelectorAll<HTMLElement>("[data-position-suggestion-column]") ?? [],
+      ).find((element) => element.dataset.positionSuggestionColumn === suggestionState.columnKey);
+      if (!anchor) {
+        return;
+      }
+      const alignment = getMeasurementSuggestionAlignment(anchor.getBoundingClientRect(), window.innerWidth);
+      setSuggestionState((current) => current?.columnKey === suggestionState.columnKey && current.alignment !== alignment
+        ? { ...current, alignment }
+        : current);
+    };
+    updateSuggestionAlignment();
+    window.addEventListener("resize", updateSuggestionAlignment);
+    window.addEventListener("scroll", updateSuggestionAlignment, true);
+    return () => {
+      window.removeEventListener("resize", updateSuggestionAlignment);
+      window.removeEventListener("scroll", updateSuggestionAlignment, true);
+    };
+  }, [suggestionState?.columnKey]);
+
+  function openPositionSuggestions(columnKey: string, query: string, anchor: HTMLElement): void {
+    const alignment = getMeasurementSuggestionAlignment(anchor.getBoundingClientRect(), window.innerWidth);
+    setSuggestionState({ columnKey, query, activeIndex: 0, alignment });
+  }
 
   function getAreaLabel(area: MeasurementMatrixAreaRow): string {
     return areaLabelDraftsRef.current[area.key] ?? area.label;
@@ -7300,11 +7331,11 @@ function MeasurementReviewTable({
                       autoComplete="off"
                       onChange={(event) => {
                         const value = event.currentTarget.value;
-                        setSuggestionState({ columnKey: suggestionColumnKey, query: value, activeIndex: 0 });
+                        openPositionSuggestions(suggestionColumnKey, value, event.currentTarget);
                       }}
                       onFocus={(event) => {
                         if (event.currentTarget.value.trim()) {
-                          setSuggestionState({ columnKey: suggestionColumnKey, query: event.currentTarget.value, activeIndex: 0 });
+                          openPositionSuggestions(suggestionColumnKey, event.currentTarget.value, event.currentTarget);
                         }
                       }}
                       onBlur={(event) => void saveFreeItemPositionDraft(column.item, event.currentTarget)}
@@ -7361,7 +7392,7 @@ function MeasurementReviewTable({
                   </div>
                 ) : positionInput}
                 {isSuggestionOpen ? (
-                  <div className="measurement-position-suggestions" role="listbox">
+                  <div className={`measurement-position-suggestions is-aligned-${suggestionState.alignment}`} role="listbox">
                     {suggestionMatches.map((suggestion, index) => (
                       <button
                         className={index === suggestionState.activeIndex ? "is-active" : ""}
@@ -7414,11 +7445,11 @@ function MeasurementReviewTable({
                   onChange={(event) => {
                     const value = event.currentTarget.value;
                     updateManualColumnDraft(column.key, { position: value, linkedItemId: null });
-                    setSuggestionState({ columnKey: column.key, query: value, activeIndex: 0 });
+                    openPositionSuggestions(column.key, value, event.currentTarget);
                   }}
                   onFocus={(event) => {
                     if (event.currentTarget.value.trim()) {
-                      setSuggestionState({ columnKey: column.key, query: event.currentTarget.value, activeIndex: 0 });
+                      openPositionSuggestions(column.key, event.currentTarget.value, event.currentTarget);
                     }
                   }}
                   onBlur={(event) => void createFreeItemFromHeaderDraft(column.key, { position: event.currentTarget.value })}
@@ -7445,7 +7476,7 @@ function MeasurementReviewTable({
                   }}
                 />
                 {isSuggestionOpen ? (
-                  <div className="measurement-position-suggestions" role="listbox">
+                  <div className={`measurement-position-suggestions is-aligned-${suggestionState.alignment}`} role="listbox">
                     {suggestionMatches.map((item, index) => (
                       <button
                         className={index === suggestionState.activeIndex ? "is-active" : ""}

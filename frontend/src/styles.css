@@ -30598,7 +30598,7 @@ body.mobile-modal-scroll-locked {
   left: 4px;
   z-index: 30;
   display: grid;
-  width: 300px;
+  width: min(300px, calc(100vw - 16px));
   max-height: 240px;
   overflow: auto;
   border: 1px solid #b8c5d7;
@@ -30607,6 +30607,11 @@ body.mobile-modal-scroll-locked {
   box-shadow: 0 12px 30px rgb(15 23 42 / 16%);
   padding: 3px;
   text-align: left;
+}
+
+.measurement-review-detail.is-table-view .measurement-position-suggestions.is-aligned-left {
+  right: 4px;
+  left: auto;
 }
 
 .measurement-review-detail.is-table-view .measurement-position-suggestions button {

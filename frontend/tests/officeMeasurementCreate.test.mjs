@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { getMeasurementSuggestionAlignment } from "../src/lib/measurementSuggestionPlacement.ts";
+
 const pageSource = readFileSync(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8");
 const apiSource = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
@@ -82,6 +84,29 @@ test("measurement columns use only the persisted order and append new office pos
   assert.doesNotMatch(replaceSource, /position\.localeCompare/);
 });
 
+test("mobile measurement positions place the writable office column before viewport fillers", () => {
+  const columnsStart = pageSource.indexOf("const displayColumns:");
+  const columnsEnd = pageSource.indexOf("const displayAreaRows:", columnsStart);
+  const columnsSource = pageSource.slice(columnsStart, columnsEnd);
+  const standardColumnsStart = columnsSource.lastIndexOf("return [");
+  const standardColumnsSource = columnsSource.slice(standardColumnsStart);
+
+  const officeColumnIndex = standardColumnsSource.indexOf("kind: \"office-extra\" as const");
+  const fillerColumnsIndex = standardColumnsSource.indexOf("Array.from({ length: fillerColumnCount }");
+
+  assert.notEqual(officeColumnIndex, -1);
+  assert.notEqual(fillerColumnsIndex, -1);
+  assert.ok(officeColumnIndex < fillerColumnsIndex);
+  assert.match(standardColumnsSource, /kind: "office-extra" as const,\s*index: 1,/);
+});
+
+test("measurement position suggestions flip left only when their right edge would leave the viewport", () => {
+  assert.equal(getMeasurementSuggestionAlignment({ left: 200 }, 1200), "right");
+  assert.equal(getMeasurementSuggestionAlignment({ left: 1000 }, 1200), "left");
+  assert.match(pageSource, /is-aligned-\$\{suggestionState\.alignment\}/);
+  assert.match(styles, /\.measurement-position-suggestions\.is-aligned-left\s*\{[\s\S]*right:\s*4px;[\s\S]*left:\s*auto;/);
+});
+
 test("existing free positions reuse the shared offer autocomplete and stay in the same column", () => {
   assert.match(pageSource, /projectPositionSuggestions/);
   assert.match(pageSource, /buildMeasurementPositionCatalog\(catalogItems\)/);
@@ -97,8 +122,9 @@ test("existing free positions reuse the shared offer autocomplete and stay in th
   assert.match(pageSource, /closeSuggestionOnOutsidePointer/);
 });
 
-test("signed and completed measurements keep their existing edit locks", () => {
-  assert.match(pageSource, /const canEditRows = \(!isDraft \|\| selectedBatch\.origin === "OFFICE"\)\s*&& !isBilled\s*&& !isCustomerSigned\s*&& selectedBatch\.deleted_at === null/s);
+test("signed measurements remain editable while completed measurements stay locked", () => {
+  assert.match(pageSource, /const canEditRows = \(!isDraft \|\| selectedBatch\.origin === "OFFICE"\)\s*&& !isBilled\s*&& selectedBatch\.deleted_at === null/s);
+  assert.doesNotMatch(pageSource, /const canEditRows[\s\S]{0,160}&& !isCustomerSigned/);
   assert.match(pageSource, /disabled=\{!canEditRows \|\| reviewActionLoading \|\| isSavingPosition\}/);
 });
 

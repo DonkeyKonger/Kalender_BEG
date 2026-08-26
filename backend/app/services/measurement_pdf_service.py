@@ -1216,7 +1216,8 @@ def _text_centered_struck(
     size: float,
 ) -> None:
     text_width = _text_width(text, size)
-    _text(commands, center_x - text_width / 2, y, text, size)
+    color = _correction_color()
+    _text(commands, center_x - text_width / 2, y, text, size, color=color)
     _line(
         commands,
         center_x - text_width / 2,
@@ -1224,6 +1225,7 @@ def _text_centered_struck(
         center_x + text_width / 2,
         y + size * 0.35,
         0.55,
+        color=color,
     )
 
 
@@ -1761,12 +1763,19 @@ def _line(
     x2: float,
     y2: float,
     width: float | None = None,
+    *,
+    color: tuple[float, float, float] | None = None,
 ) -> None:
     line = b" ".join([_number(x1), _number(y1), b"m", _number(x2), _number(y2), b"l S"])
-    if width is None:
+    if width is None and color is None:
         commands.append(line)
         return
-    commands.append(b"q " + _number(width) + b" w " + line + b" Q")
+    prefix = b"q "
+    if width is not None:
+        prefix += _number(width) + b" w "
+    if color is not None:
+        prefix += b" ".join([_number(color[0]), _number(color[1]), _number(color[2]), b"RG "])
+    commands.append(prefix + line + b" Q")
 
 
 def _rect(commands: list[bytes], x: float, y: float, width: float, height: float) -> None:
