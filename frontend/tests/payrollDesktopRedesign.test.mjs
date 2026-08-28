@@ -44,11 +44,12 @@ test("review week navigation realigns its selected week after browser scroll res
   assert.match(pageSource, /window\.removeEventListener\("pageshow", realignReviewWeekStripAfterPageShow\)/);
 });
 
-test("worker detail keeps quiet metrics and explicit future-data placeholders", () => {
+test("worker detail keeps only captured hours without placeholder metrics", () => {
   assert.match(pageSource, />Erfasste Stunden<\/span>/);
-  assert.match(pageSource, /className="is-placeholder" title="Geplante Stunden werden künftig ergänzt"/);
-  assert.match(pageSource, /className="is-placeholder" title="Die Differenz wird künftig aus den geplanten Stunden berechnet"/);
-  assert.match(styles, /\.time-review-worker-metrics \.is-placeholder strong\s*\{[^}]*color:\s*#a0aaba;/s);
+  assert.doesNotMatch(pageSource, /Geplante Stunden|Die Differenz wird künftig aus den geplanten Stunden berechnet/);
+  assert.match(styles, /\.time-review-worker-metrics > div\s*\{[^}]*min-width:\s*0;[^}]*gap:\s*4px;/s);
+  assert.doesNotMatch(styles, /\.time-review-worker-metrics \.is-placeholder/);
+  assert.doesNotMatch(styles, /@media \(max-width: 760px\)[\s\S]*?\.time-review-worker-metrics > div\s*\{[^}]*border-/s);
   assert.match(styles, /\.time-review-check-mark:not\(\.is-ok\):not\(\.is-warning\)\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;/s);
 });
 

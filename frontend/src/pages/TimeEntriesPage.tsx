@@ -1922,14 +1922,6 @@ export function TimeEntriesPage() {
                       <span>Erfasste Stunden</span>
                       <strong>{formatSubmittedHours(selectedReviewWorker.submittedMinutes)} Std.</strong>
                     </div>
-                    <div className="is-placeholder" title="Geplante Stunden werden künftig ergänzt">
-                      <span>Geplante Stunden</span>
-                      <strong>–</strong>
-                    </div>
-                    <div className="is-placeholder" title="Die Differenz wird künftig aus den geplanten Stunden berechnet">
-                      <span>Differenz</span>
-                      <strong>–</strong>
-                    </div>
                   </div>
                   <div className="time-review-worker-detail-actions">
                     <div className="time-review-worker-detail-action-stack">

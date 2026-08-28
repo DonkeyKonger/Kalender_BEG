@@ -20406,15 +20406,8 @@ body.mobile-modal-scroll-locked {
 
 .time-review-worker-metrics > div {
   display: grid;
-  min-width: 126px;
+  min-width: 0;
   gap: 4px;
-  border-right: 1px solid #e5eaf0;
-  padding-right: 20px;
-  margin-right: 20px;
-}
-
-.time-review-worker-metrics > div:last-child {
-  border-right: 0;
 }
 
 .time-review-worker-metrics span {
@@ -20427,10 +20420,6 @@ body.mobile-modal-scroll-locked {
   color: #14233b;
   font-size: 0.86rem;
   font-weight: 900;
-}
-
-.time-review-worker-metrics .is-placeholder strong {
-  color: #a0aaba;
 }
 
 .time-review-worker-detail-head .time-review-worker-detail-actions {
@@ -20685,10 +20674,8 @@ body.mobile-modal-scroll-locked {
 
   .time-review-worker-metrics > div {
     width: 100%;
-    border-right: 0;
-    border-bottom: 1px solid #e5eaf0;
     margin: 0;
-    padding: 0 0 8px;
+    padding: 0;
   }
 
   .time-review-worker-detail-head .time-review-worker-detail-primary-actions {
