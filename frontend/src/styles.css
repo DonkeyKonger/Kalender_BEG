@@ -19978,16 +19978,15 @@ body.mobile-modal-scroll-locked {
 
 .time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button {
   display: grid;
-  flex: 0 0 120px;
-  min-width: 120px;
-  min-height: 58px;
+  flex: 0 0 92px;
+  min-width: 92px;
+  min-height: 38px;
   align-content: center;
-  gap: 4px;
   border: 1px solid #d8e0ea;
   border-radius: 8px;
   background: #ffffff;
   color: #243348;
-  padding: 7px 10px;
+  padding: 6px 8px;
   scroll-snap-align: start;
   text-align: center;
 }
@@ -19997,12 +19996,6 @@ body.mobile-modal-scroll-locked {
   font-weight: 900;
 }
 
-.time-review-week-nav .time-week-strip button small {
-  color: #718096;
-  font-size: 0.68rem;
-  font-weight: 750;
-}
-
 .time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button.is-active {
   border-color: #2f78d4;
   background: #f4f8ff;
@@ -20010,14 +20003,10 @@ body.mobile-modal-scroll-locked {
   box-shadow: inset 0 0 0 1px #2f78d4;
 }
 
-.time-review-week-nav .time-week-strip button.is-active small {
-  color: #2f78d4;
-}
-
 .time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-scroll-button {
   flex: 0 0 38px;
   width: 38px;
-  height: 58px;
+  height: 38px;
   border: 1px solid #d8e0ea;
   border-radius: 8px;
   background: #ffffff;

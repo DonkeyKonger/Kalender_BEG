@@ -22,7 +22,6 @@ import {
 import {
   formatGermanDateKey as formatDate,
   formatGermanDateKeyRange as formatRangeLabel,
-  formatGermanDayMonth as formatDayMonth,
   formatGermanDateTimeShort as formatDateTime,
   formatGermanDetailDate as formatDetailDate,
   formatGermanTimeShort as formatTime,
@@ -1741,7 +1740,6 @@ export function TimeEntriesPage() {
                     onClick={() => selectReviewWeek(option)}
                   >
                     <strong>{option.label}</strong>
-                    <small>{formatDayMonth(option.start)}–{formatDayMonth(option.end)}</small>
                   </button>
                 ))}
               </div>
