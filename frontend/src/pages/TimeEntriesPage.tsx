@@ -1,5 +1,5 @@
 import { CalendarPlus, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, RefreshCw, Search, Trash2 } from "lucide-react";
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -26,8 +26,6 @@ import {
   formatGermanDetailDate as formatDetailDate,
   formatGermanTimeShort as formatTime,
   formatGermanWeekdayShort as formatWeekday,
-  formatHalfHourDeltaFromMinutes as formatHalfHourDelta,
-  formatHalfHourFromMinutes as formatHalfHour,
   formatVerboseMinutes as formatMinutes,
 } from "../lib/formatters";
 import { applyOvernightStatusToWorkDate } from "../lib/overnightStatus";
@@ -42,7 +40,7 @@ import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { OvernightStatus, TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview, TimeReviewDecision } from "../types/timeEntry";
+import type { OvernightStatus, TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview } from "../types/timeEntry";
 
 type TimeSubtab = "review" | "gpsVerification" | "evaluation";
 type TimeReviewIssue = {
@@ -63,13 +61,7 @@ type TimeReviewIssue = {
   detail: string;
 };
 type TimeReviewCaseStatus = "auto_plausible" | "needs_review" | "critical" | "not_verifiable" | "verified" | "clarification";
-type ReviewSummaryFilter = "all" | "matches" | "needs_review" | "verified";
-type ReviewEditorMode = "corrected" | "assign_site" | null;
 type TimeReviewDialogMode = "create" | "edit";
-type ReviewDecisionFormState = {
-  hours: string;
-  site_id: string;
-};
 type PayrollDatePickerState = {
   entryId: number;
   triggerTop: number;
@@ -91,24 +83,6 @@ type CalendarWeekOption = CalendarWeekSelection & {
   start: string;
   end: string;
   isCurrent: boolean;
-};
-type TimeReviewTableRow = {
-  id: number;
-  entry: TimeEntry;
-  issue: TimeReviewIssue | null;
-  workDate: string;
-  personName: string;
-  siteLabel: string;
-  siteNumber: string;
-  siteName: string;
-  manualMinutes: number | null;
-  gpsMinutes: number | null;
-  deviationMinutes: number | null;
-  correctedMinutes: number | null;
-  statusLabel: string;
-  statusTone: StatusBadgeTone;
-  systemHint: string;
-  canConfirm: boolean;
 };
 type TimeReviewWorkerSummary = {
   personId: number;
@@ -239,12 +213,7 @@ export function TimeEntriesPage() {
   const [reviewAllEntriesError, setReviewAllEntriesError] = useState<string | null>(null);
   const [reviewPayrollWeekError, setReviewPayrollWeekError] = useState<string | null>(null);
   const [recentGpsError, setRecentGpsError] = useState<string | null>(null);
-  const [reviewActionEntryId, setReviewActionEntryId] = useState<number | null>(null);
   const [reviewActionError, setReviewActionError] = useState<string | null>(null);
-  const [expandedReviewEntryId, setExpandedReviewEntryId] = useState<number | null>(null);
-  const [reviewEditorMode, setReviewEditorMode] = useState<ReviewEditorMode>(null);
-  const [reviewDecisionForm, setReviewDecisionForm] = useState<ReviewDecisionFormState>({ hours: "", site_id: "" });
-  const [isSavingReviewDecision, setIsSavingReviewDecision] = useState(false);
   const [payrollDatePicker, setPayrollDatePicker] = useState<PayrollDatePickerState | null>(null);
   const [payrollDeleteDialog, setPayrollDeleteDialog] = useState<PayrollDeleteDialogState | null>(null);
   const [isDeletingPayrollEntry, setIsDeletingPayrollEntry] = useState(false);
@@ -1019,25 +988,6 @@ export function TimeEntriesPage() {
     };
   }, [activeTimeSubtab, reviewDataRange.end, reviewDataRange.start]);
 
-  function openReviewIssue(issue: TimeReviewIssue, mode: ReviewEditorMode = null): void {
-    setExpandedReviewEntryId(issue.id);
-    setReviewEditorMode(mode);
-    setReviewDecisionForm({
-      hours: formatDecimalHours(issue.finalMinutes ?? issue.manualMinutes ?? issue.gpsMinutes ?? 0),
-      site_id: issue.entry.site_id ? String(issue.entry.site_id) : "",
-    });
-    setReviewActionError(null);
-  }
-
-  function closeReviewIssue(): void {
-    if (isSavingReviewDecision) {
-      return;
-    }
-    setExpandedReviewEntryId(null);
-    setReviewEditorMode(null);
-    setReviewDecisionForm({ hours: "", site_id: "" });
-  }
-
   function applyUpdatedTimeEntry(updatedEntry: TimeEntry): void {
     setReviewEntries((current) => replaceTimeEntryInList(current, updatedEntry));
     setReviewAllEntries((current) => replaceTimeEntryInList(current, updatedEntry));
@@ -1052,16 +1002,6 @@ export function TimeEntriesPage() {
     });
     setReviewAllEntries((current) => upsertTimeEntryInList(current, hydratedEntry));
     return hydratedEntry;
-  }
-
-  function applyCreatedTimeEntryFromGpsSuggestion(suggestionEntry: TimeEntry, createdEntry: TimeEntry): void {
-    const hydratedEntry = mergeTimeEntryReviewUpdate(suggestionEntry, createdEntry);
-    const shouldRemainInOpenReview = timeReviewIssue(hydratedEntry) !== null;
-    setReviewEntries((current) => {
-      const withoutSuggestion = current.filter((entry) => entry.id !== suggestionEntry.id);
-      return shouldRemainInOpenReview ? upsertTimeEntryInList(withoutSuggestion, hydratedEntry) : withoutSuggestion;
-    });
-    setReviewAllEntries((current) => upsertTimeEntryInList(current, hydratedEntry));
   }
 
   function selectReviewWeek(option: CalendarWeekSelection): void {
@@ -1129,127 +1069,6 @@ export function TimeEntriesPage() {
     }
     const scrollAmount = Math.min(420, Math.max(260, container.clientWidth * 0.75));
     container.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
-  }
-
-  async function decideReviewIssue(
-    issue: TimeReviewIssue,
-    decision: TimeReviewDecision,
-    options: { finalMinutes?: number | null; reviewedSiteId?: number | null } = {},
-  ): Promise<void> {
-    if (!canManageTimeEntries || reviewActionEntryId !== null || isSavingReviewDecision) {
-      return;
-    }
-    setReviewActionEntryId(issue.id);
-    setReviewActionError(null);
-    try {
-      if (issue.entry.is_gps_suggestion) {
-        const finalMinutes = options.finalMinutes ?? issue.gpsMinutes;
-        const reviewedSiteId = options.reviewedSiteId ?? issue.entry.site_id;
-        if (finalMinutes === null) {
-          setReviewActionError("GPS-Zeit ist nicht berechenbar.");
-          return;
-        }
-        if (reviewedSiteId === null) {
-          setReviewActionError("Bitte eine Baustelle auswählen.");
-          return;
-        }
-        const createdEntry = await api.createTimeEntry({
-          person_id: issue.entry.person_id,
-          site_id: reviewedSiteId,
-          work_date: issue.entry.work_date,
-          work_minutes: finalMinutes,
-          break_minutes: 0,
-          travel_minutes: 0,
-          note: "Aus GPS-Vorschlag in der Stundenprüfung übernommen.",
-        });
-        const reviewedEntry = await api.decideTimeEntryReview(createdEntry.id, {
-          decision: "accept_gps",
-          final_work_minutes: finalMinutes,
-          reviewed_site_id: reviewedSiteId,
-        });
-        setExpandedReviewEntryId(null);
-        setReviewEditorMode(null);
-        setReviewDecisionForm({ hours: "", site_id: "" });
-        applyCreatedTimeEntryFromGpsSuggestion(issue.entry, reviewedEntry);
-        return;
-      }
-      const updatedEntry = await api.decideTimeEntryReview(issue.id, {
-        decision,
-        final_work_minutes: options.finalMinutes ?? null,
-        reviewed_site_id: options.reviewedSiteId ?? null,
-      });
-      setExpandedReviewEntryId(null);
-      setReviewEditorMode(null);
-      setReviewDecisionForm({ hours: "", site_id: "" });
-      applyUpdatedTimeEntry(updatedEntry);
-    } catch (requestError) {
-      setReviewActionError(readApiError(requestError, "Prüfentscheidung konnte nicht gespeichert werden."));
-    } finally {
-      setReviewActionEntryId(null);
-    }
-  }
-
-  async function confirmReviewRow(row: TimeReviewTableRow): Promise<void> {
-    if (!canManageTimeEntries || reviewActionEntryId !== null || isSavingReviewDecision || !row.canConfirm) {
-      return;
-    }
-    setReviewActionEntryId(row.id);
-    setReviewActionError(null);
-    try {
-      const updatedEntry = await api.decideTimeEntryReview(row.id, {
-        decision: "accept_manual",
-        final_work_minutes: null,
-        reviewed_site_id: null,
-      });
-      setExpandedReviewEntryId(null);
-      setReviewEditorMode(null);
-      setReviewDecisionForm({ hours: "", site_id: "" });
-      applyUpdatedTimeEntry(updatedEntry);
-    } catch (requestError) {
-      setReviewActionError(readApiError(requestError, "Prüfentscheidung konnte nicht gespeichert werden."));
-    } finally {
-      setReviewActionEntryId(null);
-    }
-  }
-
-  async function saveReviewDecision(issue: TimeReviewIssue, modeOverride?: ReviewEditorMode): Promise<void> {
-    const decisionMode = modeOverride ?? reviewEditorMode;
-    if (!decisionMode || isSavingReviewDecision) {
-      return;
-    }
-    let finalMinutes: number | null = null;
-    if (decisionMode === "corrected") {
-      const parsedHours = parseHoursToMinutes(reviewDecisionForm.hours);
-      if (!parsedHours.ok) {
-        setReviewActionError(parsedHours.error);
-        return;
-      }
-      finalMinutes = parsedHours.value;
-    }
-    let reviewedSiteId: number | null = null;
-    if (reviewDecisionForm.site_id) {
-      const parsedSiteId = Number(reviewDecisionForm.site_id);
-      if (!Number.isInteger(parsedSiteId) || parsedSiteId <= 0) {
-        setReviewActionError("Bitte eine gültige Baustelle auswählen.");
-        return;
-      }
-      reviewedSiteId = parsedSiteId;
-    }
-    if (decisionMode === "assign_site" && reviewedSiteId === null) {
-      setReviewActionError("Bitte eine Baustelle auswählen.");
-      return;
-    }
-
-    setIsSavingReviewDecision(true);
-    setReviewActionError(null);
-    try {
-      await decideReviewIssue(issue, decisionMode === "corrected" ? "corrected" : "assign_site", {
-        finalMinutes,
-        reviewedSiteId,
-      });
-    } finally {
-      setIsSavingReviewDecision(false);
-    }
   }
 
   async function togglePayrollRowReview(entry: TimeEntry): Promise<void> {
@@ -2893,226 +2712,6 @@ function formatPerfMs(value: number): string {
   return `${Math.round(value)} ms`;
 }
 
-function renderReviewTableRows({
-  rows,
-  expandedReviewEntryId,
-  reviewDecisionForm,
-  reviewActionEntryId,
-  isSavingReviewDecision,
-  siteOptions,
-  canManageTimeEntries,
-  showDecisionColumn,
-  onConfirm,
-  onOpenIssue,
-  onCloseIssue,
-  onSaveDecision,
-  onReviewDecisionFormChange,
-  onDecideIssue,
-}: {
-  rows: TimeReviewTableRow[];
-  expandedReviewEntryId: number | null;
-  reviewDecisionForm: ReviewDecisionFormState;
-  reviewActionEntryId: number | null;
-  isSavingReviewDecision: boolean;
-  siteOptions: SiteSummary[];
-  canManageTimeEntries: boolean;
-  showDecisionColumn: boolean;
-  onConfirm: (row: TimeReviewTableRow) => Promise<void>;
-  onOpenIssue: (issue: TimeReviewIssue, mode?: ReviewEditorMode) => void;
-  onCloseIssue: () => void;
-  onSaveDecision: (issue: TimeReviewIssue, modeOverride?: ReviewEditorMode) => Promise<void>;
-  onReviewDecisionFormChange: (updater: (current: ReviewDecisionFormState) => ReviewDecisionFormState) => void;
-  onDecideIssue: (
-    issue: TimeReviewIssue,
-    decision: TimeReviewDecision,
-    options?: { finalMinutes?: number | null; reviewedSiteId?: number | null },
-  ) => Promise<void>;
-}) {
-  let currentPersonId: number | null = null;
-  let currentWorkDate: string | null = null;
-  let dayGroupIndex = -1;
-
-  return rows.map((row, index) => {
-    const issue = row.issue;
-    const isExpanded = showDecisionColumn && expandedReviewEntryId === row.id && issue !== null;
-    const isBusy = reviewActionEntryId === row.id || isSavingReviewDecision;
-    const previousRow = rows[index - 1] ?? null;
-    const nextRow = rows[index + 1] ?? null;
-    const isSamePersonAsPrevious = previousRow?.entry.person_id === row.entry.person_id;
-    const isSamePersonAsNext = nextRow?.entry.person_id === row.entry.person_id;
-    const showPersonGroup = !isSamePersonAsPrevious;
-    const showDayGroup = showPersonGroup || previousRow?.workDate !== row.workDate;
-    const hasNextSameDay = isSamePersonAsNext && nextRow?.workDate === row.workDate;
-    if (currentPersonId !== row.entry.person_id) {
-      currentPersonId = row.entry.person_id;
-      currentWorkDate = row.workDate;
-      dayGroupIndex = 0;
-    } else if (currentWorkDate !== row.workDate) {
-      currentWorkDate = row.workDate;
-      dayGroupIndex += 1;
-    }
-    const isWeekend = isWeekendDate(row.workDate);
-    const isCheckedRow = isCheckedReviewRow(row);
-    const rowClassName = [
-      "time-review-entry-row",
-      isExpanded ? "is-expanded" : "",
-      showDayGroup ? "is-day-start" : "is-same-day-continuation same-day-continuation",
-      hasNextSameDay ? "has-same-day-next same-day-has-next" : "",
-      dayGroupIndex % 2 === 0 ? "is-day-group-even" : "is-day-group-odd",
-      isWeekend ? "is-weekend-row" : "",
-      isCheckedRow ? "is-review-checked" : "",
-      row.entry.is_gps_suggestion ? "is-gps-suggestion" : "",
-    ].filter(Boolean).join(" ");
-
-    return (
-      <Fragment key={row.id}>
-        {showPersonGroup && (
-          <tr className="time-review-group-row">
-            <td colSpan={showDecisionColumn ? 9 : 8}>{row.personName}</td>
-          </tr>
-        )}
-        <tr className={rowClassName}>
-          <td className="time-review-day-cell">
-            <span className="time-review-day-value">
-              {formatWeekday(row.workDate)}
-              {isWeekend && <span className="time-review-weekend-badge">WE</span>}
-            </span>
-          </td>
-          <td className="time-review-site-number-cell">{row.siteNumber}</td>
-          <td>
-            <span className="time-review-site-name-cell">{row.siteName}</span>
-          </td>
-          <td className="time-review-note-cell">{renderReviewNote(row)}</td>
-          <td>{formatHalfHour(row.manualMinutes)}</td>
-          <td>{formatHalfHour(row.gpsMinutes)}</td>
-          <td>
-            <span className={Math.abs(row.deviationMinutes ?? 0) > 60 ? "time-review-delta is-critical" : "time-review-delta"}>
-              {formatHalfHourDelta(row.deviationMinutes)}
-            </span>
-          </td>
-          <td>{formatHalfHour(row.correctedMinutes)}</td>
-          {showDecisionColumn && (
-            <td>
-              <div className="time-review-table-actions">
-                {issue ? (
-                  <>
-                    <button
-                      className="time-table-action time-review-action-correction-primary"
-                      disabled={isBusy}
-                      type="button"
-                      onClick={() => {
-                        if (isExpanded) {
-                          onCloseIssue();
-                        } else {
-                          onOpenIssue(issue, "corrected");
-                        }
-                      }}
-                    >
-                      Korrektur
-                    </button>
-                    {canManageTimeEntries && row.canConfirm && (
-                      <button
-                        className="time-table-action time-review-action-confirm-secondary"
-                        disabled={isBusy}
-                        type="button"
-                        onClick={() => void onConfirm(row)}
-                      >
-                        Bestätigen
-                      </button>
-                    )}
-                    {!canManageTimeEntries && <StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge>}
-                  </>
-                ) : (
-                  canManageTimeEntries && row.canConfirm ? (
-                    <button
-                      className="time-table-action time-table-action-primary"
-                      disabled={isBusy}
-                      type="button"
-                      onClick={() => void onConfirm(row)}
-                    >
-                      Bestätigen
-                    </button>
-                  ) : (
-                    <StatusBadge tone={row.statusTone}>{row.statusLabel}</StatusBadge>
-                  )
-                )}
-              </div>
-            </td>
-          )}
-        </tr>
-        {isExpanded && issue && (
-          <tr className="time-review-detail-row">
-            <td colSpan={9}>
-              <div className="time-review-correction-panel">
-                {canManageTimeEntries && (
-                  <>
-                    <div className="time-review-correction-block time-review-correction-block-gps">
-                      <span>GPS</span>
-                      <button
-                        className="time-table-action"
-                        disabled={isBusy || issue.gpsMinutes === null}
-                        type="button"
-                        onClick={() => void onDecideIssue(issue, "accept_gps", { finalMinutes: issue.gpsMinutes })}
-                      >
-                        Übernehmen
-                      </button>
-                    </div>
-                    <div className="time-review-correction-block time-review-correction-block-site">
-                      <span>Baustelle zuordnen</span>
-                      <div className="time-review-correction-control-row">
-                        <select
-                          value={reviewDecisionForm.site_id}
-                          onChange={(event) => onReviewDecisionFormChange((current) => ({ ...current, site_id: event.target.value }))}
-                        >
-                          <option value="">Nicht zugeordnet</option>
-                          {siteOptions.map((site) => (
-                            <option key={site.id} value={site.id}>{siteOptionLabel(site)}</option>
-                          ))}
-                        </select>
-                        <button
-                          className="time-table-action"
-                          disabled={isBusy}
-                          type="button"
-                          onClick={() => void onSaveDecision(issue, "assign_site")}
-                        >
-                          Zuordnen
-                        </button>
-                      </div>
-                    </div>
-                    <div className="time-review-correction-block time-review-correction-block-time">
-                      <span>Zeit manuell anpassen</span>
-                      <input
-                        inputMode="decimal"
-                        placeholder="z. B. 8,5"
-                        value={reviewDecisionForm.hours}
-                        onChange={(event) => onReviewDecisionFormChange((current) => ({ ...current, hours: event.target.value }))}
-                      />
-                    </div>
-                    <div className="time-review-correction-block time-review-correction-block-save">
-                      <span>&nbsp;</span>
-                      <button
-                        className="time-table-action time-table-action-primary"
-                        disabled={isBusy}
-                        type="button"
-                        onClick={() => void onSaveDecision(issue, "corrected")}
-                      >
-                        Zeit übernehmen
-                      </button>
-                    </div>
-                  </>
-                )}
-                {!canManageTimeEntries && (
-                  <StatusBadge tone={issue.statusTone}>{issue.statusLabel}</StatusBadge>
-                )}
-              </div>
-            </td>
-          </tr>
-        )}
-      </Fragment>
-    );
-  });
-}
-
 function FinalSummaryList({ title, rows }: { title: string; rows: { label: string; minutes: number }[] }) {
   return (
     <div className="time-final-summary-list">
@@ -3125,171 +2724,6 @@ function FinalSummaryList({ title, rows }: { title: string; rows: { label: strin
       )) : <p>Keine Summen vorhanden.</p>}
     </div>
   );
-}
-
-function renderReviewNote(row: TimeReviewTableRow) {
-  const className = isProblematicReviewRow(row)
-    ? "time-review-note-instruction is-attention"
-    : "time-review-note-instruction";
-  return <span className={className}>{buildTimeReviewInstruction(row)}</span>;
-}
-
-function renderReviewedLogItems(rows: TimeReviewTableRow[]) {
-  return rows.map((row) => {
-    const log = buildTimeReviewLog(row);
-    return (
-      <article className={["time-review-log-item", log.isChanged ? "is-changed" : ""].filter(Boolean).join(" ")} key={row.id}>
-        <div className="time-review-log-status">
-          <StatusBadge tone={log.isChanged ? "warning" : "active"}>{log.statusLabel}</StatusBadge>
-          {row.entry.reviewed_at && <span>{formatDateTime(row.entry.reviewed_at)}</span>}
-        </div>
-        <div className="time-review-log-main">
-          <div>
-            <h3>
-              {formatWeekday(row.workDate)} · {row.personName} · {row.siteNumber} · {row.siteName}
-            </h3>
-            <p>Prüfhinweis: {buildTimeReviewInstruction(row)}</p>
-          </div>
-          <div className="time-review-log-change">
-            {log.changeParts ? (
-              <>
-                <span>{log.changeParts.label}</span>
-                <strong>{log.changeParts.from}</strong>
-                <span aria-hidden="true">→</span>
-                <strong>{log.changeParts.to}</strong>
-              </>
-            ) : (
-              <span>{log.changeText}</span>
-            )}
-          </div>
-        </div>
-        <div className="time-review-log-facts">
-          <span>Gemeldet: {formatHalfHour(log.reportedMinutes)}</span>
-          <span>GPS: {formatHalfHour(row.gpsMinutes)}</span>
-          <span>Gültig: {formatHalfHour(log.validMinutes)}</span>
-          {row.correctedMinutes !== null && <span>Korrigiert: {formatHalfHour(row.correctedMinutes)}</span>}
-          {row.entry.reviewed_by_user_id !== null && <span>Geprüft von: Benutzer #{row.entry.reviewed_by_user_id}</span>}
-          {row.entry.note && <span>Notiz: {row.entry.note}</span>}
-        </div>
-      </article>
-    );
-  });
-}
-
-function buildTimeReviewLog(row: TimeReviewTableRow): {
-  changeParts: { label: string; from: string; to: string } | null;
-  changeText: string;
-  isChanged: boolean;
-  reportedMinutes: number | null;
-  statusLabel: string;
-  validMinutes: number | null;
-} {
-  const entry = row.entry;
-  const reportedMinutes = entry.original_work_minutes ?? (entry.is_gps_suggestion ? null : entry.work_minutes);
-  const validMinutes = entry.work_minutes;
-  const correctedMinutes = entry.corrected_work_minutes;
-  const hasTimeChange = correctedMinutes !== null && reportedMinutes !== null && correctedMinutes !== reportedMinutes;
-  const hasGpsDecision = entry.time_review_method === "accept_gps";
-  const hasManualCorrection = entry.time_review_method === "manual_correction" || entry.time_review_status === "corrected";
-  const hasSiteDecision = entry.time_review_method === "assign_site";
-
-  if (hasGpsDecision && row.gpsMinutes !== null) {
-    return {
-      changeParts: null,
-      changeText: `GPS-Zeit übernommen: ${formatHalfHour(row.gpsMinutes)}`,
-      isChanged: true,
-      reportedMinutes,
-      statusLabel: "korrigiert",
-      validMinutes,
-    };
-  }
-  if (hasTimeChange) {
-    return {
-      changeParts: {
-        label: "Arbeitszeit geändert:",
-        from: formatHalfHour(reportedMinutes),
-        to: formatHalfHour(correctedMinutes),
-      },
-      changeText: "",
-      isChanged: true,
-      reportedMinutes,
-      statusLabel: "korrigiert",
-      validMinutes,
-    };
-  }
-  if (hasManualCorrection && correctedMinutes !== null) {
-    return {
-      changeParts: null,
-      changeText: `Korrektur: ${formatHalfHour(correctedMinutes)}`,
-      isChanged: true,
-      reportedMinutes,
-      statusLabel: "korrigiert",
-      validMinutes,
-    };
-  }
-  if (hasSiteDecision) {
-    return {
-      changeParts: null,
-      changeText: `Einsatzort geprüft/korrigiert: ${timeEntrySiteLabel(entry)}`,
-      isChanged: true,
-      reportedMinutes,
-      statusLabel: "korrigiert",
-      validMinutes,
-    };
-  }
-  return {
-    changeParts: null,
-    changeText: "Keine Änderung vorgenommen.",
-    isChanged: false,
-    reportedMinutes,
-    statusLabel: "geprüft",
-    validMinutes,
-  };
-}
-
-function buildTimeReviewInstruction(row: TimeReviewTableRow): string {
-  const entry = row.entry;
-  const hasGpsSignal = Boolean(entry.gps_first_seen_at || entry.gps_last_seen_at || entry.gps_total_points);
-  const hasPlannedSite = entry.planned_site_labels.length > 0;
-  const gpsLocationType = entry.gps_detected_location_type;
-
-  if (entry.is_gps_suggestion) {
-    return "GPS erkannt: kein manueller Eintrag vorhanden.";
-  }
-  if (entry.gps_status === "missing" || (row.gpsMinutes === null && !hasGpsSignal)) {
-    return "GPS fehlt: Arbeitszeit kann nicht automatisch geprüft werden.";
-  }
-  if (entry.gps_not_checkable || entry.gps_status === "not_checkable" || entry.review_notices.includes(GPS_NOT_CHECKABLE_NOTICE)) {
-    return "GPS nicht eindeutig: Standort liegt im Radius mehrerer Baustellen.";
-  }
-  if (row.gpsMinutes !== null && row.gpsMinutes <= 60) {
-    return "GPS fehlt: Arbeitszeit kann nicht automatisch geprüft werden.";
-  }
-  if (hasPlannedSite && gpsLocationType === "company") {
-    return "Einsatzort prüfen: automatisch erkannter Einsatzort weicht von geplantem Einsatzort ab.";
-  }
-  if (hasPlannedSite && gpsLocationType === "site" && entry.planned_vs_gps_mismatch) {
-    return "Einsatzort prüfen: automatisch erkannter Einsatzort zeigt andere Baustelle als geplant.";
-  }
-  if (entry.planned_vs_gps_mismatch) {
-    return "Einsatzort prüfen: automatisch erkannter Einsatzort weicht von geplantem Einsatzort ab.";
-  }
-  if (entry.manual_vs_gps_mismatch) {
-    return "Einsatzort prüfen: Einsatzort in Stundenerfassung weicht von automatisch erkanntem Einsatzort ab.";
-  }
-  if (entry.manual_vs_planned_mismatch) {
-    return "Planung prüfen: Einsatzort in Stundenerfassung weicht von der Kalenderplanung ab.";
-  }
-  if (row.deviationMinutes !== null && Math.abs(row.deviationMinutes) > GPS_TIME_TOLERANCE_MINUTES) {
-    return "Zeit prüfen: automatisch erkannte Zeit weicht deutlich von gemeldeter Zeit ab.";
-  }
-  if (isWeekendDate(row.workDate)) {
-    return "Wochenendeinsatz prüfen, falls nicht bewusst geplant.";
-  }
-  if (entry.time_review_status !== "open") {
-    return row.systemHint || "manuell geprüft";
-  }
-  return "automatisch geprüft";
 }
 
 function currentIsoWeek(): CalendarWeekSelection {
@@ -3445,11 +2879,6 @@ function parseDateInput(value: string): Date {
   return new Date(year, month - 1, day);
 }
 
-function isWeekendDate(value: string): boolean {
-  const day = parseDateInput(value).getDay();
-  return day === 0 || day === 6;
-}
-
 function buildTimeReviewIssues(entries: TimeEntry[]): TimeReviewIssue[] {
   return entries
     .map((entry) => timeReviewIssue(entry))
@@ -3507,23 +2936,6 @@ function mergeTimeEntryReviewUpdate(previousEntry: TimeEntry, updatedEntry: Time
     review_notices: updatedEntry.review_notices.length ? updatedEntry.review_notices : previousEntry.review_notices,
     has_manual_entry: isOfficeOnlyTimeEntry(updatedEntry) ? false : updatedEntry.has_manual_entry,
   };
-}
-
-function buildTimeReviewTableRows(
-  openIssues: TimeReviewIssue[],
-  allEntries: TimeEntry[],
-  status: ReviewSummaryFilter,
-  personFilter: string,
-): TimeReviewTableRow[] {
-  const rows = reviewRowsForStatus(openIssues, allEntries, status);
-  const personNeedle = personFilter.trim().toLowerCase();
-  return rows
-    .filter((row) => !personNeedle || row.personName.toLowerCase().includes(personNeedle))
-    .sort((left, right) => (
-      left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
-      || left.workDate.localeCompare(right.workDate)
-      || left.id - right.id
-    ));
 }
 
 function buildTimeReviewWorkerSummaries(
@@ -4224,83 +3636,6 @@ function timeReviewCheckLabel(state: TimeReviewCheckState): string {
   return "nicht prüfbar";
 }
 
-function reviewRowsForStatus(
-  openIssues: TimeReviewIssue[],
-  allEntries: TimeEntry[],
-  status: ReviewSummaryFilter,
-): TimeReviewTableRow[] {
-  if (status === "needs_review") {
-    return openIssues.map(timeReviewIssueToTableRow);
-  }
-
-  const autoPlausibleRows: TimeReviewTableRow[] = [];
-  const verifiedRows: TimeReviewTableRow[] = [];
-
-  for (const entry of allEntries) {
-    if (isAutoPlausibleEntry(entry)) {
-      autoPlausibleRows.push(timeEntryToTableRow(entry, "Passt", "active"));
-    } else if (entry.time_review_status !== "open") {
-      verifiedRows.push(timeEntryToTableRow(entry, finalStatusLabel(entry), "active"));
-    }
-  }
-
-  if (status === "all") {
-    return [
-      ...autoPlausibleRows,
-      ...openIssues.map(timeReviewIssueToTableRow),
-      ...verifiedRows,
-    ];
-  }
-  if (status === "matches") {
-    return autoPlausibleRows;
-  }
-  return verifiedRows;
-}
-
-function timeReviewIssueToTableRow(issue: TimeReviewIssue): TimeReviewTableRow {
-  return {
-    id: issue.id,
-    entry: issue.entry,
-    issue,
-    workDate: issue.workDate,
-    personName: issue.personName,
-    siteLabel: issue.siteLabel,
-    siteNumber: timeEntrySiteNumber(issue.entry),
-    siteName: timeEntrySiteName(issue.entry),
-    manualMinutes: issue.manualMinutes,
-    gpsMinutes: issue.gpsMinutes,
-    deviationMinutes: issue.deviationMinutes,
-    correctedMinutes: issue.entry.corrected_work_minutes,
-    statusLabel: issue.statusLabel,
-    statusTone: issue.statusTone,
-    systemHint: issue.systemHint,
-    canConfirm: issue.manualMinutes !== null && !issue.entry.is_gps_suggestion,
-  };
-}
-
-function timeEntryToTableRow(entry: TimeEntry, statusLabel: string, statusTone: StatusBadgeTone): TimeReviewTableRow {
-  const manualMinutes = entry.is_gps_suggestion ? null : Number.isFinite(entry.work_minutes) ? entry.work_minutes : null;
-  const gpsMinutes = entry.gps_work_minutes;
-  return {
-    id: entry.id,
-    entry,
-    issue: null,
-    workDate: entry.work_date,
-    personName: entry.person_name,
-    siteLabel: timeEntrySiteLabel(entry),
-    siteNumber: timeEntrySiteNumber(entry),
-    siteName: timeEntrySiteName(entry),
-    manualMinutes,
-    gpsMinutes,
-    deviationMinutes: manualMinutes !== null && gpsMinutes !== null ? gpsMinutes - manualMinutes : null,
-    correctedMinutes: entry.corrected_work_minutes,
-    statusLabel,
-    statusTone,
-    systemHint: finalBasisLabel(entry),
-    canConfirm: entry.time_review_status === "open" && manualMinutes !== null,
-  };
-}
-
 function isAutoPlausibleEntry(entry: TimeEntry): boolean {
   if (entry.payroll_review_state) {
     return entry.payroll_review_state.is_auto_plausible;
@@ -4363,18 +3698,6 @@ function sourceConflictNotices(entry: TimeEntry): string[] {
     entry.manual_vs_gps_mismatch ? "Gemeldete Baustelle weicht von GPS ab" : "",
     entry.manual_vs_planned_mismatch ? "Stundeneingabe weicht von Planungsmatrix ab" : "",
   ].filter(Boolean);
-}
-
-function isProblematicReviewRow(row: TimeReviewTableRow): boolean {
-  return row.issue !== null || row.entry.is_gps_suggestion || hasBackendReviewNotice(row.entry);
-}
-
-function isCheckedReviewRow(row: TimeReviewTableRow): boolean {
-  return (
-    buildTimeReviewInstruction(row) === "automatisch geprüft"
-    || row.entry.time_review_status === "manually_approved"
-    || row.entry.time_review_status === "corrected"
-  );
 }
 
 function reviewSourceSummary(_entry: TimeEntry, hint: string): string {
@@ -4478,43 +3801,6 @@ function formatHumanDeviation(minutes: number | null): string {
   }
   const sign = minutes > 0 ? "+" : minutes < 0 ? "-" : "";
   return `${sign}${formatMinutes(Math.abs(minutes))}`;
-}
-
-function calculateReviewSummary(openIssues: TimeReviewIssue[], entries: TimeEntry[]) {
-  let autoPlausible = 0;
-  let verified = 0;
-  let needsReview = 0;
-  let critical = 0;
-  let notVerifiable = 0;
-
-  for (const entry of entries) {
-    if (entry.time_review_status !== "open") {
-      verified += 1;
-      continue;
-    }
-    if (isAutoPlausibleEntry(entry)) {
-      autoPlausible += 1;
-    }
-  }
-  for (const issue of openIssues) {
-    if (issue.status === "needs_review") {
-      needsReview += 1;
-    } else if (issue.status === "critical") {
-      critical += 1;
-    } else if (issue.status === "not_verifiable") {
-      notVerifiable += 1;
-    }
-  }
-  const reviewRecommended = openIssues.length;
-  return {
-    all: autoPlausible + reviewRecommended + verified,
-    autoPlausible,
-    verified,
-    reviewRecommended,
-    needsReview,
-    critical,
-    notVerifiable,
-  };
 }
 
 function sanitizeFilenamePart(value: string): string {
@@ -4793,10 +4079,6 @@ function isCurrentLocalDateInput(value: string): boolean {
 function timeEntrySiteLabel(entry: TimeEntry): string {
   const linkedSiteLabel = [entry.site_name, entry.site_number].filter(Boolean).join(" · ");
   return linkedSiteLabel || manualTimeEntrySiteText(entry) || "-";
-}
-
-function timeEntrySiteNumber(entry: TimeEntry): string {
-  return entry.site_number || "-";
 }
 
 function timeEntrySiteName(entry: TimeEntry): string {

@@ -75,7 +75,7 @@ test("the narrow ÜN column follows the site and reuses one status for every ent
   assert.ok(tableEnd > tableStart);
   assert.match(
     tableSource,
-    /<span role="columnheader">Baustelle<\/span>\s*<span className="time-review-week-overnight" role="columnheader">\s*<span className="time-review-week-overnight-heading"><span>ÜN<\/span><\/span>\s*<\/span>\s*<span role="columnheader">Montagebeginn<\/span>/,
+    /<span role="columnheader" aria-label="Baustelle" title="Baustelle">[\s\S]*?<span className="time-review-column-label-full">Baustelle<\/span>[\s\S]*?<span className="time-review-week-overnight" role="columnheader" aria-label="Übernachtung" title="Übernachtung">[\s\S]*?<span className="time-review-column-label-full">ÜN<\/span>[\s\S]*?<span role="columnheader" aria-label="Montagebeginn" title="Montagebeginn">/,
   );
   assert.match(tableSource, /<PayrollOvernightStatusControl/);
   assert.match(tableSource, /editable=\{canManageTimeEntries && !selectedReviewWorker\.isReviewed\}/);
