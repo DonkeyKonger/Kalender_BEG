@@ -47,13 +47,23 @@ test("review week navigation realigns its selected week after browser scroll res
   assert.match(pageSource, /window\.removeEventListener\("pageshow", realignReviewWeekStripAfterPageShow\)/);
 });
 
-test("worker detail keeps only captured hours without placeholder metrics", () => {
-  assert.match(pageSource, />Erfasste Stunden<\/span>/);
+test("worker detail keeps captured hours beside the name without a redundant status badge", () => {
+  assert.match(pageSource, /className="time-review-worker-identity"[\s\S]*?time-review-worker-period[\s\S]*?<h3>\{selectedReviewWorker\.personName\}<\/h3>[\s\S]*?className="time-review-worker-hours"/);
+  assert.match(pageSource, /aria-label=\{`Erfasste Stunden: \$\{formatSubmittedHours\(selectedReviewWorker\.submittedMinutes\)\} Stunden`\}/);
+  assert.doesNotMatch(pageSource, /time-review-worker-detail-status|time-review-worker-metrics|aria-label="Wochenkennzahlen"/);
   assert.doesNotMatch(pageSource, /Geplante Stunden|Die Differenz wird künftig aus den geplanten Stunden berechnet/);
-  assert.match(styles, /\.time-review-worker-metrics > div\s*\{[^}]*min-width:\s*0;[^}]*gap:\s*4px;/s);
-  assert.doesNotMatch(styles, /\.time-review-worker-metrics \.is-placeholder/);
-  assert.doesNotMatch(styles, /@media \(max-width: 760px\)[\s\S]*?\.time-review-worker-metrics > div\s*\{[^}]*border-/s);
+  assert.match(styles, /\.time-review-worker-identity\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*overflow:\s*hidden;/s);
+  assert.match(styles, /\.time-review-worker-hours\s*\{[^}]*border-left:\s*1px solid #dfe5ed;[^}]*white-space:\s*nowrap;/s);
   assert.match(styles, /\.time-review-check-mark:not\(\.is-ok\):not\(\.is-warning\)\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;/s);
+});
+
+test("the fixed worker header is one compact action row directly above the table", () => {
+  assert.match(pageSource, /className="time-review-worker-detail-head"[\s\S]*?className="time-review-worker-identity"[\s\S]*?className="time-review-worker-detail-actions"[\s\S]*?className="time-review-worker-detail-action-stack"[\s\S]*?className="time-review-worker-detail-primary-actions"[\s\S]*?time-review-manual-create-button[\s\S]*?time-review-week-review-button[\s\S]*?time-review-week-xlsx-button/s);
+  assert.match(pageSource, /time-review-week-xlsx-button[\s\S]*?aria-label=\{isDownloadingReviewWeekXlsx \? "Monteurwoche wird als Excel erstellt" : "Monteurwoche herunterladen \(Excel\)"\}[\s\S]*?title="Monteurwoche herunterladen \(Excel\)"/s);
+  assert.match(pageSource, /<\/div>\s*\{payrollDateError && <p className="time-review-week-error">[\s\S]*?<div className="time-review-week-check-table"/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-worker-detail-head\s*\{[^}]*flex:\s*0 0 auto;[^}]*grid-template-columns:\s*minmax\(220px, 1fr\) auto;[^}]*align-items:\s*center;[^}]*padding:\s*6px 14px;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-worker-detail-action-stack\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;/s);
+  assert.match(styles, /@container time-review-detail \(max-width: 600px\)[\s\S]*?\.time-entries-page\.is-figma-times-workspace \.time-review-worker-detail-head\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?\.time-review-worker-detail-action-stack\s*\{[^}]*flex-wrap:\s*wrap;/s);
 });
 
 test("weekly review uses a round accessible state action and preserves reset", () => {
@@ -71,15 +81,19 @@ test("weekly review uses a round accessible state action and preserves reset", (
   assert.match(pageSource, /className="icon-button secondary time-review-manual-create-button"/);
 });
 
-test("each weekday is one bordered group with totals in their matching time columns", () => {
+test("weekday separators show only the full weekday and one aligned work-time total", () => {
   assert.match(pageSource, /<section className="time-review-day-group" key=\{day\.date\} role="rowgroup"/);
   assert.match(pageSource, /className="time-review-day-group-head" role="row"/);
-  assert.doesNotMatch(pageSource, /day\.entries\.length === 1 \? "Eintrag" : "Einträge"/);
-  assert.match(pageSource, /className="time-review-day-group-total"[\s\S]*?Gesamtmontagezeit/);
-  assert.match(pageSource, /day\.vacationCreditMinutes > 0[\s\S]*?Gesamtarbeitszeit/);
+  assert.match(pageSource, /function formatWeekdayLong\(value: string\)[\s\S]*?weekday: "long"/);
+  assert.match(pageSource, /weekdayLabel: formatWeekdayLong\(date\)/);
+  assert.match(pageSource, /className="time-review-day-group-label"[\s\S]*?title=\{`\$\{day\.weekdayLabel\}, \$\{formatDate\(day\.date\)\}`\}[\s\S]*?<strong>\{day\.weekdayLabel\}<\/strong>/);
+  assert.doesNotMatch(pageSource, /<span>\{formatDate\(day\.date\)\}<\/span>/);
+  assert.doesNotMatch(pageSource, /time-review-day-group-status|Gesamtmontagezeit/);
+  assert.match(pageSource, /className="time-review-day-group-total time-review-work-time-cell"[\s\S]*?aria-label=\{`Gesamtarbeitszeit[\s\S]*?\{formatTimeEntryMinutes\(timeReviewDayTotalMinutes\(day\), "hours"\)\}/);
   assert.match(pageSource, /timeReviewDayTotalMinutes\(day\)/);
-  assert.match(styles, /\.time-review-day-group\s*\{[^}]*border:\s*1px solid #dfe5ed;[^}]*border-radius:\s*10px;/s);
-  assert.match(styles, /\.time-review-day-group-total\s*\{[^}]*justify-self:\s*end;/s);
+  assert.match(styles, /\.time-review-day-group-label\s*\{[^}]*grid-column:\s*1 \/ 10;/s);
+  assert.match(styles, /\.time-review-day-group\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;/s);
+  assert.match(styles, /\.time-review-day-group-head\s*\{[^}]*min-height:\s*34px;[^}]*border-top:\s*1px solid #dfe5ed;[^}]*background:\s*#f8fafc;/s);
   assert.match(styles, /\.time-review-day-group \.time-review-week-check-row\.is-travel-time\s*\{[^}]*box-shadow:\s*none;/s);
 });
 
@@ -112,6 +126,17 @@ test("payroll review fixes the detail head while only queue and table scroll ind
   assert.match(styles, /is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
   assert.match(pageSource, /time-review-worker-detail-head[\s\S]*?time-review-week-check-table/);
   assert.match(pageSource, /time-review-week-check-table[\s\S]*?selectedReviewWeekDays\.map\(\(day\)[\s\S]*?time-review-day-group-entries[\s\S]*?time-review-week-check-row/s);
+});
+
+test("the scroll table keeps five days and multiple entries at natural row height", () => {
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-week-check-table\s*\{[^}]*align-content:\s*start;[^}]*grid-auto-rows:\s*max-content;[^}]*gap:\s*0;/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*auto;/s);
+  assert.match(styles, /\.time-review-day-group\s*\{[^}]*align-content:\s*start;[^}]*grid-auto-rows:\s*max-content;[^}]*min-height:\s*max-content;[^}]*overflow:\s*visible;/s);
+  assert.doesNotMatch(styles, /\.time-review-day-group\s*\{[^}]*overflow:\s*hidden;/s);
+  assert.match(styles, /\.time-review-day-group-entries\s*\{[^}]*align-content:\s*start;[^}]*grid-auto-rows:\s*max-content;/s);
+  assert.match(styles, /\.time-review-week-check-row\s*\{[^}]*min-height:\s*46px;/s);
+  assert.match(pageSource, /selectedReviewWeekDays\.map\(\(day\) => \([\s\S]*?day\.entries\.length > 0 \? day\.entries\.map\(\(check\) => \(/s);
+  assert.match(pageSource, /return numberRange\(0, 6\)[\s\S]*?filter\(\(day, index\) => index < 5 \|\| day\.entries\.length > 0 \|\| day\.absenceType !== null\)/s);
 });
 
 test("payroll table abbreviates headers from its container width without hiding accessible names", () => {

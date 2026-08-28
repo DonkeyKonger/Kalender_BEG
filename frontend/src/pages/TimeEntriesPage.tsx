@@ -1675,25 +1675,15 @@ export function TimeEntriesPage() {
               <div className="time-review-worker-detail">
                 <div className="time-review-worker-detail-head">
                   <div className="time-review-worker-identity">
-                    <div>
-                      <span>KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)}</span>
-                      <h3>{selectedReviewWorker.personName}</h3>
-                    </div>
-                    <div className="time-review-worker-detail-status">
-                      {selectedReviewWorker.isReviewed ? (
-                        <StatusBadge tone="active">Geprüft</StatusBadge>
-                      ) : selectedReviewWorker.isReset ? (
-                        <StatusBadge tone="warning">Zurückgesetzt</StatusBadge>
-                      ) : (
-                        <StatusBadge tone="warning">Offen</StatusBadge>
-                      )}
-                    </div>
-                  </div>
-                  <div className="time-review-worker-metrics" aria-label="Wochenkennzahlen">
-                    <div>
-                      <span>Erfasste Stunden</span>
+                    <span className="time-review-worker-period">KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)}</span>
+                    <h3>{selectedReviewWorker.personName}</h3>
+                    <span
+                      className="time-review-worker-hours"
+                      aria-label={`Erfasste Stunden: ${formatSubmittedHours(selectedReviewWorker.submittedMinutes)} Stunden`}
+                      title={`Erfasste Stunden: ${formatSubmittedHours(selectedReviewWorker.submittedMinutes)} Stunden`}
+                    >
                       <strong>{formatSubmittedHours(selectedReviewWorker.submittedMinutes)} Std.</strong>
-                    </div>
+                    </span>
                   </div>
                   <div className="time-review-worker-detail-actions">
                     <div className="time-review-worker-detail-action-stack">
@@ -1769,11 +1759,13 @@ export function TimeEntriesPage() {
                         <button
                           className="icon-button secondary time-review-week-xlsx-button"
                           type="button"
+                          aria-label={isDownloadingReviewWeekXlsx ? "Monteurwoche wird als Excel erstellt" : "Monteurwoche herunterladen (Excel)"}
+                          title="Monteurwoche herunterladen (Excel)"
                           disabled={isDownloadingReviewWeekXlsx}
                           onClick={() => void downloadSelectedReviewWeekXlsx()}
                         >
                           <Download aria-hidden="true" size={15} />
-                          {isDownloadingReviewWeekXlsx ? "Excel wird erstellt..." : "Monteurwoche herunterladen (Excel)"}
+                          {isDownloadingReviewWeekXlsx ? "Wird erstellt..." : "Excel"}
                         </button>
                       )}
                     </div>
@@ -1799,38 +1791,20 @@ export function TimeEntriesPage() {
                   {selectedReviewWeekDays.map((day) => (
                     <section className="time-review-day-group" key={day.date} role="rowgroup" aria-label={`${day.weekdayLabel}, ${formatDate(day.date)}`}>
                       <div className="time-review-day-group-head" role="row">
-                        <span className="time-review-week-move" role="cell" aria-hidden="true"></span>
-                        <span className="time-review-week-day" role="cell">
-                          <strong>{day.weekdayLabel}</strong>
-                          <span>{formatDate(day.date)}</span>
-                        </span>
-                        <span className="time-review-day-group-status" role="cell">
-                          {day.entries.length === 0 && (
-                            day.absenceType
-                              ? absenceTypeLabels[day.absenceType]
-                              : "Keine Zeitmeldung"
-                          )}
-                        </span>
-                        <span className="time-review-week-overnight" role="cell" aria-hidden="true"></span>
-                        <span className="time-review-week-time" role="cell" aria-hidden="true"></span>
-                        <span className="time-review-week-time" role="cell" aria-hidden="true"></span>
-                        <span className="time-review-week-time" role="cell" aria-hidden="true"></span>
                         <span
-                          className="time-review-day-group-total"
-                          role="cell"
-                          aria-label={day.entries.length > 0 ? `Gesamtmontagezeit ${formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}` : undefined}
+                          className="time-review-day-group-label"
+                          role="rowheader"
+                          title={`${day.weekdayLabel}, ${formatDate(day.date)}`}
                         >
-                          {day.entries.length > 0 && formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}
+                          <strong>{day.weekdayLabel}</strong>
                         </span>
-                        <span role="cell" aria-hidden="true"></span>
                         <span
                           className="time-review-day-group-total time-review-work-time-cell"
                           role="cell"
-                          aria-label={day.entries.length === 0 && day.vacationCreditMinutes > 0 ? `Gesamtarbeitszeit ${formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}` : undefined}
+                          aria-label={`Gesamtarbeitszeit ${formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}`}
                         >
-                          {day.entries.length === 0 && day.vacationCreditMinutes > 0 && formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}
+                          {formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}
                         </span>
-                        <span role="cell" aria-hidden="true"></span>
                       </div>
                       <div className="time-review-day-group-entries">
                     {day.entries.length > 0 ? day.entries.map((check) => (
@@ -2879,6 +2853,10 @@ function parseDateInput(value: string): Date {
   return new Date(year, month - 1, day);
 }
 
+function formatWeekdayLong(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", { weekday: "long" }).format(parseDateInput(value));
+}
+
 function buildTimeReviewIssues(entries: TimeEntry[]): TimeReviewIssue[] {
   return entries
     .map((entry) => timeReviewIssue(entry))
@@ -3143,7 +3121,7 @@ function buildTimeReviewWeekDays(
     const overnightStatus = dayEntries.find((entry) => entry.overnight_status !== null)?.overnight_status ?? null;
     return {
       date,
-      weekdayLabel: formatWeekday(date),
+      weekdayLabel: formatWeekdayLong(date),
       absenceType,
       overnightStatus,
       vacationCreditMinutes: vacationCreditMinutesForDate(payrollWeekPerson, date),

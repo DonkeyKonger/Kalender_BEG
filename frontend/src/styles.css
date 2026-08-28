@@ -19515,60 +19515,55 @@ body.mobile-modal-scroll-locked {
   display: grid;
   flex: 0 0 auto;
   grid-template-columns: minmax(220px, 1fr) auto;
-  gap: 8px 14px;
+  align-items: center;
+  gap: 10px;
   border-bottom: 1px solid #e7ecf2;
-  padding: 10px 14px;
+  padding: 6px 14px;
 }
 
 .time-review-worker-identity {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  overflow: hidden;
 }
 
-.time-review-worker-identity > div:first-child {
-  min-width: 0;
+.time-review-worker-period {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .time-review-worker-identity h3 {
+  min-width: 0;
+  margin: 0;
   overflow: hidden;
+  font-size: 0.92rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.time-review-worker-detail-status {
+.time-review-worker-hours {
   flex: 0 0 auto;
-}
-
-.time-review-worker-metrics {
-  display: flex;
-  grid-column: 1;
-  gap: 0;
-}
-
-.time-review-worker-metrics > div {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-}
-
-.time-review-worker-metrics span {
-  color: #718096;
-  font-size: 0.66rem;
-  font-weight: 750;
-}
-
-.time-review-worker-metrics strong {
+  border-left: 1px solid #dfe5ed;
   color: #14233b;
-  font-size: 0.86rem;
+  padding-left: 10px;
+  font-size: 0.78rem;
   font-weight: 900;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 .time-review-worker-detail-head .time-review-worker-detail-actions {
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 1;
   align-self: center;
+}
+
+.time-review-worker-detail-head .time-review-worker-detail-action-stack {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .time-review-worker-detail-head .time-review-worker-detail-primary-actions {
@@ -19642,7 +19637,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-worker-detail-head .time-review-week-xlsx-button {
-  justify-self: end;
+  flex: 0 0 auto;
 }
 
 .time-review-worker-detail .time-review-week-error {
@@ -19651,10 +19646,12 @@ body.mobile-modal-scroll-locked {
 
 .time-entries-page.is-figma-times-workspace .time-review-week-check-table {
   display: grid;
-  gap: 10px;
+  align-content: start;
+  grid-auto-rows: max-content;
+  gap: 0;
   overflow-x: auto;
   border: 0;
-  background: #f8fafc;
+  background: #ffffff;
   padding: 0 14px 14px;
 }
 
@@ -19669,8 +19666,9 @@ body.mobile-modal-scroll-locked {
   position: sticky;
   z-index: 3;
   top: 0;
-  border: 1px solid #dfe5ed;
-  border-radius: 8px;
+  border: 0;
+  border-bottom: 1px solid #dfe5ed;
+  border-radius: 0;
   background: #f5f7fa;
   padding: 8px 10px;
 }
@@ -19681,10 +19679,13 @@ body.mobile-modal-scroll-locked {
 
 .time-review-day-group {
   display: grid;
-  overflow: hidden;
+  align-content: start;
+  grid-auto-rows: max-content;
+  min-height: max-content;
   min-width: 924px;
-  border: 1px solid #dfe5ed;
-  border-radius: 10px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
   background: #ffffff;
 }
 
@@ -19693,25 +19694,28 @@ body.mobile-modal-scroll-locked {
   grid-template-columns: 30px minmax(72px, 0.65fr) minmax(140px, 1.35fr) 58px repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
   gap: 8px;
   align-items: center;
-  min-height: 45px;
+  min-height: 34px;
+  border-top: 1px solid #dfe5ed;
   border-bottom: 1px solid #e7ecf2;
-  background: #fbfcfe;
-  padding: 7px 10px;
+  background: #f8fafc;
+  padding: 5px 10px;
 }
 
-.time-review-day-group-head .time-review-week-day strong {
-  font-size: 0.86rem;
+.time-review-day-group-label {
+  grid-column: 1 / 10;
+  min-width: 0;
 }
 
-.time-review-day-group-status,
+.time-review-day-group-label strong {
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
 .time-review-day-group-total {
-  color: #718096;
-  font-size: 0.68rem;
-  font-weight: 750;
-}
-
-.time-review-day-group-total {
-  justify-self: end;
+  color: #52627a;
+  font-size: 0.72rem;
+  font-weight: 850;
   white-space: nowrap;
 }
 
@@ -19728,6 +19732,8 @@ body.mobile-modal-scroll-locked {
 
 .time-review-day-group-entries {
   display: grid;
+  align-content: start;
+  grid-auto-rows: max-content;
 }
 
 .time-review-day-group .time-review-week-check-row {
@@ -19798,8 +19804,8 @@ body.mobile-modal-scroll-locked {
   }
 }
 
-@container time-review-detail (max-width: 720px) {
-  .time-review-worker-detail-head {
+@container time-review-detail (max-width: 600px) {
+  .time-entries-page.is-figma-times-workspace .time-review-worker-detail-head {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -19810,7 +19816,8 @@ body.mobile-modal-scroll-locked {
   }
 
   .time-review-worker-detail-head .time-review-worker-detail-action-stack {
-    justify-items: start;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .time-review-worker-detail-head .time-review-week-xlsx-button {
@@ -19876,20 +19883,9 @@ body.mobile-modal-scroll-locked {
     padding: 14px;
   }
 
-  .time-review-worker-identity,
-  .time-review-worker-metrics {
+  .time-review-worker-identity {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .time-review-worker-metrics {
-    gap: 10px;
-  }
-
-  .time-review-worker-metrics > div {
-    width: 100%;
-    margin: 0;
-    padding: 0;
   }
 
   .time-review-worker-detail-head .time-review-worker-detail-primary-actions {
