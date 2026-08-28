@@ -35,6 +35,11 @@ import {
   vacationCreditMinutesForDate,
 } from "../lib/payrollWeek";
 import { resolveViewportPopoverPosition, type ViewportPopoverPosition } from "../lib/viewportPopover";
+import {
+  centeredWeekWindowStart,
+  clampWeekWindowStart,
+  PAYROLL_WEEK_VISIBLE_COUNT,
+} from "../lib/weekStrip";
 import type { Absence } from "../types/absence";
 import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType } from "../types/matrix";
@@ -267,6 +272,7 @@ export function TimeEntriesPage() {
   const reviewWeekStatusMenuRef = useRef<HTMLDivElement | null>(null);
   const payrollDatePickerMenuRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
+  const lastAlignedReviewWeekKeyRef = useRef<string | null>(null);
   const hasAutoScrolledVisibleEvaluationWeekRef = useRef(false);
   const timeReviewPerfRef = useRef<TimeReviewPerfState | null>(null);
   const timeReviewRenderCountRef = useRef(0);
@@ -695,18 +701,40 @@ export function TimeEntriesPage() {
   useLayoutEffect(() => {
     if (activeTimeSubtab !== "review") {
       hasAutoScrolledVisibleReviewWeekRef.current = false;
+      lastAlignedReviewWeekKeyRef.current = null;
       return;
     }
-    if (hasAutoScrolledVisibleReviewWeekRef.current) {
+    const selectionKey = reviewWeekKey(selectedReviewWeek);
+    const isInitialAlignment = !hasAutoScrolledVisibleReviewWeekRef.current;
+    if (!isInitialAlignment && lastAlignedReviewWeekKeyRef.current === selectionKey) {
       return;
     }
-    const animationFrameId = window.requestAnimationFrame(() => {
-      scrollWeekStripToSelection(reviewWeekStripRef.current, reviewWeekOptions, selectedReviewWeek);
-      updateReviewWeekScrollState();
-      hasAutoScrolledVisibleReviewWeekRef.current = true;
+    let layoutFrameId: number | null = null;
+    const renderFrameId = window.requestAnimationFrame(() => {
+      layoutFrameId = window.requestAnimationFrame(() => {
+        const didAlign = scrollWeekStripToSelection(
+          reviewWeekStripRef.current,
+          reviewWeekOptions,
+          selectedReviewWeek,
+          {
+            alignment: isInitialAlignment ? "center" : "nearest",
+            visibleCount: PAYROLL_WEEK_VISIBLE_COUNT,
+          },
+        );
+        if (didAlign) {
+          updateReviewWeekScrollState();
+          hasAutoScrolledVisibleReviewWeekRef.current = true;
+          lastAlignedReviewWeekKeyRef.current = selectionKey;
+        }
+      });
     });
 
-    return () => window.cancelAnimationFrame(animationFrameId);
+    return () => {
+      window.cancelAnimationFrame(renderFrameId);
+      if (layoutFrameId !== null) {
+        window.cancelAnimationFrame(layoutFrameId);
+      }
+    };
   }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek]);
 
   useLayoutEffect(() => {
@@ -714,19 +742,33 @@ export function TimeEntriesPage() {
       return;
     }
 
-    let animationFrameId: number | null = null;
+    let renderFrameId: number | null = null;
+    let layoutFrameId: number | null = null;
     function realignReviewWeekStripAfterPageShow(): void {
-      animationFrameId = window.requestAnimationFrame(() => {
-        scrollWeekStripToSelection(reviewWeekStripRef.current, reviewWeekOptions, selectedReviewWeek);
-        updateReviewWeekScrollState();
+      renderFrameId = window.requestAnimationFrame(() => {
+        layoutFrameId = window.requestAnimationFrame(() => {
+          if (scrollWeekStripToSelection(
+            reviewWeekStripRef.current,
+            reviewWeekOptions,
+            selectedReviewWeek,
+            { alignment: "center", visibleCount: PAYROLL_WEEK_VISIBLE_COUNT },
+          )) {
+            updateReviewWeekScrollState();
+            hasAutoScrolledVisibleReviewWeekRef.current = true;
+            lastAlignedReviewWeekKeyRef.current = reviewWeekKey(selectedReviewWeek);
+          }
+        });
       });
     }
 
     window.addEventListener("pageshow", realignReviewWeekStripAfterPageShow);
     return () => {
       window.removeEventListener("pageshow", realignReviewWeekStripAfterPageShow);
-      if (animationFrameId !== null) {
-        window.cancelAnimationFrame(animationFrameId);
+      if (renderFrameId !== null) {
+        window.cancelAnimationFrame(renderFrameId);
+      }
+      if (layoutFrameId !== null) {
+        window.cancelAnimationFrame(layoutFrameId);
       }
     };
   }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek]);
@@ -1058,8 +1100,7 @@ export function TimeEntriesPage() {
     if (!container) {
       return;
     }
-    const scrollAmount = Math.min(420, Math.max(260, container.clientWidth * 0.75));
-    container.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
+    scrollWeekStripByWholeWeek(container, direction);
   }
 
   function scrollEvaluationWeeks(direction: -1 | 1): void {
@@ -2771,26 +2812,63 @@ function scrollWeekStripToSelection(
   container: HTMLDivElement | null,
   options: CalendarWeekOption[],
   selection: CalendarWeekSelection,
-): void {
+  settings: { alignment?: "center" | "nearest"; visibleCount?: number } = {},
+): boolean {
   if (!container) {
-    return;
+    return false;
   }
   const selectedWeekIndex = options.findIndex(
     (option) => option.year === selection.year && option.week === selection.week,
   );
   if (selectedWeekIndex < 0) {
-    return;
+    return false;
   }
 
-  const firstVisibleIndex = Math.max(0, selectedWeekIndex - 5);
-  const targetButton = container.querySelector<HTMLButtonElement>(`[data-week-index="${firstVisibleIndex}"]`);
+  const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("[data-week-index]"));
+  const firstButton = buttons[0];
+  const selectedButton = buttons[selectedWeekIndex];
+  if (!firstButton || !selectedButton || container.clientWidth <= 0 || firstButton.offsetWidth <= 0) {
+    return false;
+  }
+
+  const visibleCount = settings.visibleCount ?? 5;
+  const selectedStart = selectedButton.offsetLeft - firstButton.offsetLeft;
+  const selectedEnd = selectedStart + selectedButton.offsetWidth;
+  if (
+    settings.alignment === "nearest"
+    && selectedStart >= container.scrollLeft - 1
+    && selectedEnd <= container.scrollLeft + container.clientWidth + 1
+  ) {
+    return true;
+  }
+
+  const requestedStart = settings.alignment === "nearest"
+    ? selectedStart < container.scrollLeft
+      ? selectedWeekIndex
+      : selectedWeekIndex - visibleCount + 1
+    : centeredWeekWindowStart(selectedWeekIndex, options.length, visibleCount);
+  const firstVisibleIndex = clampWeekWindowStart(requestedStart, options.length, visibleCount);
+  const targetButton = buttons[firstVisibleIndex];
   if (!targetButton) {
+    return false;
+  }
+  container.scrollTo({
+    left: Math.max(0, targetButton.offsetLeft - firstButton.offsetLeft),
+    behavior: "auto",
+  });
+  return true;
+}
+
+function scrollWeekStripByWholeWeek(container: HTMLDivElement, direction: -1 | 1): void {
+  const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("[data-week-index]"));
+  const firstButton = buttons[0];
+  if (!firstButton) {
     return;
   }
-
-  const containerRect = container.getBoundingClientRect();
-  const targetRect = targetButton.getBoundingClientRect();
-  container.scrollLeft = Math.max(0, container.scrollLeft + targetRect.left - containerRect.left);
+  const weekStep = buttons[1]
+    ? buttons[1].offsetLeft - firstButton.offsetLeft
+    : firstButton.offsetWidth;
+  container.scrollBy({ left: direction * weekStep, behavior: "smooth" });
 }
 
 function numberRange(start: number, end: number): number[] {

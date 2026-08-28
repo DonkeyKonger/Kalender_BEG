@@ -18777,6 +18777,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-main {
+  --time-review-queue-track: minmax(300px, 336px);
+  --time-review-layout-gap: 20px;
+  --time-review-layout-inline: 24px;
   background: #ffffff;
   border: 0;
   box-shadow: none;
@@ -19113,6 +19116,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-download-all-button {
+  justify-self: end;
   min-height: 36px;
   white-space: nowrap;
   padding: 5px 9px;
@@ -19125,33 +19129,34 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-week-nav-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--time-review-queue-track) minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px 20px;
+  gap: var(--time-review-layout-gap);
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-week-nav {
   display: block;
-  margin: 16px 24px 0;
+  margin: 16px var(--time-review-layout-inline) 0;
   border: 0;
   padding: 0;
 }
 
 .time-review-week-nav .time-week-strip-shell {
-  display: flex;
-  width: fit-content;
-  max-width: 100%;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 26px;
+  width: 100%;
+  max-width: none;
   align-items: center;
   gap: 6px;
 }
 
 .time-review-week-nav .time-week-strip {
-  /* Five complete 60px cards plus four 6px gaps. */
-  flex: 0 1 324px;
-  width: 324px;
-  max-width: calc(100vw - 210px);
+  /* Four equal cards fill the shared queue track without clipped edges. */
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   gap: 6px;
   padding: 0;
   scroll-snap-type: x mandatory;
@@ -19160,8 +19165,8 @@ body.mobile-modal-scroll-locked {
 .time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button {
   display: grid;
   position: relative;
-  flex: 0 0 60px;
-  min-width: 60px;
+  flex: 0 0 calc(25% - 4.5px);
+  min-width: calc(25% - 4.5px);
   height: 26px;
   min-height: 26px;
   box-sizing: border-box;
@@ -19228,11 +19233,11 @@ body.mobile-modal-scroll-locked {
 
 .time-review-workspace-layout {
   display: grid;
-  grid-template-columns: minmax(300px, 336px) minmax(0, 1fr);
+  grid-template-columns: var(--time-review-queue-track) minmax(0, 1fr);
   align-items: start;
-  gap: 20px;
+  gap: var(--time-review-layout-gap);
   min-width: 0;
-  margin: 16px 24px 24px;
+  margin: 16px var(--time-review-layout-inline) 24px;
 }
 
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-workspace-layout {
@@ -19821,16 +19826,18 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 1280px) {
-  .time-review-workspace-layout {
-    grid-template-columns: minmax(280px, 310px) minmax(0, 1fr);
-    gap: 14px;
-    margin-right: 18px;
-    margin-left: 18px;
+  .time-entries-page.is-figma-times-workspace .time-review-main {
+    --time-review-queue-track: minmax(280px, 310px);
+    --time-review-layout-gap: 14px;
+    --time-review-layout-inline: 18px;
   }
-
 }
 
 @media (max-width: 980px) {
+  .time-review-week-nav-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .time-review-workspace-layout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -19846,6 +19853,10 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 760px) {
+  .time-entries-page.is-figma-times-workspace .time-review-main {
+    --time-review-layout-inline: 12px;
+  }
+
   .time-entries-page.is-figma-times-workspace .page-header {
     display: grid;
     padding: 14px;
@@ -19856,7 +19867,7 @@ body.mobile-modal-scroll-locked {
   }
 
   .time-review-week-nav-row {
-    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
 
@@ -19864,14 +19875,8 @@ body.mobile-modal-scroll-locked {
     height: calc(100dvh - 60px);
   }
 
-  .time-entries-page.is-figma-times-workspace .time-review-week-nav,
-  .time-review-workspace-layout {
-    margin-right: 12px;
-    margin-left: 12px;
-  }
-
   .time-review-week-nav .time-week-strip {
-    max-width: calc(100vw - 124px);
+    max-width: none;
   }
 
   .time-entries-page.is-figma-times-workspace .time-review-worker-detail-head {

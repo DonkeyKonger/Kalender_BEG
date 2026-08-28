@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  centeredWeekWindowStart,
+  clampWeekWindowStart,
+  PAYROLL_WEEK_VISIBLE_COUNT,
+} from "../src/lib/weekStrip.ts";
 
 const pageSource = readFileSync(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
@@ -17,17 +22,21 @@ test("payroll review uses the requested master-detail queue without removing exi
   assert.match(pageSource, /Alle Arbeitsstunden herunterladen \(Excel\)/);
 });
 
-test("review week navigation presents compact week cards without date ranges", () => {
+test("review week navigation fills the shared queue width with four complete cards", () => {
   assert.match(pageSource, /className="time-week-nav-panel time-review-week-nav"/);
   assert.match(pageSource, /className="time-review-week-nav-row"[\s\S]*className="time-week-strip-shell"[\s\S]*className="icon-button secondary time-review-download-all-button"/);
   assert.match(pageSource, /<strong>\{option\.label\}<\/strong>/);
   assert.doesNotMatch(pageSource, /<small>\{formatDayMonth\(option\.start\)\}–\{formatDayMonth\(option\.end\)\}<\/small>/);
-  assert.match(styles, /\.time-review-week-nav \.time-week-strip\s*\{[^}]*width:\s*324px;/s);
-  assert.match(styles, /\.time-review-week-nav \.time-week-strip button\s*\{[^}]*flex:\s*0 0 60px;[^}]*min-width:\s*60px;[^}]*height:\s*26px;[^}]*min-height:\s*26px;[^}]*box-sizing:\s*border-box;[^}]*padding:\s*4px 5px;/s);
+  assert.equal(PAYROLL_WEEK_VISIBLE_COUNT, 4);
+  assert.match(styles, /\.time-review-main\s*\{[^}]*--time-review-queue-track:\s*minmax\(300px, 336px\);[^}]*--time-review-layout-gap:\s*20px;[^}]*--time-review-layout-inline:\s*24px;/s);
+  assert.match(styles, /\.time-review-week-nav-row\s*\{[^}]*grid-template-columns:\s*var\(--time-review-queue-track\) minmax\(0, 1fr\);[^}]*gap:\s*var\(--time-review-layout-gap\);/s);
+  assert.match(styles, /\.time-review-workspace-layout\s*\{[^}]*grid-template-columns:\s*var\(--time-review-queue-track\) minmax\(0, 1fr\);[^}]*gap:\s*var\(--time-review-layout-gap\);[^}]*margin:\s*16px var\(--time-review-layout-inline\) 24px;/s);
+  assert.match(styles, /\.time-review-week-nav\s*\{[^}]*margin:\s*16px var\(--time-review-layout-inline\) 0;/s);
+  assert.match(styles, /\.time-review-week-nav \.time-week-strip-shell\s*\{[^}]*grid-template-columns:\s*26px minmax\(0, 1fr\) 26px;[^}]*width:\s*100%;/s);
+  assert.match(styles, /\.time-review-week-nav \.time-week-strip\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*gap:\s*6px;/s);
+  assert.match(styles, /\.time-review-week-nav \.time-week-strip button\s*\{[^}]*flex:\s*0 0 calc\(25% - 4\.5px\);[^}]*min-width:\s*calc\(25% - 4\.5px\);[^}]*height:\s*26px;[^}]*min-height:\s*26px;[^}]*box-sizing:\s*border-box;/s);
   assert.match(styles, /\.time-review-week-nav \.time-week-scroll-button\s*\{[^}]*height:\s*26px;[^}]*min-height:\s*26px;[^}]*box-sizing:\s*border-box;/s);
-  assert.match(styles, /\.time-review-week-nav \.time-week-strip-shell\s*\{[^}]*align-items:\s*center;/s);
-  assert.match(styles, /\.time-review-week-nav-row\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*space-between;/s);
-  assert.match(styles, /\.time-review-download-all-button\s*\{[^}]*min-height:\s*36px;[^}]*padding:\s*5px 9px;[^}]*font-size:\s*0\.76rem;/s);
+  assert.match(styles, /\.time-review-download-all-button\s*\{[^}]*justify-self:\s*end;[^}]*min-height:\s*36px;[^}]*padding:\s*5px 9px;[^}]*font-size:\s*0\.76rem;/s);
 });
 
 test("current review week remains identifiable when another week is selected", () => {
@@ -43,8 +52,48 @@ test("current review week remains identifiable when another week is selected", (
 
 test("review week navigation realigns its selected week after browser scroll restoration", () => {
   assert.match(pageSource, /window\.addEventListener\("pageshow", realignReviewWeekStripAfterPageShow\)/);
-  assert.match(pageSource, /function realignReviewWeekStripAfterPageShow\(\): void \{\s*animationFrameId = window\.requestAnimationFrame\(\(\) => \{\s*scrollWeekStripToSelection\(reviewWeekStripRef\.current, reviewWeekOptions, selectedReviewWeek\);/s);
+  assert.match(pageSource, /function realignReviewWeekStripAfterPageShow\(\): void \{[\s\S]*?renderFrameId = window\.requestAnimationFrame\(\(\) => \{[\s\S]*?layoutFrameId = window\.requestAnimationFrame\(\(\) => \{[\s\S]*?alignment: "center", visibleCount: PAYROLL_WEEK_VISIBLE_COUNT/s);
   assert.match(pageSource, /window\.removeEventListener\("pageshow", realignReviewWeekStripAfterPageShow\)/);
+});
+
+test("reload centers the selected current week in a stable four-week window", () => {
+  const weekNumbers = [30, 31, 32, 33, 34, 35, 36, 37, 38, 39];
+  const selectedIndex = weekNumbers.indexOf(35);
+  const start = centeredWeekWindowStart(selectedIndex, weekNumbers.length);
+  const visibleWeeks = weekNumbers.slice(start, start + PAYROLL_WEEK_VISIBLE_COUNT);
+
+  assert.deepEqual(visibleWeeks, [34, 35, 36, 37]);
+  assert.ok(visibleWeeks.includes(35));
+  assert.notDeepEqual(visibleWeeks, [30, 31, 32, 33]);
+  assert.doesNotMatch(pageSource, /selectedWeekIndex\s*-\s*5/);
+  assert.match(pageSource, /alignment: isInitialAlignment \? "center" : "nearest"/);
+  assert.match(pageSource, /behavior:\s*"auto"/);
+});
+
+test("four-week window clamps at list and year boundaries", () => {
+  const crossingYear = ["2026-51", "2026-52", "2027-01", "2027-02", "2027-03"];
+  const start = centeredWeekWindowStart(2, crossingYear.length);
+
+  assert.deepEqual(crossingYear.slice(start, start + PAYROLL_WEEK_VISIBLE_COUNT), [
+    "2026-52",
+    "2027-01",
+    "2027-02",
+    "2027-03",
+  ]);
+  assert.equal(centeredWeekWindowStart(0, crossingYear.length), 0);
+  assert.equal(centeredWeekWindowStart(crossingYear.length - 1, crossingYear.length), 1);
+  assert.equal(clampWeekWindowStart(99, crossingYear.length), 1);
+});
+
+test("manual week navigation advances one full tile and is not reset by renders", () => {
+  const reviewScrollStart = pageSource.indexOf("function scrollReviewWeeks");
+  const evaluationScrollStart = pageSource.indexOf("function scrollEvaluationWeeks", reviewScrollStart);
+  const reviewScrollSource = pageSource.slice(reviewScrollStart, evaluationScrollStart);
+
+  assert.match(pageSource, /lastAlignedReviewWeekKeyRef\.current === selectionKey/);
+  assert.match(pageSource, /const weekStep = buttons\[1\][\s\S]*?buttons\[1\]\.offsetLeft - firstButton\.offsetLeft/);
+  assert.match(pageSource, /scrollBy\(\{ left: direction \* weekStep, behavior: "smooth" \}\)/);
+  assert.doesNotMatch(reviewScrollSource, /container\.clientWidth \* 0\.75/);
 });
 
 test("worker detail keeps captured hours beside the name without a redundant status badge", () => {
@@ -163,7 +212,8 @@ test("payroll queue filters stay on one compact row until the viewport is truly 
 });
 
 test("desktop layout keeps the queue compact and stacks safely below desktop width", () => {
-  assert.match(styles, /\.time-review-workspace-layout\s*\{[^}]*grid-template-columns:\s*minmax\(300px, 336px\) minmax\(0, 1fr\);[^}]*gap:\s*20px;/s);
+  assert.match(styles, /\.time-review-workspace-layout\s*\{[^}]*grid-template-columns:\s*var\(--time-review-queue-track\) minmax\(0, 1fr\);[^}]*gap:\s*var\(--time-review-layout-gap\);/s);
+  assert.match(styles, /@media \(max-width: 1280px\)[\s\S]*?--time-review-queue-track:\s*minmax\(280px, 310px\);[\s\S]*?--time-review-layout-inline:\s*18px;/s);
   assert.match(styles, /@media \(max-width: 980px\)[\s\S]*?\.time-review-workspace-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.time-review-download-all-button\s*\{[^}]*width:\s*100%;/s);
 });
