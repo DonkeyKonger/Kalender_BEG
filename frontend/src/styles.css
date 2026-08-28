@@ -20577,6 +20577,17 @@ body.mobile-modal-scroll-locked {
   white-space: nowrap;
 }
 
+.time-review-work-time-cell {
+  grid-column: 10;
+  justify-self: stretch;
+  text-align: center;
+}
+
+.time-review-week-check-row > .time-review-work-time-cell {
+  display: grid;
+  place-items: center;
+}
+
 .time-review-day-group-entries {
   display: grid;
 }

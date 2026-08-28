@@ -2005,7 +2005,7 @@ export function TimeEntriesPage() {
                         </span>
                         <span role="cell" aria-hidden="true"></span>
                         <span
-                          className="time-review-day-group-total"
+                          className="time-review-day-group-total time-review-work-time-cell"
                           role="cell"
                           aria-label={day.entries.length === 0 && day.vacationCreditMinutes > 0 ? `Gesamtarbeitszeit ${formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}` : undefined}
                         >
@@ -2072,7 +2072,7 @@ export function TimeEntriesPage() {
                             label: "Ort-Diagnose öffnen",
                           })}
                         </div>
-                        <div role="cell">
+                        <div className="time-review-work-time-cell" role="cell">
                           {renderTimeReviewCheckMark(check.timeCheck, {
                             onClick: () => openTimeReviewDiagnostic(check.entry),
                             label: "Arbeitszeit-Diagnose öffnen",
@@ -2113,7 +2113,7 @@ export function TimeEntriesPage() {
                               label: "Ort-Diagnose öffnen",
                             })}
                           </div>
-                          <div className={hasVacationCredit ? "time-review-week-time" : undefined} role="cell">
+                          <div className={`time-review-work-time-cell${hasVacationCredit ? " time-review-week-time" : ""}`} role="cell">
                             {hasVacationCredit
                               ? formatTimeEntryMinutes(day.vacationCreditMinutes, "hours")
                               : renderTimeReviewCheckMark("unknown", {

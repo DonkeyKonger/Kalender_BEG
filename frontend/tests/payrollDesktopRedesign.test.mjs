@@ -83,6 +83,14 @@ test("each weekday is one bordered group with totals in their matching time colu
   assert.match(styles, /\.time-review-day-group \.time-review-week-check-row\.is-travel-time\s*\{[^}]*box-shadow:\s*none;/s);
 });
 
+test("daily and row work times share the same centered grid column", () => {
+  assert.match(pageSource, /className="time-review-day-group-total time-review-work-time-cell"[\s\S]*?Gesamtarbeitszeit/);
+  assert.match(pageSource, /className="time-review-work-time-cell" role="cell"[\s\S]*?renderTimeReviewCheckMark\(check\.timeCheck/);
+  assert.match(pageSource, /className=\{`time-review-work-time-cell\$\{hasVacationCredit \? " time-review-week-time" : ""\}`\} role="cell"/);
+  assert.match(styles, /\.time-review-work-time-cell\s*\{[^}]*grid-column:\s*10;[^}]*justify-self:\s*stretch;[^}]*text-align:\s*center;/s);
+  assert.match(styles, /\.time-review-week-check-row > \.time-review-work-time-cell\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s);
+});
+
 test("payroll review squares its framed surfaces within the active review workspace", () => {
   assert.match(pageSource, /activeTimeSubtab === "review" \? " is-payroll-review-workspace" : ""/);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-queue-panel,[\s\S]*?\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-day-group,[\s\S]*?border-radius:\s*0;/s);
