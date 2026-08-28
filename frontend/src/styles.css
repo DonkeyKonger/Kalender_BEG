@@ -19525,13 +19525,8 @@ body.mobile-modal-scroll-locked {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   overflow: hidden;
-}
-
-.time-review-worker-period {
-  flex: 0 0 auto;
-  white-space: nowrap;
 }
 
 .time-review-worker-identity h3 {
@@ -19547,7 +19542,7 @@ body.mobile-modal-scroll-locked {
   flex: 0 0 auto;
   border-left: 1px solid #dfe5ed;
   color: #14233b;
-  padding-left: 10px;
+  padding-left: 8px;
   font-size: 0.78rem;
   font-weight: 900;
   text-transform: none;

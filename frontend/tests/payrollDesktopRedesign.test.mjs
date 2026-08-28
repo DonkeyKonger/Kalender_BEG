@@ -48,12 +48,20 @@ test("review week navigation realigns its selected week after browser scroll res
 });
 
 test("worker detail keeps captured hours beside the name without a redundant status badge", () => {
-  assert.match(pageSource, /className="time-review-worker-identity"[\s\S]*?time-review-worker-period[\s\S]*?<h3>\{selectedReviewWorker\.personName\}<\/h3>[\s\S]*?className="time-review-worker-hours"/);
+  const identityStart = pageSource.indexOf('<div className="time-review-worker-identity">');
+  const identityEnd = pageSource.indexOf("</div>", identityStart);
+  const identitySource = pageSource.slice(identityStart, identityEnd);
+
+  assert.ok(identityStart >= 0);
+  assert.ok(identityEnd > identityStart);
+  assert.match(identitySource, /className="time-review-worker-identity">\s*<h3>\{selectedReviewWorker\.personName\}<\/h3>\s*<span\s*className="time-review-worker-hours"/);
+  assert.doesNotMatch(identitySource, /selectedReviewWeek\.week|formatRangeLabel|time-review-worker-period|KW \{/);
   assert.match(pageSource, /aria-label=\{`Erfasste Stunden: \$\{formatSubmittedHours\(selectedReviewWorker\.submittedMinutes\)\} Stunden`\}/);
   assert.doesNotMatch(pageSource, /time-review-worker-detail-status|time-review-worker-metrics|aria-label="Wochenkennzahlen"/);
   assert.doesNotMatch(pageSource, /Geplante Stunden|Die Differenz wird künftig aus den geplanten Stunden berechnet/);
-  assert.match(styles, /\.time-review-worker-identity\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*overflow:\s*hidden;/s);
-  assert.match(styles, /\.time-review-worker-hours\s*\{[^}]*border-left:\s*1px solid #dfe5ed;[^}]*white-space:\s*nowrap;/s);
+  assert.doesNotMatch(styles, /\.time-review-worker-period/);
+  assert.match(styles, /\.time-review-worker-identity\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*gap:\s*8px;[^}]*overflow:\s*hidden;/s);
+  assert.match(styles, /\.time-review-worker-hours\s*\{[^}]*border-left:\s*1px solid #dfe5ed;[^}]*padding-left:\s*8px;[^}]*white-space:\s*nowrap;/s);
   assert.match(styles, /\.time-review-check-mark:not\(\.is-ok\):not\(\.is-warning\)\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;/s);
 });
 

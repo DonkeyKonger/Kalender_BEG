@@ -1675,7 +1675,6 @@ export function TimeEntriesPage() {
               <div className="time-review-worker-detail">
                 <div className="time-review-worker-detail-head">
                   <div className="time-review-worker-identity">
-                    <span className="time-review-worker-period">KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)}</span>
                     <h3>{selectedReviewWorker.personName}</h3>
                     <span
                       className="time-review-worker-hours"
