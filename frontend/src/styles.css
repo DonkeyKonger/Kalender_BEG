@@ -19953,6 +19953,14 @@ body.mobile-modal-scroll-locked {
   white-space: nowrap;
 }
 
+.time-review-week-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+
 .time-entries-page.is-figma-times-workspace .time-review-week-nav {
   display: block;
   margin: 16px 24px 0;
@@ -19964,35 +19972,36 @@ body.mobile-modal-scroll-locked {
   display: flex;
   width: fit-content;
   max-width: 100%;
-  gap: 8px;
+  gap: 6px;
 }
 
 .time-review-week-nav .time-week-strip {
-  flex: 0 1 632px;
-  width: 632px;
+  /* Five complete 60px cards plus four 6px gaps. */
+  flex: 0 1 324px;
+  width: 324px;
   max-width: calc(100vw - 210px);
-  gap: 8px;
+  gap: 6px;
   padding: 0;
   scroll-snap-type: x mandatory;
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button {
   display: grid;
-  flex: 0 0 92px;
-  min-width: 92px;
-  min-height: 38px;
+  flex: 0 0 60px;
+  min-width: 60px;
+  min-height: 26px;
   align-content: center;
   border: 1px solid #d8e0ea;
   border-radius: 8px;
   background: #ffffff;
   color: #243348;
-  padding: 6px 8px;
+  padding: 4px 5px;
   scroll-snap-align: start;
   text-align: center;
 }
 
 .time-review-week-nav .time-week-strip button strong {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 900;
 }
 
@@ -20004,9 +20013,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-scroll-button {
-  flex: 0 0 38px;
-  width: 38px;
-  height: 38px;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
   border: 1px solid #d8e0ea;
   border-radius: 8px;
   background: #ffffff;
@@ -20506,6 +20515,11 @@ body.mobile-modal-scroll-locked {
 
   .time-review-download-all-button {
     width: 100%;
+  }
+
+  .time-review-week-nav-row {
+    display: grid;
+    gap: 12px;
   }
 
   .time-entries-page.is-figma-times-workspace .time-review-week-nav,

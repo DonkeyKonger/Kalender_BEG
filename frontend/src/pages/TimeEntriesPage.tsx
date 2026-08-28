@@ -1682,17 +1682,6 @@ export function TimeEntriesPage() {
           <h1>Lohnprüfung</h1>
           <p className="page-subtitle">Arbeitszeiten der Monteure prüfen</p>
         </div>
-        {activeTimeSubtab === "review" && (
-          <button
-            className="icon-button secondary time-review-download-all-button"
-            type="button"
-            disabled={isDownloadingAllReviewWeekXlsx}
-            onClick={() => void downloadAllReviewWeekXlsx()}
-          >
-            <Download aria-hidden="true" size={16} />
-            {isDownloadingAllReviewWeekXlsx ? "Excel wird erstellt..." : "Alle Arbeitsstunden herunterladen (Excel)"}
-          </button>
-        )}
       </div>
 
       {error && <p className="form-error">{error}</p>}
@@ -1715,42 +1704,53 @@ export function TimeEntriesPage() {
       {activeTimeSubtab === "review" && (
         <div className="time-entries-main time-review-main">
           <div className="time-week-nav-panel time-review-week-nav" aria-label="Kalenderwochen">
-            <div className="time-week-strip-shell">
-              <button
-                className="time-week-scroll-button"
-                disabled={!reviewWeekScrollState.canScrollLeft}
-                type="button"
-                aria-label="Kalenderwochen nach links scrollen"
-                onClick={() => scrollReviewWeeks(-1)}
-              >
-                <ChevronLeft aria-hidden="true" size={16} />
-              </button>
-              <div className="time-week-strip" ref={reviewWeekStripRef}>
-                {reviewWeekOptions.map((option, index) => (
-                  <button
-                    className={[
-                      option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? "is-active" : "",
-                      option.isCurrent ? "is-current" : "",
-                      completedReviewWeekKeys.has(reviewWeekKey(option)) ? "is-fully-reviewed" : "",
-                    ].filter(Boolean).join(" ")}
-                    data-week-index={index}
-                    key={`${option.year}-${option.week}`}
-                    title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
-                    type="button"
-                    onClick={() => selectReviewWeek(option)}
-                  >
-                    <strong>{option.label}</strong>
-                  </button>
-                ))}
+            <div className="time-review-week-nav-row">
+              <div className="time-week-strip-shell">
+                <button
+                  className="time-week-scroll-button"
+                  disabled={!reviewWeekScrollState.canScrollLeft}
+                  type="button"
+                  aria-label="Kalenderwochen nach links scrollen"
+                  onClick={() => scrollReviewWeeks(-1)}
+                >
+                  <ChevronLeft aria-hidden="true" size={16} />
+                </button>
+                <div className="time-week-strip" ref={reviewWeekStripRef}>
+                  {reviewWeekOptions.map((option, index) => (
+                    <button
+                      className={[
+                        option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? "is-active" : "",
+                        option.isCurrent ? "is-current" : "",
+                        completedReviewWeekKeys.has(reviewWeekKey(option)) ? "is-fully-reviewed" : "",
+                      ].filter(Boolean).join(" ")}
+                      data-week-index={index}
+                      key={`${option.year}-${option.week}`}
+                      title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
+                      type="button"
+                      onClick={() => selectReviewWeek(option)}
+                    >
+                      <strong>{option.label}</strong>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="time-week-scroll-button"
+                  disabled={!reviewWeekScrollState.canScrollRight}
+                  type="button"
+                  aria-label="Kalenderwochen nach rechts scrollen"
+                  onClick={() => scrollReviewWeeks(1)}
+                >
+                  <ChevronRight aria-hidden="true" size={16} />
+                </button>
               </div>
               <button
-                className="time-week-scroll-button"
-                disabled={!reviewWeekScrollState.canScrollRight}
+                className="icon-button secondary time-review-download-all-button"
                 type="button"
-                aria-label="Kalenderwochen nach rechts scrollen"
-                onClick={() => scrollReviewWeeks(1)}
+                disabled={isDownloadingAllReviewWeekXlsx}
+                onClick={() => void downloadAllReviewWeekXlsx()}
               >
-                <ChevronRight aria-hidden="true" size={16} />
+                <Download aria-hidden="true" size={16} />
+                {isDownloadingAllReviewWeekXlsx ? "Excel wird erstellt..." : "Alle Arbeitsstunden herunterladen (Excel)"}
               </button>
             </div>
           </div>

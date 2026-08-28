@@ -19,11 +19,13 @@ test("payroll review uses the requested master-detail queue without removing exi
 
 test("review week navigation presents compact week cards without date ranges", () => {
   assert.match(pageSource, /className="time-week-nav-panel time-review-week-nav"/);
+  assert.match(pageSource, /className="time-review-week-nav-row"[\s\S]*className="time-week-strip-shell"[\s\S]*className="icon-button secondary time-review-download-all-button"/);
   assert.match(pageSource, /<strong>\{option\.label\}<\/strong>\s*<\/button>/);
   assert.doesNotMatch(pageSource, /<small>\{formatDayMonth\(option\.start\)\}–\{formatDayMonth\(option\.end\)\}<\/small>/);
-  assert.match(styles, /\.time-review-week-nav \.time-week-strip\s*\{[^}]*width:\s*632px;/s);
-  assert.match(styles, /\.time-review-week-nav \.time-week-strip button\s*\{[^}]*flex:\s*0 0 92px;[^}]*min-width:\s*92px;[^}]*min-height:\s*38px;/s);
-  assert.match(styles, /\.time-review-week-nav \.time-week-scroll-button\s*\{[^}]*height:\s*38px;/s);
+  assert.match(styles, /\.time-review-week-nav \.time-week-strip\s*\{[^}]*width:\s*324px;/s);
+  assert.match(styles, /\.time-review-week-nav \.time-week-strip button\s*\{[^}]*flex:\s*0 0 60px;[^}]*min-width:\s*60px;[^}]*min-height:\s*26px;[^}]*padding:\s*4px 5px;/s);
+  assert.match(styles, /\.time-review-week-nav \.time-week-scroll-button\s*\{[^}]*height:\s*26px;/s);
+  assert.match(styles, /\.time-review-week-nav-row\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*space-between;/s);
 });
 
 test("review week navigation realigns its selected week after browser scroll restoration", () => {
