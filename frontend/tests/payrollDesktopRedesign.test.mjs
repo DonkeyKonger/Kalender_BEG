@@ -24,6 +24,12 @@ test("review week navigation presents five compact week cards with date ranges",
   assert.match(styles, /\.time-review-week-nav \.time-week-strip button\s*\{[^}]*flex:\s*0 0 120px;[^}]*min-width:\s*120px;[^}]*min-height:\s*58px;/s);
 });
 
+test("review week navigation realigns its selected week after browser scroll restoration", () => {
+  assert.match(pageSource, /window\.addEventListener\("pageshow", realignReviewWeekStripAfterPageShow\)/);
+  assert.match(pageSource, /function realignReviewWeekStripAfterPageShow\(\): void \{\s*animationFrameId = window\.requestAnimationFrame\(\(\) => \{\s*scrollWeekStripToSelection\(reviewWeekStripRef\.current, reviewWeekOptions, selectedReviewWeek\);/s);
+  assert.match(pageSource, /window\.removeEventListener\("pageshow", realignReviewWeekStripAfterPageShow\)/);
+});
+
 test("worker detail keeps quiet metrics and explicit future-data placeholders", () => {
   assert.match(pageSource, />Erfasste Stunden<\/span>/);
   assert.match(pageSource, /className="is-placeholder" title="Geplante Stunden werden künftig ergänzt"/);

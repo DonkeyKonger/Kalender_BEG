@@ -742,6 +742,28 @@ export function TimeEntriesPage() {
   }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek]);
 
   useLayoutEffect(() => {
+    if (activeTimeSubtab !== "review") {
+      return;
+    }
+
+    let animationFrameId: number | null = null;
+    function realignReviewWeekStripAfterPageShow(): void {
+      animationFrameId = window.requestAnimationFrame(() => {
+        scrollWeekStripToSelection(reviewWeekStripRef.current, reviewWeekOptions, selectedReviewWeek);
+        updateReviewWeekScrollState();
+      });
+    }
+
+    window.addEventListener("pageshow", realignReviewWeekStripAfterPageShow);
+    return () => {
+      window.removeEventListener("pageshow", realignReviewWeekStripAfterPageShow);
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek]);
+
+  useLayoutEffect(() => {
     if (activeTimeSubtab !== "evaluation") {
       hasAutoScrolledVisibleEvaluationWeekRef.current = false;
       return;
