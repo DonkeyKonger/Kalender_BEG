@@ -20344,9 +20344,9 @@ body.mobile-modal-scroll-locked {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
+  container-name: time-review-detail;
+  container-type: inline-size;
 }
 
 .time-review-detail-shell > .time-table-note {
@@ -20354,14 +20354,16 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-worker-detail {
-  gap: 14px;
+  gap: 0;
   padding: 0;
 }
 
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-worker-detail {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-worker-empty-detail {
@@ -20373,17 +20375,18 @@ body.mobile-modal-scroll-locked {
 
 .time-entries-page.is-figma-times-workspace .time-review-worker-detail-head {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
-  gap: 14px 20px;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 8px 14px;
   border-bottom: 1px solid #e7ecf2;
-  padding: 16px 18px 14px;
+  padding: 10px 14px;
 }
 
 .time-review-worker-identity {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .time-review-worker-identity > div:first-child {
@@ -20427,7 +20430,7 @@ body.mobile-modal-scroll-locked {
 .time-review-worker-detail-head .time-review-worker-detail-actions {
   grid-column: 2;
   grid-row: 1 / span 2;
-  align-self: start;
+  align-self: center;
 }
 
 .time-review-worker-detail-head .time-review-worker-detail-primary-actions {
@@ -20440,10 +20443,64 @@ body.mobile-modal-scroll-locked {
   white-space: nowrap;
 }
 
+.time-review-week-review-control {
+  display: inline-flex;
+  position: relative;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
 .time-review-worker-detail-head .time-review-week-review-button {
-  border-color: #b9d7c4;
-  background: #f2fbf5;
-  color: #227345;
+  display: inline-grid;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  flex: 0 0 40px;
+  appearance: none;
+  place-items: center;
+  border: 2px solid #2f855a;
+  border-radius: 50%;
+  background: transparent;
+  color: #237347;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: none;
+}
+
+.time-review-worker-detail-head .time-review-week-review-button:hover,
+.time-review-worker-detail-head .time-review-week-review-button:focus-visible {
+  border-color: #237347;
+  background: #eaf6ee;
+  color: #185d38;
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(47 133 90 / 18%);
+}
+
+.time-review-worker-detail-head .time-review-week-review-button.is-reviewed {
+  border-color: #237a49;
+  background: #237a49;
+  color: #ffffff;
+}
+
+.time-review-worker-detail-head .time-review-week-review-button.is-reviewed:hover,
+.time-review-worker-detail-head .time-review-week-review-button.is-reviewed:focus-visible {
+  border-color: #185d38;
+  background: #185d38;
+  color: #ffffff;
+}
+
+.time-review-worker-detail-head .time-review-week-review-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.time-review-week-review-menu {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 132px;
 }
 
 .time-review-worker-detail-head .time-review-week-xlsx-button {
@@ -20464,9 +20521,10 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-week-check-table {
-  flex: 0 0 auto;
-  overflow-x: auto;
-  overflow-y: visible;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-week-check-head {
@@ -20581,15 +20639,18 @@ body.mobile-modal-scroll-locked {
   text-align: center;
 }
 
-@media (max-width: 1280px) {
-  .time-review-workspace-layout {
-    grid-template-columns: minmax(280px, 310px) minmax(0, 1fr);
-    gap: 14px;
-    margin-right: 18px;
-    margin-left: 18px;
+@container time-review-detail (max-width: 1050px) {
+  .time-review-column-label-full {
+    display: none;
   }
 
-  .time-entries-page.is-figma-times-workspace .time-review-worker-detail-head {
+  .time-review-column-label-short {
+    display: inline;
+  }
+}
+
+@container time-review-detail (max-width: 720px) {
+  .time-review-worker-detail-head {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -20606,14 +20667,16 @@ body.mobile-modal-scroll-locked {
   .time-review-worker-detail-head .time-review-week-xlsx-button {
     justify-self: start;
   }
+}
 
-  .time-review-column-label-full {
-    display: none;
+@media (max-width: 1280px) {
+  .time-review-workspace-layout {
+    grid-template-columns: minmax(280px, 310px) minmax(0, 1fr);
+    gap: 14px;
+    margin-right: 18px;
+    margin-left: 18px;
   }
 
-  .time-review-column-label-short {
-    display: inline;
-  }
 }
 
 @media (max-width: 980px) {
@@ -20681,7 +20744,8 @@ body.mobile-modal-scroll-locked {
   }
 
   .time-review-worker-detail-head .time-review-worker-detail-primary-actions {
-    display: grid;
+    display: flex;
+    align-items: center;
     width: 100%;
   }
 
@@ -20689,6 +20753,11 @@ body.mobile-modal-scroll-locked {
   .time-review-worker-detail-head .time-review-worker-detail-action-stack,
   .time-review-worker-detail-head .icon-button {
     width: 100%;
+  }
+
+  .time-review-worker-detail-head .time-review-manual-create-button {
+    flex: 1 1 auto;
+    width: auto;
   }
 
   .time-review-day-group,

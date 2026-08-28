@@ -56,6 +56,21 @@ test("worker detail keeps only captured hours without placeholder metrics", () =
   assert.match(styles, /\.time-review-check-mark:not\(\.is-ok\):not\(\.is-warning\)\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;/s);
 });
 
+test("weekly review uses a round accessible state action and preserves reset", () => {
+  assert.match(pageSource, /className=\{`time-review-week-review-button\$\{selectedReviewWorker\.isReviewed \? " is-reviewed" : ""\}`\}/);
+  assert.match(pageSource, /aria-pressed=\{selectedReviewWorker\.isReviewed\}/);
+  assert.match(pageSource, /aria-haspopup=\{selectedReviewWorker\.isReviewed \? "menu" : undefined\}/);
+  assert.match(pageSource, /Monteurwoche geprüft, Status ändern/);
+  assert.match(pageSource, /Monteurwoche als geprüft markieren/);
+  assert.match(pageSource, /title=\{selectedReviewWorker\.isReviewed[\s\S]*?Monteurwoche geprüft – klicken, um den Status zu ändern/);
+  assert.match(pageSource, /void markSelectedReviewWeekReviewed\(\)/);
+  assert.match(pageSource, /role="menuitem"[\s\S]*?void resetSelectedReviewWeekReview\(\)/);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*width:\s*40px;[^}]*height:\s*40px;[^}]*border:\s*2px solid #2f855a;[^}]*border-radius:\s*50%;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:hover,[\s\S]*?\.time-review-week-review-button:focus-visible\s*\{[^}]*background:\s*#eaf6ee;[^}]*box-shadow:/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*background:\s*#237a49;[^}]*color:\s*#ffffff;/s);
+  assert.match(pageSource, /className="icon-button secondary time-review-manual-create-button"/);
+});
+
 test("each weekday is one bordered group with totals in their matching time columns", () => {
   assert.match(pageSource, /<section className="time-review-day-group" key=\{day\.date\} role="rowgroup"/);
   assert.match(pageSource, /className="time-review-day-group-head" role="row"/);
@@ -76,25 +91,28 @@ test("payroll review squares its framed surfaces within the active review worksp
   assert.doesNotMatch(styles, /is-payroll-review-workspace \.time-review-queue-status/);
 });
 
-test("payroll review fixes navigation while the queue and complete detail block scroll independently", () => {
+test("payroll review fixes the detail head while only queue and table scroll independently", () => {
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*calc\(100dvh - 96px\);[^}]*min-height:\s*0;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-queue-panel\s*\{[^}]*grid-template-rows:\s*auto auto auto auto minmax\(0, 1fr\) auto;[^}]*min-height:\s*0;/s);
   assert.match(styles, /is-payroll-review-workspace > \.page-header,[\s\S]*?is-payroll-review-workspace > \.time-main-subtabs\s*\{[^}]*flex:\s*0 0 auto;/s);
   assert.match(styles, /is-payroll-review-workspace > \.time-main-subtabs\s*\{[^}]*overflow:\s*visible;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-workspace-layout\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);[^}]*height:\s*calc\(100% - 40px\);/s);
-  assert.match(styles, /is-payroll-review-workspace \.time-review-detail-shell\s*\{[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
-  assert.match(styles, /is-payroll-review-workspace \.time-review-worker-detail\s*\{[^}]*flex:\s*0 0 auto;/s);
-  assert.match(styles, /is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*flex:\s*0 0 auto;[^}]*overflow-x:\s*auto;[^}]*overflow-y:\s*visible;/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-detail-shell\s*\{[^}]*overflow:\s*hidden;[^}]*container-name:\s*time-review-detail;[^}]*container-type:\s*inline-size;/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-worker-detail\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
+  assert.match(styles, /\.time-review-worker-detail-head\s*\{[^}]*flex:\s*0 0 auto;/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
+  assert.match(pageSource, /time-review-worker-detail-head[\s\S]*?time-review-week-check-table/);
   assert.match(pageSource, /time-review-week-check-table[\s\S]*?selectedReviewWeekDays\.map\(\(day\)[\s\S]*?time-review-day-group-entries[\s\S]*?time-review-week-check-row/s);
 });
 
-test("payroll table abbreviates headers below desktop width without hiding their accessible names", () => {
+test("payroll table abbreviates headers from its container width without hiding accessible names", () => {
   assert.match(pageSource, /role="columnheader" aria-label="Montagebeginn" title="Montagebeginn"><span className="time-review-column-label-full">Montagebeginn<\/span><span className="time-review-column-label-short" aria-hidden="true">MA<\/span>/);
   assert.match(pageSource, /role="columnheader" aria-label="Montageende" title="Montageende"[\s\S]*?time-review-column-label-short" aria-hidden="true">ME/);
+  assert.match(pageSource, /role="columnheader" aria-label="Montagezeit" title="Montagezeit"[\s\S]*?time-review-column-label-short" aria-hidden="true">MZ/);
   assert.match(pageSource, /role="columnheader" aria-label="Arbeitszeit" title="Arbeitszeit"[\s\S]*?time-review-column-label-short" aria-hidden="true">AZ/);
   assert.match(styles, /\.time-review-column-label-short\s*\{[^}]*display:\s*none;/s);
-  assert.match(styles, /@media \(max-width: 1280px\)[\s\S]*?\.time-review-column-label-full\s*\{[^}]*display:\s*none;[\s\S]*?\.time-review-column-label-short\s*\{[^}]*display:\s*inline;/s);
+  assert.match(styles, /@container time-review-detail \(max-width: 1050px\)\s*\{[\s\S]*?\.time-review-column-label-full\s*\{[^}]*display:\s*none;[\s\S]*?\.time-review-column-label-short\s*\{[^}]*display:\s*inline;/s);
 });
 
 test("payroll queue filters stay on one compact row until the viewport is truly narrow", () => {

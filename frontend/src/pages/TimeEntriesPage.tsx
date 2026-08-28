@@ -1862,53 +1862,7 @@ export function TimeEntriesPage() {
                     </div>
                     <div className="time-review-worker-detail-status">
                       {selectedReviewWorker.isReviewed ? (
-                        <div
-                          ref={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId ? reviewWeekStatusMenuRef : undefined}
-                          style={{ display: "inline-flex", position: "relative" }}
-                        >
-                          <button
-                            aria-expanded={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId}
-                            aria-haspopup="menu"
-                            className="status-badge status-badge-active"
-                            disabled={!canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId}
-                            style={{
-                              appearance: "none",
-                              border: 0,
-                              cursor: !canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId ? "not-allowed" : "pointer",
-                              font: "inherit",
-                            }}
-                            type="button"
-                            onClick={() => setReviewWeekStatusMenuPersonId((current) => (
-                              current === selectedReviewWorker.personId ? null : selectedReviewWorker.personId
-                            ))}
-                          >
-                            Geprüft
-                          </button>
-                          {reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && (
-                            <div
-                              className="time-review-day-move-popover"
-                              role="menu"
-                              aria-label="Lohnprüfstatus Aktionen"
-                              style={{
-                                minWidth: "132px",
-                                position: "absolute",
-                                right: 0,
-                                top: "calc(100% + 4px)",
-                                zIndex: 100,
-                              }}
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                disabled={markingReviewWeekPersonId === selectedReviewWorker.personId}
-                                style={{ background: "#fff8eb", color: "#9a5b00" }}
-                                onClick={() => void resetSelectedReviewWeekReview()}
-                              >
-                                {markingReviewWeekPersonId === selectedReviewWorker.personId ? "Wird zurückgesetzt..." : "Zurücksetzen"}
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                        <StatusBadge tone="active">Geprüft</StatusBadge>
                       ) : selectedReviewWorker.isReset ? (
                         <StatusBadge tone="warning">Zurückgesetzt</StatusBadge>
                       ) : (
@@ -1938,19 +1892,59 @@ export function TimeEntriesPage() {
                             Zeit manuell erstellen
                           </button>
                         )}
-                        <button
-                          className="icon-button secondary time-review-week-review-button"
-                          type="button"
-                          disabled={!canManageTimeEntries || selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
-                          onClick={() => void markSelectedReviewWeekReviewed()}
+                        <div
+                          className="time-review-week-review-control"
+                          ref={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId ? reviewWeekStatusMenuRef : undefined}
                         >
-                          <Check aria-hidden="true" size={15} />
-                          {selectedReviewWorker.isReviewed
-                            ? "Monteurwoche geprüft"
-                            : markingReviewWeekPersonId === selectedReviewWorker.personId
-                              ? "Monteurwoche wird geprüft..."
+                          <button
+                            aria-expanded={selectedReviewWorker.isReviewed
+                              ? reviewWeekStatusMenuPersonId === selectedReviewWorker.personId
+                              : undefined}
+                            aria-haspopup={selectedReviewWorker.isReviewed ? "menu" : undefined}
+                            aria-label={markingReviewWeekPersonId === selectedReviewWorker.personId
+                              ? selectedReviewWorker.isReviewed
+                                ? "Monteurwoche wird zurückgesetzt"
+                                : "Monteurwoche wird geprüft"
+                              : selectedReviewWorker.isReviewed
+                                ? "Monteurwoche geprüft, Status ändern"
+                                : "Monteurwoche als geprüft markieren"}
+                            aria-pressed={selectedReviewWorker.isReviewed}
+                            className={`time-review-week-review-button${selectedReviewWorker.isReviewed ? " is-reviewed" : ""}`}
+                            title={selectedReviewWorker.isReviewed
+                              ? "Monteurwoche geprüft – klicken, um den Status zu ändern"
                               : "Monteurwoche als geprüft markieren"}
-                        </button>
+                            type="button"
+                            disabled={!canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                            onClick={() => {
+                              if (selectedReviewWorker.isReviewed) {
+                                setReviewWeekStatusMenuPersonId((current) => (
+                                  current === selectedReviewWorker.personId ? null : selectedReviewWorker.personId
+                                ));
+                                return;
+                              }
+                              void markSelectedReviewWeekReviewed();
+                            }}
+                          >
+                            <Check aria-hidden="true" size={18} />
+                          </button>
+                          {selectedReviewWorker.isReviewed && reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && (
+                            <div
+                              className="time-review-day-move-popover time-review-week-review-menu"
+                              role="menu"
+                              aria-label="Lohnprüfstatus Aktionen"
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                disabled={markingReviewWeekPersonId === selectedReviewWorker.personId}
+                                style={{ background: "#fff8eb", color: "#9a5b00" }}
+                                onClick={() => void resetSelectedReviewWeekReview()}
+                              >
+                                {markingReviewWeekPersonId === selectedReviewWorker.personId ? "Wird zurückgesetzt..." : "Zurücksetzen"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       {selectedReviewWorker.isReviewed && (
                         <button
