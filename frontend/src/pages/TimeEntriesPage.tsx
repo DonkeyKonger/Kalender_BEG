@@ -1722,15 +1722,19 @@ export function TimeEntriesPage() {
                         option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? "is-active" : "",
                         option.isCurrent ? "is-current" : "",
                         completedReviewWeekKeys.has(reviewWeekKey(option)) ? "is-fully-reviewed" : "",
-                      ].filter(Boolean).join(" ")}
-                      data-week-index={index}
-                      key={`${option.year}-${option.week}`}
-                      title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
-                      type="button"
-                      onClick={() => selectReviewWeek(option)}
-                    >
-                      <strong>{option.label}</strong>
-                    </button>
+                    ].filter(Boolean).join(" ")}
+                    data-week-index={index}
+                    key={`${option.year}-${option.week}`}
+                    aria-current={option.isCurrent ? "date" : undefined}
+                    aria-label={`KW ${option.week} ${option.year}${option.isCurrent ? ", aktuelle Kalenderwoche" : ""}${option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week ? ", ausgewählt" : ""}`}
+                    aria-pressed={option.year === selectedReviewWeek.year && option.week === selectedReviewWeek.week}
+                    title={`${formatRangeLabel(option.start, option.end)} · ${option.year}${option.isCurrent ? " · aktuelle Kalenderwoche" : ""}`}
+                    type="button"
+                    onClick={() => selectReviewWeek(option)}
+                  >
+                    <strong>{option.label}</strong>
+                    {option.isCurrent && <span className="time-review-week-current-marker" aria-hidden="true">jetzt</span>}
+                  </button>
                   ))}
                 </div>
                 <button
@@ -1975,18 +1979,18 @@ export function TimeEntriesPage() {
                 <div className="time-review-week-check-table" role="table" aria-label={`Lohnprüfung ${selectedReviewWorker.personName} KW ${selectedReviewWeek.week}`}>
                   <div className="time-review-week-check-head" role="row">
                     <span role="columnheader" aria-label="Tag ändern"></span>
-                    <span role="columnheader">Tag</span>
-                    <span role="columnheader">Baustelle</span>
-                    <span className="time-review-week-overnight" role="columnheader">
-                      <span className="time-review-week-overnight-heading"><span>ÜN</span></span>
+                    <span role="columnheader" aria-label="Tag" title="Tag"><span className="time-review-column-label-full">Tag</span><span className="time-review-column-label-short" aria-hidden="true">Tg</span></span>
+                    <span role="columnheader" aria-label="Baustelle" title="Baustelle"><span className="time-review-column-label-full">Baustelle</span><span className="time-review-column-label-short" aria-hidden="true">BS</span></span>
+                    <span className="time-review-week-overnight" role="columnheader" aria-label="Übernachtung" title="Übernachtung">
+                      <span className="time-review-week-overnight-heading"><span className="time-review-column-label-full">ÜN</span><span className="time-review-column-label-short" aria-hidden="true">ÜN</span></span>
                     </span>
-                    <span role="columnheader">Montagebeginn</span>
-                    <span role="columnheader">Montageende</span>
-                    <span role="columnheader">Pause</span>
-                    <span role="columnheader">Montagezeit</span>
-                    <span role="columnheader">Ort</span>
-                    <span role="columnheader">Arbeitszeit</span>
-                    <span role="columnheader">Geprüft</span>
+                    <span role="columnheader" aria-label="Montagebeginn" title="Montagebeginn"><span className="time-review-column-label-full">Montagebeginn</span><span className="time-review-column-label-short" aria-hidden="true">MA</span></span>
+                    <span role="columnheader" aria-label="Montageende" title="Montageende"><span className="time-review-column-label-full">Montageende</span><span className="time-review-column-label-short" aria-hidden="true">ME</span></span>
+                    <span role="columnheader" aria-label="Pause" title="Pause"><span className="time-review-column-label-full">Pause</span><span className="time-review-column-label-short" aria-hidden="true">Pa</span></span>
+                    <span role="columnheader" aria-label="Montagezeit" title="Montagezeit"><span className="time-review-column-label-full">Montagezeit</span><span className="time-review-column-label-short" aria-hidden="true">MZ</span></span>
+                    <span role="columnheader" aria-label="Ort" title="Ort"><span className="time-review-column-label-full">Ort</span><span className="time-review-column-label-short" aria-hidden="true">O</span></span>
+                    <span role="columnheader" aria-label="Arbeitszeit" title="Arbeitszeit"><span className="time-review-column-label-full">Arbeitszeit</span><span className="time-review-column-label-short" aria-hidden="true">AZ</span></span>
+                    <span role="columnheader" aria-label="Geprüft" title="Geprüft"><span className="time-review-column-label-full">Geprüft</span><span className="time-review-column-label-short" aria-hidden="true">GP</span></span>
                   </div>
                   {selectedReviewWeekDays.map((day) => (
                     <section className="time-review-day-group" key={day.date} role="rowgroup" aria-label={`${day.weekdayLabel}, ${formatDate(day.date)}`}>
@@ -1996,13 +2000,33 @@ export function TimeEntriesPage() {
                           <strong>{day.weekdayLabel}</strong>
                           <span>{formatDate(day.date)}</span>
                         </span>
-                        <span className="time-review-day-group-summary" role="cell">
-                          {day.entries.length > 0
-                            ? `${day.entries.length} ${day.entries.length === 1 ? "Eintrag" : "Einträge"} · ${formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}`
-                            : day.absenceType
+                        <span className="time-review-day-group-status" role="cell">
+                          {day.entries.length === 0 && (
+                            day.absenceType
                               ? absenceTypeLabels[day.absenceType]
-                              : "Keine Zeitmeldung"}
+                              : "Keine Zeitmeldung"
+                          )}
                         </span>
+                        <span className="time-review-week-overnight" role="cell" aria-hidden="true"></span>
+                        <span className="time-review-week-time" role="cell" aria-hidden="true"></span>
+                        <span className="time-review-week-time" role="cell" aria-hidden="true"></span>
+                        <span className="time-review-week-time" role="cell" aria-hidden="true"></span>
+                        <span
+                          className="time-review-day-group-total"
+                          role="cell"
+                          aria-label={day.entries.length > 0 ? `Gesamtmontagezeit ${formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}` : undefined}
+                        >
+                          {day.entries.length > 0 && formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}
+                        </span>
+                        <span role="cell" aria-hidden="true"></span>
+                        <span
+                          className="time-review-day-group-total"
+                          role="cell"
+                          aria-label={day.entries.length === 0 && day.vacationCreditMinutes > 0 ? `Gesamtarbeitszeit ${formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}` : undefined}
+                        >
+                          {day.entries.length === 0 && day.vacationCreditMinutes > 0 && formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}
+                        </span>
+                        <span role="cell" aria-hidden="true"></span>
                       </div>
                       <div className="time-review-day-group-entries">
                     {day.entries.length > 0 ? day.entries.map((check) => (
