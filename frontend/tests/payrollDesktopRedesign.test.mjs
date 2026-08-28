@@ -49,6 +49,14 @@ test("each weekday is one bordered group without decorative day bars", () => {
   assert.match(styles, /\.time-review-day-group \.time-review-week-check-row\.is-travel-time\s*\{[^}]*box-shadow:\s*none;/s);
 });
 
+test("payroll review squares its framed surfaces within the active review workspace", () => {
+  assert.match(pageSource, /activeTimeSubtab === "review" \? " is-payroll-review-workspace" : ""/);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-queue-panel,[\s\S]*?\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-day-group,[\s\S]*?border-radius:\s*0;/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-week-nav \.time-week-strip button,[\s\S]*?\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-week-check-head,[\s\S]*?border-radius:\s*0;/s);
+  assert.match(styles, /\.time-review-queue-status\s*\{[^}]*border-radius:\s*999px;/s);
+  assert.doesNotMatch(styles, /is-payroll-review-workspace \.time-review-queue-status/);
+});
+
 test("desktop layout keeps the queue compact and stacks safely below desktop width", () => {
   assert.match(styles, /\.time-review-workspace-layout\s*\{[^}]*grid-template-columns:\s*minmax\(300px, 336px\) minmax\(0, 1fr\);[^}]*gap:\s*20px;/s);
   assert.match(styles, /@media \(max-width: 980px\)[\s\S]*?\.time-review-workspace-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s);

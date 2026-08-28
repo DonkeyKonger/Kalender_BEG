@@ -1676,7 +1676,7 @@ export function TimeEntriesPage() {
   }
 
   return (
-    <section className="time-entries-page is-figma-times-workspace">
+    <section className={`time-entries-page is-figma-times-workspace${activeTimeSubtab === "review" ? " is-payroll-review-workspace" : ""}`}>
       <div className="page-header entity-page-header">
         <div>
           <h1>Lohnprüfung</h1>

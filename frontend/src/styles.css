@@ -20433,6 +20433,27 @@ body.mobile-modal-scroll-locked {
   color: #718096;
 }
 
+/* Keep the active payroll-review workspace rectilinear without flattening shared controls elsewhere. */
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-download-all-button,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-week-nav,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-week-nav .time-week-strip button,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-week-nav .time-week-scroll-button,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-queue-panel,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-detail-shell,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-queue-search,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-queue-filters button,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-queue-filters button small,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-worker-detail-head .icon-button,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-week-check-head,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-day-group,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-day-move-button,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-overnight-marker,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-overnight-bed,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-overnight-badge,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-overnight-trigger {
+  border-radius: 0;
+}
+
 .time-review-worker-empty-detail {
   min-height: 360px;
   place-content: center;
