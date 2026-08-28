@@ -19513,6 +19513,16 @@ body.mobile-modal-scroll-locked {
   flex-direction: column;
   height: calc(100dvh - 96px);
   min-height: 0;
+  overflow: hidden;
+}
+
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace > .page-header,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace > .time-main-subtabs {
+  flex: 0 0 auto;
+}
+
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace > .time-main-subtabs {
+  overflow: visible;
 }
 
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-main {
@@ -20087,6 +20097,8 @@ body.mobile-modal-scroll-locked {
 
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-workspace-layout {
   align-items: stretch;
+  grid-template-rows: minmax(0, 1fr);
+  height: calc(100% - 40px);
   min-height: 0;
   overflow: hidden;
 }
@@ -20330,6 +20342,9 @@ body.mobile-modal-scroll-locked {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .time-review-detail-shell > .time-table-note {
@@ -20341,7 +20356,12 @@ body.mobile-modal-scroll-locked {
   padding: 0;
 }
 
-.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-worker-detail,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-worker-detail {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+}
+
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-worker-empty-detail {
   display: flex;
   flex: 1 1 auto;
@@ -20453,10 +20473,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-week-check-table {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
+  flex: 0 0 auto;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-week-check-head {

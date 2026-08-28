@@ -72,11 +72,17 @@ test("payroll review squares its framed surfaces within the active review worksp
   assert.doesNotMatch(styles, /is-payroll-review-workspace \.time-review-queue-status/);
 });
 
-test("payroll review fills the viewport while its queue and table keep their own scroll areas", () => {
+test("payroll review fixes navigation while the queue and complete detail block scroll independently", () => {
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*calc\(100dvh - 96px\);[^}]*min-height:\s*0;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-queue-panel\s*\{[^}]*grid-template-rows:\s*auto auto auto auto minmax\(0, 1fr\) auto;[^}]*min-height:\s*0;/s);
-  assert.match(styles, /is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*auto;/s);
+  assert.match(styles, /is-payroll-review-workspace > \.page-header,[\s\S]*?is-payroll-review-workspace > \.time-main-subtabs\s*\{[^}]*flex:\s*0 0 auto;/s);
+  assert.match(styles, /is-payroll-review-workspace > \.time-main-subtabs\s*\{[^}]*overflow:\s*visible;/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-workspace-layout\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);[^}]*height:\s*calc\(100% - 40px\);/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-detail-shell\s*\{[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-worker-detail\s*\{[^}]*flex:\s*0 0 auto;/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*flex:\s*0 0 auto;[^}]*overflow-x:\s*auto;[^}]*overflow-y:\s*visible;/s);
+  assert.match(pageSource, /time-review-week-check-table[\s\S]*?selectedReviewWeekDays\.map\(\(day\)[\s\S]*?time-review-day-group-entries[\s\S]*?time-review-week-check-row/s);
 });
 
 test("payroll table abbreviates headers below desktop width without hiding their accessible names", () => {
