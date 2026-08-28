@@ -1,5 +1,11 @@
 # Projektweite Arbeitsvereinbarung
 
+## Worker-Modellrichtlinie
+
+- Für alle Codex-Worker und neuen Worker-Turns grundsätzlich `gpt-5.6-sol` verwenden.
+- Nach Komplexität staffeln: `high` für normale Implementierungen und klar begrenzte Bugfixes; `xhigh` für komplexe Mehrdatei-Änderungen, responsive UI, Regressionen und parallele Zusammenführung; `max` für kritische Integrationen, schwer reproduzierbare Fehler und qualitätskritische Aufgaben.
+- `gpt-5.6-terra` oder `gpt-5.6-luna` niemals automatisch verwenden, sondern nur auf ausdrücklichen Nutzerwunsch.
+
 ## Codex-Workflow und Git-Übergabe
 
 - Nutzeränderungen dürfen in einer separaten, isolierten Codex-Arbeitskopie oder durch einen passenden KI-Arbeiter umgesetzt werden.
