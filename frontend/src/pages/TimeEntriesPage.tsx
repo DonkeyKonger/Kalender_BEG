@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, ChevronsUpDown, RefreshCw, Trash2 } from "lucide-react";
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, RefreshCw, Search, Trash2 } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -22,6 +22,7 @@ import {
 import {
   formatGermanDateKey as formatDate,
   formatGermanDateKeyRange as formatRangeLabel,
+  formatGermanDayMonth as formatDayMonth,
   formatGermanDateTimeShort as formatDateTime,
   formatGermanDetailDate as formatDetailDate,
   formatGermanTimeShort as formatTime,
@@ -124,6 +125,8 @@ type TimeReviewWorkerSummary = {
   isReset: boolean;
   entries: TimeEntry[];
 };
+type TimeReviewWorkerFilter = "all" | "open" | "missing" | "reviewed";
+type TimeReviewWorkerStatus = Exclude<TimeReviewWorkerFilter, "all">;
 type TimeReviewCheckState = "ok" | "warning" | "unknown";
 type TimeReviewEntryCheck = {
   entry: TimeEntry;
@@ -281,6 +284,8 @@ export function TimeEntriesPage() {
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [reviewWeekStatusMenuPersonId, setReviewWeekStatusMenuPersonId] = useState<number | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
+  const [reviewWorkerSearch, setReviewWorkerSearch] = useState("");
+  const [reviewWorkerFilter, setReviewWorkerFilter] = useState<TimeReviewWorkerFilter>("all");
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const [evaluationWeekScrollState, setEvaluationWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const canManageTimeEntries = canEditMainPage(user, "payroll");
@@ -438,6 +443,14 @@ export function TimeEntriesPage() {
     });
     return result;
   }, [payrollWeekPersons, people, reviewAbsences, reviewAllEntries, reviewEntries, resetWorkerIds, reviewedWorkerIds]);
+  const reviewWorkerFilterCounts = useMemo(
+    () => countTimeReviewWorkersByFilter(timeReviewWorkers),
+    [timeReviewWorkers],
+  );
+  const filteredTimeReviewWorkers = useMemo(
+    () => filterTimeReviewWorkers(timeReviewWorkers, reviewWorkerSearch, reviewWorkerFilter),
+    [reviewWorkerFilter, reviewWorkerSearch, timeReviewWorkers],
+  );
   const selectedReviewWorker = useMemo(
     () => timeReviewWorkers.find((worker) => worker.personId === selectedReviewPersonId) ?? null,
     [selectedReviewPersonId, timeReviewWorkers],
@@ -1648,6 +1661,17 @@ export function TimeEntriesPage() {
           <h1>Lohnprüfung</h1>
           <p className="page-subtitle">Arbeitszeiten der Monteure prüfen</p>
         </div>
+        {activeTimeSubtab === "review" && (
+          <button
+            className="icon-button secondary time-review-download-all-button"
+            type="button"
+            disabled={isDownloadingAllReviewWeekXlsx}
+            onClick={() => void downloadAllReviewWeekXlsx()}
+          >
+            <Download aria-hidden="true" size={16} />
+            {isDownloadingAllReviewWeekXlsx ? "Excel wird erstellt..." : "Alle Arbeitsstunden herunterladen (Excel)"}
+          </button>
+        )}
       </div>
 
       {error && <p className="form-error">{error}</p>}
@@ -1669,11 +1693,7 @@ export function TimeEntriesPage() {
 
       {activeTimeSubtab === "review" && (
         <div className="time-entries-main time-review-main">
-          <div className="time-week-nav-panel" aria-label="Kalenderwochen">
-            <div className="time-week-nav-title">
-              <span>Kalenderwoche</span>
-              <strong>KW {selectedReviewWeek.week}</strong>
-            </div>
+          <div className="time-week-nav-panel time-review-week-nav" aria-label="Kalenderwochen">
             <div className="time-week-strip-shell">
               <button
                 className="time-week-scroll-button"
@@ -1698,7 +1718,8 @@ export function TimeEntriesPage() {
                     type="button"
                     onClick={() => selectReviewWeek(option)}
                   >
-                    {option.label}
+                    <strong>{option.label}</strong>
+                    <small>{formatDayMonth(option.start)}–{formatDayMonth(option.end)}</small>
                   </button>
                 ))}
               </div>
@@ -1714,129 +1735,220 @@ export function TimeEntriesPage() {
             </div>
           </div>
 
-          <div className="time-review-worker-panel" ref={timeReviewWorkerPanelRef}>
-            <div className="time-review-worker-head">
-              <div>
-                <h2>Lohnprüfung pro Monteur</h2>
-                <p>KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)}</p>
+          <div className="time-review-workspace-layout" ref={timeReviewWorkerPanelRef}>
+            <aside className="time-review-queue-panel" aria-label="Prüfwarteschlange">
+              <div className="time-review-queue-head">
+                <h2>Prüfwarteschlange</h2>
+                <span>KW {selectedReviewWeek.week}</span>
               </div>
-              <button
-                className="icon-button secondary time-review-download-button"
-                type="button"
-                disabled={isDownloadingAllReviewWeekXlsx}
-                onClick={() => void downloadAllReviewWeekXlsx()}
-              >
-                {isDownloadingAllReviewWeekXlsx ? "Excel wird erstellt..." : "Alle Arbeitsstunden Downloaden (Excel)"}
-              </button>
-            </div>
-
-            {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
-            {reviewHoursDownloadError && <p className="time-table-note">{reviewHoursDownloadError}</p>}
-            {reviewPayrollWeekError && <p className="time-table-note">{reviewPayrollWeekError}</p>}
-            {isLoadingPeople && timeReviewWorkers.length === 0 && (
-              <div className="empty-panel">Monteure werden geladen...</div>
-            )}
-            {!isLoadingPeople && (isLoadingReviewEntries || isLoadingReviewAllEntries) && timeReviewWorkers.length === 0 && (
-              <div className="empty-panel">Stundenprüfung wird geladen...</div>
-            )}
-            {!isLoadingReviewEntries && reviewEntriesError && <div className="empty-panel">{reviewEntriesError}</div>}
-            {!isLoadingReviewAllEntries && reviewAllEntriesError && <div className="empty-panel">{reviewAllEntriesError}</div>}
-            {!isLoadingPeople && !isLoadingReviewEntries && !isLoadingReviewAllEntries && !reviewEntriesError && !reviewAllEntriesError && timeReviewWorkers.length === 0 && (
-              <div className="empty-panel">Keine aktiven internen Monteure für die Lohnprüfung gefunden.</div>
-            )}
-
-            {timeReviewWorkers.length > 0 && (
-              <div className="time-review-worker-bubbles" aria-label="Monteure mit gemeldeten Zeiten">
-                {timeReviewWorkers.map((worker) => (
+              <label className="time-review-queue-search">
+                <Search aria-hidden="true" size={15} />
+                <input
+                  type="search"
+                  value={reviewWorkerSearch}
+                  placeholder="Monteur suchen..."
+                  aria-label="Monteur suchen"
+                  onChange={(event) => setReviewWorkerSearch(event.currentTarget.value)}
+                />
+              </label>
+              <div className="time-review-queue-filters" role="group" aria-label="Statusfilter">
+                {([
+                  ["all", "Alle"],
+                  ["open", "Offen"],
+                  ["missing", "Keine Meldung"],
+                  ["reviewed", "Geprüft"],
+                ] as const).map(([filter, label]) => (
                   <button
-                    className={[
-                      "time-review-worker-bubble",
-                      selectedReviewWorker?.personId === worker.personId ? "is-active" : "",
-                      worker.isReviewed ? "is-reviewed" : "",
-                      worker.isReset ? "is-reset" : "",
-                      worker.submittedMinutes <= 0 ? "has-no-submissions" : "",
-                      worker.absenceType ? `has-absence-${worker.absenceType}` : "",
-                    ].filter(Boolean).join(" ")}
-                    key={worker.personId}
+                    className={reviewWorkerFilter === filter ? "is-active" : ""}
+                    key={filter}
                     type="button"
-                    onClick={() => setSelectedReviewPersonId(worker.personId)}
+                    aria-pressed={reviewWorkerFilter === filter}
+                    onClick={() => setReviewWorkerFilter(filter)}
                   >
-                    <span className="time-review-worker-name">{worker.personName}</span>
-                    <small>
-                      {worker.submittedMinutes > 0
-                        ? `${formatSubmittedHours(worker.submittedMinutes)} Std. erfasst`
-                        : "Keine Meldung"}
-                    </small>
-                    {worker.isReviewed && <span className="time-review-worker-check" aria-label="geprüft">✓</span>}
-                    {worker.isReset && !worker.isReviewed && (
-                      <span className="time-review-worker-check" aria-label="zurückgesetzt" style={{ color: "#b45309" }}>!</span>
-                    )}
+                    <span>{label}</span>
+                    <small>{reviewWorkerFilterCounts[filter]}</small>
                   </button>
                 ))}
               </div>
-            )}
+              <div className="time-review-queue-columns" aria-hidden="true">
+                <span>Monteur</span>
+                <span>Std. erfasst</span>
+                <span>Status</span>
+              </div>
+              <div className="time-review-queue-list" role="listbox" aria-label="Monteure für die Lohnprüfung">
+                {isLoadingPeople && timeReviewWorkers.length === 0 && (
+                  <div className="time-review-queue-state">Monteure werden geladen...</div>
+                )}
+                {!isLoadingPeople && (isLoadingReviewEntries || isLoadingReviewAllEntries) && timeReviewWorkers.length === 0 && (
+                  <div className="time-review-queue-state">Stundenprüfung wird geladen...</div>
+                )}
+                {!isLoadingReviewEntries && reviewEntriesError && <div className="time-review-queue-state is-error">{reviewEntriesError}</div>}
+                {!isLoadingReviewAllEntries && reviewAllEntriesError && <div className="time-review-queue-state is-error">{reviewAllEntriesError}</div>}
+                {!isLoadingPeople && !isLoadingReviewEntries && !isLoadingReviewAllEntries && !reviewEntriesError && !reviewAllEntriesError && timeReviewWorkers.length === 0 && (
+                  <div className="time-review-queue-state">Keine aktiven internen Monteure gefunden.</div>
+                )}
+                {timeReviewWorkers.length > 0 && filteredTimeReviewWorkers.length === 0 && (
+                  <div className="time-review-queue-state">Keine Monteure für diesen Filter.</div>
+                )}
+                {filteredTimeReviewWorkers.map((worker) => {
+                  const workerStatus = timeReviewWorkerStatus(worker);
+                  return (
+                    <button
+                      className={[
+                        "time-review-queue-row",
+                        selectedReviewWorker?.personId === worker.personId ? "is-active" : "",
+                      ].filter(Boolean).join(" ")}
+                      key={worker.personId}
+                      type="button"
+                      role="option"
+                      aria-selected={selectedReviewWorker?.personId === worker.personId}
+                      onClick={() => setSelectedReviewPersonId(worker.personId)}
+                    >
+                      <span className="time-review-worker-name">{worker.personName}</span>
+                      <span className="time-review-queue-hours">
+                        {worker.submittedMinutes > 0 ? `${formatSubmittedHours(worker.submittedMinutes)} Std.` : "–"}
+                      </span>
+                      <span
+                        className={`time-review-queue-status is-${workerStatus}`}
+                        aria-label={timeReviewWorkerStatusLabel(workerStatus)}
+                        title={timeReviewWorkerStatusLabel(workerStatus)}
+                      >
+                        {workerStatus === "reviewed" ? "✓" : workerStatus === "open" ? "!" : "–"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="time-review-queue-footer">
+                <span>{filteredTimeReviewWorkers.length} von {timeReviewWorkers.length} Monteuren</span>
+              </div>
+            </aside>
+
+            <div className="time-review-detail-shell">
+              {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
+              {reviewHoursDownloadError && <p className="time-table-note">{reviewHoursDownloadError}</p>}
+              {reviewPayrollWeekError && <p className="time-table-note">{reviewPayrollWeekError}</p>}
 
             {selectedReviewWorker ? (
               <div className="time-review-worker-detail">
                 <div className="time-review-worker-detail-head">
-                  <div>
-                    <span>KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)}</span>
-                    <h3>{selectedReviewWorker.personName}</h3>
-                  </div>
-                  <div className="time-review-worker-detail-status">
-                    {selectedReviewWorker.isReviewed ? (
-                      <div
-                        ref={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId ? reviewWeekStatusMenuRef : undefined}
-                        style={{ display: "inline-flex", position: "relative" }}
-                      >
-                        <button
-                          aria-expanded={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId}
-                          aria-haspopup="menu"
-                          className="status-badge status-badge-active"
-                          disabled={!canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId}
-                          style={{
-                            appearance: "none",
-                            border: 0,
-                            cursor: !canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId ? "not-allowed" : "pointer",
-                            font: "inherit",
-                          }}
-                          type="button"
-                          onClick={() => setReviewWeekStatusMenuPersonId((current) => (
-                            current === selectedReviewWorker.personId ? null : selectedReviewWorker.personId
-                          ))}
+                  <div className="time-review-worker-identity">
+                    <div>
+                      <span>KW {selectedReviewWeek.week} · {formatRangeLabel(reviewWeekRange.start, reviewWeekRange.end)}</span>
+                      <h3>{selectedReviewWorker.personName}</h3>
+                    </div>
+                    <div className="time-review-worker-detail-status">
+                      {selectedReviewWorker.isReviewed ? (
+                        <div
+                          ref={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId ? reviewWeekStatusMenuRef : undefined}
+                          style={{ display: "inline-flex", position: "relative" }}
                         >
-                          Geprüft
-                        </button>
-                        {reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && (
-                          <div
-                            className="time-review-day-move-popover"
-                            role="menu"
-                            aria-label="Lohnprüfstatus Aktionen"
+                          <button
+                            aria-expanded={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId}
+                            aria-haspopup="menu"
+                            className="status-badge status-badge-active"
+                            disabled={!canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId}
                             style={{
-                              minWidth: "132px",
-                              position: "absolute",
-                              right: 0,
-                              top: "calc(100% + 4px)",
-                              zIndex: 100,
+                              appearance: "none",
+                              border: 0,
+                              cursor: !canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId ? "not-allowed" : "pointer",
+                              font: "inherit",
                             }}
+                            type="button"
+                            onClick={() => setReviewWeekStatusMenuPersonId((current) => (
+                              current === selectedReviewWorker.personId ? null : selectedReviewWorker.personId
+                            ))}
                           >
-                            <button
-                              type="button"
-                              role="menuitem"
-                              disabled={markingReviewWeekPersonId === selectedReviewWorker.personId}
-                              style={{ background: "#fff8eb", color: "#9a5b00" }}
-                              onClick={() => void resetSelectedReviewWeekReview()}
+                            Geprüft
+                          </button>
+                          {reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && (
+                            <div
+                              className="time-review-day-move-popover"
+                              role="menu"
+                              aria-label="Lohnprüfstatus Aktionen"
+                              style={{
+                                minWidth: "132px",
+                                position: "absolute",
+                                right: 0,
+                                top: "calc(100% + 4px)",
+                                zIndex: 100,
+                              }}
                             >
-                              {markingReviewWeekPersonId === selectedReviewWorker.personId ? "Wird zurückgesetzt..." : "Zurücksetzen"}
-                            </button>
-                          </div>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                disabled={markingReviewWeekPersonId === selectedReviewWorker.personId}
+                                style={{ background: "#fff8eb", color: "#9a5b00" }}
+                                onClick={() => void resetSelectedReviewWeekReview()}
+                              >
+                                {markingReviewWeekPersonId === selectedReviewWorker.personId ? "Wird zurückgesetzt..." : "Zurücksetzen"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : selectedReviewWorker.isReset ? (
+                        <StatusBadge tone="warning">Zurückgesetzt</StatusBadge>
+                      ) : (
+                        <StatusBadge tone="warning">Offen</StatusBadge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="time-review-worker-metrics" aria-label="Wochenkennzahlen">
+                    <div>
+                      <span>Erfasste Stunden</span>
+                      <strong>{formatSubmittedHours(selectedReviewWorker.submittedMinutes)} Std.</strong>
+                    </div>
+                    <div className="is-placeholder" title="Geplante Stunden werden künftig ergänzt">
+                      <span>Geplante Stunden</span>
+                      <strong>–</strong>
+                    </div>
+                    <div className="is-placeholder" title="Die Differenz wird künftig aus den geplanten Stunden berechnet">
+                      <span>Differenz</span>
+                      <strong>–</strong>
+                    </div>
+                  </div>
+                  <div className="time-review-worker-detail-actions">
+                    <div className="time-review-worker-detail-action-stack">
+                      <div className="time-review-worker-detail-primary-actions">
+                        {canManageTimeEntries && (
+                          <button
+                            className="icon-button secondary time-review-manual-create-button"
+                            type="button"
+                            aria-haspopup="dialog"
+                            title={selectedReviewWorker.isReviewed ? "Geprüfte Woche zuerst zurücksetzen." : "Zeit für diese Monteurwoche manuell erstellen"}
+                            disabled={selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                            onClick={openManualTimeEntryDialog}
+                          >
+                            <CalendarPlus aria-hidden="true" size={15} />
+                            Zeit manuell erstellen
+                          </button>
                         )}
+                        <button
+                          className="icon-button secondary time-review-week-review-button"
+                          type="button"
+                          disabled={!canManageTimeEntries || selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                          onClick={() => void markSelectedReviewWeekReviewed()}
+                        >
+                          <Check aria-hidden="true" size={15} />
+                          {selectedReviewWorker.isReviewed
+                            ? "Monteurwoche geprüft"
+                            : markingReviewWeekPersonId === selectedReviewWorker.personId
+                              ? "Monteurwoche wird geprüft..."
+                              : "Monteurwoche als geprüft markieren"}
+                        </button>
                       </div>
-                    ) : selectedReviewWorker.isReset ? (
-                      <StatusBadge tone="warning">Zurückgesetzt</StatusBadge>
-                    ) : (
-                      <StatusBadge tone="warning">Offen</StatusBadge>
-                    )}
+                      {selectedReviewWorker.isReviewed && (
+                        <button
+                          className="icon-button secondary time-review-week-xlsx-button"
+                          type="button"
+                          disabled={isDownloadingReviewWeekXlsx}
+                          onClick={() => void downloadSelectedReviewWeekXlsx()}
+                        >
+                          <Download aria-hidden="true" size={15} />
+                          {isDownloadingReviewWeekXlsx ? "Excel wird erstellt..." : "Monteurwoche herunterladen (Excel)"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
                 {payrollDateError && <p className="time-review-week-error">{payrollDateError}</p>}
@@ -1857,7 +1969,23 @@ export function TimeEntriesPage() {
                     <span role="columnheader">Geprüft</span>
                   </div>
                   {selectedReviewWeekDays.map((day) => (
-                    day.entries.length > 0 ? day.entries.map((check, index) => (
+                    <section className="time-review-day-group" key={day.date} role="rowgroup" aria-label={`${day.weekdayLabel}, ${formatDate(day.date)}`}>
+                      <div className="time-review-day-group-head" role="row">
+                        <span className="time-review-week-move" role="cell" aria-hidden="true"></span>
+                        <span className="time-review-week-day" role="cell">
+                          <strong>{day.weekdayLabel}</strong>
+                          <span>{formatDate(day.date)}</span>
+                        </span>
+                        <span className="time-review-day-group-summary" role="cell">
+                          {day.entries.length > 0
+                            ? `${day.entries.length} ${day.entries.length === 1 ? "Eintrag" : "Einträge"} · ${formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}`
+                            : day.absenceType
+                              ? absenceTypeLabels[day.absenceType]
+                              : "Keine Zeitmeldung"}
+                        </span>
+                      </div>
+                      <div className="time-review-day-group-entries">
+                    {day.entries.length > 0 ? day.entries.map((check) => (
                       <div
                         className={[
                           "time-review-week-check-row",
@@ -1880,12 +2008,6 @@ export function TimeEntriesPage() {
                           </button>
                         </div>
                         <div className="time-review-week-day" role="cell">
-                          {index === 0 && (
-                            <>
-                              <strong>{day.weekdayLabel}</strong>
-                              <span>{formatDate(day.date)}</span>
-                            </>
-                          )}
                           {check.entry.original_work_date && check.entry.original_work_date !== check.entry.work_date && (
                             <small className="time-review-day-shift-note">vom {formatWeekday(check.entry.original_work_date)} verschoben</small>
                           )}
@@ -1941,10 +2063,7 @@ export function TimeEntriesPage() {
                       return (
                         <div className="time-review-week-check-row is-empty" key={day.date} role="row">
                           <div className="time-review-week-move" role="cell"></div>
-                          <div className="time-review-week-day" role="cell">
-                            <strong>{day.weekdayLabel}</strong>
-                            <span>{formatDate(day.date)}</span>
-                          </div>
+                          <div className="time-review-week-day" role="cell"></div>
                           <div className="time-review-week-site" role="cell">
                             {day.absenceType ? (
                               <StatusBadge tone={day.absenceType} className="time-review-absence-badge">
@@ -1976,7 +2095,9 @@ export function TimeEntriesPage() {
                           <div role="cell">{renderPayrollReviewEmptyMark()}</div>
                         </div>
                       );
-                    })()
+                    })()}
+                      </div>
+                    </section>
                   ))}
                 </div>
                 {payrollDatePicker && payrollDatePickerEntry && typeof document !== "undefined" && createPortal(
@@ -2017,50 +2138,11 @@ export function TimeEntriesPage() {
                   </div>,
                   document.body,
                 )}
-                <div className="time-review-worker-detail-actions">
-                  <div className="time-review-worker-detail-action-stack">
-                    <div className="time-review-worker-detail-primary-actions">
-                      {canManageTimeEntries && (
-                        <button
-                          className="icon-button secondary time-review-manual-create-button"
-                          type="button"
-                          aria-haspopup="dialog"
-                          title={selectedReviewWorker.isReviewed ? "Geprüfte Woche zuerst zurücksetzen." : "Zeit für diese Monteurwoche manuell erstellen"}
-                          disabled={selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
-                          onClick={openManualTimeEntryDialog}
-                        >
-                          Zeit manuell erstellen
-                        </button>
-                      )}
-                      <button
-                        className="icon-button secondary"
-                        type="button"
-                        disabled={!canManageTimeEntries || selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
-                        onClick={() => void markSelectedReviewWeekReviewed()}
-                      >
-                        {selectedReviewWorker.isReviewed
-                          ? "Monteurwoche geprüft"
-                          : markingReviewWeekPersonId === selectedReviewWorker.personId
-                            ? "Monteurwoche wird geprüft..."
-                            : "Monteurwoche als geprüft markieren"}
-                      </button>
-                    </div>
-                    {selectedReviewWorker.isReviewed && (
-                      <button
-                        className="icon-button secondary time-review-week-xlsx-button"
-                        type="button"
-                        disabled={isDownloadingReviewWeekXlsx}
-                        onClick={() => void downloadSelectedReviewWeekXlsx()}
-                      >
-                        {isDownloadingReviewWeekXlsx ? "Excel wird erstellt..." : "Monteurwoche Downloaden (Excel)"}
-                      </button>
-                    )}
-                  </div>
-                </div>
               </div>
             ) : timeReviewWorkers.length > 0 ? (
               <div className="time-review-worker-empty-detail">Monteur auswählen, um die Lohnprüfung für KW {selectedReviewWeek.week} zu öffnen.</div>
             ) : null}
+            </div>
           </div>
         </div>
       )}
@@ -3485,6 +3567,55 @@ function buildTimeReviewWorkerSummaries(
       };
     })
     .sort((left, right) => left.personName.localeCompare(right.personName, "de", { sensitivity: "base" }));
+}
+
+function timeReviewWorkerStatus(worker: TimeReviewWorkerSummary): TimeReviewWorkerStatus {
+  if (worker.isReviewed) {
+    return "reviewed";
+  }
+  return worker.submittedMinutes > 0 ? "open" : "missing";
+}
+
+function timeReviewWorkerStatusLabel(status: TimeReviewWorkerStatus): string {
+  if (status === "reviewed") {
+    return "Geprüft";
+  }
+  if (status === "open") {
+    return "Offen";
+  }
+  return "Keine Meldung";
+}
+
+function countTimeReviewWorkersByFilter(workers: TimeReviewWorkerSummary[]): Record<TimeReviewWorkerFilter, number> {
+  const counts: Record<TimeReviewWorkerFilter, number> = {
+    all: workers.length,
+    open: 0,
+    missing: 0,
+    reviewed: 0,
+  };
+  workers.forEach((worker) => {
+    counts[timeReviewWorkerStatus(worker)] += 1;
+  });
+  return counts;
+}
+
+function filterTimeReviewWorkers(
+  workers: TimeReviewWorkerSummary[],
+  search: string,
+  filter: TimeReviewWorkerFilter,
+): TimeReviewWorkerSummary[] {
+  const normalizedSearch = search.trim().toLocaleLowerCase("de-DE");
+  return workers.filter((worker) => (
+    (!normalizedSearch || worker.personName.toLocaleLowerCase("de-DE").includes(normalizedSearch))
+    && (filter === "all" || timeReviewWorkerStatus(worker) === filter)
+  ));
+}
+
+function timeReviewDayTotalMinutes(day: TimeReviewWeekDay): number {
+  if (day.entries.length === 0) {
+    return day.vacationCreditMinutes;
+  }
+  return day.entries.reduce((total, check) => total + (effectivePayrollWorkMinutes(check.entry) ?? 0), 0);
 }
 
 function isPayrollReviewWorker(person: Person): boolean {

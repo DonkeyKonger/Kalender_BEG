@@ -19939,6 +19939,620 @@ body.mobile-modal-scroll-locked {
   background: #ffffff;
 }
 
+/* Calm master-detail payroll review workspace. */
+.time-entries-page.is-figma-times-workspace .page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 24px 15px;
+}
+
+.time-review-download-all-button {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-week-nav {
+  display: block;
+  margin: 16px 24px 0;
+  border: 0;
+  padding: 0;
+}
+
+.time-review-week-nav .time-week-strip-shell {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  gap: 8px;
+}
+
+.time-review-week-nav .time-week-strip {
+  flex: 0 1 632px;
+  width: 632px;
+  max-width: calc(100vw - 210px);
+  gap: 8px;
+  padding: 0;
+  scroll-snap-type: x mandatory;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button {
+  display: grid;
+  flex: 0 0 120px;
+  min-width: 120px;
+  min-height: 58px;
+  align-content: center;
+  gap: 4px;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #243348;
+  padding: 7px 10px;
+  scroll-snap-align: start;
+  text-align: center;
+}
+
+.time-review-week-nav .time-week-strip button strong {
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.time-review-week-nav .time-week-strip button small {
+  color: #718096;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button.is-active {
+  border-color: #2f78d4;
+  background: #f4f8ff;
+  color: #1763c5;
+  box-shadow: inset 0 0 0 1px #2f78d4;
+}
+
+.time-review-week-nav .time-week-strip button.is-active small {
+  color: #2f78d4;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-scroll-button {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 58px;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.time-review-workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 336px) minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+  min-width: 0;
+  margin: 16px 24px 24px;
+}
+
+.time-review-queue-panel,
+.time-review-detail-shell {
+  min-width: 0;
+  border: 1px solid #d8e0ea;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.time-review-queue-panel {
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(260px, 1fr) auto;
+  overflow: hidden;
+  max-height: calc(100vh - 245px);
+  min-height: 590px;
+}
+
+.time-review-queue-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #e7ecf2;
+  padding: 16px 16px 12px;
+}
+
+.time-review-queue-head h2 {
+  margin: 0;
+  color: #14233b;
+  font-size: 0.96rem;
+  font-weight: 900;
+}
+
+.time-review-queue-head span {
+  color: #718096;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.time-review-queue-search {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  margin: 12px 14px 10px;
+  border: 1px solid #d8e0ea;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #738196;
+  padding: 0 10px;
+}
+
+.time-review-queue-search input {
+  width: 100%;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: #172033;
+  padding: 0;
+  font: inherit;
+  font-size: 0.76rem;
+  outline: 0;
+}
+
+.time-review-queue-search:focus-within {
+  border-color: #7aa7d7;
+  box-shadow: 0 0 0 3px rgb(31 95 159 / 10%);
+}
+
+.time-review-queue-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px 12px;
+}
+
+.time-review-queue-filters button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #e0e6ee;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #52627a;
+  padding: 4px 7px;
+  font: inherit;
+  font-size: 0.66rem;
+  font-weight: 850;
+}
+
+.time-review-queue-filters button small {
+  display: inline-grid;
+  min-width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 5px;
+  background: #edf1f6;
+  color: #64748b;
+  font-size: 0.61rem;
+}
+
+.time-review-queue-filters button.is-active {
+  border-color: #bfd6f2;
+  background: #edf5ff;
+  color: #1763a5;
+}
+
+.time-review-queue-filters button.is-active small {
+  background: #ffffff;
+  color: #1763a5;
+}
+
+.time-review-queue-columns,
+.time-review-queue-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px 42px;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-review-queue-columns {
+  border-top: 1px solid #e7ecf2;
+  border-bottom: 1px solid #e7ecf2;
+  background: #f8fafc;
+  color: #718096;
+  padding: 8px 12px;
+  font-size: 0.62rem;
+  font-weight: 850;
+}
+
+.time-review-queue-columns span:nth-child(2),
+.time-review-queue-columns span:nth-child(3) {
+  text-align: center;
+}
+
+.time-review-queue-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.time-review-queue-row {
+  width: 100%;
+  min-height: 45px;
+  border: 0;
+  border-bottom: 1px solid #edf1f5;
+  background: #ffffff;
+  color: #21324a;
+  padding: 7px 12px;
+  text-align: left;
+}
+
+.time-review-queue-row:hover,
+.time-review-queue-row:focus-visible {
+  background: #f8fbff;
+  outline: 0;
+}
+
+.time-review-queue-row.is-active {
+  background: #eef5ff;
+  box-shadow: inset 2px 0 0 #2f78d4;
+}
+
+.time-review-queue-row .time-review-worker-name {
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.time-review-queue-hours {
+  color: #42526a;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.time-review-queue-status {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  justify-self: center;
+  border-radius: 999px;
+  background: #eef1f5;
+  color: #8a97a8;
+  font-size: 0.67rem;
+  font-weight: 950;
+}
+
+.time-review-queue-status.is-reviewed {
+  background: #def3e4;
+  color: #1c8b4a;
+}
+
+.time-review-queue-status.is-open {
+  background: #fff0d4;
+  color: #c47a0c;
+}
+
+.time-review-queue-state {
+  color: #718096;
+  padding: 20px 14px;
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+.time-review-queue-state.is-error {
+  color: #b42318;
+}
+
+.time-review-queue-footer {
+  border-top: 1px solid #e7ecf2;
+  color: #718096;
+  padding: 10px 14px;
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.time-review-detail-shell {
+  display: grid;
+  align-content: start;
+  overflow: hidden;
+}
+
+.time-review-detail-shell > .time-table-note {
+  margin: 10px 14px 0;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-worker-detail {
+  gap: 14px;
+  padding: 0;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-worker-detail-head {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 14px 20px;
+  border-bottom: 1px solid #e7ecf2;
+  padding: 16px 18px 14px;
+}
+
+.time-review-worker-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.time-review-worker-identity > div:first-child {
+  min-width: 0;
+}
+
+.time-review-worker-identity h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-review-worker-detail-status {
+  flex: 0 0 auto;
+}
+
+.time-review-worker-metrics {
+  display: flex;
+  grid-column: 1;
+  gap: 0;
+}
+
+.time-review-worker-metrics > div {
+  display: grid;
+  min-width: 126px;
+  gap: 4px;
+  border-right: 1px solid #e5eaf0;
+  padding-right: 20px;
+  margin-right: 20px;
+}
+
+.time-review-worker-metrics > div:last-child {
+  border-right: 0;
+}
+
+.time-review-worker-metrics span {
+  color: #718096;
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.time-review-worker-metrics strong {
+  color: #14233b;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.time-review-worker-metrics .is-placeholder strong {
+  color: #a0aaba;
+}
+
+.time-review-worker-detail-head .time-review-worker-detail-actions {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+
+.time-review-worker-detail-head .time-review-worker-detail-primary-actions {
+  flex-wrap: nowrap;
+}
+
+.time-review-worker-detail-head .icon-button {
+  min-height: 36px;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+
+.time-review-worker-detail-head .time-review-week-review-button {
+  border-color: #b9d7c4;
+  background: #f2fbf5;
+  color: #227345;
+}
+
+.time-review-worker-detail-head .time-review-week-xlsx-button {
+  justify-self: end;
+}
+
+.time-review-worker-detail .time-review-week-error {
+  margin: 0 18px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-week-check-table {
+  display: grid;
+  gap: 10px;
+  overflow-x: auto;
+  border: 0;
+  background: #f8fafc;
+  padding: 0 14px 14px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-week-check-head {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  border: 1px solid #dfe5ed;
+  border-radius: 8px;
+  background: #f5f7fa;
+  padding: 8px 10px;
+}
+
+.time-review-day-group {
+  display: grid;
+  overflow: hidden;
+  min-width: 924px;
+  border: 1px solid #dfe5ed;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.time-review-day-group-head {
+  display: grid;
+  grid-template-columns: 30px minmax(72px, 0.65fr) minmax(140px, 1.35fr) 58px repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 45px;
+  border-bottom: 1px solid #e7ecf2;
+  background: #fbfcfe;
+  padding: 7px 10px;
+}
+
+.time-review-day-group-head .time-review-week-day strong {
+  font-size: 0.86rem;
+}
+
+.time-review-day-group-summary {
+  grid-column: 3 / -1;
+  color: #718096;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.time-review-day-group-entries {
+  display: grid;
+}
+
+.time-review-day-group .time-review-week-check-row {
+  border-bottom: 1px solid #edf1f5;
+  padding: 7px 10px;
+}
+
+.time-review-day-group .time-review-week-check-row:last-child {
+  border-bottom: 0;
+}
+
+.time-review-day-group .time-review-week-check-row.is-travel-time {
+  background: #faf9f7;
+  box-shadow: none;
+}
+
+.time-review-day-group .time-review-week-check-row.is-empty {
+  background: #ffffff;
+}
+
+.time-review-check-mark:not(.is-ok):not(.is-warning) {
+  border-color: transparent;
+  background: transparent;
+  color: #a5afbd;
+}
+
+.time-review-check-mark:not(.is-ok):not(.is-warning).is-clickable:hover,
+.time-review-check-mark:not(.is-ok):not(.is-warning).is-clickable:focus-visible {
+  border-color: #d8e0ea;
+  background: #f8fafc;
+  color: #718096;
+}
+
+.time-review-worker-empty-detail {
+  min-height: 360px;
+  place-content: center;
+  text-align: center;
+}
+
+@media (max-width: 1280px) {
+  .time-review-workspace-layout {
+    grid-template-columns: minmax(280px, 310px) minmax(0, 1fr);
+    gap: 14px;
+    margin-right: 18px;
+    margin-left: 18px;
+  }
+
+  .time-entries-page.is-figma-times-workspace .time-review-worker-detail-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .time-review-worker-detail-head .time-review-worker-detail-actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: flex-start;
+  }
+
+  .time-review-worker-detail-head .time-review-worker-detail-action-stack {
+    justify-items: start;
+  }
+
+  .time-review-worker-detail-head .time-review-week-xlsx-button {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 980px) {
+  .time-review-workspace-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .time-review-queue-panel {
+    min-height: 0;
+    max-height: 390px;
+  }
+}
+
+@media (max-width: 760px) {
+  .time-entries-page.is-figma-times-workspace .page-header {
+    display: grid;
+    padding: 14px;
+  }
+
+  .time-review-download-all-button {
+    width: 100%;
+  }
+
+  .time-entries-page.is-figma-times-workspace .time-review-week-nav,
+  .time-review-workspace-layout {
+    margin-right: 12px;
+    margin-left: 12px;
+  }
+
+  .time-review-week-nav .time-week-strip {
+    max-width: calc(100vw - 124px);
+  }
+
+  .time-entries-page.is-figma-times-workspace .time-review-worker-detail-head {
+    padding: 14px;
+  }
+
+  .time-review-worker-identity,
+  .time-review-worker-metrics {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .time-review-worker-metrics {
+    gap: 10px;
+  }
+
+  .time-review-worker-metrics > div {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid #e5eaf0;
+    margin: 0;
+    padding: 0 0 8px;
+  }
+
+  .time-review-worker-detail-head .time-review-worker-detail-primary-actions {
+    display: grid;
+    width: 100%;
+  }
+
+  .time-review-worker-detail-head .time-review-worker-detail-actions,
+  .time-review-worker-detail-head .time-review-worker-detail-action-stack,
+  .time-review-worker-detail-head .icon-button {
+    width: 100%;
+  }
+
+  .time-review-day-group,
+  .time-review-day-group-head {
+    min-width: 754px;
+  }
+
+  .time-review-day-group-head {
+    grid-template-columns: 28px minmax(58px, 0.75fr) minmax(120px, 1.25fr) repeat(4, 58px) 54px 72px 56px;
+    gap: 6px;
+    padding: 7px;
+  }
+}
+
 @media (min-width: 980px) {
   .time-entries-layout {
     grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
