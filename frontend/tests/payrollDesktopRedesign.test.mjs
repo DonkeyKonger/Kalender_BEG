@@ -23,8 +23,9 @@ test("review week navigation presents compact week cards without date ranges", (
   assert.match(pageSource, /<strong>\{option\.label\}<\/strong>/);
   assert.doesNotMatch(pageSource, /<small>\{formatDayMonth\(option\.start\)\}–\{formatDayMonth\(option\.end\)\}<\/small>/);
   assert.match(styles, /\.time-review-week-nav \.time-week-strip\s*\{[^}]*width:\s*324px;/s);
-  assert.match(styles, /\.time-review-week-nav \.time-week-strip button\s*\{[^}]*flex:\s*0 0 60px;[^}]*min-width:\s*60px;[^}]*min-height:\s*26px;[^}]*padding:\s*4px 5px;/s);
-  assert.match(styles, /\.time-review-week-nav \.time-week-scroll-button\s*\{[^}]*height:\s*26px;/s);
+  assert.match(styles, /\.time-review-week-nav \.time-week-strip button\s*\{[^}]*flex:\s*0 0 60px;[^}]*min-width:\s*60px;[^}]*height:\s*26px;[^}]*min-height:\s*26px;[^}]*box-sizing:\s*border-box;[^}]*padding:\s*4px 5px;/s);
+  assert.match(styles, /\.time-review-week-nav \.time-week-scroll-button\s*\{[^}]*height:\s*26px;[^}]*min-height:\s*26px;[^}]*box-sizing:\s*border-box;/s);
+  assert.match(styles, /\.time-review-week-nav \.time-week-strip-shell\s*\{[^}]*align-items:\s*center;/s);
   assert.match(styles, /\.time-review-week-nav-row\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*space-between;/s);
   assert.match(styles, /\.time-review-download-all-button\s*\{[^}]*min-height:\s*36px;[^}]*padding:\s*5px 9px;[^}]*font-size:\s*0\.76rem;/s);
 });
@@ -33,9 +34,11 @@ test("current review week remains identifiable when another week is selected", (
   assert.match(pageSource, /option\.isCurrent \? "is-current" : ""/);
   assert.match(pageSource, /aria-current=\{option\.isCurrent \? "date" : undefined\}/);
   assert.match(pageSource, /aria-pressed=\{option\.year === selectedReviewWeek\.year && option\.week === selectedReviewWeek\.week\}/);
-  assert.match(pageSource, /option\.isCurrent && <span className="time-review-week-current-marker" aria-hidden="true">jetzt<\/span>/);
-  assert.match(styles, /button\.is-current\s*\{[^}]*border:\s*2px solid #155db2;[^}]*box-shadow:\s*inset 0 -2px 0 #155db2;/s);
-  assert.match(styles, /button\.is-active\.is-current\s*\{[^}]*box-shadow:\s*inset 0 0 0 1px #155db2, inset 0 -2px 0 #f6c849;/s);
+  assert.doesNotMatch(pageSource, /time-review-week-current-marker|>jetzt<\/span>/i);
+  assert.match(styles, /button\.is-current\s*\{[^}]*border-color:\s*#79a98a;[^}]*background:\s*#f0f8f3;[^}]*color:\s*#245b38;/s);
+  assert.match(styles, /button\.is-current::after\s*\{[^}]*content:\s*"";[^}]*width:\s*5px;[^}]*height:\s*5px;[^}]*border-radius:\s*50%;[^}]*background:\s*#2f855a;/s);
+  assert.match(styles, /button\.is-active\s*\{[^}]*border:\s*2px solid #1763c5;[^}]*background:\s*#f4f8ff;/s);
+  assert.match(styles, /button\.is-active\.is-current\s*\{[^}]*border:\s*2px solid #1763c5;[^}]*background:\s*#edf7f1;/s);
 });
 
 test("review week navigation realigns its selected week after browser scroll restoration", () => {

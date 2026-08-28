@@ -1733,7 +1733,6 @@ export function TimeEntriesPage() {
                     onClick={() => selectReviewWeek(option)}
                   >
                     <strong>{option.label}</strong>
-                    {option.isCurrent && <span className="time-review-week-current-marker" aria-hidden="true">jetzt</span>}
                   </button>
                   ))}
                 </div>

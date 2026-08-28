@@ -20005,6 +20005,7 @@ body.mobile-modal-scroll-locked {
   display: flex;
   width: fit-content;
   max-width: 100%;
+  align-items: center;
   gap: 6px;
 }
 
@@ -20023,7 +20024,9 @@ body.mobile-modal-scroll-locked {
   position: relative;
   flex: 0 0 60px;
   min-width: 60px;
+  height: 26px;
   min-height: 26px;
+  box-sizing: border-box;
   align-content: center;
   border: 1px solid #d8e0ea;
   border-radius: 8px;
@@ -20040,47 +20043,46 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button.is-active {
-  border-color: #2f78d4;
+  border: 2px solid #1763c5;
   background: #f4f8ff;
   color: #1763c5;
-  box-shadow: inset 0 0 0 1px #2f78d4;
+  box-shadow: inset 0 0 0 1px rgb(23 99 197 / 20%);
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button.is-current {
-  border: 2px solid #155db2;
-  background: #eaf3ff;
-  color: #0f4d92;
-  box-shadow: inset 0 -2px 0 #155db2;
+  border-color: #79a98a;
+  background: #f0f8f3;
+  color: #245b38;
+  box-shadow: none;
 }
 
-.time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button.is-current strong {
-  transform: translateY(3px);
-}
-
-.time-review-week-current-marker {
+.time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button.is-current::after {
+  content: "";
   position: absolute;
-  top: 1px;
-  left: 0;
-  right: 0;
-  color: currentColor;
-  font-size: 0.46rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  text-transform: uppercase;
+  top: 3px;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border: 1px solid #ffffff;
+  border-radius: 50%;
+  background: #2f855a;
+  box-shadow: 0 0 0 1px rgb(47 133 90 / 25%);
+  pointer-events: none;
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-strip button.is-active.is-current {
-  border-color: #ffffff;
-  background: #1c5f9f;
-  color: #ffffff;
-  box-shadow: inset 0 0 0 1px #155db2, inset 0 -2px 0 #f6c849;
+  border: 2px solid #1763c5;
+  background: #edf7f1;
+  color: #0f4d92;
+  box-shadow: inset 0 0 0 1px rgb(23 99 197 / 20%);
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-week-nav .time-week-scroll-button {
   flex: 0 0 26px;
   width: 26px;
   height: 26px;
+  min-height: 26px;
+  box-sizing: border-box;
   border: 1px solid #d8e0ea;
   border-radius: 8px;
   background: #ffffff;
