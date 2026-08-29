@@ -19586,6 +19586,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-queue-row {
+  box-sizing: border-box;
   width: 100%;
   min-height: 45px;
   border: 0;

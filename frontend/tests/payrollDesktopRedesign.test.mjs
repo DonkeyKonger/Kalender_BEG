@@ -24,6 +24,13 @@ test("payroll review uses the requested master-detail queue with consolidated ac
   assert.match(pageSource, /Alle Arbeitsstunden als Excel/);
 });
 
+test("queue hours header and values use the same border-box grid axis", () => {
+  assert.match(styles, /\.time-review-queue-columns,[\s\S]*?\.time-review-queue-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 82px 42px;[^}]*gap:\s*8px;/s);
+  assert.match(styles, /\.time-review-queue-columns span:nth-child\(2\),[\s\S]*?\.time-review-queue-columns span:nth-child\(3\)\s*\{[^}]*text-align:\s*center;/s);
+  assert.match(styles, /\.time-review-queue-row\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;[^}]*padding:\s*7px 12px;/s);
+  assert.match(styles, /\.time-review-queue-hours\s*\{[^}]*text-align:\s*center;/s);
+});
+
 test("review week navigation fills the shared queue width with four complete cards", () => {
   assert.match(pageSource, /className="time-week-nav-panel time-review-week-nav"/);
   assert.match(pageSource, /className="time-review-week-nav-row"[\s\S]*className="time-week-strip-shell"/);
