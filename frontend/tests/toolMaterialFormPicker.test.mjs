@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { getDashboardNotePickerNavigationIndex } from "../src/lib/pickerKeyboard.ts";
+
 
 const [pageSource, pickerSource, styles] = await Promise.all([
   readFile(new URL("../src/pages/MiscellaneousPage.tsx", import.meta.url), "utf8"),
@@ -39,9 +41,23 @@ test("picker opens above when needed and supports keyboard option navigation", (
   assert.match(pickerSource, /availableBelow < preferredHeight && availableAbove > availableBelow/);
   assert.match(pickerSource, /bottom:\s*Math\.max\(margin, window\.innerHeight - rect\.top \+ gap\)/);
   assert.match(pickerSource, /\["ArrowDown", "ArrowUp", "Home", "End"\]/);
-  assert.match(pickerSource, /optionButtons\[nextIndex\]\?\.focus\(\)/);
-  assert.match(pickerSource, /event\.key === "Enter" \|\| event\.key === " "/);
-  assert.match(pickerSource, /event\.target\.click\(\)/);
+  assert.match(pickerSource, /aria-activedescendant=\{isOpen \? activeOptionId : undefined\}/);
+  assert.match(pickerSource, /className=\{`dashboard-note-picker-option\$\{isSelected \? " is-selected" : ""\}\$\{activeOptionValue === option\.value \? " is-active" : ""\}`\}/);
+  assert.match(pickerSource, /event\.key === "Enter" && activeOptionValue !== null/);
+  assert.match(pickerSource, /event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);[\s\S]*?selectOption\(activeOptionValue\)/);
+  assert.match(pickerSource, /event\.key === "Escape"[\s\S]*?closeAndFocusTrigger\(\)/);
+  assert.match(pickerSource, /scrollIntoView\(\{ block: "nearest" \}\)/);
+  assert.match(styles, /\.dashboard-note-picker-option\.is-active \{[^}]*background: #f2f6fb;[^}]*outline: 1px solid #8aa8cf;/s);
+});
+
+test("picker keyboard navigation wraps active suggestions and has no option when empty", () => {
+  assert.equal(getDashboardNotePickerNavigationIndex(-1, 3, "ArrowDown"), 0);
+  assert.equal(getDashboardNotePickerNavigationIndex(2, 3, "ArrowDown"), 0);
+  assert.equal(getDashboardNotePickerNavigationIndex(-1, 3, "ArrowUp"), 2);
+  assert.equal(getDashboardNotePickerNavigationIndex(0, 3, "ArrowUp"), 2);
+  assert.equal(getDashboardNotePickerNavigationIndex(1, 3, "Home"), 0);
+  assert.equal(getDashboardNotePickerNavigationIndex(1, 3, "End"), 2);
+  assert.equal(getDashboardNotePickerNavigationIndex(0, 0, "ArrowDown"), null);
 });
 
 

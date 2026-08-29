@@ -8,6 +8,7 @@ import type {
   OperationalAbsenceProjectManager,
 } from "../lib/api";
 import { filterPickerOptions } from "../lib/pickerSearch";
+import { getDashboardNotePickerNavigationIndex } from "../lib/pickerKeyboard";
 import type { Person } from "../types/person";
 
 type DashboardNoteSiteOption = {
@@ -282,6 +283,7 @@ export function DashboardNotePicker({
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeOptionValue, setActiveOptionValue] = useState<string | null>(null);
   const [popupPosition, setPopupPosition] = useState<DashboardNotePickerPopupPosition | null>(null);
   const selectedOption = options.find((option) => option.value === value) ?? null;
   const selectedLabel = selectedOption?.label ?? emptyOptionLabel;
@@ -289,6 +291,15 @@ export function DashboardNotePicker({
     () => searchable ? filterPickerOptions(options, query) : options,
     [options, query, searchable],
   );
+  const keyboardOptions = useMemo(
+    () => [
+      ...(includeEmptyOption ? [{ value: "", label: emptyOptionLabel }] : []),
+      ...filteredOptions,
+    ],
+    [emptyOptionLabel, filteredOptions, includeEmptyOption],
+  );
+  const activeOptionIndex = keyboardOptions.findIndex((option) => option.value === activeOptionValue);
+  const activeOptionId = activeOptionIndex >= 0 ? `${listboxId}-option-${activeOptionIndex}` : undefined;
   const popupPreferredHeight = searchable
     ? 330
     : Math.min(330, (options.length + (includeEmptyOption ? 1 : 0)) * 34 + 2);
@@ -348,9 +359,31 @@ export function DashboardNotePicker({
     };
   }, [isOpen, popupPreferredHeight, searchable]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    if (activeOptionIndex >= 0) {
+      return;
+    }
+    setActiveOptionValue(
+      keyboardOptions.some((option) => option.value === value)
+        ? value
+        : (keyboardOptions[0]?.value ?? null),
+    );
+  }, [activeOptionIndex, isOpen, keyboardOptions, value]);
+
+  useEffect(() => {
+    if (!isOpen || activeOptionId === undefined) {
+      return;
+    }
+    document.getElementById(activeOptionId)?.scrollIntoView({ block: "nearest" });
+  }, [activeOptionId, isOpen]);
+
   const closeAndFocusTrigger = () => {
     setIsOpen(false);
     setQuery("");
+    setActiveOptionValue(null);
     window.requestAnimationFrame(() => triggerRef.current?.focus());
   };
 
@@ -359,10 +392,24 @@ export function DashboardNotePicker({
     closeAndFocusTrigger();
   };
 
+  const openPicker = () => {
+    if (triggerRef.current) {
+      setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current, popupPreferredHeight));
+    }
+    setQuery("");
+    setActiveOptionValue(
+      keyboardOptions.some((option) => option.value === value)
+        ? value
+        : (keyboardOptions[0]?.value ?? null),
+    );
+    setIsOpen(true);
+  };
+
   return (
     <div className="dashboard-note-picker">
       <button
         aria-controls={isOpen ? listboxId : undefined}
+        aria-activedescendant={isOpen ? activeOptionId : undefined}
         aria-describedby={loading || error ? statusId : undefined}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -377,21 +424,15 @@ export function DashboardNotePicker({
           if (isOpen) {
             setIsOpen(false);
             setQuery("");
+            setActiveOptionValue(null);
             return;
           }
-          if (triggerRef.current) {
-            setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current, popupPreferredHeight));
-          }
-          setQuery("");
-          setIsOpen(true);
+          openPicker();
         }}
         onKeyDown={(event) => {
           if (!isOpen && (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ")) {
             event.preventDefault();
-            if (triggerRef.current) {
-              setPopupPosition(getDashboardNotePickerPopupPosition(triggerRef.current, popupPreferredHeight));
-            }
-            setIsOpen(true);
+            openPicker();
           }
         }}
       >
@@ -416,8 +457,20 @@ export function DashboardNotePicker({
               ref={popupRef}
               style={popupPosition}
               onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  closeAndFocusTrigger();
+                  return;
+                }
+                if (event.key === "Enter" && activeOptionValue !== null) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  selectOption(activeOptionValue);
+                  return;
+                }
                 if (
-                  (event.key === "Enter" || event.key === " ")
+                  event.key === " "
                   && event.target instanceof HTMLButtonElement
                   && event.target.classList.contains("dashboard-note-picker-option")
                 ) {
@@ -435,29 +488,20 @@ export function DashboardNotePicker({
                 ) {
                   return;
                 }
-                const optionButtons = Array.from(
-                  popupRef.current?.querySelectorAll<HTMLButtonElement>(
-                    ".dashboard-note-picker-option:not(:disabled)",
-                  ) ?? [],
+                const nextIndex = getDashboardNotePickerNavigationIndex(
+                  activeOptionIndex,
+                  keyboardOptions.length,
+                  event.key,
                 );
-                if (optionButtons.length === 0) {
+                if (nextIndex === null) {
                   return;
                 }
                 event.preventDefault();
-                const currentIndex = optionButtons.indexOf(document.activeElement as HTMLButtonElement);
-                let nextIndex = currentIndex;
-                if (event.key === "Home") {
-                  nextIndex = 0;
-                } else if (event.key === "End") {
-                  nextIndex = optionButtons.length - 1;
-                } else if (event.key === "ArrowDown") {
-                  nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % optionButtons.length;
-                } else {
-                  nextIndex = currentIndex < 0
-                    ? optionButtons.length - 1
-                    : (currentIndex - 1 + optionButtons.length) % optionButtons.length;
+                event.stopPropagation();
+                setActiveOptionValue(keyboardOptions[nextIndex]?.value ?? null);
+                if (event.target !== searchRef.current) {
+                  document.getElementById(`${listboxId}-option-${nextIndex}`)?.focus();
                 }
-                optionButtons[nextIndex]?.focus();
               }}
             >
               {searchable ? (
@@ -465,22 +509,32 @@ export function DashboardNotePicker({
                   <Search aria-hidden="true" size={14} />
                   <input
                     aria-label={searchLabel}
+                    aria-activedescendant={activeOptionId}
+                    aria-controls={listboxId}
                     autoComplete="off"
                     placeholder={searchPlaceholder}
                     ref={searchRef}
                     type="search"
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => {
+                      const nextQuery = event.target.value;
+                      const nextOptions = filterPickerOptions(options, nextQuery);
+                      setQuery(nextQuery);
+                      setActiveOptionValue(nextOptions[0]?.value ?? (includeEmptyOption ? "" : null));
+                    }}
                   />
                 </div>
               ) : null}
               <div aria-label={listLabel} className="dashboard-note-picker-options" id={listboxId} role="listbox">
                 {includeEmptyOption ? (
                   <button
+                    id={`${listboxId}-option-0`}
                     aria-selected={value === ""}
-                    className={`dashboard-note-picker-option${value === "" ? " is-selected" : ""}`}
+                    className={`dashboard-note-picker-option${value === "" ? " is-selected" : ""}${activeOptionValue === "" ? " is-active" : ""}`}
                     role="option"
                     type="button"
+                    onFocus={() => setActiveOptionValue("")}
+                    onMouseMove={() => setActiveOptionValue("")}
                     onClick={() => selectOption("")}
                   >
                     <span className="dashboard-note-picker-option-check" aria-hidden="true">
@@ -499,11 +553,14 @@ export function DashboardNotePicker({
                         <Fragment key={option.value}>
                           {showGroup ? <div className="dashboard-note-picker-group">{option.groupLabel}</div> : null}
                           <button
+                            id={`${listboxId}-option-${index + (includeEmptyOption ? 1 : 0)}`}
                             aria-selected={isSelected}
-                            className={`dashboard-note-picker-option${isSelected ? " is-selected" : ""}`}
+                            className={`dashboard-note-picker-option${isSelected ? " is-selected" : ""}${activeOptionValue === option.value ? " is-active" : ""}`}
                             role="option"
                             title={option.label}
                             type="button"
+                            onFocus={() => setActiveOptionValue(option.value)}
+                            onMouseMove={() => setActiveOptionValue(option.value)}
                             onClick={() => selectOption(option.value)}
                           >
                             <span className="dashboard-note-picker-option-check" aria-hidden="true">

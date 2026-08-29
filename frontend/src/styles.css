@@ -18114,16 +18114,6 @@ body.mobile-modal-scroll-locked {
   font-size: 0.88rem;
 }
 
-.time-review-diagnostic-popover.is-create .time-review-diagnostic-head {
-  border-top: 3px solid #1763c5;
-  background: #f4f8ff;
-  padding: 12px 14px 11px;
-}
-
-.time-review-diagnostic-popover.is-create .time-review-diagnostic-head h4 {
-  font-size: 1rem;
-}
-
 .time-review-diagnostic-close {
   width: 24px;
   height: 24px;
@@ -18145,9 +18135,9 @@ body.mobile-modal-scroll-locked {
 
 .time-review-manual-context {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.55fr);
-  gap: 14px;
-  align-items: end;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
   padding: 12px 14px;
@@ -18157,7 +18147,8 @@ body.mobile-modal-scroll-locked {
 .time-review-manual-context label {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  grid-template-rows: 14px 36px;
+  gap: 5px;
 }
 
 .time-review-manual-context span {
@@ -18168,10 +18159,16 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-manual-context strong {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
   overflow: hidden;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
   color: #172033;
   font-size: 0.84rem;
   font-weight: 850;
+  padding: 5px 7px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -18213,23 +18210,15 @@ body.mobile-modal-scroll-locked {
 
 .time-review-manual-site-field {
   border-bottom: 1px solid #e2e8f0;
-  border-left: 3px solid #1763c5;
-  background: #f4f8ff;
-  padding: 12px 14px 12px 11px;
-}
-
-.time-review-manual-site-field > span {
-  color: #1763c5;
+  background: #ffffff;
+  padding: 12px 14px;
 }
 
 .time-review-manual-site-field .dashboard-note-picker-trigger,
 .time-review-manual-field .dashboard-note-picker-trigger {
-  min-height: 38px;
-}
-
-.time-review-manual-site-field .dashboard-note-picker-trigger {
-  border-color: #9bbce0;
-  background: #ffffff;
+  box-sizing: border-box;
+  min-height: 36px;
+  height: 36px;
 }
 
 .time-review-manual-field-error {
@@ -18240,13 +18229,14 @@ body.mobile-modal-scroll-locked {
 
 .time-review-manual-time-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   background: #f8fafc;
   padding: 12px 14px;
 }
 
 .time-review-manual-time-grid label {
+  grid-template-rows: 14px 36px;
   gap: 5px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
@@ -18255,9 +18245,11 @@ body.mobile-modal-scroll-locked {
 
 .time-review-manual-time-grid input {
   width: 100%;
-  min-height: 34px;
+  box-sizing: border-box;
+  min-height: 36px;
+  height: 36px;
   border: 1px solid #cbd5e1;
-  border-radius: 2px;
+  border-radius: 0;
   background: #ffffff;
   color: #172033;
   padding: 5px 7px;
@@ -18276,22 +18268,6 @@ body.mobile-modal-scroll-locked {
   color: #334155;
   cursor: default;
   font-weight: 800;
-}
-
-.time-review-manual-time-grid label > small {
-  color: #64748b;
-  font-size: 0.65rem;
-  line-height: 1.25;
-}
-
-.time-review-manual-info {
-  margin: 0;
-  border-top: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #64748b;
-  padding: 10px 14px;
-  font-size: 0.72rem;
-  line-height: 1.35;
 }
 
 .time-review-diagnostic-table {
@@ -18603,7 +18579,7 @@ body.mobile-modal-scroll-locked {
 
 .time-review-diagnostic-save {
   min-height: 34px;
-  border-radius: 2px;
+  border-radius: 0;
   background: #1763c5;
   padding: 6px 12px;
   font-size: 0.8rem;
@@ -18616,7 +18592,7 @@ body.mobile-modal-scroll-locked {
 
 .time-review-diagnostic-cancel {
   min-height: 34px;
-  border-radius: 2px;
+  border-radius: 0;
   padding: 6px 12px;
   font-size: 0.8rem;
 }
@@ -22497,6 +22473,13 @@ body.mobile-modal-scroll-locked {
   background: #edf4fc;
   color: #1f4f84;
   font-weight: 800;
+}
+
+.dashboard-note-picker-option.is-active {
+  background: #f2f6fb;
+  color: #173c69;
+  outline: 1px solid #8aa8cf;
+  outline-offset: -1px;
 }
 
 .dashboard-note-picker-option > span:last-child {

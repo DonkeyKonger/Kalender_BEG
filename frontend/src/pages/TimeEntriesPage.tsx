@@ -1,5 +1,5 @@
 import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, Search, Trash2, Wrench } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -1402,6 +1402,11 @@ export function TimeEntriesPage() {
     }
   }
 
+  function submitPayrollManualTimeEntry(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    void savePayrollTimeCorrection();
+  }
+
   async function createPayrollManualTimeEntry(missingEntry: TimeEntry): Promise<void> {
     const result = buildPayrollManualEntryPayload({
       personId: missingEntry.person_id,
@@ -2297,7 +2302,12 @@ export function TimeEntriesPage() {
               </button>
             </div>
             {timeReviewDialogMode === "create" ? (
-              <div className="time-review-manual-form" aria-labelledby="time-review-diagnostic-title">
+              <form
+                className="time-review-manual-form"
+                id="payroll-manual-time-entry-form"
+                aria-labelledby="time-review-diagnostic-title"
+                onSubmit={submitPayrollManualTimeEntry}
+              >
                 <div className="time-review-manual-context">
                   <div>
                     <span>Monteur</span>
@@ -2387,19 +2397,14 @@ export function TimeEntriesPage() {
                   <label>
                     <span>Gesamtstunden (automatisch)</span>
                     <input
-                      aria-describedby="payroll-manual-total-help"
                       className="time-review-manual-calculated-hours"
                       type="text"
                       value={payrollManualTimeCalculation.status === "valid" ? payrollManualTimeCalculation.formattedHours : "–"}
                       readOnly
                     />
-                    <small id="payroll-manual-total-help">Aus Anfang, Ende und Pause berechnet.</small>
                   </label>
                 </div>
-                <p className="time-review-manual-info" role="note">
-                  Die Gesamtstunden werden aus Beginn, Ende und Pause automatisch berechnet.
-                </p>
-              </div>
+              </form>
             ) : (
               <div className="time-review-diagnostic-table" role="table" aria-label="Arbeitszeit-Diagnosewerte">
                 <div className="time-review-diagnostic-row is-head" role="row">
@@ -2484,9 +2489,10 @@ export function TimeEntriesPage() {
               </button>
               <button
                 className="icon-button time-review-diagnostic-save"
-                type="button"
+                form={timeReviewDialogMode === "create" ? "payroll-manual-time-entry-form" : undefined}
+                type={timeReviewDialogMode === "create" ? "submit" : "button"}
                 disabled={!canManageTimeEntries || isSavingPayrollCorrection}
-                onClick={() => void savePayrollTimeCorrection()}
+                onClick={timeReviewDialogMode === "create" ? undefined : () => void savePayrollTimeCorrection()}
               >
                 {timeReviewDialogMode === "create"
                   ? (isSavingPayrollCorrection ? "Zeit wird gespeichert..." : "Zeit speichern")
