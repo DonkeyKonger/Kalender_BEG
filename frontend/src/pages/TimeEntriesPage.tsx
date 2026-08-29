@@ -80,6 +80,7 @@ type PayrollReviewStatusMenuState = {
   triggerTop: number;
   triggerBottom: number;
   triggerLeft: number;
+  triggerRight: number;
   position: ViewportPopoverPosition | null;
 };
 type PayrollDeleteDialogState = {
@@ -265,6 +266,7 @@ export function TimeEntriesPage() {
   const [isDownloadingReviewWeekXlsx, setIsDownloadingReviewWeekXlsx] = useState(false);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [isReviewWeekActionsMenuOpen, setIsReviewWeekActionsMenuOpen] = useState(false);
+  const [reviewWeekActionsMenuPosition, setReviewWeekActionsMenuPosition] = useState<PayrollReviewStatusMenuState | null>(null);
   const [reviewWeekStatusMenuPersonId, setReviewWeekStatusMenuPersonId] = useState<number | null>(null);
   const [reviewWeekStatusMenuPosition, setReviewWeekStatusMenuPosition] = useState<PayrollReviewStatusMenuState | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
@@ -280,6 +282,7 @@ export function TimeEntriesPage() {
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
   const evaluationWeekStripRef = useRef<HTMLDivElement | null>(null);
   const timeReviewWorkerPanelRef = useRef<HTMLDivElement | null>(null);
+  const reviewWeekActionsMenuControlRef = useRef<HTMLDivElement | null>(null);
   const reviewWeekActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const reviewWeekActionsMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const reviewWeekStatusMenuControlRef = useRef<HTMLDivElement | null>(null);
@@ -342,7 +345,7 @@ export function TimeEntriesPage() {
     const position = resolveViewportPopoverPosition({
       triggerTop: reviewWeekStatusMenuPosition.triggerTop,
       triggerBottom: reviewWeekStatusMenuPosition.triggerBottom,
-      triggerLeft: reviewWeekStatusMenuPosition.triggerLeft,
+      triggerLeft: reviewWeekStatusMenuPosition.triggerRight - Math.max(bounds.width, menu.scrollWidth),
       menuWidth: Math.max(bounds.width, menu.scrollWidth),
       menuHeight: menu.scrollHeight,
       viewportWidth: window.innerWidth,
@@ -367,31 +370,72 @@ export function TimeEntriesPage() {
     function closeActionsMenuOnOutsideClick(event: PointerEvent) {
       if (
         event.target instanceof Node
-        && reviewWeekActionsMenuRef.current?.contains(event.target)
+        && (
+          reviewWeekActionsMenuControlRef.current?.contains(event.target)
+          || reviewWeekActionsMenuRef.current?.contains(event.target)
+        )
       ) {
         return;
       }
       setIsReviewWeekActionsMenuOpen(false);
+      setReviewWeekActionsMenuPosition(null);
     }
     function closeActionsMenuOnEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") {
         return;
       }
       setIsReviewWeekActionsMenuOpen(false);
+      setReviewWeekActionsMenuPosition(null);
       reviewWeekActionsMenuTriggerRef.current?.focus();
+    }
+    function closeActionsMenuOnViewportChange() {
+      setIsReviewWeekActionsMenuOpen(false);
+      setReviewWeekActionsMenuPosition(null);
     }
     document.addEventListener("pointerdown", closeActionsMenuOnOutsideClick);
     document.addEventListener("keydown", closeActionsMenuOnEscape);
+    window.addEventListener("resize", closeActionsMenuOnViewportChange);
+    window.addEventListener("scroll", closeActionsMenuOnViewportChange, true);
     return () => {
       document.removeEventListener("pointerdown", closeActionsMenuOnOutsideClick);
       document.removeEventListener("keydown", closeActionsMenuOnEscape);
+      window.removeEventListener("resize", closeActionsMenuOnViewportChange);
+      window.removeEventListener("scroll", closeActionsMenuOnViewportChange, true);
     };
   }, [isReviewWeekActionsMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (!reviewWeekActionsMenuPosition || reviewWeekActionsMenuPosition.position || !reviewWeekActionsMenuRef.current) {
+      return;
+    }
+    const menu = reviewWeekActionsMenuRef.current;
+    const bounds = menu.getBoundingClientRect();
+    const position = resolveViewportPopoverPosition({
+      triggerTop: reviewWeekActionsMenuPosition.triggerTop,
+      triggerBottom: reviewWeekActionsMenuPosition.triggerBottom,
+      triggerLeft: reviewWeekActionsMenuPosition.triggerRight - Math.max(bounds.width, menu.scrollWidth),
+      menuWidth: Math.max(bounds.width, menu.scrollWidth),
+      menuHeight: menu.scrollHeight,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    });
+    setReviewWeekActionsMenuPosition((current) => (
+      current && current.position === null ? { ...current, position } : current
+    ));
+  }, [reviewWeekActionsMenuPosition]);
+
+  useEffect(() => {
+    if (!reviewWeekActionsMenuPosition?.position) {
+      return;
+    }
+    reviewWeekActionsMenuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  }, [reviewWeekActionsMenuPosition?.position]);
 
   useEffect(() => {
     setReviewWeekStatusMenuPersonId(null);
     setReviewWeekStatusMenuPosition(null);
     setIsReviewWeekActionsMenuOpen(false);
+    setReviewWeekActionsMenuPosition(null);
   }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
@@ -1827,7 +1871,7 @@ export function TimeEntriesPage() {
                           Zeit erfassen
                         </button>
                       )}
-                      <div className="time-review-week-actions-control" ref={reviewWeekActionsMenuRef}>
+                      <div className="time-review-week-actions-control" ref={reviewWeekActionsMenuControlRef}>
                         <button
                           aria-controls={isReviewWeekActionsMenuOpen ? "time-review-week-actions-menu" : undefined}
                           aria-expanded={isReviewWeekActionsMenuOpen}
@@ -1836,17 +1880,40 @@ export function TimeEntriesPage() {
                           className="icon-button secondary time-review-week-actions-button"
                           ref={reviewWeekActionsMenuTriggerRef}
                           type="button"
-                          onClick={() => setIsReviewWeekActionsMenuOpen((current) => !current)}
+                          onClick={(event) => {
+                            if (isReviewWeekActionsMenuOpen) {
+                              setIsReviewWeekActionsMenuOpen(false);
+                              setReviewWeekActionsMenuPosition(null);
+                              return;
+                            }
+                            const bounds = event.currentTarget.getBoundingClientRect();
+                            setReviewWeekActionsMenuPosition({
+                              triggerTop: bounds.top,
+                              triggerBottom: bounds.bottom,
+                              triggerLeft: bounds.left,
+                              triggerRight: bounds.right,
+                              position: null,
+                            });
+                            setIsReviewWeekActionsMenuOpen(true);
+                          }}
                         >
                           <MoreHorizontal aria-hidden="true" size={17} />
                           Mehr
                         </button>
-                        {isReviewWeekActionsMenuOpen && (
+                        {isReviewWeekActionsMenuOpen && reviewWeekActionsMenuPosition && typeof document !== "undefined" && createPortal(
                           <div
-                            className="time-review-day-move-popover time-review-week-actions-menu"
+                            className={`time-review-day-move-popover time-review-week-actions-menu${reviewWeekActionsMenuPosition.position ? ` is-open-${reviewWeekActionsMenuPosition.position.placement}` : ""}`}
                             id="time-review-week-actions-menu"
+                            ref={reviewWeekActionsMenuRef}
                             role="menu"
                             aria-label="Excel-Exporte"
+                            style={{
+                              left: `${reviewWeekActionsMenuPosition.position?.left ?? reviewWeekActionsMenuPosition.triggerLeft}px`,
+                              top: `${reviewWeekActionsMenuPosition.position?.top ?? reviewWeekActionsMenuPosition.triggerBottom + 6}px`,
+                              maxHeight: reviewWeekActionsMenuPosition.position ? `${reviewWeekActionsMenuPosition.position.maxHeight}px` : undefined,
+                              maxWidth: reviewWeekActionsMenuPosition.position ? `${reviewWeekActionsMenuPosition.position.maxWidth}px` : undefined,
+                              visibility: reviewWeekActionsMenuPosition.position ? "visible" : "hidden",
+                            }}
                             onKeyDown={(event) => {
                               if (event.key === "Escape") {
                                 event.preventDefault();
@@ -1877,6 +1944,7 @@ export function TimeEntriesPage() {
                                 disabled={isDownloadingReviewWeekXlsx}
                                 onClick={() => {
                                   setIsReviewWeekActionsMenuOpen(false);
+                                  setReviewWeekActionsMenuPosition(null);
                                   void downloadSelectedReviewWeekXlsx();
                                 }}
                               >
@@ -1890,6 +1958,7 @@ export function TimeEntriesPage() {
                               disabled={isDownloadingAllReviewWeekXlsx}
                               onClick={() => {
                                 setIsReviewWeekActionsMenuOpen(false);
+                                setReviewWeekActionsMenuPosition(null);
                                 void downloadAllReviewWeekXlsx();
                               }}
                             >
@@ -1897,6 +1966,8 @@ export function TimeEntriesPage() {
                               {isDownloadingAllReviewWeekXlsx ? "Excel wird erstellt..." : "Alle Arbeitsstunden als Excel"}
                             </button>
                           </div>
+                          ,
+                          document.body,
                         )}
                       </div>
                       <span className="time-review-week-action-separator" aria-hidden="true" />
@@ -1939,6 +2010,7 @@ export function TimeEntriesPage() {
                                   triggerTop: bounds.top,
                                   triggerBottom: bounds.bottom,
                                   triggerLeft: bounds.left,
+                                  triggerRight: bounds.right,
                                   position: null,
                                 });
                                 setReviewWeekStatusMenuPersonId(selectedReviewWorker.personId);

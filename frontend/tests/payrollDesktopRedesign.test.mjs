@@ -129,15 +129,20 @@ test("the fixed worker header is one compact action row directly above the table
   assert.match(styles, /\.time-review-week-action-separator\s*\{[^}]*width:\s*1px;[^}]*height:\s*19px;[^}]*background:\s*#dfe5ed;/s);
 });
 
-test("the consolidated actions menu keeps exports keyboard accessible", () => {
+test("the consolidated actions menu stays above the table and keeps exports keyboard accessible", () => {
   assert.match(pageSource, /aria-haspopup="menu"[\s\S]*?aria-label="Weitere Aktionen für die Monteurwoche"/);
   assert.match(pageSource, /aria-controls=\{isReviewWeekActionsMenuOpen \? "time-review-week-actions-menu" : undefined\}/);
   assert.match(pageSource, /role="menu"[\s\S]*?role="menuitem"[\s\S]*?role="menuitem"/s);
   assert.match(pageSource, /document\.addEventListener\("pointerdown", closeActionsMenuOnOutsideClick\)/);
   assert.match(pageSource, /document\.addEventListener\("keydown", closeActionsMenuOnEscape\)/);
+  assert.match(pageSource, /reviewWeekActionsMenuPosition && typeof document !== "undefined" && createPortal\(/);
+  assert.match(pageSource, /ref=\{reviewWeekActionsMenuControlRef\}/);
+  assert.match(pageSource, /ref=\{reviewWeekActionsMenuRef\}/);
+  assert.match(pageSource, /window\.addEventListener\("scroll", closeActionsMenuOnViewportChange, true\)/);
+  assert.match(pageSource, /reviewWeekActionsMenuPosition\.triggerRight - Math\.max\(bounds\.width, menu\.scrollWidth\)/);
   assert.match(pageSource, /\["ArrowDown", "ArrowUp", "Home", "End"\]/);
   assert.match(pageSource, /querySelectorAll<HTMLButtonElement>\("button:not\(:disabled\)"\)/);
-  assert.match(styles, /\.time-review-week-actions-menu\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*100;[^}]*right:\s*0;[^}]*min-width:\s*235px;/s);
+  assert.match(styles, /\.time-review-week-actions-menu\s*\{[^}]*position:\s*fixed;[^}]*z-index:\s*110;[^}]*min-width:\s*235px;/s);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-week-check-head\s*\{[^}]*position:\s*sticky;[^}]*z-index:\s*3;/s);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*overflow-x:\s*auto;[^}]*overflow-y:\s*auto;/s);
 });
