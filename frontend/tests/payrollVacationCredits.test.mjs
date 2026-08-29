@@ -34,12 +34,14 @@ test("bei fehlender Serverzusammenfassung bleibt die bisherige Zeitsumme erhalte
   assert.equal(payrollWeekTotalMinutes(undefined, 375), 375);
 });
 
-test("Stundenprüfung lädt und rendert den serverseitigen Urlaubswert", async () => {
+test("Stundenprüfung zeigt Urlaub nur in der Tagessumme und lässt die Abwesenheitszeile leer", async () => {
   const source = await readFile(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
 
   assert.match(source, /api\.timeEntryPayrollWeek\(/);
   assert.match(source, /payrollWeekTotalMinutes\(payrollWeekPerson,/);
-  assert.match(source, /className=\{`time-review-work-time-cell\$\{hasVacationCredit \? " time-review-week-time" : ""\}`\} role="cell"/);
-  assert.match(source, /formatTimeEntryMinutes\(day\.vacationCreditMinutes, "hours"\)/);
+  assert.match(source, /formatTimeEntryMinutes\(timeReviewDayTotalMinutes\(day\), "hours"\)/);
+  assert.match(source, /aria-label=\{hasVacationCredit \? "Keine zusätzliche Arbeitszeit" : undefined\}/);
+  assert.match(source, /hasVacationCredit\s*\? null\s*:\s*renderTimeReviewCheckMark\("unknown"/);
+  assert.doesNotMatch(source, /formatTimeEntryMinutes\(day\.vacationCreditMinutes, "hours"\)/);
   assert.doesNotMatch(source, /vacation[^\n]*480|480[^\n]*vacation/i);
 });

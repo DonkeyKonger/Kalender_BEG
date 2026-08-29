@@ -40,7 +40,7 @@ export type PayrollCorrectionDraft = {
 
 export type PayrollTimeBasisField = "start_time" | "end_time" | "break_minutes";
 
-export type PayrollManualEntryDraft = PayrollCorrectionDraft & {
+export type PayrollManualEntryDraft = Omit<PayrollCorrectionDraft, "hours"> & {
   site_id: string;
   travel_minutes: string;
   work_date: string;
@@ -180,10 +180,6 @@ export function buildPayrollManualEntryPayload({
       error: "Pause muss als ganze, nicht negative Minutenzahl eingetragen werden.",
     };
   }
-  const workMinutes = parseDecimalHours(draft.hours);
-  if (!workMinutes.ok) {
-    return workMinutes;
-  }
   const travelMinutes = parseOptionalNonNegativeMinutes(draft.travel_minutes);
   if (!travelMinutes.ok) {
     return travelMinutes;
@@ -200,7 +196,7 @@ export function buildPayrollManualEntryPayload({
       end_time: draft.end_time,
       break_minutes: breakMinutes,
       travel_minutes: travelMinutes.value,
-      work_minutes: workMinutes.value,
+      work_minutes: calculation.minutes,
       note: OFFICE_ONLY_TIME_ENTRY_NOTE,
       source: "manual",
       status: "draft",
@@ -214,17 +210,6 @@ function parseClockMinutes(value: string): number | null {
     return null;
   }
   return Number(match[1]) * 60 + Number(match[2]);
-}
-
-function parseDecimalHours(
-  value: string,
-): { ok: true; value: number } | PayrollManualEntryValidationError {
-  const normalized = value.trim().replace(",", ".");
-  const parsed = Number(normalized);
-  if (!normalized || !Number.isFinite(parsed) || parsed < 0) {
-    return { ok: false, field: "time", error: "Gesamtstunden müssen eine Zahl ab 0 sein." };
-  }
-  return { ok: true, value: roundMinutesToQuarterHour(Math.round(parsed * 60)) };
 }
 
 function parseOptionalNonNegativeMinutes(

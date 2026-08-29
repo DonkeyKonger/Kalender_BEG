@@ -15,7 +15,7 @@ const validDraft = {
   start_time: "08:00",
   end_time: "17:00",
   break_minutes: "60",
-  hours: "8,00",
+  hours: "999,00",
   travel_minutes: "30",
 };
 
@@ -83,21 +83,21 @@ test("manual payroll entry only accepts dates from the open calendar week", () =
   assert.equal(result.field, "date");
 });
 
-test("manual total is stored even when it overrides the calculated total", () => {
+test("manual payload always uses the calculated total instead of a supplied hours value", () => {
   const result = build({ ...validDraft, hours: "7,50" });
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.equal(result.payload.work_minutes, 450);
+  assert.equal(result.payload.work_minutes, 480);
 });
 
-test("manual total is normalized to the shared quarter-hour value before saving", () => {
+test("manual payload applies the shared pause and quarter-hour calculation", () => {
   const result = build({
     ...validDraft,
     start_time: "06:05",
     end_time: "14:03",
     break_minutes: "0",
-    hours: "7,97",
+    hours: "0,25",
   });
 
   assert.equal(result.ok, true);
@@ -105,6 +105,27 @@ test("manual total is normalized to the shared quarter-hour value before saving"
   assert.equal(result.payload.start_time, "06:05");
   assert.equal(result.payload.end_time, "14:03");
   assert.equal(result.payload.work_minutes, 480);
+});
+
+test("manual payload supports overnight work and rejects incomplete time bases", () => {
+  const overnight = build({
+    ...validDraft,
+    start_time: "22:00",
+    end_time: "06:00",
+    break_minutes: "30",
+    hours: "99,00",
+  });
+  assert.equal(overnight.ok, true);
+  if (overnight.ok) {
+    assert.equal(overnight.payload.work_minutes, 450);
+  }
+
+  const incomplete = build({ ...validDraft, end_time: "" });
+  assert.deepEqual(incomplete, {
+    ok: false,
+    field: "time",
+    error: "Bitte Beginn, Ende und Pause vollständig eintragen.",
+  });
 });
 
 test("invalid pause and negative travel time are rejected", () => {
@@ -147,6 +168,15 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   assert.doesNotMatch(source.slice(createStart, editStart), /Fahrtzeit \(Min\.\)|payrollManualTravelMinutes/);
   assert.match(source, /site_id: payrollManualSiteId,[\s\S]*?travel_minutes: "0",[\s\S]*?work_date: payrollManualWorkDate,/);
   assert.doesNotMatch(source, /setPayrollManualTravelMinutes|payrollManualTravelMinutes/);
+  const calculatedTotalStart = source.indexOf('<span>Gesamtstunden (automatisch)</span>', createStart);
+  const calculatedTotalEnd = source.indexOf("</label>", calculatedTotalStart);
+  assert.ok(calculatedTotalStart > createStart);
+  assert.ok(calculatedTotalEnd > calculatedTotalStart);
+  const calculatedTotalSource = source.slice(calculatedTotalStart, calculatedTotalEnd);
+  assert.match(calculatedTotalSource, /value=\{payrollManualTimeCalculation\.status === "valid" \? payrollManualTimeCalculation\.formattedHours : "–"\}/);
+  assert.match(calculatedTotalSource, /readOnly/);
+  assert.doesNotMatch(calculatedTotalSource, /onChange|payrollCorrectionForm\.hours/);
+  assert.match(calculatedTotalSource, /Aus Anfang, Ende und Pause berechnet\./);
   assert.match(source.slice(editStart), /timeReviewDiagnosticRows\(timeReviewDiagnosticEntry\)/);
   assert.match(source, /await api\.createTimeEntry\(result\.payload\)/);
   assert.match(source, /closeTimeReviewDiagnostic\(\)/);

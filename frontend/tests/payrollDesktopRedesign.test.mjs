@@ -201,7 +201,7 @@ test("weekday separators show the full weekday, overnight assignment, and one al
 test("daily and row work times share the same centered grid column", () => {
   assert.match(pageSource, /className="time-review-day-group-total time-review-work-time-cell"[\s\S]*?Gesamtarbeitszeit/);
   assert.match(pageSource, /className="time-review-work-time-cell" role="cell"[\s\S]*?renderTimeReviewCheckMark\(check\.timeCheck/);
-  assert.match(pageSource, /className=\{`time-review-work-time-cell\$\{hasVacationCredit \? " time-review-week-time" : ""\}`\} role="cell"/);
+  assert.match(pageSource, /aria-label=\{hasVacationCredit \? "Keine zusätzliche Arbeitszeit" : undefined\}[\s\S]*?className=\{`time-review-work-time-cell\$\{hasVacationCredit \? " time-review-week-time" : ""\}`\}[\s\S]*?role="cell"/);
   assert.match(styles, /\.time-review-work-time-cell\s*\{[^}]*grid-column:\s*10;[^}]*justify-self:\s*stretch;[^}]*text-align:\s*center;/s);
   assert.match(styles, /\.time-review-week-check-row > \.time-review-work-time-cell\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s);
 });

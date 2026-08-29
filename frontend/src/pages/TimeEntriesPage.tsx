@@ -526,6 +526,7 @@ export function TimeEntriesPage() {
       })),
     [siteOptions],
   );
+  const payrollManualTimeCalculation = calculatePayrollTime(payrollCorrectionForm);
   const evaluationTimeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewAllEntries), [reviewAllEntries]);
   const reviewedWorkerIds = useMemo(
     () => new Set(reviewWeeklyReviews.filter(isWeeklyReviewReviewed).map((review) => review.person_id)),
@@ -2200,9 +2201,13 @@ export function TimeEntriesPage() {
                               label: "Ort-Diagnose öffnen",
                             })}
                           </div>
-                          <div className={`time-review-work-time-cell${hasVacationCredit ? " time-review-week-time" : ""}`} role="cell">
+                          <div
+                            aria-label={hasVacationCredit ? "Keine zusätzliche Arbeitszeit" : undefined}
+                            className={`time-review-work-time-cell${hasVacationCredit ? " time-review-week-time" : ""}`}
+                            role="cell"
+                          >
                             {hasVacationCredit
-                              ? formatTimeEntryMinutes(day.vacationCreditMinutes, "hours")
+                              ? null
                               : renderTimeReviewCheckMark("unknown", {
                                 onClick: () => openTimeReviewDiagnostic(missingEntry),
                                 label: "Arbeitszeit-Diagnose öffnen",
@@ -2511,18 +2516,15 @@ export function TimeEntriesPage() {
                     />
                   </label>
                   <label>
-                    <span>Gesamtstunden</span>
+                    <span>Gesamtstunden (automatisch)</span>
                     <input
+                      aria-describedby="payroll-manual-total-help"
+                      className="time-review-manual-calculated-hours"
                       type="text"
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      value={payrollCorrectionForm.hours}
-                      onChange={(event) => {
-                        setPayrollCorrectionError(null);
-                        setPayrollCorrectionForm((current) => ({ ...current, hours: event.target.value }));
-                      }}
-                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
+                      value={payrollManualTimeCalculation.status === "valid" ? payrollManualTimeCalculation.formattedHours : "–"}
+                      readOnly
                     />
+                    <small id="payroll-manual-total-help">Aus Anfang, Ende und Pause berechnet.</small>
                   </label>
                 </div>
               </div>
