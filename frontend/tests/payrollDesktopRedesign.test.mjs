@@ -152,6 +152,13 @@ test("weekly review distinguishes the neutral action from the green reviewed sta
   assert.match(pageSource, /title=\{selectedReviewWorker\.isReviewed[\s\S]*?Monteurwoche geprüft – klicken, um den Status zu ändern/);
   assert.match(pageSource, /void markSelectedReviewWeekReviewed\(\)/);
   assert.match(pageSource, /role="menuitem"[\s\S]*?void resetSelectedReviewWeekReview\(\)/);
+  assert.match(pageSource, /reviewWeekStatusMenuPosition && typeof document !== "undefined" && createPortal\(/);
+  assert.match(pageSource, /ref=\{reviewWeekStatusMenuRef\}/);
+  assert.match(pageSource, /aria-controls=\{selectedReviewWorker\.isReviewed && reviewWeekStatusMenuPersonId === selectedReviewWorker\.personId[\s\S]*?"time-review-week-review-menu"/);
+  assert.match(pageSource, /querySelector<HTMLButtonElement>\("button:not\(:disabled\)"\)\?\.focus\(\)/);
+  assert.match(pageSource, /window\.addEventListener\("scroll", closeStatusMenuOnViewportChange, true\)/);
+  assert.match(pageSource, /event\.key !== "Escape"[\s\S]*?reviewWeekStatusMenuTriggerRef\.current\?\.focus\(\)/);
+  assert.match(pageSource, /resolveViewportPopoverPosition\(\{[\s\S]*?triggerTop: reviewWeekStatusMenuPosition\.triggerTop[\s\S]*?menuHeight: menu\.scrollHeight/s);
   assert.match(pageSource, /selectedReviewWorker\.isReviewed\s*\? <RotateCcw aria-hidden="true" size=\{17\} \/>\s*:\s*<Check aria-hidden="true" size=\{18\} \/>/s);
   assert.match(pageSource, /import \{[\s\S]*?RotateCcw[\s\S]*?\} from "lucide-react";/);
   assert.match(styles, /\.time-review-worker-detail-head \.icon-button\s*\{[^}]*min-height:\s*29px;[^}]*border-radius:\s*7px;/s);
@@ -163,6 +170,7 @@ test("weekly review distinguishes the neutral action from the green reviewed sta
   assert.doesNotMatch(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*min-width:/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed:hover,[\s\S]*?\.time-review-week-review-button\.is-reviewed:focus-visible\s*\{[^}]*border-color:\s*#276f4b;[^}]*background:\s*#276f4b;/s);
   assert.match(styles, /\.time-review-worker-detail\.is-reviewed\s*\{[^}]*filter:\s*grayscale\(0\.45\);[^}]*opacity:\s*0\.82;/s);
+  assert.match(styles, /\.time-review-week-review-menu\s*\{[^}]*position:\s*fixed;[^}]*z-index:\s*110;[^}]*min-width:\s*132px;/s);
   assert.match(pageSource, /className="icon-button secondary time-review-manual-create-button"/);
 });
 

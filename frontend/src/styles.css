@@ -19666,10 +19666,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-week-review-menu {
-  position: absolute;
-  z-index: 100;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
+  z-index: 110;
   min-width: 132px;
 }
 

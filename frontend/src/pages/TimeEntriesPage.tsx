@@ -76,6 +76,12 @@ type PayrollDatePickerState = {
   triggerLeft: number;
   position: ViewportPopoverPosition | null;
 };
+type PayrollReviewStatusMenuState = {
+  triggerTop: number;
+  triggerBottom: number;
+  triggerLeft: number;
+  position: ViewportPopoverPosition | null;
+};
 type PayrollDeleteDialogState = {
   entry: TimeEntry;
   weeklyReviewed: boolean;
@@ -260,6 +266,7 @@ export function TimeEntriesPage() {
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [isReviewWeekActionsMenuOpen, setIsReviewWeekActionsMenuOpen] = useState(false);
   const [reviewWeekStatusMenuPersonId, setReviewWeekStatusMenuPersonId] = useState<number | null>(null);
+  const [reviewWeekStatusMenuPosition, setReviewWeekStatusMenuPosition] = useState<PayrollReviewStatusMenuState | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
   const [reviewWorkerSearch, setReviewWorkerSearch] = useState("");
   const [reviewWorkerFilter, setReviewWorkerFilter] = useState<TimeReviewWorkerFilter>("all");
@@ -275,6 +282,8 @@ export function TimeEntriesPage() {
   const timeReviewWorkerPanelRef = useRef<HTMLDivElement | null>(null);
   const reviewWeekActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const reviewWeekActionsMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const reviewWeekStatusMenuControlRef = useRef<HTMLDivElement | null>(null);
+  const reviewWeekStatusMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const reviewWeekStatusMenuRef = useRef<HTMLDivElement | null>(null);
   const payrollDatePickerMenuRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
@@ -291,15 +300,65 @@ export function TimeEntriesPage() {
     function closeStatusMenuOnOutsideClick(event: MouseEvent) {
       if (
         event.target instanceof Node
-        && reviewWeekStatusMenuRef.current?.contains(event.target)
+        && (
+          reviewWeekStatusMenuControlRef.current?.contains(event.target)
+          || reviewWeekStatusMenuRef.current?.contains(event.target)
+        )
       ) {
         return;
       }
       setReviewWeekStatusMenuPersonId(null);
+      setReviewWeekStatusMenuPosition(null);
+    }
+    function closeStatusMenuOnViewportChange() {
+      setReviewWeekStatusMenuPersonId(null);
+      setReviewWeekStatusMenuPosition(null);
+    }
+    function closeStatusMenuOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+      closeStatusMenuOnViewportChange();
+      reviewWeekStatusMenuTriggerRef.current?.focus();
     }
     document.addEventListener("mousedown", closeStatusMenuOnOutsideClick);
-    return () => document.removeEventListener("mousedown", closeStatusMenuOnOutsideClick);
+    document.addEventListener("keydown", closeStatusMenuOnEscape);
+    window.addEventListener("resize", closeStatusMenuOnViewportChange);
+    window.addEventListener("scroll", closeStatusMenuOnViewportChange, true);
+    return () => {
+      document.removeEventListener("mousedown", closeStatusMenuOnOutsideClick);
+      document.removeEventListener("keydown", closeStatusMenuOnEscape);
+      window.removeEventListener("resize", closeStatusMenuOnViewportChange);
+      window.removeEventListener("scroll", closeStatusMenuOnViewportChange, true);
+    };
   }, [reviewWeekStatusMenuPersonId]);
+
+  useLayoutEffect(() => {
+    if (!reviewWeekStatusMenuPosition || reviewWeekStatusMenuPosition.position || !reviewWeekStatusMenuRef.current) {
+      return;
+    }
+    const menu = reviewWeekStatusMenuRef.current;
+    const bounds = menu.getBoundingClientRect();
+    const position = resolveViewportPopoverPosition({
+      triggerTop: reviewWeekStatusMenuPosition.triggerTop,
+      triggerBottom: reviewWeekStatusMenuPosition.triggerBottom,
+      triggerLeft: reviewWeekStatusMenuPosition.triggerLeft,
+      menuWidth: Math.max(bounds.width, menu.scrollWidth),
+      menuHeight: menu.scrollHeight,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    });
+    setReviewWeekStatusMenuPosition((current) => (
+      current && current.position === null ? { ...current, position } : current
+    ));
+  }, [reviewWeekStatusMenuPosition]);
+
+  useEffect(() => {
+    if (!reviewWeekStatusMenuPosition?.position) {
+      return;
+    }
+    reviewWeekStatusMenuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  }, [reviewWeekStatusMenuPosition?.position]);
 
   useEffect(() => {
     if (!isReviewWeekActionsMenuOpen) {
@@ -331,6 +390,7 @@ export function TimeEntriesPage() {
 
   useEffect(() => {
     setReviewWeekStatusMenuPersonId(null);
+    setReviewWeekStatusMenuPosition(null);
     setIsReviewWeekActionsMenuOpen(false);
   }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
 
@@ -1553,6 +1613,7 @@ export function TimeEntriesPage() {
       return;
     }
     setReviewWeekStatusMenuPersonId(null);
+    setReviewWeekStatusMenuPosition(null);
     setMarkingReviewWeekPersonId(selectedReviewWorker.personId);
     setReviewActionError(null);
     try {
@@ -1841,9 +1902,12 @@ export function TimeEntriesPage() {
                       <span className="time-review-week-action-separator" aria-hidden="true" />
                       <div
                         className="time-review-week-review-control"
-                        ref={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId ? reviewWeekStatusMenuRef : undefined}
+                        ref={reviewWeekStatusMenuControlRef}
                       >
                           <button
+                            aria-controls={selectedReviewWorker.isReviewed && reviewWeekStatusMenuPersonId === selectedReviewWorker.personId
+                              ? "time-review-week-review-menu"
+                              : undefined}
                             aria-expanded={selectedReviewWorker.isReviewed
                               ? reviewWeekStatusMenuPersonId === selectedReviewWorker.personId
                               : undefined}
@@ -1862,11 +1926,22 @@ export function TimeEntriesPage() {
                               : "Monteurwoche als geprüft markieren"}
                             type="button"
                             disabled={!canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId}
-                            onClick={() => {
+                            ref={reviewWeekStatusMenuTriggerRef}
+                            onClick={(event) => {
                               if (selectedReviewWorker.isReviewed) {
-                                setReviewWeekStatusMenuPersonId((current) => (
-                                  current === selectedReviewWorker.personId ? null : selectedReviewWorker.personId
-                                ));
+                                if (reviewWeekStatusMenuPersonId === selectedReviewWorker.personId) {
+                                  setReviewWeekStatusMenuPersonId(null);
+                                  setReviewWeekStatusMenuPosition(null);
+                                  return;
+                                }
+                                const bounds = event.currentTarget.getBoundingClientRect();
+                                setReviewWeekStatusMenuPosition({
+                                  triggerTop: bounds.top,
+                                  triggerBottom: bounds.bottom,
+                                  triggerLeft: bounds.left,
+                                  position: null,
+                                });
+                                setReviewWeekStatusMenuPersonId(selectedReviewWorker.personId);
                                 return;
                               }
                               void markSelectedReviewWeekReviewed();
@@ -1876,11 +1951,20 @@ export function TimeEntriesPage() {
                               ? <RotateCcw aria-hidden="true" size={17} />
                               : <Check aria-hidden="true" size={18} />}
                           </button>
-                          {selectedReviewWorker.isReviewed && reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && (
+                          {selectedReviewWorker.isReviewed && reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && reviewWeekStatusMenuPosition && typeof document !== "undefined" && createPortal(
                             <div
                               className="time-review-day-move-popover time-review-week-review-menu"
+                              id="time-review-week-review-menu"
+                              ref={reviewWeekStatusMenuRef}
                               role="menu"
                               aria-label="Lohnprüfstatus Aktionen"
+                              style={{
+                                left: `${reviewWeekStatusMenuPosition.position?.left ?? reviewWeekStatusMenuPosition.triggerLeft}px`,
+                                top: `${reviewWeekStatusMenuPosition.position?.top ?? reviewWeekStatusMenuPosition.triggerBottom + 6}px`,
+                                maxHeight: reviewWeekStatusMenuPosition.position ? `${reviewWeekStatusMenuPosition.position.maxHeight}px` : undefined,
+                                maxWidth: reviewWeekStatusMenuPosition.position ? `${reviewWeekStatusMenuPosition.position.maxWidth}px` : undefined,
+                                visibility: reviewWeekStatusMenuPosition.position ? "visible" : "hidden",
+                              }}
                             >
                               <button
                                 type="button"
@@ -1892,6 +1976,8 @@ export function TimeEntriesPage() {
                                 {markingReviewWeekPersonId === selectedReviewWorker.personId ? "Wird zurückgesetzt..." : "Zurücksetzen"}
                               </button>
                             </div>
+                            ,
+                            document.body,
                           )}
                       </div>
                     </div>
