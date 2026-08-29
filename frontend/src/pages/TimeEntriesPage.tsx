@@ -1,5 +1,5 @@
 import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, Search, Trash2, Wrench } from "lucide-react";
-import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -240,6 +240,7 @@ export function TimeEntriesPage() {
   const [locationReviewSiteId, setLocationReviewSiteId] = useState("");
   const [locationReviewSiteSearch, setLocationReviewSiteSearch] = useState("");
   const [isLocationReviewPickerOpen, setIsLocationReviewPickerOpen] = useState(false);
+  const [locationReviewActiveSiteId, setLocationReviewActiveSiteId] = useState("");
   const [locationReviewError, setLocationReviewError] = useState<string | null>(null);
   const [isSavingLocationReview, setIsSavingLocationReview] = useState(false);
   const [locationReviewPopupTop, setLocationReviewPopupTop] = useState<number | null>(null);
@@ -276,6 +277,7 @@ export function TimeEntriesPage() {
   const reviewWeekStatusMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const reviewWeekStatusMenuRef = useRef<HTMLDivElement | null>(null);
   const payrollDatePickerMenuRef = useRef<HTMLDivElement | null>(null);
+  const locationReviewPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
   const lastAlignedReviewWeekKeyRef = useRef<string | null>(null);
   const timeReviewPerfRef = useRef<TimeReviewPerfState | null>(null);
@@ -479,6 +481,16 @@ export function TimeEntriesPage() {
     () => filterLocationReviewSites(locationReviewSiteOptions, locationReviewSiteSearch).slice(0, 8),
     [locationReviewSiteOptions, locationReviewSiteSearch],
   );
+  const locationReviewActiveSiteOptions = useMemo(
+    () => locationReviewSiteSearch.trim() ? locationReviewSiteSearchResults : locationReviewSiteOptions,
+    [locationReviewSiteOptions, locationReviewSiteSearch, locationReviewSiteSearchResults],
+  );
+  const locationReviewActiveListboxId = locationReviewSiteSearch.trim()
+    ? "time-review-location-search-results"
+    : "time-review-location-all-options";
+  const locationReviewActiveOptionId = locationReviewActiveSiteId
+    ? `${locationReviewActiveListboxId}-option-${locationReviewActiveSiteId}`
+    : undefined;
   const payrollManualSiteOptions = useMemo(
     () => siteOptions
       .filter((site) => site.status !== "deleted")
@@ -653,6 +665,7 @@ export function TimeEntriesPage() {
       setLocationReviewSiteId("");
       setLocationReviewSiteSearch("");
       setIsLocationReviewPickerOpen(false);
+      setLocationReviewActiveSiteId("");
       setLocationReviewError(null);
       setIsSavingLocationReview(false);
       return;
@@ -660,8 +673,31 @@ export function TimeEntriesPage() {
     setLocationReviewSiteId(locationReviewDiagnosticEntry.site_id ? String(locationReviewDiagnosticEntry.site_id) : "");
     setLocationReviewSiteSearch("");
     setIsLocationReviewPickerOpen(false);
+    setLocationReviewActiveSiteId("");
     setLocationReviewError(null);
   }, [locationReviewDiagnosticEntry]);
+
+  useEffect(() => {
+    if (!isLocationReviewPickerOpen) {
+      return;
+    }
+    setLocationReviewActiveSiteId((currentSiteId) => {
+      if (locationReviewActiveSiteOptions.some((site) => String(site.id) === currentSiteId)) {
+        return currentSiteId;
+      }
+      if (locationReviewActiveSiteOptions.some((site) => String(site.id) === locationReviewSiteId)) {
+        return locationReviewSiteId;
+      }
+      return locationReviewActiveSiteOptions[0] ? String(locationReviewActiveSiteOptions[0].id) : "";
+    });
+  }, [isLocationReviewPickerOpen, locationReviewActiveSiteOptions, locationReviewSiteId]);
+
+  useEffect(() => {
+    if (!isLocationReviewPickerOpen || !locationReviewActiveOptionId) {
+      return;
+    }
+    document.getElementById(locationReviewActiveOptionId)?.scrollIntoView({ block: "nearest" });
+  }, [isLocationReviewPickerOpen, locationReviewActiveOptionId]);
 
   useEffect(() => {
     if (!payrollDatePicker) {
@@ -1220,6 +1256,70 @@ export function TimeEntriesPage() {
   function closeLocationReviewDiagnostic(): void {
     setLocationReviewDiagnosticEntry(null);
     setLocationReviewPopupTop(null);
+  }
+
+  function closeLocationReviewPicker(): void {
+    setIsLocationReviewPickerOpen(false);
+    setLocationReviewActiveSiteId("");
+    window.requestAnimationFrame(() => locationReviewPickerTriggerRef.current?.focus());
+  }
+
+  function toggleLocationReviewPicker(): void {
+    if (isLocationReviewPickerOpen) {
+      closeLocationReviewPicker();
+      return;
+    }
+    setIsLocationReviewPickerOpen(true);
+  }
+
+  function selectLocationReviewSite(siteId: string, clearSearch = false): void {
+    if (!canManageTimeEntries || isSavingLocationReview) {
+      return;
+    }
+    setLocationReviewSiteId(siteId);
+    setLocationReviewActiveSiteId(siteId);
+    if (clearSearch) {
+      setLocationReviewSiteSearch("");
+    }
+  }
+
+  function moveLocationReviewActiveSite(direction: 1 | -1): void {
+    if (!locationReviewActiveSiteOptions.length) {
+      return;
+    }
+    setLocationReviewActiveSiteId((currentSiteId) => {
+      const currentIndex = locationReviewActiveSiteOptions.findIndex((site) => String(site.id) === currentSiteId);
+      const nextIndex = currentIndex < 0
+        ? (direction === 1 ? 0 : locationReviewActiveSiteOptions.length - 1)
+        : Math.max(0, Math.min(locationReviewActiveSiteOptions.length - 1, currentIndex + direction));
+      return String(locationReviewActiveSiteOptions[nextIndex].id);
+    });
+  }
+
+  function selectActiveLocationReviewSite(): void {
+    const activeSite = locationReviewActiveSiteOptions.find((site) => String(site.id) === locationReviewActiveSiteId);
+    if (!activeSite) {
+      return;
+    }
+    selectLocationReviewSite(String(activeSite.id), Boolean(locationReviewSiteSearch.trim()));
+    closeLocationReviewPicker();
+  }
+
+  function handleLocationReviewPickerKeyDown(event: ReactKeyboardEvent<HTMLInputElement | HTMLDivElement>): void {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      moveLocationReviewActiveSite(event.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      selectActiveLocationReviewSite();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeLocationReviewPicker();
+    }
   }
 
   async function createTimeEntryForMissingDay(missingEntry: TimeEntry, siteId: number): Promise<TimeEntry> {
@@ -2590,7 +2690,6 @@ export function TimeEntriesPage() {
           >
             <div className="time-review-diagnostic-head">
               <div>
-                <span>Diagnose</span>
                 <h4>Ort-Prüfung | {formatTimeEntryRange(locationReviewDiagnosticEntry)}</h4>
               </div>
               <button
@@ -2621,47 +2720,62 @@ export function TimeEntriesPage() {
             <div className="time-review-location-decision">
               <div className="time-review-location-summary is-actions-only">
                 <button
+                  ref={locationReviewPickerTriggerRef}
                   className="time-review-location-change"
                   type="button"
                   aria-expanded={isLocationReviewPickerOpen}
+                  aria-controls={isLocationReviewPickerOpen ? "time-review-location-picker" : undefined}
                   disabled={!canManageTimeEntries || isSavingLocationReview}
-                  onClick={() => setIsLocationReviewPickerOpen((current) => !current)}
+                  onClick={toggleLocationReviewPicker}
                 >
                   {isLocationReviewPickerOpen ? "Auswahl schliessen" : "Baustelle manuell anpassen"}
                 </button>
               </div>
               {isLocationReviewPickerOpen && (
-                <div className="time-review-location-picker" aria-label="Baustelle manuell auswählen">
+                <div className="time-review-location-picker" id="time-review-location-picker" aria-label="Baustelle manuell auswählen">
                   <section className="time-review-location-picker-panel">
                     <label className="time-review-location-search">
                       <span>Baustelle suchen</span>
                       <input
+                        aria-activedescendant={locationReviewActiveOptionId}
+                        aria-autocomplete="list"
+                        aria-controls={locationReviewActiveListboxId}
+                        aria-expanded={isLocationReviewPickerOpen}
+                        role="combobox"
                         type="search"
                         placeholder="Kommission oder Baustellenname"
                         value={locationReviewSiteSearch}
                         onChange={(event) => setLocationReviewSiteSearch(event.target.value)}
+                        onKeyDown={handleLocationReviewPickerKeyDown}
                         disabled={!canManageTimeEntries || isSavingLocationReview}
                       />
                     </label>
                     {locationReviewSiteSearch.trim() && (
-                      <div className="time-review-location-suggestions" role="listbox" aria-label="Baustellenvorschläge">
+                      <div
+                        className="time-review-location-suggestions"
+                        id="time-review-location-search-results"
+                        role="listbox"
+                        aria-label="Baustellenvorschläge"
+                        aria-activedescendant={locationReviewActiveSiteId
+                          ? `time-review-location-search-results-option-${locationReviewActiveSiteId}`
+                          : undefined}
+                        tabIndex={0}
+                        onKeyDown={handleLocationReviewPickerKeyDown}
+                      >
                         {locationReviewSiteSearchResults.length ? (
                           locationReviewSiteSearchResults.map((site) => (
-                            <button
-                              className={String(site.id) === locationReviewSiteId ? "is-selected" : ""}
+                            <div
+                              className={`time-review-location-option${String(site.id) === locationReviewSiteId ? " is-selected" : ""}${String(site.id) === locationReviewActiveSiteId ? " is-active" : ""}`}
+                              id={`time-review-location-search-results-option-${site.id}`}
                               key={site.id}
-                              type="button"
                               role="option"
                               aria-selected={String(site.id) === locationReviewSiteId}
-                              disabled={!canManageTimeEntries || isSavingLocationReview}
-                              onClick={() => {
-                                setLocationReviewSiteId(String(site.id));
-                                setLocationReviewSiteSearch("");
-                              }}
+                              aria-disabled={!canManageTimeEntries || isSavingLocationReview}
+                              onClick={() => selectLocationReviewSite(String(site.id), true)}
                             >
                               <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
                               <span>{site.name}</span>
-                            </button>
+                            </div>
                           ))
                         ) : (
                           <p>Keine passende Baustelle gefunden.</p>
@@ -2675,20 +2789,30 @@ export function TimeEntriesPage() {
                       <span>Alle auswählbaren Baustellen</span>
                       <small>{locationReviewSiteOptions.length}</small>
                     </div>
-                    <div className="time-review-location-site-list" role="listbox" aria-label="Alle auswählbaren Baustellen">
+                    <div
+                      className="time-review-location-site-list"
+                      id="time-review-location-all-options"
+                      role="listbox"
+                      aria-label="Alle auswählbaren Baustellen"
+                      aria-activedescendant={locationReviewActiveSiteId
+                        ? `time-review-location-all-options-option-${locationReviewActiveSiteId}`
+                        : undefined}
+                      tabIndex={0}
+                      onKeyDown={handleLocationReviewPickerKeyDown}
+                    >
                       {locationReviewSiteOptions.map((site) => (
-                        <button
-                          className={String(site.id) === locationReviewSiteId ? "is-selected" : ""}
+                        <div
+                          className={`time-review-location-option${String(site.id) === locationReviewSiteId ? " is-selected" : ""}${String(site.id) === locationReviewActiveSiteId ? " is-active" : ""}`}
+                          id={`time-review-location-all-options-option-${site.id}`}
                           key={site.id}
-                          type="button"
                           role="option"
                           aria-selected={String(site.id) === locationReviewSiteId}
-                          disabled={!canManageTimeEntries || isSavingLocationReview}
-                          onClick={() => setLocationReviewSiteId(String(site.id))}
+                          aria-disabled={!canManageTimeEntries || isSavingLocationReview}
+                          onClick={() => selectLocationReviewSite(String(site.id))}
                         >
                           <strong>{site.site_number || `Baustelle ${site.id}`}</strong>
                           <span>{site.name}</span>
-                        </button>
+                        </div>
                       ))}
                     </div>
                   </section>
@@ -2698,7 +2822,7 @@ export function TimeEntriesPage() {
             <div className="time-review-diagnostic-actions">
               {locationReviewError && <p className="time-review-diagnostic-error">{locationReviewError}</p>}
               <button
-                className="icon-button secondary time-review-diagnostic-save"
+                className="icon-button time-review-diagnostic-save"
                 type="button"
                 disabled={!canManageTimeEntries || isSavingLocationReview}
                 onClick={() => void saveLocationReviewSite()}

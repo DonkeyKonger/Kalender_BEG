@@ -18593,8 +18593,7 @@ body.mobile-modal-scroll-locked {
   padding-right: 2px;
 }
 
-.time-review-location-suggestions button,
-.time-review-location-site-list button {
+.time-review-location-option {
   display: grid;
   grid-template-columns: minmax(74px, 0.45fr) minmax(0, 1fr);
   gap: 6px;
@@ -18609,36 +18608,43 @@ body.mobile-modal-scroll-locked {
   text-align: left;
 }
 
-.time-review-location-suggestions button:hover,
-.time-review-location-suggestions button:focus-visible,
-.time-review-location-site-list button:hover,
-.time-review-location-site-list button:focus-visible {
+.time-review-location-option:hover,
+.time-review-location-option.is-active,
+.time-review-location-suggestions:focus-visible .time-review-location-option.is-active,
+.time-review-location-site-list:focus-visible .time-review-location-option.is-active {
   border-color: #9bbce0;
   background: #f4f8fd;
   outline: none;
 }
 
-.time-review-location-suggestions button.is-selected,
-.time-review-location-site-list button.is-selected {
+.time-review-location-suggestions:focus-visible,
+.time-review-location-site-list:focus-visible {
+  outline: 1px solid #9bbce0;
+  outline-offset: 1px;
+}
+
+.time-review-location-option.is-active {
+  border-color: #1763c5;
+  box-shadow: inset 3px 0 #1763c5;
+}
+
+.time-review-location-option.is-selected {
   border-color: #1d5c99;
   background: #edf5ff;
 }
 
-.time-review-location-suggestions button:disabled,
-.time-review-location-site-list button:disabled {
+.time-review-location-option[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.time-review-location-suggestions button strong,
-.time-review-location-site-list button strong {
+.time-review-location-option strong {
   color: #172033;
   font-size: 0.74rem;
   font-weight: 850;
 }
 
-.time-review-location-suggestions button span,
-.time-review-location-site-list button span {
+.time-review-location-option span {
   min-width: 0;
   overflow: hidden;
   color: #172033;
