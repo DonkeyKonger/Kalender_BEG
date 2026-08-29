@@ -17834,6 +17834,12 @@ body.mobile-modal-scroll-locked {
   font-weight: 900;
 }
 
+.time-review-week-break {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
 .time-review-week-site .time-review-absence-badge {
   justify-self: start;
   width: fit-content;

@@ -2080,7 +2080,7 @@ export function TimeEntriesPage() {
                         </div>
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "start")}</div>
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "end")}</div>
-                        <div className="time-review-week-time" role="cell">{renderTimeReviewBreakMinutes(check.entry)}</div>
+                        <div className="time-review-week-time time-review-week-break" role="cell">{renderTimeReviewBreakMinutes(check.entry)}</div>
                         <div className="time-review-week-time time-review-week-total" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
                         <div role="cell">
                           {renderTimeReviewCheckMark(check.locationCheck, {
@@ -2120,7 +2120,7 @@ export function TimeEntriesPage() {
                             )}
                           </div>
                           <div className="time-review-week-time time-review-week-total" role="cell">-</div>
-                          <div className="time-review-week-time" role="cell">-</div>
+                          <div className="time-review-week-time time-review-week-break" role="cell">-</div>
                           <div className="time-review-week-time" role="cell">-</div>
                           <div className="time-review-week-time" role="cell">-</div>
                           <div role="cell">

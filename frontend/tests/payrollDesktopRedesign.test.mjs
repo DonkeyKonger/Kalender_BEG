@@ -306,6 +306,16 @@ test("payroll grouping preserves row actions, diagnostics, and the emphasized to
   assert.match(styles, /\.time-review-week-total\s*\{[^}]*font-weight:\s*900;/s);
 });
 
+test("payroll break values use the existing subdued secondary-time treatment", () => {
+  const tableStart = pageSource.indexOf('className="time-review-week-check-table"');
+  const tableEnd = pageSource.indexOf("{payrollDatePicker &&", tableStart);
+  const tableSource = pageSource.slice(tableStart, tableEnd);
+
+  assert.match(tableSource, /className="time-review-week-time" role="cell">\{renderPayrollClock\(check\.entry, "start"\)\}<\/div>[\s\S]*?className="time-review-week-time" role="cell">\{renderPayrollClock\(check\.entry, "end"\)\}<\/div>[\s\S]*?className="time-review-week-time time-review-week-break" role="cell">\{renderTimeReviewBreakMinutes\(check\.entry\)\}<\/div>[\s\S]*?className="time-review-week-time time-review-week-total"/s);
+  assert.match(tableSource, /className="time-review-week-time time-review-week-break" role="cell">-<\/div>/);
+  assert.match(styles, /\.time-review-week-break\s*\{[^}]*color:\s*#64748b;[^}]*font-size:\s*0\.7rem;[^}]*font-weight:\s*700;/s);
+});
+
 test("payroll queue filters stay on one compact row until the viewport is truly narrow", () => {
   assert.match(styles, /\.time-review-queue-filters\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*gap:\s*3px;/s);
   assert.match(styles, /\.time-review-queue-filters button\s*\{[^}]*flex:\s*1 1 0;[^}]*justify-content:\s*center;[^}]*font-size:\s*0\.62rem;[^}]*white-space:\s*nowrap;/s);
