@@ -278,6 +278,34 @@ test("payroll table abbreviates headers from its container width without hiding 
   assert.match(styles, /@container time-review-detail \(max-width: 1050px\)\s*\{[\s\S]*?\.time-review-column-label-full\s*\{[^}]*display:\s*none;[\s\S]*?\.time-review-column-label-short\s*\{[^}]*display:\s*inline;/s);
 });
 
+test("payroll table adds compact semantic groups without changing its detailed columns", () => {
+  const tableStart = pageSource.indexOf('className="time-review-week-check-table"');
+  const tableEnd = pageSource.indexOf("{selectedReviewWeekDays.map", tableStart);
+  const tableSource = pageSource.slice(tableStart, tableEnd);
+
+  assert.match(tableSource, /className="time-review-week-check-group-head" role="row"[\s\S]*?aria-colspan=\{3\} aria-label="Spaltengruppe Auftrag">Auftrag[\s\S]*?aria-colspan=\{4\} aria-label="Spaltengruppe Arbeitszeit">Arbeitszeit[\s\S]*?aria-colspan=\{3\} aria-label="Spaltengruppe Prüfung und Status">Prüfung \/ Status/s);
+  assert.match(tableSource, /aria-label="Tag" title="Tag"[\s\S]*?aria-label="Eintragstyp" title="Eintragstyp"[\s\S]*?aria-label="Baustelle" title="Baustelle"[\s\S]*?aria-label="Montagebeginn" title="Montagebeginn"[\s\S]*?aria-label="Geprüft" title="Geprüft"/s);
+  assert.match(styles, /\.time-review-week-check-group-head\s*\{[^}]*height:\s*24px;[^}]*font-size:\s*0\.6rem;[^}]*text-transform:\s*uppercase;/s);
+  assert.match(styles, /\.time-review-column-group\.is-order\s*\{[^}]*grid-column:\s*2 \/ 5;/s);
+  assert.match(styles, /\.time-review-column-group\.is-work-time\s*\{[^}]*grid-column:\s*5 \/ 9;/s);
+  assert.match(styles, /\.time-review-column-group\.is-status\s*\{[^}]*grid-column:\s*9 \/ 12;/s);
+  assert.match(styles, /\.time-review-column-group\.is-work-time,[\s\S]*?\.time-review-week-check-row > :nth-child\(9\)\s*\{[^}]*box-shadow:\s*inset 1px 0 #dfe5ed;/s);
+  assert.match(styles, /@container time-review-detail \(max-width: 760px\)\s*\{[\s\S]*?\.time-review-week-check-group-head\s*\{[^}]*display:\s*none;[\s\S]*?\.time-review-week-check-head\s*\{[^}]*top:\s*0;/s);
+});
+
+test("payroll grouping preserves row actions, diagnostics, and the emphasized total", () => {
+  const tableStart = pageSource.indexOf('className="time-review-week-check-table"');
+  const tableEnd = pageSource.indexOf("{payrollDatePicker &&", tableStart);
+  const tableSource = pageSource.slice(tableStart, tableEnd);
+
+  assert.match(tableSource, /onClick=\{\(event\) => togglePayrollDatePicker\(check\.entry, event\.currentTarget\)\}/);
+  assert.match(tableSource, /onClick: \(\) => openLocationReviewDiagnostic\(check\.entry\)/);
+  assert.match(tableSource, /onClick: \(\) => openTimeReviewDiagnostic\(check\.entry\)/);
+  assert.match(tableSource, /onToggle: \(\) => void togglePayrollRowReview\(check\.entry\)/);
+  assert.match(tableSource, /className="time-review-week-time time-review-week-total" role="cell">\{renderPayrollWorkMinutes\(check\.entry\)\}/);
+  assert.match(styles, /\.time-review-week-total\s*\{[^}]*font-weight:\s*900;/s);
+});
+
 test("payroll queue filters stay on one compact row until the viewport is truly narrow", () => {
   assert.match(styles, /\.time-review-queue-filters\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*gap:\s*3px;/s);
   assert.match(styles, /\.time-review-queue-filters button\s*\{[^}]*flex:\s*1 1 0;[^}]*justify-content:\s*center;[^}]*font-size:\s*0\.62rem;[^}]*white-space:\s*nowrap;/s);

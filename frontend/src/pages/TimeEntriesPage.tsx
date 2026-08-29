@@ -1975,6 +1975,12 @@ export function TimeEntriesPage() {
                 </div>
                 {payrollDateError && <p className="time-review-week-error">{payrollDateError}</p>}
                 <div className="time-review-week-check-table" role="table" aria-label={`Lohnprüfung ${selectedReviewWorker.personName} KW ${selectedReviewWeek.week}`}>
+                  <div className="time-review-week-check-group-head" role="row">
+                    <span aria-hidden="true"></span>
+                    <span className="time-review-column-group is-order" role="columnheader" aria-colspan={3} aria-label="Spaltengruppe Auftrag">Auftrag</span>
+                    <span className="time-review-column-group is-work-time" role="columnheader" aria-colspan={4} aria-label="Spaltengruppe Arbeitszeit">Arbeitszeit</span>
+                    <span className="time-review-column-group is-status" role="columnheader" aria-colspan={3} aria-label="Spaltengruppe Prüfung und Status">Prüfung / Status</span>
+                  </div>
                   <div className="time-review-week-check-head" role="row">
                     <span role="columnheader" aria-label="Tag ändern"></span>
                     <span role="columnheader" aria-label="Tag" title="Tag"><span className="time-review-column-label-full">Tag</span><span className="time-review-column-label-short" aria-hidden="true">Tg</span></span>
@@ -2075,7 +2081,7 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "start")}</div>
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "end")}</div>
                         <div className="time-review-week-time" role="cell">{renderTimeReviewBreakMinutes(check.entry)}</div>
-                        <div className="time-review-week-time" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
+                        <div className="time-review-week-time time-review-week-total" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
                         <div role="cell">
                           {renderTimeReviewCheckMark(check.locationCheck, {
                             onClick: () => openLocationReviewDiagnostic(check.entry),
@@ -2113,7 +2119,7 @@ export function TimeEntriesPage() {
                               <strong>Keine Zeitmeldung</strong>
                             )}
                           </div>
-                          <div className="time-review-week-time" role="cell">-</div>
+                          <div className="time-review-week-time time-review-week-total" role="cell">-</div>
                           <div className="time-review-week-time" role="cell">-</div>
                           <div className="time-review-week-time" role="cell">-</div>
                           <div className="time-review-week-time" role="cell">-</div>

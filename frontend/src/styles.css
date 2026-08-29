@@ -17450,6 +17450,7 @@ body.mobile-modal-scroll-locked {
   background: #ffffff;
 }
 
+.time-review-week-check-group-head,
 .time-review-week-check-head,
 .time-review-week-check-row {
   display: grid;
@@ -17459,6 +17460,37 @@ body.mobile-modal-scroll-locked {
   min-width: 924px;
   border-bottom: 1px solid #e2e8f0;
   padding: 8px 10px;
+}
+
+.time-review-week-check-group-head {
+  box-sizing: border-box;
+  height: 24px;
+  align-items: end;
+  border-bottom: 0;
+  background: #f5f7fa;
+  color: #64748b;
+  padding: 4px 10px 3px;
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.time-review-column-group {
+  min-width: 0;
+}
+
+.time-review-column-group.is-order {
+  grid-column: 2 / 5;
+}
+
+.time-review-column-group.is-work-time {
+  grid-column: 5 / 9;
+}
+
+.time-review-column-group.is-status {
+  grid-column: 9 / 12;
 }
 
 .time-review-week-check-head {
@@ -17480,6 +17512,26 @@ body.mobile-modal-scroll-locked {
 
 .time-review-week-check-row.is-empty {
   background: #fbfdff;
+}
+
+.time-review-column-group.is-work-time,
+.time-review-column-group.is-status,
+.time-review-week-check-head > :nth-child(5),
+.time-review-week-check-head > :nth-child(9),
+.time-review-week-check-row > :nth-child(5),
+.time-review-week-check-row > :nth-child(9) {
+  box-shadow: inset 1px 0 #dfe5ed;
+}
+
+.time-review-week-check-head > :nth-child(n + 5),
+.time-review-week-check-row > :nth-child(n + 5):nth-child(-n + 8) {
+  text-align: center;
+}
+
+.time-review-week-check-row > :nth-child(9),
+.time-review-week-check-row > :nth-child(11) {
+  display: grid;
+  place-items: center;
 }
 
 .time-review-week-day,
@@ -17776,6 +17828,10 @@ body.mobile-modal-scroll-locked {
   color: #334155;
   font-size: 0.74rem;
   font-weight: 800;
+}
+
+.time-review-week-total {
+  font-weight: 900;
 }
 
 .time-review-week-site .time-review-absence-badge {
@@ -18644,6 +18700,7 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 760px) {
+  .time-review-week-check-group-head,
   .time-review-week-check-head,
   .time-review-week-check-row {
     grid-template-columns: 28px minmax(58px, 0.75fr) 64px minmax(120px, 1.25fr) repeat(4, 58px) 54px 72px 56px;
@@ -19747,12 +19804,18 @@ body.mobile-modal-scroll-locked {
 .time-entries-page.is-figma-times-workspace .time-review-week-check-head {
   position: sticky;
   z-index: 3;
-  top: 0;
+  top: 24px;
   border: 0;
   border-bottom: 1px solid #dfe5ed;
   border-radius: 0;
   background: #f5f7fa;
   padding: 8px 10px;
+}
+
+.time-entries-page.is-figma-times-workspace .time-review-week-check-group-head {
+  position: sticky;
+  z-index: 4;
+  top: 0;
 }
 
 .time-review-column-label-short {
@@ -19887,6 +19950,16 @@ body.mobile-modal-scroll-locked {
 
   .time-review-column-label-short {
     display: inline;
+  }
+}
+
+@container time-review-detail (max-width: 760px) {
+  .time-entries-page.is-figma-times-workspace .time-review-week-check-group-head {
+    display: none;
+  }
+
+  .time-entries-page.is-figma-times-workspace .time-review-week-check-head {
+    top: 0;
   }
 }
 
