@@ -156,10 +156,40 @@ test("weekday separators show only the full weekday and one aligned work-time to
 
 test("daily and row work times share the same centered grid column", () => {
   assert.match(pageSource, /className="time-review-day-group-total time-review-work-time-cell"[\s\S]*?Gesamtarbeitszeit/);
-  assert.match(pageSource, /className="time-review-work-time-cell" role="cell"[\s\S]*?renderTimeReviewCheckMark\(check\.timeCheck/);
+  assert.match(pageSource, /className="time-review-work-time-cell has-entry-work-time" role="cell"[\s\S]*?className="time-review-work-time-value"[\s\S]*?renderPayrollWorkMinutes\(check\.entry\)[\s\S]*?renderTimeReviewCheckMark\(check\.timeCheck/);
   assert.match(pageSource, /className=\{`time-review-work-time-cell\$\{hasVacationCredit \? " time-review-week-time" : ""\}`\} role="cell"/);
   assert.match(styles, /\.time-review-work-time-cell\s*\{[^}]*grid-column:\s*10;[^}]*justify-self:\s*stretch;[^}]*text-align:\s*center;/s);
   assert.match(styles, /\.time-review-week-check-row > \.time-review-work-time-cell\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s);
+  assert.match(styles, /\.time-review-work-time-cell\.has-entry-work-time\s*\{[^}]*position:\s*relative;/s);
+  assert.match(styles, /\.time-review-work-time-cell\.has-entry-work-time > \.time-review-check-mark\s*\{[^}]*position:\s*absolute;[^}]*right:\s*-3px;/s);
+});
+
+test("each normal entry shows its own AZ value while the day keeps one total", () => {
+  const dayRowsStart = pageSource.indexOf("{day.entries.length > 0 ? day.entries.map((check) => (");
+  const emptyRowStart = pageSource.indexOf(")) : (() => {", dayRowsStart);
+  const entryRowsSource = pageSource.slice(dayRowsStart, emptyRowStart);
+  const dayTotalOccurrences = pageSource.match(/className="time-review-day-group-total time-review-work-time-cell"/g) ?? [];
+
+  assert.ok(dayRowsStart >= 0);
+  assert.ok(emptyRowStart > dayRowsStart);
+  assert.equal(dayTotalOccurrences.length, 1);
+  assert.match(entryRowsSource, /renderPayrollMountingMinutes\(check\.entry\)/);
+  assert.match(entryRowsSource, /className="time-review-work-time-value"[\s\S]*?aria-label=\{`Arbeitszeit \$\{formatTimeEntryMinutes\(effectivePayrollWorkMinutes\(check\.entry\), "hours"\)\}`\}[\s\S]*?renderPayrollWorkMinutes\(check\.entry\)/s);
+  assert.match(entryRowsSource, /renderTimeReviewCheckMark\(check\.timeCheck,[\s\S]*?label: "Arbeitszeit-Diagnose öffnen"/s);
+  assert.match(pageSource, /function effectivePayrollMountingMinutes\(entry: TimeEntry\): number \| null \{[\s\S]*?return entry\.work_minutes;[\s\S]*?\}/s);
+  assert.match(pageSource, /function effectivePayrollWorkMinutes\(entry: TimeEntry\): number \| null \{[\s\S]*?effectivePayrollMountingMinutes\(entry\)[\s\S]*?roundMinutesToQuarterHour\(mountingMinutes \+ \(entry\.travel_minutes \|\| 0\)\)/s);
+});
+
+test("vacation and missing-time rows keep correct AZ values or diagnostics", () => {
+  const emptyRowStart = pageSource.indexOf("const missingEntry = buildMissingTimeReviewEntry");
+  const emptyRowEnd = pageSource.indexOf("})()}", emptyRowStart);
+  const emptyRowSource = pageSource.slice(emptyRowStart, emptyRowEnd);
+
+  assert.ok(emptyRowStart >= 0);
+  assert.ok(emptyRowEnd > emptyRowStart);
+  assert.match(emptyRowSource, /hasVacationCredit = day\.absenceType === "vacation" && day\.vacationCreditMinutes > 0/);
+  assert.match(emptyRowSource, /hasVacationCredit[\s\S]*?formatTimeEntryMinutes\(day\.vacationCreditMinutes, "hours"\)[\s\S]*?renderTimeReviewCheckMark\("unknown"/s);
+  assert.match(emptyRowSource, /<div className="time-review-week-time" role="cell">-<\/div>[\s\S]*?<div role="cell">/s);
 });
 
 test("payroll review squares its framed surfaces within the active review workspace", () => {

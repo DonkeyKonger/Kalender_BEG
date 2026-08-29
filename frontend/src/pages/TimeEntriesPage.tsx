@@ -1898,14 +1898,21 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "start")}</div>
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "end")}</div>
                         <div className="time-review-week-time" role="cell">{renderTimeReviewBreakMinutes(check.entry)}</div>
-                        <div className="time-review-week-time" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
+                        <div className="time-review-week-time" role="cell">{renderPayrollMountingMinutes(check.entry)}</div>
                         <div role="cell">
                           {renderTimeReviewCheckMark(check.locationCheck, {
                             onClick: () => openLocationReviewDiagnostic(check.entry),
                             label: "Ort-Diagnose öffnen",
                           })}
                         </div>
-                        <div className="time-review-work-time-cell" role="cell">
+                        <div className="time-review-work-time-cell has-entry-work-time" role="cell">
+                          <span
+                            className="time-review-work-time-value"
+                            aria-label={`Arbeitszeit ${formatTimeEntryMinutes(effectivePayrollWorkMinutes(check.entry), "hours")}`}
+                            title={`Arbeitszeit ${formatTimeEntryMinutes(effectivePayrollWorkMinutes(check.entry), "hours")}`}
+                          >
+                            {renderPayrollWorkMinutes(check.entry)}
+                          </span>
                           {renderTimeReviewCheckMark(check.timeCheck, {
                             onClick: () => openTimeReviewDiagnostic(check.entry),
                             label: "Arbeitszeit-Diagnose öffnen",
@@ -3430,6 +3437,18 @@ function renderPayrollWorkMinutes(entry: TimeEntry) {
   return formatTimeEntryMinutes(workMinutes, "hours");
 }
 
+function renderPayrollMountingMinutes(entry: TimeEntry) {
+  const mountingMinutes = effectivePayrollMountingMinutes(entry);
+  if (hasPayrollTimeCorrection(entry)) {
+    return (
+      <span className="time-review-payroll-corrected-time" title="Büro-geprüfte Montagezeit">
+        {formatTimeEntryMinutes(mountingMinutes, "hours")}
+      </span>
+    );
+  }
+  return formatTimeEntryMinutes(mountingMinutes, "hours");
+}
+
 function renderTimeReviewBreakMinutes(entry: TimeEntry): string {
   if (
     isOfficeOnlyTimeEntry(entry)
@@ -3474,14 +3493,22 @@ function effectivePayrollEndTime(entry: TimeEntry): string | null {
 }
 
 function effectivePayrollWorkMinutes(entry: TimeEntry): number | null {
+  const mountingMinutes = effectivePayrollMountingMinutes(entry);
+  if (mountingMinutes === null) {
+    return null;
+  }
+  return roundMinutesToQuarterHour(mountingMinutes + (entry.travel_minutes || 0));
+}
+
+function effectivePayrollMountingMinutes(entry: TimeEntry): number | null {
   const correctedMinutes = effectivePayrollCorrectedWorkMinutes(entry);
   if (correctedMinutes !== null) {
-    return roundMinutesToQuarterHour(correctedMinutes + (entry.travel_minutes || 0));
+    return correctedMinutes;
   }
   if (isOfficeOnlyTimeEntry(entry) && !hasDirectOfficeTime(entry)) {
     return null;
   }
-  return roundMinutesToQuarterHour(entry.work_minutes + (entry.travel_minutes || 0));
+  return entry.work_minutes;
 }
 
 function hasDirectOfficeTime(entry: TimeEntry): boolean {

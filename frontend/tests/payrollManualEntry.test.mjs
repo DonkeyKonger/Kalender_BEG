@@ -159,5 +159,6 @@ test("office-created entries display their directly stored times without requiri
     /isOfficeOnlyTimeEntry\(entry\) && !hasDirectOfficeTime\(entry\)/,
   );
   assert.match(source, /entry\.payroll_corrected_break_minutes \?\? entry\.break_minutes/);
-  assert.match(source, /entry\.work_minutes \+ \(entry\.travel_minutes \|\| 0\)/);
+  assert.match(source, /return entry\.work_minutes;/);
+  assert.match(source, /mountingMinutes \+ \(entry\.travel_minutes \|\| 0\)/);
 });
