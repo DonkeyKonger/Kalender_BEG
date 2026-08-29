@@ -154,9 +154,11 @@ test("weekly review distinguishes the neutral action from the green reviewed sta
   assert.match(pageSource, /selectedReviewWorker\.isReviewed \? "Geprüft" : "Als geprüft markieren"/);
   assert.match(pageSource, /selectedReviewWorker\.isReviewed \? "Wird zurückgesetzt\.\.\." : "Wird geprüft\.\.\."/);
   assert.match(styles, /\.time-review-worker-detail-head \.icon-button\s*\{[^}]*min-height:\s*36px;[^}]*border-radius:\s*7px;/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*min-width:\s*172px;[^}]*height:\s*36px;[^}]*min-height:\s*36px;[^}]*border:\s*1px solid #a7b4c6;[^}]*border-radius:\s*7px;[^}]*background:\s*#ffffff;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*min-width:\s*172px;[^}]*height:\s*36px;[^}]*min-height:\s*36px;[^}]*border:\s*1px solid #a7b4c6;[^}]*border-radius:\s*0;[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:hover,[\s\S]*?\.time-review-week-review-button:focus-visible\s*\{[^}]*background:\s*#f5f8fc;[^}]*box-shadow:/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*border-color:\s*#2f855a;[^}]*background:\s*#2f855a;[^}]*color:\s*#ffffff;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*border-color:\s*#2f855a;[^}]*background:\s*#2f855a;[^}]*color:\s*#ffffff;[^}]*opacity:\s*1;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed span,[\s\S]*?\.time-review-week-review-button\.is-reviewed svg\s*\{[^}]*color:\s*#ffffff;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:disabled\s*\{[^}]*opacity:\s*0\.62;/s);
   assert.doesNotMatch(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*min-width:/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed:hover,[\s\S]*?\.time-review-week-review-button\.is-reviewed:focus-visible\s*\{[^}]*border-color:\s*#276f4b;[^}]*background:\s*#276f4b;/s);
   assert.match(pageSource, /className="icon-button secondary time-review-manual-create-button"/);
@@ -201,8 +203,8 @@ test("travel time is identified in its own type column without tinting the compl
   assert.match(tableSource, /<strong>\{timeReviewSiteName\(check\.entry\)\}<\/strong>/);
   assert.match(tableSource, /className="time-review-week-type" role="cell" aria-label="Keine Zeitmeldung"/);
   assert.doesNotMatch(tableSource, /is-travel-time/);
-  assert.match(styles, /\.time-review-entry-type\s*\{[^}]*box-sizing:\s*border-box;[^}]*min-height:\s*24px;[^}]*gap:\s*4px;[^}]*border:\s*1px solid #cbd5e1;[^}]*border-radius:\s*4px;[^}]*padding:\s*4px 5px;/s);
-  assert.match(styles, /\.time-review-entry-type\.is-travel\s*\{[^}]*border-color:\s*#dfbd73;[^}]*background:\s*#fff7e5;[^}]*color:\s*#8a5b00;/s);
+  assert.match(styles, /\.time-review-entry-type\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*60px;[^}]*min-height:\s*24px;[^}]*gap:\s*4px;[^}]*justify-content:\s*center;[^}]*border:\s*1px solid #cbd5e1;[^}]*border-radius:\s*4px;[^}]*padding:\s*4px 5px;/s);
+  assert.match(styles, /\.time-review-entry-type\.is-travel\s*\{[^}]*border-color:\s*#e6cd9f;[^}]*background:\s*#fff9ef;[^}]*color:\s*#8a651d;/s);
   assert.doesNotMatch(tableSource, /<button[^>]*time-review-entry-type/);
   assert.doesNotMatch(styles, /\.time-review-week-check-row\.is-travel-time/);
   assert.match(tableSource, /aria-label=\{isTravelTimeEntry\(check\.entry\) \? "Eintragstyp Fahrt" : "Eintragstyp Arbeit"\}/);

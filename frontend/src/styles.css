@@ -17495,9 +17495,11 @@ body.mobile-modal-scroll-locked {
 .time-review-entry-type {
   display: inline-flex;
   box-sizing: border-box;
+  width: 60px;
   min-height: 24px;
   align-items: center;
   gap: 4px;
+  justify-content: center;
   justify-self: start;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
@@ -17511,9 +17513,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-entry-type.is-travel {
-  border-color: #dfbd73;
-  background: #fff7e5;
-  color: #8a5b00;
+  border-color: #e6cd9f;
+  background: #fff9ef;
+  color: #8a651d;
 }
 
 .time-review-overnight-indicator {
@@ -19617,7 +19619,7 @@ body.mobile-modal-scroll-locked {
   justify-content: center;
   gap: 7px;
   border: 1px solid #a7b4c6;
-  border-radius: 7px;
+  border-radius: 0;
   background: #ffffff;
   color: #334155;
   cursor: pointer;
@@ -19640,6 +19642,12 @@ body.mobile-modal-scroll-locked {
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed {
   border-color: #2f855a;
   background: #2f855a;
+  color: #ffffff;
+  opacity: 1;
+}
+
+.time-review-worker-detail-head .time-review-week-review-button.is-reviewed span,
+.time-review-worker-detail-head .time-review-week-review-button.is-reviewed svg {
   color: #ffffff;
 }
 
