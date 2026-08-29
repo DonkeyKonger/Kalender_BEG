@@ -19730,23 +19730,6 @@ body.mobile-modal-scroll-locked {
   place-items: center;
 }
 
-.time-review-work-time-cell.has-entry-work-time {
-  position: relative;
-}
-
-.time-review-work-time-value {
-  display: inline-flex;
-  max-width: calc(100% - 22px);
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-}
-
-.time-review-work-time-cell.has-entry-work-time > .time-review-check-mark {
-  position: absolute;
-  right: -3px;
-}
-
 .time-review-day-group-entries {
   display: grid;
   align-content: start;
