@@ -4,7 +4,6 @@ import type { OvernightStatus, TimeEntry } from "../types/timeEntry";
 export type OvernightStatusPresentation = {
   badge: "MA" | "BEG" | null;
   label: string;
-  marker: "–" | null;
   tone: "none" | "self-paid" | "beg-paid";
 };
 
@@ -32,7 +31,6 @@ export function getOvernightStatusPresentation(
     return {
       badge: null,
       label: "Keine Übernachtung",
-      marker: "–",
       tone: "none",
     };
   }
@@ -40,7 +38,6 @@ export function getOvernightStatusPresentation(
     return {
       badge: "MA",
       label: "Übernachtung – Hotel vom Monteur bezahlt",
-      marker: null,
       tone: "self-paid",
     };
   }
@@ -48,14 +45,12 @@ export function getOvernightStatusPresentation(
     return {
       badge: "BEG",
       label: "Übernachtung – Hotel durch BEG bezahlt",
-      marker: null,
       tone: "beg-paid",
     };
   }
   return {
     badge: null,
     label: "Übernachtungsstatus nicht erfasst",
-    marker: "–",
     tone: "none",
   };
 }

@@ -18,53 +18,48 @@ const [componentSource, controlSource, pageSource, apiSource, styles] = await Pr
 ]);
 
 
-test("payroll overnight states keep their compact marker, badge and accessible meaning", () => {
+test("payroll overnight states keep their payer badge and accessible meaning", () => {
   assert.deepEqual(getOvernightStatusPresentation("none"), {
     badge: null,
     label: "Keine Übernachtung",
-    marker: "–",
     tone: "none",
   });
   assert.deepEqual(getOvernightStatusPresentation("self_paid"), {
     badge: "MA",
     label: "Übernachtung – Hotel vom Monteur bezahlt",
-    marker: null,
     tone: "self-paid",
   });
   assert.deepEqual(getOvernightStatusPresentation("beg_paid"), {
     badge: "BEG",
     label: "Übernachtung – Hotel durch BEG bezahlt",
-    marker: null,
     tone: "beg-paid",
   });
   assert.deepEqual(getOvernightStatusPresentation(null), {
     badge: null,
     label: "Übernachtungsstatus nicht erfasst",
-    marker: "–",
     tone: "none",
   });
   assert.deepEqual(
     {
       badge: getOvernightStatusPresentation(null).badge,
-      marker: getOvernightStatusPresentation(null).marker,
       tone: getOvernightStatusPresentation(null).tone,
     },
     {
       badge: getOvernightStatusPresentation("none").badge,
-      marker: getOvernightStatusPresentation("none").marker,
       tone: getOvernightStatusPresentation("none").tone,
     },
   );
 });
 
 
-test("the indicator keeps payer text inside the bed square with matching tooltip labels", () => {
+test("the indicator keeps payer text inside the bed square while no overnight stays visually empty", () => {
   assert.match(componentSource, /import \{ BedDouble \} from "lucide-react"/);
   assert.match(componentSource, /aria-label=\{label\}/);
   assert.match(componentSource, /title=\{label\}/);
   assert.match(componentSource, /role="img"/);
   assert.match(componentSource, /time-review-overnight-bed/);
-  assert.match(componentSource, /time-review-overnight-marker/);
+  assert.match(componentSource, /if \(presentation\.tone === "none"\) \{[\s\S]*?className=\{`time-review-overnight-indicator is-\$\{presentation\.tone\}`\}[\s\S]*?\/>/);
+  assert.doesNotMatch(componentSource, /presentation\.marker/);
   assert.match(componentSource, /time-review-overnight-payer-strip/);
   assert.match(componentSource, /\{presentation\.badge\}/);
   assert.doesNotMatch(componentSource, /time-review-overnight-badge/);

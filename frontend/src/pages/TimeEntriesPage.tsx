@@ -1,4 +1,4 @@
-import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, RefreshCw, Search, Trash2, Wrench } from "lucide-react";
+import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, RefreshCw, RotateCcw, Search, Trash2, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -1739,7 +1739,7 @@ export function TimeEntriesPage() {
               {reviewPayrollWeekError && <p className="time-table-note">{reviewPayrollWeekError}</p>}
 
             {selectedReviewWorker ? (
-              <div className="time-review-worker-detail">
+              <div className={`time-review-worker-detail${selectedReviewWorker.isReviewed ? " is-reviewed" : ""}`}>
                 <div className="time-review-worker-detail-head">
                   <div className="time-review-worker-identity">
                     <h3>{selectedReviewWorker.personName}</h3>
@@ -1872,12 +1872,9 @@ export function TimeEntriesPage() {
                               void markSelectedReviewWeekReviewed();
                             }}
                           >
-                            <Check aria-hidden="true" size={18} />
-                            <span>
-                              {markingReviewWeekPersonId === selectedReviewWorker.personId
-                                ? selectedReviewWorker.isReviewed ? "Wird zurückgesetzt..." : "Wird geprüft..."
-                                : selectedReviewWorker.isReviewed ? "Geprüft" : "Als geprüft markieren"}
-                            </span>
+                            {selectedReviewWorker.isReviewed
+                              ? <RotateCcw aria-hidden="true" size={17} />
+                              : <Check aria-hidden="true" size={18} />}
                           </button>
                           {selectedReviewWorker.isReviewed && reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && (
                             <div

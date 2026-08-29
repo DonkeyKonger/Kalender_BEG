@@ -123,10 +123,10 @@ test("the fixed worker header is one compact action row directly above the table
   assert.match(pageSource, /role="menu"[\s\S]*?aria-label="Excel-Exporte"[\s\S]*?Diese Woche als Excel[\s\S]*?Alle Arbeitsstunden als Excel/s);
   assert.doesNotMatch(pageSource, /time-review-week-xlsx-button/);
   assert.match(pageSource, /<\/div>\s*\{payrollDateError && <p className="time-review-week-error">[\s\S]*?<div className="time-review-week-check-table"/s);
-  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-worker-detail-head\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*4;[^}]*flex:\s*0 0 auto;[^}]*grid-template-columns:\s*minmax\(220px, 1fr\) auto;[^}]*align-items:\s*center;[^}]*padding:\s*6px 14px;/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-worker-detail-head\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*4;[^}]*flex:\s*0 0 auto;[^}]*grid-template-columns:\s*minmax\(220px, 1fr\) auto;[^}]*align-items:\s*center;[^}]*padding:\s*5px 14px;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-worker-detail-action-stack\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;/s);
   assert.match(styles, /@container time-review-detail \(max-width: 600px\)[\s\S]*?\.time-entries-page\.is-figma-times-workspace \.time-review-worker-detail-head\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?\.time-review-worker-detail-action-stack\s*\{[^}]*flex-wrap:\s*wrap;/s);
-  assert.match(styles, /\.time-review-week-action-separator\s*\{[^}]*width:\s*1px;[^}]*height:\s*24px;[^}]*background:\s*#dfe5ed;/s);
+  assert.match(styles, /\.time-review-week-action-separator\s*\{[^}]*width:\s*1px;[^}]*height:\s*19px;[^}]*background:\s*#dfe5ed;/s);
 });
 
 test("the consolidated actions menu keeps exports keyboard accessible", () => {
@@ -143,6 +143,7 @@ test("the consolidated actions menu keeps exports keyboard accessible", () => {
 });
 
 test("weekly review distinguishes the neutral action from the green reviewed state and preserves reset", () => {
+  assert.match(pageSource, /className=\{`time-review-worker-detail\$\{selectedReviewWorker\.isReviewed \? " is-reviewed" : ""\}`\}/);
   assert.match(pageSource, /className=\{`time-review-week-review-button\$\{selectedReviewWorker\.isReviewed \? " is-reviewed" : ""\}`\}/);
   assert.match(pageSource, /aria-pressed=\{selectedReviewWorker\.isReviewed\}/);
   assert.match(pageSource, /aria-haspopup=\{selectedReviewWorker\.isReviewed \? "menu" : undefined\}/);
@@ -151,16 +152,17 @@ test("weekly review distinguishes the neutral action from the green reviewed sta
   assert.match(pageSource, /title=\{selectedReviewWorker\.isReviewed[\s\S]*?Monteurwoche geprüft – klicken, um den Status zu ändern/);
   assert.match(pageSource, /void markSelectedReviewWeekReviewed\(\)/);
   assert.match(pageSource, /role="menuitem"[\s\S]*?void resetSelectedReviewWeekReview\(\)/);
-  assert.match(pageSource, /selectedReviewWorker\.isReviewed \? "Geprüft" : "Als geprüft markieren"/);
-  assert.match(pageSource, /selectedReviewWorker\.isReviewed \? "Wird zurückgesetzt\.\.\." : "Wird geprüft\.\.\."/);
-  assert.match(styles, /\.time-review-worker-detail-head \.icon-button\s*\{[^}]*min-height:\s*36px;[^}]*border-radius:\s*7px;/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*min-width:\s*172px;[^}]*height:\s*36px;[^}]*min-height:\s*36px;[^}]*border:\s*1px solid #a7b4c6;[^}]*border-radius:\s*0;[^}]*background:\s*#ffffff;/s);
+  assert.match(pageSource, /selectedReviewWorker\.isReviewed\s*\? <RotateCcw aria-hidden="true" size=\{17\} \/>\s*:\s*<Check aria-hidden="true" size=\{18\} \/>/s);
+  assert.match(pageSource, /import \{[\s\S]*?RotateCcw[\s\S]*?\} from "lucide-react";/);
+  assert.match(styles, /\.time-review-worker-detail-head \.icon-button\s*\{[^}]*min-height:\s*29px;[^}]*border-radius:\s*7px;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*width:\s*29px;[^}]*height:\s*29px;[^}]*min-height:\s*29px;[^}]*border:\s*1px solid #a7b4c6;[^}]*border-radius:\s*50%;[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:hover,[\s\S]*?\.time-review-week-review-button:focus-visible\s*\{[^}]*background:\s*#f5f8fc;[^}]*box-shadow:/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*border-color:\s*#2f855a;[^}]*background:\s*#2f855a;[^}]*color:\s*#ffffff;[^}]*opacity:\s*1;/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed span,[\s\S]*?\.time-review-week-review-button\.is-reviewed svg\s*\{[^}]*color:\s*#ffffff;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed svg\s*\{[^}]*color:\s*#ffffff;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:disabled\s*\{[^}]*opacity:\s*0\.62;/s);
-  assert.doesNotMatch(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*min-width:/s);
+  assert.doesNotMatch(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*min-width:/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed:hover,[\s\S]*?\.time-review-week-review-button\.is-reviewed:focus-visible\s*\{[^}]*border-color:\s*#276f4b;[^}]*background:\s*#276f4b;/s);
+  assert.match(styles, /\.time-review-worker-detail\.is-reviewed\s*\{[^}]*filter:\s*grayscale\(0\.45\);[^}]*opacity:\s*0\.82;/s);
   assert.match(pageSource, /className="icon-button secondary time-review-manual-create-button"/);
 });
 

@@ -29,16 +29,14 @@ export function OvernightStatusIndicator({
     );
   }
 
-  if (presentation.marker) {
+  if (presentation.tone === "none") {
     return (
       <span
         aria-label={label}
         className={`time-review-overnight-indicator is-${presentation.tone}`}
         role="img"
         title={label}
-      >
-        <span className="time-review-overnight-marker" aria-hidden="true">{presentation.marker}</span>
-      </span>
+      />
     );
   }
 
