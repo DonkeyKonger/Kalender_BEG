@@ -2401,7 +2401,7 @@ export function TimeEntriesPage() {
                     />
                   </label>
                   <label>
-                    <span>Gesamtstunden (automatisch)</span>
+                    <span>Gesamtstunden</span>
                     <input
                       className="time-review-manual-calculated-hours"
                       type="text"

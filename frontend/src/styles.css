@@ -18286,17 +18286,26 @@ body.mobile-modal-scroll-locked {
 .time-review-manual-time-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  background: #f8fafc;
+  gap: 0;
+  background: #ffffff;
   padding: 12px 14px;
 }
 
 .time-review-manual-time-grid label {
   grid-template-rows: 14px 36px;
   gap: 5px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  padding: 8px;
+  border-left: 1px solid #e2e8f0;
+  background: transparent;
+  padding: 0 8px;
+}
+
+.time-review-manual-time-grid label:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.time-review-manual-time-grid label:last-child {
+  padding-right: 0;
 }
 
 .time-review-manual-time-grid input {
@@ -18320,7 +18329,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-manual-time-grid .time-review-manual-calculated-hours {
-  background: #f8fafc;
+  background: #ffffff;
   color: #334155;
   cursor: default;
   font-weight: 800;
@@ -18666,6 +18675,15 @@ body.mobile-modal-scroll-locked {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .time-review-manual-time-grid label:nth-child(odd) {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .time-review-manual-time-grid label:nth-child(even) {
+    padding-right: 0;
+  }
+
   .time-review-diagnostic-actions {
     flex-wrap: wrap;
   }
@@ -18692,6 +18710,11 @@ body.mobile-modal-scroll-locked {
 
   .time-review-manual-time-grid {
     grid-template-columns: 1fr;
+  }
+
+  .time-review-manual-time-grid label {
+    border-left: 0;
+    padding-right: 0;
   }
 
   .time-review-diagnostic-actions > button {

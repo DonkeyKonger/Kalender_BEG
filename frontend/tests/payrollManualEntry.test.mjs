@@ -175,8 +175,9 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   assert.match(styles, /\.time-review-manual-context > div,[\s\S]*?grid-template-rows: 14px 36px;/s);
   assert.match(styles, /\.time-review-manual-context strong \{[^}]*min-height: 36px;[^}]*border: 1px solid #cbd5e1;/s);
   assert.match(styles, /\.time-review-manual-site-field \{[^}]*background: #ffffff;[^}]*padding: 12px 14px;/s);
-  assert.match(styles, /\.time-review-manual-time-grid \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);[^}]*background: #f8fafc;/s);
-  assert.match(styles, /\.time-review-manual-time-grid label \{[^}]*grid-template-rows: 14px 36px;/s);
+  assert.match(styles, /\.time-review-manual-time-grid \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);[^}]*gap: 0;[^}]*background: #ffffff;/s);
+  assert.match(styles, /\.time-review-manual-time-grid label \{[^}]*grid-template-rows: 14px 36px;[^}]*border-left: 1px solid #e2e8f0;[^}]*background: transparent;/s);
+  assert.match(styles, /\.time-review-manual-time-grid label:first-child \{[^}]*border-left: 0;/s);
   assert.match(styles, /\.time-review-manual-time-grid input \{[^}]*min-height: 36px;[^}]*height: 36px;[^}]*border-radius: 0;/s);
   assert.doesNotMatch(styles, /\.time-review-diagnostic-popover\.is-create \.time-review-diagnostic-head/);
   assert.doesNotMatch(styles, /\.time-review-manual-site-field \{[^}]*border-left:/s);
@@ -188,7 +189,7 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   assert.doesNotMatch(source.slice(createStart, editStart), /Fahrtzeit \(Min\.\)|payrollManualTravelMinutes/);
   assert.match(source, /site_id: payrollManualSiteId,[\s\S]*?travel_minutes: "0",[\s\S]*?work_date: payrollManualWorkDate,/);
   assert.doesNotMatch(source, /setPayrollManualTravelMinutes|payrollManualTravelMinutes/);
-  const calculatedTotalStart = source.indexOf('<span>Gesamtstunden (automatisch)</span>', createStart);
+  const calculatedTotalStart = source.indexOf('<span>Gesamtstunden</span>', createStart);
   const calculatedTotalEnd = source.indexOf("</label>", calculatedTotalStart);
   assert.ok(calculatedTotalStart > createStart);
   assert.ok(calculatedTotalEnd > calculatedTotalStart);
