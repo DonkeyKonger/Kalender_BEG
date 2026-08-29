@@ -129,7 +129,8 @@ test("the desktop table reserves a compact type column after removing the repeat
 test("all payroll overnight states share one axis and align in the day header", () => {
   assert.match(styles, /--time-review-overnight-status-width:\s*55px/);
   assert.match(styles, /--time-review-overnight-symbol-width:\s*29px/);
-  assert.match(styles, /\.time-review-day-group-summary\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*7px/s);
+  assert.match(styles, /\.time-review-day-group-summary\s*\{[^}]*--time-review-weekday-label-inline-size:\s*80px;[^}]*display:\s*inline-grid;[^}]*grid-template-columns:\s*var\(--time-review-weekday-label-inline-size\) max-content;[^}]*align-items:\s*center;[^}]*column-gap:\s*7px/s);
+  assert.match(styles, /\.time-review-day-group-weekday\s*\{[^}]*inline-size:\s*var\(--time-review-weekday-label-inline-size\);/s);
   assert.match(
     styles,
     /\.time-review-overnight-indicator\s*\{[^}]*width:\s*var\(--time-review-overnight-status-width\);[^}]*height:\s*28px;[^}]*align-items:\s*flex-end;[^}]*justify-content:\s*flex-start/s,

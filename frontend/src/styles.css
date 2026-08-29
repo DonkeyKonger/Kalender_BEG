@@ -19739,12 +19739,16 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-day-group-summary {
-  display: inline-flex;
+  --time-review-weekday-label-inline-size: 80px;
+  display: inline-grid;
+  grid-template-columns: var(--time-review-weekday-label-inline-size) max-content;
   align-items: center;
-  gap: 7px;
+  column-gap: 7px;
+  max-width: 100%;
 }
 
-.time-review-day-group-label strong {
+.time-review-day-group-weekday {
+  inline-size: var(--time-review-weekday-label-inline-size);
   color: #334155;
   font-size: 0.78rem;
   font-weight: 850;

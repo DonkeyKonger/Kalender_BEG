@@ -1924,7 +1924,7 @@ export function TimeEntriesPage() {
                           title={`${day.weekdayLabel}, ${formatDate(day.date)}`}
                         >
                           <span className="time-review-day-group-summary">
-                            <strong>{day.weekdayLabel}</strong>
+                            <strong className="time-review-day-group-weekday">{day.weekdayLabel}</strong>
                             {day.entries.length > 0 && (
                               <PayrollOvernightStatusControl
                                 editable={canManageTimeEntries && !selectedReviewWorker.isReviewed}

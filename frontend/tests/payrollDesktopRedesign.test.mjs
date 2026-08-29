@@ -169,8 +169,10 @@ test("weekday separators show the full weekday, overnight assignment, and one al
   assert.match(pageSource, /className="time-review-day-group-head" role="row"/);
   assert.match(pageSource, /function formatWeekdayLong\(value: string\)[\s\S]*?weekday: "long"/);
   assert.match(pageSource, /weekdayLabel: formatWeekdayLong\(date\)/);
-  assert.match(pageSource, /className="time-review-day-group-label"[\s\S]*?title=\{`\$\{day\.weekdayLabel\}, \$\{formatDate\(day\.date\)\}`\}[\s\S]*?<strong>\{day\.weekdayLabel\}<\/strong>/);
+  assert.match(pageSource, /className="time-review-day-group-label"[\s\S]*?title=\{`\$\{day\.weekdayLabel\}, \$\{formatDate\(day\.date\)\}`\}[\s\S]*?<strong className="time-review-day-group-weekday">\{day\.weekdayLabel\}<\/strong>/);
   assert.match(pageSource, /className="time-review-day-group-summary"[\s\S]*?<PayrollOvernightStatusControl/);
+  assert.match(styles, /\.time-review-day-group-summary\s*\{[^}]*--time-review-weekday-label-inline-size:\s*80px;[^}]*display:\s*inline-grid;[^}]*grid-template-columns:\s*var\(--time-review-weekday-label-inline-size\) max-content;[^}]*column-gap:\s*7px;[^}]*max-width:\s*100%;/s);
+  assert.match(styles, /\.time-review-day-group-weekday\s*\{[^}]*inline-size:\s*var\(--time-review-weekday-label-inline-size\);/s);
   assert.doesNotMatch(pageSource, /<span>\{formatDate\(day\.date\)\}<\/span>/);
   assert.doesNotMatch(pageSource, /time-review-day-group-status|Gesamtmontagezeit/);
   assert.match(pageSource, /className="time-review-day-group-total time-review-work-time-cell"[\s\S]*?aria-label=\{`Gesamtarbeitszeit[\s\S]*?\{formatTimeEntryMinutes\(timeReviewDayTotalMinutes\(day\), "hours"\)\}/);
