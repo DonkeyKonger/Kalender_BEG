@@ -18648,12 +18648,18 @@ body.mobile-modal-scroll-locked {
   white-space: nowrap;
 }
 
-.time-review-diagnostic-save {
+.time-review-diagnostic-save,
+.time-review-diagnostic-cancel {
+  box-sizing: border-box;
+  height: 34px;
   min-height: 34px;
   border-radius: 0;
-  background: #1763c5;
   padding: 6px 12px;
   font-size: 0.8rem;
+}
+
+.time-review-diagnostic-save {
+  background: #1763c5;
 }
 
 .time-review-diagnostic-save:not(:disabled):hover,
@@ -18662,10 +18668,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-diagnostic-cancel {
-  min-height: 34px;
-  border-radius: 0;
-  padding: 6px 12px;
-  font-size: 0.8rem;
+  border: 1px solid #cbd7e6;
+  background: #ffffff;
+  color: #243348;
 }
 
 @media (max-width: 760px) {
