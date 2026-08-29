@@ -259,7 +259,6 @@ export function TimeEntriesPage() {
   const [payrollManualWorkDate, setPayrollManualWorkDate] = useState("");
   const [payrollManualSiteId, setPayrollManualSiteId] = useState("");
   const [payrollManualSiteError, setPayrollManualSiteError] = useState<string | null>(null);
-  const [payrollManualTravelMinutes, setPayrollManualTravelMinutes] = useState("0");
   const [payrollCorrectionError, setPayrollCorrectionError] = useState<string | null>(null);
   const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
   const [isDownloadingAllReviewWeekXlsx, setIsDownloadingAllReviewWeekXlsx] = useState(false);
@@ -654,7 +653,6 @@ export function TimeEntriesPage() {
       setPayrollManualWorkDate("");
       setPayrollManualSiteId("");
       setPayrollManualSiteError(null);
-      setPayrollManualTravelMinutes("0");
       setPayrollCorrectionError(null);
       setIsSavingPayrollCorrection(false);
       return;
@@ -662,7 +660,6 @@ export function TimeEntriesPage() {
     setPayrollManualWorkDate(timeReviewDiagnosticEntry.work_date);
     setPayrollManualSiteId(timeReviewDialogMode === "create" ? "" : String(timeReviewDiagnosticEntry.site_id ?? ""));
     setPayrollManualSiteError(null);
-    setPayrollManualTravelMinutes(String(timeReviewDialogMode === "create" ? 0 : timeReviewDiagnosticEntry.travel_minutes ?? 0));
     if (timeReviewDialogMode === "create") {
       setPayrollCorrectionForm({ start_time: "", end_time: "", break_minutes: "0", hours: "" });
       setPayrollCorrectionError(null);
@@ -1493,7 +1490,7 @@ export function TimeEntriesPage() {
       draft: {
         ...payrollCorrectionForm,
         site_id: payrollManualSiteId,
-        travel_minutes: payrollManualTravelMinutes,
+        travel_minutes: "0",
         work_date: payrollManualWorkDate,
       },
       allowedWorkDates: selectedReviewWeekDayOptions.map((option) => option.date),
@@ -2523,21 +2520,6 @@ export function TimeEntriesPage() {
                       onChange={(event) => {
                         setPayrollCorrectionError(null);
                         setPayrollCorrectionForm((current) => ({ ...current, hours: event.target.value }));
-                      }}
-                      disabled={!canManageTimeEntries || isSavingPayrollCorrection}
-                    />
-                  </label>
-                  <label>
-                    <span>Fahrtzeit (Min.)</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      step="1"
-                      value={payrollManualTravelMinutes}
-                      onChange={(event) => {
-                        setPayrollManualTravelMinutes(event.target.value);
-                        setPayrollCorrectionError(null);
                       }}
                       disabled={!canManageTimeEntries || isSavingPayrollCorrection}
                     />

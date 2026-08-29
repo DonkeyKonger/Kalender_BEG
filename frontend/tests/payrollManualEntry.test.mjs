@@ -144,6 +144,9 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   assert.ok(createStart >= 0);
   assert.ok(editStart > createStart);
   assert.doesNotMatch(source.slice(createStart, editStart), /Eingetragene Monteurstunden|Erkannte Handy GPS Stunden/);
+  assert.doesNotMatch(source.slice(createStart, editStart), /Fahrtzeit \(Min\.\)|payrollManualTravelMinutes/);
+  assert.match(source, /site_id: payrollManualSiteId,[\s\S]*?travel_minutes: "0",[\s\S]*?work_date: payrollManualWorkDate,/);
+  assert.doesNotMatch(source, /setPayrollManualTravelMinutes|payrollManualTravelMinutes/);
   assert.match(source.slice(editStart), /timeReviewDiagnosticRows\(timeReviewDiagnosticEntry\)/);
   assert.match(source, /await api\.createTimeEntry\(result\.payload\)/);
   assert.match(source, /closeTimeReviewDiagnostic\(\)/);
