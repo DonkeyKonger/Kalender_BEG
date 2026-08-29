@@ -285,7 +285,7 @@ test("payroll table abbreviates headers from its container width without hiding 
   assert.match(styles, /@container time-review-detail \(max-width: 1050px\)\s*\{[\s\S]*?\.time-review-column-label-full\s*\{[^}]*display:\s*none;[\s\S]*?\.time-review-column-label-short\s*\{[^}]*display:\s*inline;/s);
 });
 
-test("payroll header aligns the day and type labels with their existing row content", () => {
+test("payroll header aligns its group, day, and type labels with their existing row content", () => {
   const tableStart = pageSource.indexOf('className="time-review-week-check-table"');
   const tableEnd = pageSource.indexOf("{selectedReviewWeekDays.map", tableStart);
   const tableSource = pageSource.slice(tableStart, tableEnd);
@@ -293,8 +293,12 @@ test("payroll header aligns the day and type labels with their existing row cont
   assert.match(tableSource, /className="time-review-column-day" role="columnheader" aria-label="Tag" title="Tag"/);
   assert.match(tableSource, /className="time-review-column-type" role="columnheader" aria-label="Eintragstyp" title="Eintragstyp"/);
   assert.match(styles, /\.time-review-column-day\s*\{[^}]*justify-self:\s*start;[^}]*margin-left:\s*-38px;/s);
+  assert.match(styles, /\.time-review-column-group\.is-order\s*\{[^}]*grid-column:\s*2 \/ 5;[^}]*justify-self:\s*start;[^}]*margin-left:\s*-38px;/s);
+  assert.match(styles, /\.time-review-column-group\.is-work-time\s*\{[^}]*grid-column:\s*5 \/ 9;[^}]*justify-self:\s*start;/s);
+  assert.match(styles, /\.time-review-column-group\.is-status\s*\{[^}]*grid-column:\s*9 \/ 12;[^}]*justify-self:\s*start;/s);
+  assert.match(styles, /\.time-review-day-group-label\s*\{[^}]*grid-column:\s*1 \/ 10;/s);
   assert.match(styles, /\.time-review-column-type\s*\{[^}]*justify-self:\s*center;[^}]*text-align:\s*center;/s);
-  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-review-column-day\s*\{[^}]*margin-left:\s*-34px;/s);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-review-column-day\s*\{[^}]*margin-left:\s*-34px;[\s\S]*?\.time-review-column-group\.is-order\s*\{[^}]*margin-left:\s*-34px;/s);
 });
 
 test("payroll table adds compact semantic groups without changing its detailed columns", () => {

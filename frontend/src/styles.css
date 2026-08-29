@@ -17483,14 +17483,18 @@ body.mobile-modal-scroll-locked {
 
 .time-review-column-group.is-order {
   grid-column: 2 / 5;
+  justify-self: start;
+  margin-left: -38px;
 }
 
 .time-review-column-group.is-work-time {
   grid-column: 5 / 9;
+  justify-self: start;
 }
 
 .time-review-column-group.is-status {
   grid-column: 9 / 12;
+  justify-self: start;
 }
 
 .time-review-week-check-head {
@@ -18755,6 +18759,10 @@ body.mobile-modal-scroll-locked {
   }
 
   .time-review-column-day {
+    margin-left: -34px;
+  }
+
+  .time-review-column-group.is-order {
     margin-left: -34px;
   }
 }
