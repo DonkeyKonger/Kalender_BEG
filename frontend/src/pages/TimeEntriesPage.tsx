@@ -237,6 +237,7 @@ export function TimeEntriesPage() {
   const [timeReviewPopupTop, setTimeReviewPopupTop] = useState<number | null>(null);
   const [locationReviewDiagnosticEntry, setLocationReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [locationReviewSiteId, setLocationReviewSiteId] = useState("");
+  const [hasLocationReviewSitePreview, setHasLocationReviewSitePreview] = useState(false);
   const [locationReviewSiteSearch, setLocationReviewSiteSearch] = useState("");
   const [isLocationReviewPickerOpen, setIsLocationReviewPickerOpen] = useState(false);
   const [locationReviewActiveSiteId, setLocationReviewActiveSiteId] = useState("");
@@ -662,6 +663,7 @@ export function TimeEntriesPage() {
   useEffect(() => {
     if (!locationReviewDiagnosticEntry) {
       setLocationReviewSiteId("");
+      setHasLocationReviewSitePreview(false);
       setLocationReviewSiteSearch("");
       setIsLocationReviewPickerOpen(false);
       setLocationReviewActiveSiteId("");
@@ -670,6 +672,7 @@ export function TimeEntriesPage() {
       return;
     }
     setLocationReviewSiteId(locationReviewDiagnosticEntry.site_id ? String(locationReviewDiagnosticEntry.site_id) : "");
+    setHasLocationReviewSitePreview(false);
     setLocationReviewSiteSearch("");
     setIsLocationReviewPickerOpen(false);
     setLocationReviewActiveSiteId("");
@@ -1253,6 +1256,7 @@ export function TimeEntriesPage() {
   }
 
   function closeLocationReviewDiagnostic(): void {
+    setHasLocationReviewSitePreview(false);
     setLocationReviewDiagnosticEntry(null);
     setLocationReviewPopupTop(null);
   }
@@ -1276,6 +1280,7 @@ export function TimeEntriesPage() {
       return;
     }
     setLocationReviewSiteId(siteId);
+    setHasLocationReviewSitePreview(true);
     setLocationReviewActiveSiteId(siteId);
     if (clearSearch) {
       setLocationReviewSiteSearch("");
@@ -1595,6 +1600,7 @@ export function TimeEntriesPage() {
           : currentEntry
       ));
       setLocationReviewSiteId(String(parsedSiteId));
+      setHasLocationReviewSitePreview(false);
     } catch (requestError) {
       setLocationReviewError(readApiError(requestError, "Ort konnte nicht gespeichert werden."));
     } finally {
@@ -2707,7 +2713,11 @@ export function TimeEntriesPage() {
                 <span role="columnheader">Kommission</span>
                 <span role="columnheader">Ort / Adresse</span>
               </div>
-              {locationReviewDiagnosticRows(locationReviewDiagnosticEntry, sites).map((row) => (
+              {locationReviewDiagnosticRows(
+                locationReviewDiagnosticEntry,
+                sites,
+                hasLocationReviewSitePreview ? locationReviewSiteId : null,
+              ).map((row) => (
                 <div className="time-review-diagnostic-row is-location" key={row.source} role="row">
                   <strong role="cell">{row.source}</strong>
                   <span role="cell">{row.siteName}</span>
@@ -3789,11 +3799,22 @@ function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
   ];
 }
 
-function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): LocationReviewDiagnosticRow[] {
+function locationReviewDiagnosticRows(
+  entry: TimeEntry,
+  sites: SiteSummary[],
+  previewOfficeSiteId: string | null = null,
+): LocationReviewDiagnosticRow[] {
   const hasSubmittedSite = !isOfficeOnlyTimeEntry(entry);
   const hasManualOfficeReview = hasManualLocationReview(entry);
   const originalSite = hasSubmittedSite ? findSiteSummary(sites, entry.original_site_id ?? entry.site_id) : null;
-  const reviewedSite = hasManualOfficeReview ? findSiteSummary(sites, entry.site_id) : null;
+  const parsedPreviewOfficeSiteId = previewOfficeSiteId === null ? null : Number(previewOfficeSiteId);
+  const previewedOfficeSite = parsedPreviewOfficeSiteId !== null
+    && Number.isInteger(parsedPreviewOfficeSiteId)
+    && parsedPreviewOfficeSiteId > 0
+    ? findSiteSummary(sites, parsedPreviewOfficeSiteId)
+    : null;
+  const reviewedSite = previewedOfficeSite ?? (hasManualOfficeReview ? findSiteSummary(sites, entry.site_id) : null);
+  const hasOfficeReview = hasManualOfficeReview || previewedOfficeSite !== null;
   const gpsSite = hasGpsSiteMatch(entry) ? findSiteSummary(sites, entry.gps_detected_site_id) : null;
   const rows: LocationReviewDiagnosticRow[] = [
     {
@@ -3810,9 +3831,9 @@ function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): L
     },
     {
       source: "Büroerfassung",
-      siteName: hasManualOfficeReview ? displayDiagnosticValue(timeEntrySiteName(entry)) : "-",
-      siteNumber: hasManualOfficeReview ? displayDiagnosticValue(entry.site_number) : "-",
-      location: hasManualOfficeReview ? siteLocationLabel(reviewedSite) : "-",
+      siteName: hasOfficeReview ? displayDiagnosticValue(previewedOfficeSite?.name ?? timeEntrySiteName(entry)) : "-",
+      siteNumber: hasOfficeReview ? displayDiagnosticValue(previewedOfficeSite?.site_number ?? entry.site_number) : "-",
+      location: hasOfficeReview ? siteLocationLabel(reviewedSite) : "-",
     },
   ];
   return rows;
