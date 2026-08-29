@@ -10,21 +10,24 @@ import {
 const pageSource = readFileSync(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
-test("payroll review uses the requested master-detail queue without removing existing actions", () => {
+test("payroll review uses the requested master-detail queue with consolidated actions", () => {
   assert.match(pageSource, /className="time-review-workspace-layout"/);
   assert.match(pageSource, /<aside className="time-review-queue-panel" aria-label="Prüfwarteschlange">/);
   assert.match(pageSource, /placeholder="Monteur suchen\.\.\."/);
+  assert.match(styles, /\.time-review-queue-search input\s*\{[^}]*height:\s*30px;[^}]*font-size:\s*0\.76rem;/s);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-review-queue-search input\s*\{[^}]*min-height:\s*36px;/s);
   assert.match(pageSource, /\["all", "Alle"\][\s\S]*?\["open", "Offen"\][\s\S]*?\["missing", "Keine Meldung"\][\s\S]*?\["reviewed", "Geprüft"\]/);
   assert.match(pageSource, />Monteur<\/span>\s*<span>Std\. erfasst<\/span>\s*<span>Status<\/span>/);
-  assert.match(pageSource, /Zeit manuell erstellen/);
+  assert.match(pageSource, /Zeit erfassen/);
   assert.match(pageSource, /Monteurwoche als geprüft markieren/);
-  assert.match(pageSource, /Monteurwoche herunterladen \(Excel\)/);
-  assert.match(pageSource, /Alle Arbeitsstunden herunterladen \(Excel\)/);
+  assert.match(pageSource, /Diese Woche als Excel/);
+  assert.match(pageSource, /Alle Arbeitsstunden als Excel/);
 });
 
 test("review week navigation fills the shared queue width with four complete cards", () => {
   assert.match(pageSource, /className="time-week-nav-panel time-review-week-nav"/);
-  assert.match(pageSource, /className="time-review-week-nav-row"[\s\S]*className="time-week-strip-shell"[\s\S]*className="icon-button secondary time-review-download-all-button"/);
+  assert.match(pageSource, /className="time-review-week-nav-row"[\s\S]*className="time-week-strip-shell"/);
+  assert.doesNotMatch(pageSource, /time-review-download-all-button/);
   assert.match(pageSource, /<strong>\{option\.label\}<\/strong>/);
   assert.doesNotMatch(pageSource, /<small>\{formatDayMonth\(option\.start\)\}–\{formatDayMonth\(option\.end\)\}<\/small>/);
   assert.equal(PAYROLL_WEEK_VISIBLE_COUNT, 4);
@@ -36,7 +39,7 @@ test("review week navigation fills the shared queue width with four complete car
   assert.match(styles, /\.time-review-week-nav \.time-week-strip\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*gap:\s*6px;/s);
   assert.match(styles, /\.time-review-week-nav \.time-week-strip button\s*\{[^}]*flex:\s*0 0 calc\(25% - 4\.5px\);[^}]*min-width:\s*calc\(25% - 4\.5px\);[^}]*height:\s*26px;[^}]*min-height:\s*26px;[^}]*box-sizing:\s*border-box;/s);
   assert.match(styles, /\.time-review-week-nav \.time-week-scroll-button\s*\{[^}]*height:\s*26px;[^}]*min-height:\s*26px;[^}]*box-sizing:\s*border-box;/s);
-  assert.match(styles, /\.time-review-download-all-button\s*\{[^}]*justify-self:\s*end;[^}]*min-height:\s*36px;[^}]*padding:\s*5px 9px;[^}]*font-size:\s*0\.76rem;/s);
+  assert.doesNotMatch(styles, /\.time-review-download-all-button/);
 });
 
 test("current review week remains identifiable when another week is selected", () => {
@@ -115,15 +118,29 @@ test("worker detail keeps captured hours beside the name without a redundant sta
 });
 
 test("the fixed worker header is one compact action row directly above the table", () => {
-  assert.match(pageSource, /className="time-review-worker-detail-head"[\s\S]*?className="time-review-worker-identity"[\s\S]*?className="time-review-worker-detail-actions"[\s\S]*?className="time-review-worker-detail-action-stack"[\s\S]*?className="time-review-worker-detail-primary-actions"[\s\S]*?time-review-manual-create-button[\s\S]*?time-review-week-review-button[\s\S]*?time-review-week-xlsx-button/s);
-  assert.match(pageSource, /time-review-week-xlsx-button[\s\S]*?aria-label=\{isDownloadingReviewWeekXlsx \? "Monteurwoche wird als Excel erstellt" : "Monteurwoche herunterladen \(Excel\)"\}[\s\S]*?title="Monteurwoche herunterladen \(Excel\)"/s);
+  assert.match(pageSource, /className="time-review-worker-detail-head"[\s\S]*?className="time-review-worker-identity"[\s\S]*?className="time-review-worker-detail-actions"[\s\S]*?className="time-review-worker-detail-action-stack"[\s\S]*?time-review-manual-create-button[\s\S]*?time-review-week-actions-button[\s\S]*?time-review-week-action-separator[\s\S]*?time-review-week-review-button/s);
+  assert.match(pageSource, /<MoreHorizontal aria-hidden="true" size=\{17\} \/>[\s\S]*?Mehr/);
+  assert.match(pageSource, /role="menu"[\s\S]*?aria-label="Excel-Exporte"[\s\S]*?Diese Woche als Excel[\s\S]*?Alle Arbeitsstunden als Excel/s);
+  assert.doesNotMatch(pageSource, /time-review-week-xlsx-button/);
   assert.match(pageSource, /<\/div>\s*\{payrollDateError && <p className="time-review-week-error">[\s\S]*?<div className="time-review-week-check-table"/s);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-worker-detail-head\s*\{[^}]*flex:\s*0 0 auto;[^}]*grid-template-columns:\s*minmax\(220px, 1fr\) auto;[^}]*align-items:\s*center;[^}]*padding:\s*6px 14px;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-worker-detail-action-stack\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;/s);
   assert.match(styles, /@container time-review-detail \(max-width: 600px\)[\s\S]*?\.time-entries-page\.is-figma-times-workspace \.time-review-worker-detail-head\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?\.time-review-worker-detail-action-stack\s*\{[^}]*flex-wrap:\s*wrap;/s);
+  assert.match(styles, /\.time-review-week-action-separator\s*\{[^}]*width:\s*1px;[^}]*height:\s*24px;[^}]*background:\s*#dfe5ed;/s);
 });
 
-test("weekly review uses a round accessible state action and preserves reset", () => {
+test("the consolidated actions menu keeps exports keyboard accessible", () => {
+  assert.match(pageSource, /aria-haspopup="menu"[\s\S]*?aria-label="Weitere Aktionen für die Monteurwoche"/);
+  assert.match(pageSource, /aria-controls=\{isReviewWeekActionsMenuOpen \? "time-review-week-actions-menu" : undefined\}/);
+  assert.match(pageSource, /role="menu"[\s\S]*?role="menuitem"[\s\S]*?role="menuitem"/s);
+  assert.match(pageSource, /document\.addEventListener\("pointerdown", closeActionsMenuOnOutsideClick\)/);
+  assert.match(pageSource, /document\.addEventListener\("keydown", closeActionsMenuOnEscape\)/);
+  assert.match(pageSource, /\["ArrowDown", "ArrowUp", "Home", "End"\]/);
+  assert.match(pageSource, /querySelectorAll<HTMLButtonElement>\("button:not\(:disabled\)"\)/);
+  assert.match(styles, /\.time-review-week-actions-menu\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*100;[^}]*min-width:\s*235px;/s);
+});
+
+test("weekly review distinguishes the neutral action from the green reviewed state and preserves reset", () => {
   assert.match(pageSource, /className=\{`time-review-week-review-button\$\{selectedReviewWorker\.isReviewed \? " is-reviewed" : ""\}`\}/);
   assert.match(pageSource, /aria-pressed=\{selectedReviewWorker\.isReviewed\}/);
   assert.match(pageSource, /aria-haspopup=\{selectedReviewWorker\.isReviewed \? "menu" : undefined\}/);
@@ -132,18 +149,21 @@ test("weekly review uses a round accessible state action and preserves reset", (
   assert.match(pageSource, /title=\{selectedReviewWorker\.isReviewed[\s\S]*?Monteurwoche geprüft – klicken, um den Status zu ändern/);
   assert.match(pageSource, /void markSelectedReviewWeekReviewed\(\)/);
   assert.match(pageSource, /role="menuitem"[\s\S]*?void resetSelectedReviewWeekReview\(\)/);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*width:\s*40px;[^}]*height:\s*40px;[^}]*border:\s*2px solid #2f855a;[^}]*border-radius:\s*50%;/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:hover,[\s\S]*?\.time-review-week-review-button:focus-visible\s*\{[^}]*background:\s*#eaf6ee;[^}]*box-shadow:/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*background:\s*#237a49;[^}]*color:\s*#ffffff;/s);
+  assert.match(pageSource, /selectedReviewWorker\.isReviewed \? "Geprüft" : "Als geprüft markieren"/);
+  assert.match(pageSource, /selectedReviewWorker\.isReviewed \? "Wird zurückgesetzt\.\.\." : "Wird geprüft\.\.\."/);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*min-width:\s*172px;[^}]*height:\s*44px;[^}]*border:\s*1px solid #a7b4c6;[^}]*border-radius:\s*5px;[^}]*background:\s*#ffffff;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:hover,[\s\S]*?\.time-review-week-review-button:focus-visible\s*\{[^}]*background:\s*#f5f8fc;[^}]*box-shadow:/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*min-width:\s*104px;[^}]*background:\s*#237a49;[^}]*color:\s*#ffffff;/s);
   assert.match(pageSource, /className="icon-button secondary time-review-manual-create-button"/);
 });
 
-test("weekday separators show only the full weekday and one aligned work-time total", () => {
+test("weekday separators show the full weekday, overnight assignment, and one aligned work-time total", () => {
   assert.match(pageSource, /<section className="time-review-day-group" key=\{day\.date\} role="rowgroup"/);
   assert.match(pageSource, /className="time-review-day-group-head" role="row"/);
   assert.match(pageSource, /function formatWeekdayLong\(value: string\)[\s\S]*?weekday: "long"/);
   assert.match(pageSource, /weekdayLabel: formatWeekdayLong\(date\)/);
   assert.match(pageSource, /className="time-review-day-group-label"[\s\S]*?title=\{`\$\{day\.weekdayLabel\}, \$\{formatDate\(day\.date\)\}`\}[\s\S]*?<strong>\{day\.weekdayLabel\}<\/strong>/);
+  assert.match(pageSource, /className="time-review-day-group-summary"[\s\S]*?<PayrollOvernightStatusControl/);
   assert.doesNotMatch(pageSource, /<span>\{formatDate\(day\.date\)\}<\/span>/);
   assert.doesNotMatch(pageSource, /time-review-day-group-status|Gesamtmontagezeit/);
   assert.match(pageSource, /className="time-review-day-group-total time-review-work-time-cell"[\s\S]*?aria-label=\{`Gesamtarbeitszeit[\s\S]*?\{formatTimeEntryMinutes\(timeReviewDayTotalMinutes\(day\), "hours"\)\}/);
@@ -151,7 +171,7 @@ test("weekday separators show only the full weekday and one aligned work-time to
   assert.match(styles, /\.time-review-day-group-label\s*\{[^}]*grid-column:\s*1 \/ 10;/s);
   assert.match(styles, /\.time-review-day-group\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;/s);
   assert.match(styles, /\.time-review-day-group-head\s*\{[^}]*min-height:\s*34px;[^}]*border-top:\s*1px solid #dfe5ed;[^}]*background:\s*#f8fafc;/s);
-  assert.match(styles, /\.time-review-day-group \.time-review-week-check-row\.is-travel-time\s*\{[^}]*box-shadow:\s*none;/s);
+  assert.doesNotMatch(styles, /\.time-review-week-check-row\.is-travel-time/);
 });
 
 test("daily and row work times share the same centered grid column", () => {
@@ -162,6 +182,29 @@ test("daily and row work times share the same centered grid column", () => {
   assert.match(styles, /\.time-review-week-check-row > \.time-review-work-time-cell\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s);
 });
 
+test("travel time is identified in its own type column without tinting the complete row", () => {
+  const tableStart = pageSource.indexOf('className="time-review-week-check-table"');
+  const tableEnd = pageSource.indexOf("{payrollDatePicker &&", tableStart);
+  const tableSource = pageSource.slice(tableStart, tableEnd);
+
+  assert.match(
+    tableSource,
+    /aria-label="Tag" title="Tag"[\s\S]*?aria-label="Eintragstyp" title="Eintragstyp"[\s\S]*?aria-label="Baustelle" title="Baustelle"/,
+  );
+  assert.match(tableSource, /<CarFront aria-hidden="true" size=\{14\} \/>[\s\S]*?<span>Fahrt<\/span>/);
+  assert.match(tableSource, /className="time-review-entry-type is-work">Arbeit/);
+  assert.match(tableSource, /<strong>\{timeReviewSiteName\(check\.entry\)\}<\/strong>/);
+  assert.match(tableSource, /className="time-review-week-type" role="cell" aria-label="Keine Zeitmeldung"/);
+  assert.doesNotMatch(tableSource, /is-travel-time/);
+  assert.match(styles, /\.time-review-entry-type\.is-travel\s*\{[^}]*border:\s*1px solid #dfbd73;[^}]*border-radius:\s*4px;[^}]*background:\s*#fff7e5;/s);
+  assert.doesNotMatch(styles, /\.time-review-week-check-row\.is-travel-time/);
+  assert.match(tableSource, /aria-label=\{isTravelTimeEntry\(check\.entry\) \? "Eintragstyp Fahrt" : "Eintragstyp Arbeit"\}/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?grid-template-columns:\s*28px minmax\(58px, 0\.75fr\) 64px minmax\(120px, 1\.25fr\)[\s\S]*?min-width:\s*818px/s);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.time-review-day-group,[\s\S]*?min-width:\s*818px;[\s\S]*?grid-template-columns:\s*28px minmax\(58px, 0\.75fr\) 64px minmax\(120px, 1\.25fr\)/s);
+  assert.match(pageSource, /function timeReviewSiteName\(entry: TimeEntry\)/);
+  assert.match(pageSource, /isTravelTimeEntry\(entry\) && !entry\.site_name && \/\^fahrtzeit\$\/i\.test\(siteName\) \? "-" : siteName/);
+});
+
 test("payroll review squares its framed surfaces within the active review workspace", () => {
   assert.match(pageSource, /activeTimeSubtab === "review" \? " is-payroll-review-workspace" : ""/);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-queue-panel,[\s\S]*?\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-day-group,[\s\S]*?border-radius:\s*0;/s);
@@ -170,8 +213,10 @@ test("payroll review squares its framed surfaces within the active review worksp
   assert.doesNotMatch(styles, /is-payroll-review-workspace \.time-review-queue-status/);
 });
 
-test("payroll review fixes the detail head while only queue and table scroll independently", () => {
-  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*calc\(100dvh - 96px\);[^}]*min-height:\s*0;/s);
+test("payroll review fills the available app area while only queue and table scroll independently", () => {
+  assert.match(styles, /\.content-area:has\(> \.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace\)\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*100dvh;[^}]*flex-direction:\s*column;[^}]*padding-bottom:\s*0;/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace\s*\{[^}]*display:\s*flex;[^}]*flex:\s*1 0 auto;[^}]*flex-direction:\s*column;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
+  assert.doesNotMatch(styles, /is-payroll-review-workspace\s*\{[^}]*height:\s*calc\(100dvh - 96px\)/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-queue-panel\s*\{[^}]*grid-template-rows:\s*auto auto auto auto minmax\(0, 1fr\) auto;[^}]*min-height:\s*0;/s);
   assert.match(styles, /is-payroll-review-workspace > \.page-header,[\s\S]*?is-payroll-review-workspace > \.time-main-subtabs\s*\{[^}]*flex:\s*0 0 auto;/s);
@@ -215,5 +260,5 @@ test("desktop layout keeps the queue compact and stacks safely below desktop wid
   assert.match(styles, /\.time-review-workspace-layout\s*\{[^}]*grid-template-columns:\s*var\(--time-review-queue-track\) minmax\(0, 1fr\);[^}]*gap:\s*var\(--time-review-layout-gap\);/s);
   assert.match(styles, /@media \(max-width: 1280px\)[\s\S]*?--time-review-queue-track:\s*minmax\(280px, 310px\);[\s\S]*?--time-review-layout-inline:\s*18px;/s);
   assert.match(styles, /@media \(max-width: 980px\)[\s\S]*?\.time-review-workspace-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s);
-  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.time-review-download-all-button\s*\{[^}]*width:\s*100%;/s);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.time-review-worker-detail-head \.time-review-worker-detail-actions,[\s\S]*?width:\s*100%;/s);
 });

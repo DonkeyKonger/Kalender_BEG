@@ -17454,7 +17454,7 @@ body.mobile-modal-scroll-locked {
 .time-review-week-check-head,
 .time-review-week-check-row {
   display: grid;
-  grid-template-columns: 30px minmax(72px, 0.65fr) minmax(140px, 1.35fr) 58px repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
+  grid-template-columns: 30px minmax(72px, 0.65fr) minmax(66px, 0.5fr) minmax(140px, 1.35fr) repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
   gap: 8px;
   align-items: center;
   min-width: 924px;
@@ -17475,11 +17475,6 @@ body.mobile-modal-scroll-locked {
   min-height: 46px;
 }
 
-.time-review-week-check-row.is-travel-time {
-  background: #f8f5ef;
-  box-shadow: inset 3px 0 0 #d7c7aa;
-}
-
 .time-review-week-check-row:last-child {
   border-bottom: 0;
 }
@@ -17490,27 +17485,31 @@ body.mobile-modal-scroll-locked {
 
 .time-review-week-day,
 .time-review-week-move,
+.time-review-week-type,
 .time-review-week-site,
-.time-review-week-overnight,
 .time-review-week-time {
   display: grid;
   min-width: 0;
 }
 
-.time-review-week-overnight {
-  place-items: center;
-  transform: translateX(-4px);
+.time-review-entry-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: start;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.time-review-week-overnight-heading {
-  display: grid;
-  width: var(--time-review-overnight-status-width);
-  grid-template-columns: var(--time-review-overnight-symbol-width) minmax(0, 1fr);
-}
-
-.time-review-week-overnight-heading > span {
-  grid-column: 1;
-  justify-self: center;
+.time-review-entry-type.is-travel {
+  border: 1px solid #dfbd73;
+  border-radius: 4px;
+  background: #fff7e5;
+  color: #8a5b00;
+  padding: 4px 5px;
 }
 
 .time-review-overnight-indicator {
@@ -17574,6 +17573,12 @@ body.mobile-modal-scroll-locked {
   border-color: #deb33d;
   background: #f8d761;
   color: #614700;
+}
+
+.time-review-overnight-indicator.is-conflict .time-review-overnight-marker {
+  border-color: #e5a146;
+  background: #fff4d6;
+  color: #9a5b00;
 }
 
 .time-review-overnight-trigger {
@@ -17886,11 +17891,31 @@ body.mobile-modal-scroll-locked {
   gap: 6px;
 }
 
-.time-review-worker-detail-primary-actions {
+.time-review-week-actions-control {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.time-review-week-actions-menu {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 235px;
+}
+
+.time-review-week-actions-menu button {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
+  width: 100%;
+  align-items: center;
+  gap: 7px;
+}
+
+.time-review-week-action-separator {
+  width: 1px;
+  height: 24px;
+  flex: 0 0 1px;
+  background: #dfe5ed;
 }
 
 .time-review-worker-detail-actions .icon-button {
@@ -18525,14 +18550,8 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 760px) {
-  .time-review-worker-detail-primary-actions {
-    display: grid;
-    width: 100%;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .time-review-worker-detail-primary-actions .icon-button {
-    width: 100%;
+  .time-review-queue-search input {
+    min-height: 36px;
   }
 
   .time-review-manual-context {
@@ -18551,9 +18570,9 @@ body.mobile-modal-scroll-locked {
 @media (max-width: 760px) {
   .time-review-week-check-head,
   .time-review-week-check-row {
-    grid-template-columns: 28px minmax(58px, 0.75fr) minmax(120px, 1.25fr) repeat(4, 58px) 54px 72px 56px;
+    grid-template-columns: 28px minmax(58px, 0.75fr) 64px minmax(120px, 1.25fr) repeat(4, 58px) 54px 72px 56px;
     gap: 6px;
-    min-width: 754px;
+    min-width: 818px;
     padding: 7px;
   }
 
@@ -18792,10 +18811,17 @@ body.mobile-modal-scroll-locked {
 /* The payroll review is a viewport workspace; its queue and check table own scrolling. */
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace {
   display: flex;
+  flex: 1 0 auto;
   flex-direction: column;
-  height: calc(100dvh - 96px);
   min-height: 0;
   overflow: hidden;
+}
+
+.content-area:has(> .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace) {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  padding-bottom: 0;
 }
 
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace > .page-header,
@@ -19115,19 +19141,6 @@ body.mobile-modal-scroll-locked {
   padding: 18px 24px 15px;
 }
 
-.time-review-download-all-button {
-  justify-self: end;
-  min-height: 36px;
-  white-space: nowrap;
-  padding: 5px 9px;
-  font-size: 0.76rem;
-}
-
-.time-review-download-all-button svg {
-  width: 15px;
-  height: 15px;
-}
-
 .time-review-week-nav-row {
   display: grid;
   grid-template-columns: var(--time-review-queue-track) minmax(0, 1fr);
@@ -19308,7 +19321,7 @@ body.mobile-modal-scroll-locked {
 
 .time-review-queue-search input {
   width: 100%;
-  height: 36px;
+  height: 30px;
   border: 0;
   background: transparent;
   color: #172033;
@@ -19566,10 +19579,6 @@ body.mobile-modal-scroll-locked {
   gap: 6px;
 }
 
-.time-review-worker-detail-head .time-review-worker-detail-primary-actions {
-  flex-wrap: nowrap;
-}
-
 .time-review-worker-detail-head .icon-button {
   min-height: 36px;
   border-radius: 7px;
@@ -19584,33 +19593,37 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-worker-detail-head .time-review-week-review-button {
-  display: inline-grid;
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  min-height: 40px;
-  flex: 0 0 40px;
-  appearance: none;
-  place-items: center;
-  border: 2px solid #2f855a;
-  border-radius: 50%;
-  background: transparent;
-  color: #237347;
+  display: inline-flex;
+  min-width: 172px;
+  height: 44px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #a7b4c6;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #334155;
   cursor: pointer;
-  padding: 0;
+  padding: 0 13px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 850;
   box-shadow: none;
 }
 
 .time-review-worker-detail-head .time-review-week-review-button:hover,
 .time-review-worker-detail-head .time-review-week-review-button:focus-visible {
-  border-color: #237347;
-  background: #eaf6ee;
-  color: #185d38;
+  border-color: #6f8fab;
+  background: #f5f8fc;
+  color: #243348;
   outline: none;
-  box-shadow: 0 0 0 3px rgb(47 133 90 / 18%);
+  box-shadow: 0 0 0 3px rgb(31 95 159 / 16%);
 }
 
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed {
+  min-width: 104px;
   border-color: #237a49;
   background: #237a49;
   color: #ffffff;
@@ -19634,10 +19647,6 @@ body.mobile-modal-scroll-locked {
   top: calc(100% + 6px);
   right: 0;
   min-width: 132px;
-}
-
-.time-review-worker-detail-head .time-review-week-xlsx-button {
-  flex: 0 0 auto;
 }
 
 .time-review-worker-detail .time-review-week-error {
@@ -19691,7 +19700,7 @@ body.mobile-modal-scroll-locked {
 
 .time-review-day-group-head {
   display: grid;
-  grid-template-columns: 30px minmax(72px, 0.65fr) minmax(140px, 1.35fr) 58px repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
+  grid-template-columns: 30px minmax(72px, 0.65fr) minmax(66px, 0.5fr) minmax(140px, 1.35fr) repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
   gap: 8px;
   align-items: center;
   min-height: 34px;
@@ -19704,6 +19713,12 @@ body.mobile-modal-scroll-locked {
 .time-review-day-group-label {
   grid-column: 1 / 10;
   min-width: 0;
+}
+
+.time-review-day-group-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .time-review-day-group-label strong {
@@ -19745,11 +19760,6 @@ body.mobile-modal-scroll-locked {
   border-bottom: 0;
 }
 
-.time-review-day-group .time-review-week-check-row.is-travel-time {
-  background: #faf9f7;
-  box-shadow: none;
-}
-
 .time-review-day-group .time-review-week-check-row.is-empty {
   background: #ffffff;
 }
@@ -19768,7 +19778,6 @@ body.mobile-modal-scroll-locked {
 }
 
 /* Keep the active payroll-review workspace rectilinear without flattening shared controls elsewhere. */
-.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-download-all-button,
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-week-nav,
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-week-nav .time-week-strip button,
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-week-nav .time-week-scroll-button,
@@ -19820,9 +19829,6 @@ body.mobile-modal-scroll-locked {
     justify-content: flex-start;
   }
 
-  .time-review-worker-detail-head .time-review-week-xlsx-button {
-    justify-self: start;
-  }
 }
 
 @media (max-width: 1280px) {
@@ -19862,17 +19868,13 @@ body.mobile-modal-scroll-locked {
     padding: 14px;
   }
 
-  .time-review-download-all-button {
-    width: 100%;
-  }
-
   .time-review-week-nav-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
 
   .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace {
-    height: calc(100dvh - 60px);
+    height: auto;
   }
 
   .time-review-week-nav .time-week-strip {
@@ -19888,12 +19890,6 @@ body.mobile-modal-scroll-locked {
     flex-direction: column;
   }
 
-  .time-review-worker-detail-head .time-review-worker-detail-primary-actions {
-    display: flex;
-    align-items: center;
-    width: 100%;
-  }
-
   .time-review-worker-detail-head .time-review-worker-detail-actions,
   .time-review-worker-detail-head .time-review-worker-detail-action-stack,
   .time-review-worker-detail-head .icon-button {
@@ -19907,11 +19903,11 @@ body.mobile-modal-scroll-locked {
 
   .time-review-day-group,
   .time-review-day-group-head {
-    min-width: 754px;
+    min-width: 818px;
   }
 
   .time-review-day-group-head {
-    grid-template-columns: 28px minmax(58px, 0.75fr) minmax(120px, 1.25fr) repeat(4, 58px) 54px 72px 56px;
+    grid-template-columns: 28px minmax(58px, 0.75fr) 64px minmax(120px, 1.25fr) repeat(4, 58px) 54px 72px 56px;
     gap: 6px;
     padding: 7px;
   }

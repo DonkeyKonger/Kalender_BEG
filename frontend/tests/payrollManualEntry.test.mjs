@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   buildPayrollManualEntryPayload,
+  isTravelOnlyPayrollEntry,
   OFFICE_ONLY_TIME_ENTRY_NOTE,
 } from "../src/lib/payrollTimeCorrection.ts";
 import { formatGermanDateKey, formatGermanWeekdayShort } from "../src/lib/formatters.ts";
@@ -26,6 +27,21 @@ function build(draft = validDraft) {
     allowedSiteIds: [72, 73],
   });
 }
+
+test("travel-only classification excludes normal work and office-only placeholder entries", () => {
+  const sharedEntry = {
+    end_time: "16:00",
+    has_manual_entry: true,
+    id: 42,
+    is_gps_suggestion: false,
+    note: null,
+    start_time: "08:00",
+  };
+
+  assert.equal(isTravelOnlyPayrollEntry({ ...sharedEntry, work_minutes: 0, travel_minutes: 45 }), true);
+  assert.equal(isTravelOnlyPayrollEntry({ ...sharedEntry, work_minutes: 30, travel_minutes: 45 }), false);
+  assert.equal(isTravelOnlyPayrollEntry({ ...sharedEntry, work_minutes: 0, travel_minutes: 45, note: OFFICE_ONLY_TIME_ENTRY_NOTE }), false);
+});
 
 test("manual payroll entry stores the selected stable site id and entered values", () => {
   const result = build();
@@ -137,7 +153,7 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   );
   assert.ok(weekSiteCellStart >= 0);
   assert.ok(weekSiteCellEnd > weekSiteCellStart);
-  assert.match(source.slice(weekSiteCellStart, weekSiteCellEnd), /timeEntrySiteName\(check\.entry\)/);
+  assert.match(source.slice(weekSiteCellStart, weekSiteCellEnd), /timeReviewSiteName\(check\.entry\)/);
   assert.match(source.slice(weekSiteCellStart, weekSiteCellEnd), /check\.entry\.site_number/);
   assert.doesNotMatch(source.slice(weekSiteCellStart, weekSiteCellEnd), /original_site|planned_site|gps_detected/);
   assert.match(source, /key={`\$\{day\.date\}-\$\{check\.entry\.id\}`}/);

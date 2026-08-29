@@ -8,6 +8,11 @@ export type OvernightStatusPresentation = {
   tone: "none" | "self-paid" | "beg-paid";
 };
 
+export type OvernightStatusDaySummary = {
+  status: OvernightStatus | null;
+  hasConflict: boolean;
+};
+
 
 export const DEFAULT_OVERNIGHT_STATUS: OvernightStatus = "none";
 
@@ -52,6 +57,21 @@ export function getOvernightStatusPresentation(
     label: "Übernachtungsstatus nicht erfasst",
     marker: "–",
     tone: "none",
+  };
+}
+
+
+export function summarizeOvernightStatuses(
+  statuses: Array<OvernightStatus | null | undefined>,
+): OvernightStatusDaySummary {
+  const recordedStatuses = statuses.filter((status): status is OvernightStatus => status !== null && status !== undefined);
+  const distinctStatuses = new Set(recordedStatuses);
+
+  return {
+    // An inconsistent historical day must not be rendered as an arbitrary payer.
+    // Selecting a value in the payroll editor resolves it for all entries of the day.
+    status: distinctStatuses.size === 1 ? recordedStatuses[0] : null,
+    hasConflict: distinctStatuses.size > 1,
   };
 }
 

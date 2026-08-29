@@ -2,6 +2,35 @@ import type { TimeEntryCreate } from "../types/timeEntry";
 
 export const OFFICE_ONLY_TIME_ENTRY_NOTE = "Büroprüfung ohne Monteur-Zeitmeldung.";
 
+type PayrollEntryClassificationInput = {
+  end_time: string | null;
+  has_manual_entry: boolean;
+  id: number;
+  is_gps_suggestion: boolean;
+  note: string | null;
+  start_time: string | null;
+  travel_minutes: number | null;
+  work_minutes: number;
+};
+
+export function isOfficeOnlyPayrollEntry(entry: PayrollEntryClassificationInput): boolean {
+  return (
+    entry.note === OFFICE_ONLY_TIME_ENTRY_NOTE
+    || (
+      entry.id < 0
+      && !entry.is_gps_suggestion
+      && !entry.has_manual_entry
+      && entry.work_minutes === 0
+      && !entry.start_time
+      && !entry.end_time
+    )
+  );
+}
+
+export function isTravelOnlyPayrollEntry(entry: PayrollEntryClassificationInput): boolean {
+  return !isOfficeOnlyPayrollEntry(entry) && entry.work_minutes === 0 && (entry.travel_minutes || 0) > 0;
+}
+
 export type PayrollCorrectionDraft = {
   start_time: string;
   end_time: string;

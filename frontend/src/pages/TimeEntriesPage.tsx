@@ -1,4 +1,4 @@
-import { CalendarPlus, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, RefreshCw, Search, Trash2 } from "lucide-react";
+import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -12,6 +12,8 @@ import {
   applyPayrollTimeBasisChange,
   buildPayrollManualEntryPayload,
   calculatePayrollTime,
+  isOfficeOnlyPayrollEntry,
+  isTravelOnlyPayrollEntry,
   OFFICE_ONLY_TIME_ENTRY_NOTE,
   parsePayrollBreakMinutes,
   roundMinutesToQuarterHour,
@@ -28,7 +30,7 @@ import {
   formatGermanWeekdayShort as formatWeekday,
   formatVerboseMinutes as formatMinutes,
 } from "../lib/formatters";
-import { applyOvernightStatusToWorkDate } from "../lib/overnightStatus";
+import { applyOvernightStatusToWorkDate, summarizeOvernightStatuses } from "../lib/overnightStatus";
 import {
   payrollWeekPersonsById,
   payrollWeekTotalMinutes,
@@ -116,6 +118,7 @@ type TimeReviewWeekDay = {
   weekdayLabel: string;
   absenceType: AbsenceType | null;
   overnightStatus: OvernightStatus | null;
+  hasOvernightStatusConflict: boolean;
   vacationCreditMinutes: number;
   entries: TimeReviewEntryCheck[];
 };
@@ -255,6 +258,7 @@ export function TimeEntriesPage() {
   const [isDownloadingAllReviewWeekXlsx, setIsDownloadingAllReviewWeekXlsx] = useState(false);
   const [isDownloadingReviewWeekXlsx, setIsDownloadingReviewWeekXlsx] = useState(false);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
+  const [isReviewWeekActionsMenuOpen, setIsReviewWeekActionsMenuOpen] = useState(false);
   const [reviewWeekStatusMenuPersonId, setReviewWeekStatusMenuPersonId] = useState<number | null>(null);
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
   const [reviewWorkerSearch, setReviewWorkerSearch] = useState("");
@@ -269,6 +273,8 @@ export function TimeEntriesPage() {
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
   const evaluationWeekStripRef = useRef<HTMLDivElement | null>(null);
   const timeReviewWorkerPanelRef = useRef<HTMLDivElement | null>(null);
+  const reviewWeekActionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const reviewWeekActionsMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const reviewWeekStatusMenuRef = useRef<HTMLDivElement | null>(null);
   const payrollDatePickerMenuRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
@@ -296,7 +302,36 @@ export function TimeEntriesPage() {
   }, [reviewWeekStatusMenuPersonId]);
 
   useEffect(() => {
+    if (!isReviewWeekActionsMenuOpen) {
+      return undefined;
+    }
+    function closeActionsMenuOnOutsideClick(event: PointerEvent) {
+      if (
+        event.target instanceof Node
+        && reviewWeekActionsMenuRef.current?.contains(event.target)
+      ) {
+        return;
+      }
+      setIsReviewWeekActionsMenuOpen(false);
+    }
+    function closeActionsMenuOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+      setIsReviewWeekActionsMenuOpen(false);
+      reviewWeekActionsMenuTriggerRef.current?.focus();
+    }
+    document.addEventListener("pointerdown", closeActionsMenuOnOutsideClick);
+    document.addEventListener("keydown", closeActionsMenuOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeActionsMenuOnOutsideClick);
+      document.removeEventListener("keydown", closeActionsMenuOnEscape);
+    };
+  }, [isReviewWeekActionsMenuOpen]);
+
+  useEffect(() => {
     setReviewWeekStatusMenuPersonId(null);
+    setIsReviewWeekActionsMenuOpen(false);
   }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
@@ -1606,15 +1641,6 @@ export function TimeEntriesPage() {
                   <ChevronRight aria-hidden="true" size={16} />
                 </button>
               </div>
-              <button
-                className="icon-button secondary time-review-download-all-button"
-                type="button"
-                disabled={isDownloadingAllReviewWeekXlsx}
-                onClick={() => void downloadAllReviewWeekXlsx()}
-              >
-                <Download aria-hidden="true" size={16} />
-                {isDownloadingAllReviewWeekXlsx ? "Excel wird erstellt..." : "Alle Arbeitsstunden herunterladen (Excel)"}
-              </button>
             </div>
           </div>
 
@@ -1727,24 +1753,96 @@ export function TimeEntriesPage() {
                   </div>
                   <div className="time-review-worker-detail-actions">
                     <div className="time-review-worker-detail-action-stack">
-                      <div className="time-review-worker-detail-primary-actions">
-                        {canManageTimeEntries && (
-                          <button
-                            className="icon-button secondary time-review-manual-create-button"
-                            type="button"
-                            aria-haspopup="dialog"
-                            title={selectedReviewWorker.isReviewed ? "Geprüfte Woche zuerst zurücksetzen." : "Zeit für diese Monteurwoche manuell erstellen"}
-                            disabled={selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
-                            onClick={openManualTimeEntryDialog}
-                          >
-                            <CalendarPlus aria-hidden="true" size={15} />
-                            Zeit manuell erstellen
-                          </button>
-                        )}
-                        <div
-                          className="time-review-week-review-control"
-                          ref={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId ? reviewWeekStatusMenuRef : undefined}
+                      {canManageTimeEntries && (
+                        <button
+                          className="icon-button secondary time-review-manual-create-button"
+                          type="button"
+                          aria-haspopup="dialog"
+                          title={selectedReviewWorker.isReviewed ? "Geprüfte Woche zuerst zurücksetzen." : "Zeit für diese Monteurwoche manuell erfassen"}
+                          disabled={selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                          onClick={openManualTimeEntryDialog}
                         >
+                          <CalendarPlus aria-hidden="true" size={15} />
+                          Zeit erfassen
+                        </button>
+                      )}
+                      <div className="time-review-week-actions-control" ref={reviewWeekActionsMenuRef}>
+                        <button
+                          aria-controls={isReviewWeekActionsMenuOpen ? "time-review-week-actions-menu" : undefined}
+                          aria-expanded={isReviewWeekActionsMenuOpen}
+                          aria-haspopup="menu"
+                          aria-label="Weitere Aktionen für die Monteurwoche"
+                          className="icon-button secondary time-review-week-actions-button"
+                          ref={reviewWeekActionsMenuTriggerRef}
+                          type="button"
+                          onClick={() => setIsReviewWeekActionsMenuOpen((current) => !current)}
+                        >
+                          <MoreHorizontal aria-hidden="true" size={17} />
+                          Mehr
+                        </button>
+                        {isReviewWeekActionsMenuOpen && (
+                          <div
+                            className="time-review-day-move-popover time-review-week-actions-menu"
+                            id="time-review-week-actions-menu"
+                            role="menu"
+                            aria-label="Excel-Exporte"
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                setIsReviewWeekActionsMenuOpen(false);
+                                reviewWeekActionsMenuTriggerRef.current?.focus();
+                                return;
+                              }
+                              if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                                return;
+                              }
+                              event.preventDefault();
+                              const menuItems = Array.from(
+                                event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
+                              );
+                              const currentIndex = menuItems.indexOf(document.activeElement as HTMLButtonElement);
+                              const nextIndex = event.key === "Home"
+                                ? 0
+                                : event.key === "End"
+                                  ? menuItems.length - 1
+                                  : (currentIndex + (event.key === "ArrowDown" ? 1 : -1) + menuItems.length) % menuItems.length;
+                              menuItems[nextIndex]?.focus();
+                            }}
+                          >
+                            {selectedReviewWorker.isReviewed && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                disabled={isDownloadingReviewWeekXlsx}
+                                onClick={() => {
+                                  setIsReviewWeekActionsMenuOpen(false);
+                                  void downloadSelectedReviewWeekXlsx();
+                                }}
+                              >
+                                <Download aria-hidden="true" size={15} />
+                                {isDownloadingReviewWeekXlsx ? "Excel wird erstellt..." : "Diese Woche als Excel"}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={isDownloadingAllReviewWeekXlsx}
+                              onClick={() => {
+                                setIsReviewWeekActionsMenuOpen(false);
+                                void downloadAllReviewWeekXlsx();
+                              }}
+                            >
+                              <Download aria-hidden="true" size={15} />
+                              {isDownloadingAllReviewWeekXlsx ? "Excel wird erstellt..." : "Alle Arbeitsstunden als Excel"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <span className="time-review-week-action-separator" aria-hidden="true" />
+                      <div
+                        className="time-review-week-review-control"
+                        ref={reviewWeekStatusMenuPersonId === selectedReviewWorker.personId ? reviewWeekStatusMenuRef : undefined}
+                      >
                           <button
                             aria-expanded={selectedReviewWorker.isReviewed
                               ? reviewWeekStatusMenuPersonId === selectedReviewWorker.personId
@@ -1775,6 +1873,11 @@ export function TimeEntriesPage() {
                             }}
                           >
                             <Check aria-hidden="true" size={18} />
+                            <span>
+                              {markingReviewWeekPersonId === selectedReviewWorker.personId
+                                ? selectedReviewWorker.isReviewed ? "Wird zurückgesetzt..." : "Wird geprüft..."
+                                : selectedReviewWorker.isReviewed ? "Geprüft" : "Als geprüft markieren"}
+                            </span>
                           </button>
                           {selectedReviewWorker.isReviewed && reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && (
                             <div
@@ -1793,21 +1896,7 @@ export function TimeEntriesPage() {
                               </button>
                             </div>
                           )}
-                        </div>
                       </div>
-                      {selectedReviewWorker.isReviewed && (
-                        <button
-                          className="icon-button secondary time-review-week-xlsx-button"
-                          type="button"
-                          aria-label={isDownloadingReviewWeekXlsx ? "Monteurwoche wird als Excel erstellt" : "Monteurwoche herunterladen (Excel)"}
-                          title="Monteurwoche herunterladen (Excel)"
-                          disabled={isDownloadingReviewWeekXlsx}
-                          onClick={() => void downloadSelectedReviewWeekXlsx()}
-                        >
-                          <Download aria-hidden="true" size={15} />
-                          {isDownloadingReviewWeekXlsx ? "Wird erstellt..." : "Excel"}
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1816,10 +1905,8 @@ export function TimeEntriesPage() {
                   <div className="time-review-week-check-head" role="row">
                     <span role="columnheader" aria-label="Tag ändern"></span>
                     <span role="columnheader" aria-label="Tag" title="Tag"><span className="time-review-column-label-full">Tag</span><span className="time-review-column-label-short" aria-hidden="true">Tg</span></span>
+                    <span role="columnheader" aria-label="Eintragstyp" title="Eintragstyp"><span className="time-review-column-label-full">Typ</span><span className="time-review-column-label-short" aria-hidden="true">Typ</span></span>
                     <span role="columnheader" aria-label="Baustelle" title="Baustelle"><span className="time-review-column-label-full">Baustelle</span><span className="time-review-column-label-short" aria-hidden="true">BS</span></span>
-                    <span className="time-review-week-overnight" role="columnheader" aria-label="Übernachtung" title="Übernachtung">
-                      <span className="time-review-week-overnight-heading"><span className="time-review-column-label-full">ÜN</span><span className="time-review-column-label-short" aria-hidden="true">ÜN</span></span>
-                    </span>
                     <span role="columnheader" aria-label="Montagebeginn" title="Montagebeginn"><span className="time-review-column-label-full">Montagebeginn</span><span className="time-review-column-label-short" aria-hidden="true">MA</span></span>
                     <span role="columnheader" aria-label="Montageende" title="Montageende"><span className="time-review-column-label-full">Montageende</span><span className="time-review-column-label-short" aria-hidden="true">ME</span></span>
                     <span role="columnheader" aria-label="Pause" title="Pause"><span className="time-review-column-label-full">Pause</span><span className="time-review-column-label-short" aria-hidden="true">Pa</span></span>
@@ -1836,7 +1923,22 @@ export function TimeEntriesPage() {
                           role="rowheader"
                           title={`${day.weekdayLabel}, ${formatDate(day.date)}`}
                         >
-                          <strong>{day.weekdayLabel}</strong>
+                          <span className="time-review-day-group-summary">
+                            <strong>{day.weekdayLabel}</strong>
+                            {day.entries.length > 0 && (
+                              <PayrollOvernightStatusControl
+                                editable={canManageTimeEntries && !selectedReviewWorker.isReviewed}
+                                hasConflict={day.hasOvernightStatusConflict}
+                                saving={payrollOvernightSavingKey === `${selectedReviewWorker.personId}:${day.date}`}
+                                status={day.overnightStatus}
+                                onChange={(overnightStatus) => updatePayrollOvernightStatus(
+                                  selectedReviewWorker.personId,
+                                  day.date,
+                                  overnightStatus,
+                                )}
+                              />
+                            )}
+                          </span>
                         </span>
                         <span
                           className="time-review-day-group-total time-review-work-time-cell"
@@ -1849,10 +1951,7 @@ export function TimeEntriesPage() {
                       <div className="time-review-day-group-entries">
                     {day.entries.length > 0 ? day.entries.map((check) => (
                       <div
-                        className={[
-                          "time-review-week-check-row",
-                          isTravelTimeEntry(check.entry) ? "is-travel-time" : "",
-                        ].filter(Boolean).join(" ")}
+                        className="time-review-week-check-row"
                         key={`${day.date}-${check.entry.id}`}
                         role="row"
                       >
@@ -1874,26 +1973,28 @@ export function TimeEntriesPage() {
                             <small className="time-review-day-shift-note">vom {formatWeekday(check.entry.original_work_date)} verschoben</small>
                           )}
                         </div>
+                        <div
+                          className="time-review-week-type"
+                          role="cell"
+                          aria-label={isTravelTimeEntry(check.entry) ? "Eintragstyp Fahrt" : "Eintragstyp Arbeit"}
+                        >
+                          {isTravelTimeEntry(check.entry) ? (
+                            <span className="time-review-entry-type is-travel" title="Fahrzeit">
+                              <CarFront aria-hidden="true" size={14} />
+                              <span>Fahrt</span>
+                            </span>
+                          ) : (
+                            <span className="time-review-entry-type is-work">Arbeit</span>
+                          )}
+                        </div>
                         <div className="time-review-week-site" role="cell">
-                          <strong>{timeEntrySiteName(check.entry)}</strong>
+                          <strong>{timeReviewSiteName(check.entry)}</strong>
                           {check.entry.site_number && <span>{check.entry.site_number}</span>}
                           {day.absenceType && (
                             <StatusBadge tone={day.absenceType} className="time-review-absence-badge">
                               {absenceTypeLabels[day.absenceType]}
                             </StatusBadge>
                           )}
-                        </div>
-                        <div className="time-review-week-overnight" role="cell">
-                          <PayrollOvernightStatusControl
-                            editable={canManageTimeEntries && !selectedReviewWorker.isReviewed}
-                            saving={payrollOvernightSavingKey === `${selectedReviewWorker.personId}:${day.date}`}
-                            status={day.overnightStatus}
-                            onChange={(overnightStatus) => updatePayrollOvernightStatus(
-                              selectedReviewWorker.personId,
-                              day.date,
-                              overnightStatus,
-                            )}
-                          />
                         </div>
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "start")}</div>
                         <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "end")}</div>
@@ -1926,6 +2027,7 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-check-row is-empty" key={day.date} role="row">
                           <div className="time-review-week-move" role="cell"></div>
                           <div className="time-review-week-day" role="cell"></div>
+                          <div className="time-review-week-type" role="cell" aria-label="Keine Zeitmeldung"></div>
                           <div className="time-review-week-site" role="cell">
                             {day.absenceType ? (
                               <StatusBadge tone={day.absenceType} className="time-review-absence-badge">
@@ -1935,7 +2037,6 @@ export function TimeEntriesPage() {
                               <strong>Keine Zeitmeldung</strong>
                             )}
                           </div>
-                          <div className="time-review-week-overnight" role="cell" aria-label="Keine Zeitmeldung"></div>
                           <div className="time-review-week-time" role="cell">-</div>
                           <div className="time-review-week-time" role="cell">-</div>
                           <div className="time-review-week-time" role="cell">-</div>
@@ -3195,12 +3296,13 @@ function buildTimeReviewWeekDays(
     const date = addDaysToDateInput(weekStart, dayOffset);
     const dayEntries = (entriesByDate.get(date) ?? []).slice().sort(compareTimeReviewWorkerEntries);
     const absenceType = personId === null ? null : highestPriorityAbsenceTypeForPersonDate(absences, personId, date);
-    const overnightStatus = dayEntries.find((entry) => entry.overnight_status !== null)?.overnight_status ?? null;
+    const overnightSummary = summarizeOvernightStatuses(dayEntries.map((entry) => entry.overnight_status));
     return {
       date,
       weekdayLabel: formatWeekdayLong(date),
       absenceType,
-      overnightStatus,
+      overnightStatus: overnightSummary.status,
+      hasOvernightStatusConflict: overnightSummary.hasConflict,
       vacationCreditMinutes: vacationCreditMinutesForDate(payrollWeekPerson, date),
       entries: dayEntries
         .map((entry) => ({
@@ -3608,21 +3710,11 @@ function displayDiagnosticValue(value: string | null | undefined): string {
 }
 
 function isOfficeOnlyTimeEntry(entry: TimeEntry): boolean {
-  return (
-    entry.note === OFFICE_ONLY_TIME_ENTRY_NOTE
-    || (
-      entry.id < 0
-      && !entry.is_gps_suggestion
-      && !entry.has_manual_entry
-      && entry.work_minutes === 0
-      && !entry.start_time
-      && !entry.end_time
-    )
-  );
+  return isOfficeOnlyPayrollEntry(entry);
 }
 
 function isTravelTimeEntry(entry: TimeEntry): boolean {
-  return !isOfficeOnlyTimeEntry(entry) && entry.work_minutes === 0 && (entry.travel_minutes || 0) > 0;
+  return isTravelOnlyPayrollEntry(entry);
 }
 
 function renderPayrollReviewMark(
@@ -4138,6 +4230,11 @@ function timeEntrySiteLabel(entry: TimeEntry): string {
 
 function timeEntrySiteName(entry: TimeEntry): string {
   return entry.site_name || manualTimeEntrySiteText(entry) || "-";
+}
+
+function timeReviewSiteName(entry: TimeEntry): string {
+  const siteName = timeEntrySiteName(entry);
+  return isTravelTimeEntry(entry) && !entry.site_name && /^fahrtzeit$/i.test(siteName) ? "-" : siteName;
 }
 
 function payrollDeleteSiteLabel(entry: TimeEntry): string {

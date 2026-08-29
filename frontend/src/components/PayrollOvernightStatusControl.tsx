@@ -9,6 +9,7 @@ import { OvernightStatusIndicator } from "./OvernightStatusIndicator";
 
 type PayrollOvernightStatusControlProps = {
   editable: boolean;
+  hasConflict?: boolean;
   saving: boolean;
   status: OvernightStatus | null;
   onChange: (status: OvernightStatus) => Promise<void>;
@@ -30,6 +31,7 @@ const PAYROLL_OVERNIGHT_OPTIONS: Array<{ status: OvernightStatus; label: string 
 
 export function PayrollOvernightStatusControl({
   editable,
+  hasConflict = false,
   saving,
   status,
   onChange,
@@ -38,6 +40,9 @@ export function PayrollOvernightStatusControl({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const presentation = getOvernightStatusPresentation(status);
+  const statusLabel = hasConflict
+    ? "Widersprüchliche Übernachtungszuordnungen – bitte prüfen"
+    : presentation.label;
 
   useEffect(() => {
     if (!editable) {
@@ -136,7 +141,7 @@ export function PayrollOvernightStatusControl({
   }
 
   if (!editable) {
-    return <OvernightStatusIndicator status={status} />;
+    return <OvernightStatusIndicator status={status} hasConflict={hasConflict} />;
   }
 
   return (
@@ -144,14 +149,14 @@ export function PayrollOvernightStatusControl({
       <button
         aria-expanded={popover !== null}
         aria-haspopup="menu"
-        aria-label={`Übernachtungsstatus ändern: ${presentation.label}`}
+        aria-label={`Übernachtungsstatus ändern: ${statusLabel}`}
         className="time-review-overnight-trigger"
         disabled={saving}
         ref={triggerRef}
         type="button"
         onClick={togglePopover}
       >
-        <span aria-hidden="true"><OvernightStatusIndicator status={status} /></span>
+        <span aria-hidden="true"><OvernightStatusIndicator status={status} hasConflict={hasConflict} /></span>
       </button>
       {popover && typeof document !== "undefined" && createPortal(
         <div

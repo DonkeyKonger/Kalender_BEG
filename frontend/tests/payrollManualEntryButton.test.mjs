@@ -8,7 +8,7 @@ const [source, styles] = await Promise.all([
 ]);
 
 test("manual payroll entry action opens the explicit create mode", () => {
-  const manualButton = source.indexOf("Zeit manuell erstellen");
+  const manualButton = source.indexOf("Zeit erfassen");
   const reviewButton = source.indexOf("Monteurwoche als geprüft markieren", manualButton);
 
   assert.ok(manualButton > 0);
@@ -25,7 +25,7 @@ test("manual payroll entry action opens the explicit create mode", () => {
   assert.match(source, /closeTimeReviewDiagnostic\(\)/);
 });
 
-test("manual action row stays aligned and stacks safely on narrow screens", () => {
-  assert.match(styles, /\.time-review-worker-detail-primary-actions\s*\{[\s\S]*?display:\s*flex;[\s\S]*?gap:\s*6px;[\s\S]*?\}/);
-  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.time-review-worker-detail-primary-actions\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/);
+test("manual action stays in the compact header action row on narrow screens", () => {
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-worker-detail-action-stack\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*gap:\s*6px;/s);
+  assert.match(styles, /@container time-review-detail \(max-width: 600px\)[\s\S]*?\.time-review-worker-detail-action-stack\s*\{[^}]*flex-wrap:\s*wrap;[^}]*justify-content:\s*flex-start;/s);
 });
