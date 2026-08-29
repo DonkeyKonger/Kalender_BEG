@@ -225,7 +225,6 @@ class PersonService:
         person.address_latitude = None
         person.address_longitude = None
         person.address_location_status = SiteLocationStatus.UNCHECKED
-        person.company_phone_device_id = None
         person.notes = None
         person.deleted_at = deleted_at
         self.audit.record(

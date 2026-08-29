@@ -44,6 +44,8 @@ class Person(TimestampMixin, Base):
         nullable=False,
         default=SiteLocationStatus.UNCHECKED,
     )
+    # Persistierte Altspalte der entfernten Handy-GPS-Funktion. Kein aktiver
+    # Erfassungs-, Übertragungs- oder Auswertungspfad verwendet sie mehr.
     company_phone_device_id: Mapped[str | None] = mapped_column(String(120))
     notes: Mapped[str | None] = mapped_column(Text)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)

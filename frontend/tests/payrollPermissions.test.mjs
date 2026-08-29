@@ -25,7 +25,7 @@ test("payroll opt-in grants office users normal payroll page actions", () => {
   assert.equal(canAccessMainPage(officeWithoutOptIn, "payroll"), false);
 });
 
-test("payroll page and week downloads use payroll access while GPS verification stays admin-only", async () => {
+test("payroll page and week downloads use payroll access without a phone GPS verification tab", async () => {
   const appSource = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
   const permissionSource = await readFile(new URL("../src/auth/permissions.ts", import.meta.url), "utf8");
   const pageSource = await readFile(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
@@ -36,5 +36,5 @@ test("payroll page and week downloads use payroll access while GPS verification 
   assert.match(pageSource, /canManageTimeEntries = canEditMainPage\(user, "payroll"\)/);
   assert.match(pageSource, /api\.weeklyAllWorkersTimeEntriesXlsx/);
   assert.match(pageSource, /api\.weeklyWorkerTimeEntriesXlsx/);
-  assert.match(pageSource, /canViewGpsVerification = user\?\.role === "admin"/);
+  assert.doesNotMatch(pageSource, /gpsVerification|GPS-Prüfung|recentGpsLocationPoints/);
 });

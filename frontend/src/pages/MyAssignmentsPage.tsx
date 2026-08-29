@@ -5,7 +5,6 @@ import {
   FolderOpen,
   HeartPulse,
   LogOut,
-  MapPin,
   Plane,
   RefreshCcw,
   Settings,
@@ -21,22 +20,9 @@ import { MobileBackButton } from "../components/MobileBackButton";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { buildMobileAssignmentHistoryWeeks } from "../lib/mobileAssignmentHistory";
-import {
-  ANDROID_GPS_PING_INTERVAL_MS,
-  checkAndroidGpsPermissions,
-  formatMobileGpsError,
-  getAndroidBackgroundGpsStatus,
-  getMobileGpsPlatform,
-  openAndroidAppLocationSettings,
-  isAndroidAppContext,
-  requestForegroundLocationPermission,
-  startAndroidBackgroundGpsTracking,
-  stopAndroidBackgroundGpsTracking,
-} from "../lib/mobileGps";
 import { useMobileScrollReset } from "../lib/mobileScroll";
 import { canUsePushNotifications, initializePushNotifications } from "../lib/pushNotifications";
 import { useMobileModalStack } from "../lib/useMobileModalStack";
-import type { AndroidBackgroundGpsStatus, AndroidGpsPermissionStatus } from "../lib/mobileGps";
 import type {
   MobileAssignment,
   MobileAssignmentSiteHistoryResponse,
@@ -46,7 +32,6 @@ import type {
 } from "../types/mobile";
 
 const CACHE_KEY_PREFIX = "kb_mobile_assignments_cache_v3";
-const GPS_TRACKING_ENABLED_KEY = "kb_mobile_gps_tracking_enabled_v1";
 const PUSH_NOTIFICATIONS_ENABLED_KEY = "kb_mobile_push_notifications_enabled_v1";
 const MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE = 2;
 
@@ -95,14 +80,6 @@ export function MyAssignmentsPage() {
   const [selfPlanError, setSelfPlanError] = useState<string | null>(null);
   const [selfPlanningSiteId, setSelfPlanningSiteId] = useState<number | null>(null);
   const [activeScreen, setActiveScreen] = useState<"home" | "assignments" | "settings">("home");
-  const [gpsMessage, setGpsMessage] = useState<string | null>(null);
-  const [gpsMessageTone, setGpsMessageTone] = useState<"info" | "error">("info");
-  const [lastAutomaticGpsSentAt, setLastAutomaticGpsSentAt] = useState<string | null>(null);
-  const [androidGpsStatus, setAndroidGpsStatus] = useState<AndroidBackgroundGpsStatus | null>(null);
-  const [androidGpsPermissions, setAndroidGpsPermissions] = useState<AndroidGpsPermissionStatus | null>(null);
-  const [isHandlingGpsPermission, setIsHandlingGpsPermission] = useState(false);
-  const [isTogglingGpsTracking, setIsTogglingGpsTracking] = useState(false);
-  const [isGpsTrackingEnabled, setIsGpsTrackingEnabled] = useState(() => readGpsTrackingPreference());
   const [isPushNotificationsEnabled, setIsPushNotificationsEnabled] = useState(() => readPushNotificationPreference());
   const [isTogglingPushNotifications, setIsTogglingPushNotifications] = useState(false);
   const [pushNotificationMessage, setPushNotificationMessage] = useState<string | null>(null);
@@ -191,71 +168,6 @@ export function MyAssignmentsPage() {
     }
   }, [activeScreen, loadAssignmentSites]);
 
-  const refreshAndroidGpsStatus = useCallback(async () => {
-    if (!isAndroidAppContext()) {
-      setAndroidGpsStatus(null);
-      setLastAutomaticGpsSentAt(null);
-      return;
-    }
-    try {
-      const trackingStatus = await getAndroidBackgroundGpsStatus();
-      setAndroidGpsStatus(trackingStatus);
-      if (trackingStatus.lastSentAt) {
-        setLastAutomaticGpsSentAt(trackingStatus.lastSentAt);
-      }
-      if (trackingStatus.lastError) {
-        setGpsMessage(trackingStatus.lastError);
-        setGpsMessageTone("error");
-      }
-    } catch (statusError) {
-      setGpsMessage(formatMobileGpsError(statusError));
-      setGpsMessageTone("error");
-    }
-  }, []);
-
-  const syncAndroidGpsTracking = useCallback(async () => {
-    if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
-      setAndroidGpsPermissions(null);
-      setAndroidGpsStatus(null);
-      void stopAndroidBackgroundGpsTracking();
-      return;
-    }
-
-    try {
-      if (!isGpsTrackingEnabled) {
-        const stoppedStatus = await stopAndroidBackgroundGpsTracking();
-        setAndroidGpsStatus(stoppedStatus);
-        return;
-      }
-
-      const permissions = await checkAndroidGpsPermissions();
-      setAndroidGpsPermissions(permissions);
-      if (!hasRequiredAndroidGpsPermissions(permissions)) {
-        const stoppedStatus = await stopAndroidBackgroundGpsTracking();
-        setAndroidGpsStatus(stoppedStatus);
-        return;
-      }
-
-      const trackingStatus = await startAndroidBackgroundGpsTracking();
-      setAndroidGpsStatus(trackingStatus);
-      if (trackingStatus.lastSentAt) {
-        setLastAutomaticGpsSentAt(trackingStatus.lastSentAt);
-      }
-      if (trackingStatus.isTracking) {
-        setGpsMessage("Android-Hintergrundstandort aktiv.");
-        setGpsMessageTone("info");
-      }
-    } catch (trackingError) {
-      setGpsMessage(formatMobileGpsError(trackingError));
-      setGpsMessageTone("error");
-      await refreshAndroidGpsStatus();
-    }
-  }, [isGpsTrackingEnabled, refreshAndroidGpsStatus, status, user?.role]);
-
-  useEffect(() => {
-    void syncAndroidGpsTracking();
-  }, [syncAndroidGpsTracking]);
-
   useEffect(() => {
     if (!isPushNotificationsEnabled || status !== "authenticated" || !user) {
       return;
@@ -264,92 +176,6 @@ export function MyAssignmentsPage() {
       console.warn("Push notification initialization failed", pushError);
     });
   }, [isPushNotificationsEnabled, status, user]);
-
-  useEffect(() => {
-    if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
-      return undefined;
-    }
-
-    const handleResume = () => {
-      if (document.visibilityState === "hidden") {
-        return;
-      }
-      void syncAndroidGpsTracking();
-    };
-    window.addEventListener("focus", handleResume);
-    document.addEventListener("visibilitychange", handleResume);
-
-    return () => {
-      window.removeEventListener("focus", handleResume);
-      document.removeEventListener("visibilitychange", handleResume);
-    };
-  }, [status, syncAndroidGpsTracking, user?.role]);
-
-  useEffect(() => {
-    if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
-      return undefined;
-    }
-
-    void refreshAndroidGpsStatus();
-    const statusTimer = window.setInterval(() => {
-      void refreshAndroidGpsStatus();
-    }, 30_000);
-
-    return () => {
-      window.clearInterval(statusTimer);
-    };
-  }, [refreshAndroidGpsStatus, status, user?.role]);
-
-  async function handleGpsTrackingToggle(nextEnabled: boolean): Promise<void> {
-    if (isTogglingGpsTracking) {
-      return;
-    }
-
-    setIsTogglingGpsTracking(true);
-    setGpsMessageTone("info");
-    setGpsMessage(nextEnabled ? "Ortung wird aktiviert ..." : "Ortung wird ausgeschaltet ...");
-    setIsGpsTrackingEnabled(nextEnabled);
-    writeGpsTrackingPreference(nextEnabled);
-
-    try {
-      if (!nextEnabled) {
-        const stoppedStatus = await stopAndroidBackgroundGpsTracking();
-        setAndroidGpsStatus(stoppedStatus);
-        setGpsMessage("Ortung ausgeschaltet.");
-        setGpsMessageTone("info");
-        return;
-      }
-
-      if (status !== "authenticated" || user?.role !== "monteur" || !isAndroidAppContext()) {
-        setGpsMessage("Ortung ist nur in der Android-App verfügbar.");
-        setGpsMessageTone("error");
-        return;
-      }
-
-      const permissions = await checkAndroidGpsPermissions();
-      setAndroidGpsPermissions(permissions);
-      if (!hasRequiredAndroidGpsPermissions(permissions)) {
-        const stoppedStatus = await stopAndroidBackgroundGpsTracking();
-        setAndroidGpsStatus(stoppedStatus);
-        setGpsMessage("Für die Ortung fehlen noch Berechtigungen.");
-        setGpsMessageTone("error");
-        return;
-      }
-
-      const trackingStatus = await startAndroidBackgroundGpsTracking();
-      setAndroidGpsStatus(trackingStatus);
-      if (trackingStatus.lastSentAt) {
-        setLastAutomaticGpsSentAt(trackingStatus.lastSentAt);
-      }
-      setGpsMessage(trackingStatus.isTracking ? "Ortung aktiv." : "Ortung konnte nicht aktiviert werden.");
-      setGpsMessageTone("info");
-    } catch (requestError) {
-      setGpsMessage(formatMobileGpsError(requestError));
-      setGpsMessageTone("error");
-    } finally {
-      setIsTogglingGpsTracking(false);
-    }
-  }
 
   async function handlePushNotificationsToggle(nextEnabled: boolean): Promise<void> {
     if (isTogglingPushNotifications) {
@@ -396,39 +222,7 @@ export function MyAssignmentsPage() {
     }
   }
 
-  async function handleAndroidGpsPermissionAction(): Promise<void> {
-    const prompt = getAndroidGpsPermissionPrompt(androidGpsPermissions);
-    if (!prompt || isHandlingGpsPermission) {
-      return;
-    }
-
-    setIsHandlingGpsPermission(true);
-    setGpsMessageTone("info");
-    try {
-      if (prompt.kind === "background") {
-        setGpsMessage("App-Einstellungen geöffnet. Bitte Standort auf Immer erlauben stellen.");
-        await openAndroidAppLocationSettings();
-      } else {
-        setGpsMessage("Android-Berechtigung wird angefragt ...");
-        const permissions = await requestForegroundLocationPermission();
-        setAndroidGpsPermissions(permissions);
-        if (hasRequiredAndroidGpsPermissions(permissions)) {
-          await syncAndroidGpsTracking();
-        } else {
-          setGpsMessage("Standortberechtigung ist noch nicht vollständig erteilt.");
-        }
-      }
-      setGpsMessageTone("info");
-    } catch (permissionError) {
-      setGpsMessage(formatMobileGpsError(permissionError));
-      setGpsMessageTone("error");
-    } finally {
-      setIsHandlingGpsPermission(false);
-    }
-  }
-
   async function handleLogout(): Promise<void> {
-    await stopAndroidBackgroundGpsTracking();
     await logout();
   }
 
@@ -537,12 +331,6 @@ export function MyAssignmentsPage() {
     () => mobileHomeTimelineItems.filter((item) => item.assignment !== null).length,
     [mobileHomeTimelineItems],
   );
-  const androidGpsPermissionPrompt = getAndroidGpsPermissionPrompt(androidGpsPermissions);
-  const mobileGpsPlatform = getMobileGpsPlatform();
-  const showGpsDebug = import.meta.env.DEV;
-  const showGpsDebugStatus = showGpsDebug && user?.role === "monteur";
-  const canUseAndroidGpsTracking = user?.role === "monteur" && isAndroidAppContext();
-  const gpsToggleLabel = isGpsTrackingEnabled ? "Ortung aktiv" : "Ortung aus";
   const canUseAppPushNotifications = canUsePushNotifications();
   const pushToggleLabel = isPushNotificationsEnabled ? "Benachrichtigungen ein" : "Benachrichtigungen aus";
   useMobileScrollReset(
@@ -650,60 +438,6 @@ export function MyAssignmentsPage() {
         </header>
 
         <div className="mobile-settings-list">
-          <section className="mobile-location-settings-card" aria-label="Standortprüfung">
-            <div className="mobile-location-settings-head">
-              <div>
-                <h2>Standortprüfung</h2>
-                <p>{gpsToggleLabel}</p>
-              </div>
-              <label className="mobile-toggle">
-                <input
-                  checked={isGpsTrackingEnabled}
-                  disabled={!canUseAndroidGpsTracking || isTogglingGpsTracking}
-                  type="checkbox"
-                  onChange={(event) => void handleGpsTrackingToggle(event.target.checked)}
-                />
-                <span aria-hidden="true" />
-              </label>
-            </div>
-            <p className="mobile-location-settings-text">
-              Standortdaten helfen dem Büro später zu prüfen, ob gemeldete Baustellenzeiten plausibel zur geplanten Baustelle passen. Es geht nicht um Live-Überwachung.
-            </p>
-            {canUseAndroidGpsTracking && isGpsTrackingEnabled && androidGpsPermissionPrompt ? (
-              <div className="form-info mobile-gps-status">
-                <strong>{androidGpsPermissionPrompt.title}</strong>
-                <p>{androidGpsPermissionPrompt.text}</p>
-                <button
-                  className="icon-button secondary"
-                  disabled={isHandlingGpsPermission}
-                  type="button"
-                  onClick={() => void handleAndroidGpsPermissionAction()}
-                >
-                  <MapPin aria-hidden="true" size={17} />
-                  <span>{isHandlingGpsPermission ? "Bitte warten ..." : androidGpsPermissionPrompt.actionLabel}</span>
-                </button>
-              </div>
-            ) : null}
-            {!canUseAndroidGpsTracking ? <p className="cache-note mobile-gps-status">Ortung ist nur in der Android-App verfügbar.</p> : null}
-            {gpsMessage ? <p className={gpsMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>{gpsMessage}</p> : null}
-            {showGpsDebugStatus && isAndroidAppContext() ? (
-              <>
-                <p className="cache-note mobile-gps-status">
-                  Android-Hintergrundstandort: alle {Math.round(ANDROID_GPS_PING_INTERVAL_MS / 60_000)} Minuten, wenn in der App aktiviert.
-                </p>
-                {lastAutomaticGpsSentAt ? <p className="cache-note mobile-gps-status">Zuletzt automatisch gesendet: {formatDateTime(lastAutomaticGpsSentAt)}</p> : null}
-              </>
-            ) : null}
-            {showGpsDebugStatus ? (
-              <MobileGpsDebugCard
-                platform={mobileGpsPlatform}
-                permissions={androidGpsPermissions}
-                status={androidGpsStatus}
-                lastAutomaticSentAt={lastAutomaticGpsSentAt}
-              />
-            ) : null}
-          </section>
-
           <section className="mobile-location-settings-card" aria-label="Benachrichtigungen">
             <div className="mobile-location-settings-head">
               <div>
@@ -723,9 +457,9 @@ export function MyAssignmentsPage() {
             <p className="mobile-location-settings-text">
               Hinweise zu geänderten Einsätzen und geprüften Aufmaßen erhalten.
             </p>
-            {!canUseAppPushNotifications ? <p className="cache-note mobile-gps-status">Benachrichtigungen sind nur in der Android-App verfügbar.</p> : null}
+            {!canUseAppPushNotifications ? <p className="cache-note mobile-settings-status">Benachrichtigungen sind nur in der Android-App verfügbar.</p> : null}
             {pushNotificationMessage ? (
-              <p className={pushNotificationMessageTone === "error" ? "form-error mobile-gps-status" : "form-info mobile-gps-status"}>
+              <p className={pushNotificationMessageTone === "error" ? "form-error mobile-settings-status" : "form-info mobile-settings-status"}>
                 {pushNotificationMessage}
               </p>
             ) : null}
@@ -923,44 +657,6 @@ export function MyAssignmentsPage() {
   );
 }
 
-type AndroidGpsPermissionPrompt = {
-  kind: "foreground" | "background" | "notifications";
-  title: string;
-  text: string;
-  actionLabel: string;
-};
-
-function hasRequiredAndroidGpsPermissions(permissions: AndroidGpsPermissionStatus | null): boolean {
-  return Boolean(
-    permissions?.foregroundLocationGranted
-      && permissions.backgroundLocationGranted
-      && permissions.notificationsGranted,
-  );
-}
-
-function readGpsTrackingPreference(): boolean {
-  try {
-    const stored = localStorage.getItem(GPS_TRACKING_ENABLED_KEY);
-    if (stored === "true") {
-      return true;
-    }
-    if (stored === "false") {
-      return false;
-    }
-  } catch {
-    return isAndroidAppContext();
-  }
-  return isAndroidAppContext();
-}
-
-function writeGpsTrackingPreference(isEnabled: boolean): void {
-  try {
-    localStorage.setItem(GPS_TRACKING_ENABLED_KEY, String(isEnabled));
-  } catch {
-    // Ignore storage failures; the in-memory toggle still controls this session.
-  }
-}
-
 function readPushNotificationPreference(): boolean {
   try {
     return localStorage.getItem(PUSH_NOTIFICATIONS_ENABLED_KEY) === "true";
@@ -975,37 +671,6 @@ function writePushNotificationPreference(isEnabled: boolean): void {
   } catch {
     // Ignore storage failures; the in-memory toggle still controls this session.
   }
-}
-
-function getAndroidGpsPermissionPrompt(permissions: AndroidGpsPermissionStatus | null): AndroidGpsPermissionPrompt | null {
-  if (!permissions) {
-    return null;
-  }
-  if (!permissions.foregroundLocationGranted) {
-    return {
-      kind: "foreground",
-      title: "Standort erlauben",
-      text: "Für die automatische Arbeitszeitprüfung benötigt die App Standortzugriff.",
-      actionLabel: "Standort erlauben",
-    };
-  }
-  if (!permissions.notificationsGranted) {
-    return {
-      kind: "notifications",
-      title: "Benachrichtigung erlauben",
-      text: "Damit Android die laufende Standortprüfung anzeigen kann, muss die App Benachrichtigungen senden dürfen.",
-      actionLabel: "Berechtigung erlauben",
-    };
-  }
-  if (!permissions.backgroundLocationGranted) {
-    return {
-      kind: "background",
-      title: "Standort auf Immer erlauben stellen",
-      text: "Damit die automatische Arbeitszeitprüfung auch bei gesperrtem Handy funktioniert, muss der Standortzugriff auf Immer erlauben gestellt werden.",
-      actionLabel: "App-Einstellungen öffnen",
-    };
-  }
-  return null;
 }
 
 function MobileHomeTimelineCard({
@@ -1333,46 +998,6 @@ function MobileSelfPlanSheet({
   );
 }
 
-function MobileGpsDebugCard({
-  platform,
-  permissions,
-  status,
-  lastAutomaticSentAt,
-}: {
-  platform: string;
-  permissions: AndroidGpsPermissionStatus | null;
-  status: AndroidBackgroundGpsStatus | null;
-  lastAutomaticSentAt: string | null;
-}) {
-  const backgroundAvailable = platform === "android" && isAndroidAppContext();
-  const nextPingLabel = status?.nextPingAt ? formatDateTime(status.nextPingAt) : "-";
-  return (
-    <div className="mobile-gps-debug-card" aria-label="GPS Status">
-      <div className="mobile-gps-debug-card-head">
-        <strong>GPS-Status</strong>
-        <span>Testphase</span>
-      </div>
-      <dl className="mobile-gps-debug-grid">
-        <div><dt>Plattform</dt><dd>{platform}</dd></div>
-        <div><dt>Background verfügbar</dt><dd>{formatYesNo(backgroundAvailable)}</dd></div>
-        <div><dt>Background aktiv</dt><dd>{formatYesNo(status?.isTracking)}</dd></div>
-        <div><dt>Service läuft</dt><dd>{formatYesNo(status?.isServiceRunning)}</dd></div>
-        <div><dt>Foreground-Service</dt><dd>{formatYesNo(status?.isForegroundServiceRunning)}</dd></div>
-        <div><dt>Standort foreground</dt><dd>{formatYesNo(permissions?.foregroundLocationGranted)}</dd></div>
-        <div><dt>Standort immer erlauben</dt><dd>{formatYesNo(permissions?.backgroundLocationGranted)}</dd></div>
-        <div><dt>Benachrichtigung</dt><dd>{formatYesNo(permissions?.notificationsGranted)}</dd></div>
-        <div><dt>Letzte automatische Sendung</dt><dd>{formatOptionalDateTime(lastAutomaticSentAt)}</dd></div>
-        <div><dt>Offline-Queue</dt><dd>{status?.queuedCount ?? 0}</dd></div>
-        <div><dt>Zuletzt gepuffert</dt><dd>{formatOptionalDateTime(status?.lastQueuedAt ?? null)}</dd></div>
-        <div><dt>Service-Start</dt><dd>{formatOptionalDateTime(status?.lastServiceStartAt ?? null)}</dd></div>
-        <div><dt>Service-Stop</dt><dd>{formatOptionalDateTime(status?.lastServiceStopAt ?? null)}</dd></div>
-        <div><dt>Nächster Ping</dt><dd>{nextPingLabel}</dd></div>
-      </dl>
-      {status?.lastError ? <p className="mobile-gps-debug-error">Letzter Fehler: {status.lastError}</p> : null}
-    </div>
-  );
-}
-
 function getUpcomingRange(): { start: string; end: string } {
   const today = startOfToday();
   return {
@@ -1634,23 +1259,8 @@ function formatHomeOverviewDate(date: string): string {
   return `${formatted.charAt(0).toLocaleUpperCase("de-DE")}${formatted.slice(1)}`;
 }
 
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
-}
-
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
-}
-
-function formatOptionalDateTime(value: string | null | undefined): string {
-  return value ? formatDateTime(value) : "-";
-}
-
-function formatYesNo(value: boolean | null | undefined): string {
-  if (value === undefined || value === null) {
-    return "-";
-  }
-  return value ? "ja" : "nein";
 }
 
 function formatRangeLabel(start: string, end: string): string {

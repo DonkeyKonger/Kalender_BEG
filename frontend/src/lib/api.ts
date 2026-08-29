@@ -4,7 +4,6 @@ import type { Customer, CustomerCreate, CustomerRemoveResponse, CustomerUpdate }
 import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
 import type { AssignmentRead, AssignmentType, MatrixCell, MatrixCellMark, MatrixConflictMessage, MatrixEntryInput, MatrixMutationResponse, MatrixResponse, MatrixSite, MatrixVersionResponse } from "../types/matrix";
-import type { GpsLocationPointCreate, GpsLocationPointRead, GpsRecentLocationPoint } from "../types/gps";
 import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonHoursAccount, PersonHoursManualAdjustmentPayload, PersonHoursPayoutPayload, PersonMapResponse, PersonRemovePlan, PersonRemoveResponse, PersonToolMaterialItem, PersonUpdate } from "../types/person";
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketDocumentRead, ExtraWorkTicketDocumentUpdate, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketDetailsUpdate, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { ExtraWorkManualStatus, MeasurementManualStatus } from "./projectRecordStatuses";
@@ -473,22 +472,6 @@ export const api = {
         body: JSON.stringify(payload),
       },
     );
-  },
-
-  async createGpsLocationPoint(payload: GpsLocationPointCreate): Promise<GpsLocationPointRead> {
-    return request<GpsLocationPointRead>("/gps/location-points", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-  },
-
-  async recentGpsLocationPoints(params: { limit?: number } = {}): Promise<GpsRecentLocationPoint[]> {
-    const search = new URLSearchParams();
-    if (params.limit !== undefined) {
-      search.set("limit", String(params.limit));
-    }
-    const suffix = search.toString() ? `?${search.toString()}` : "";
-    return request<GpsRecentLocationPoint[]>(`/gps/location-points/recent${suffix}`);
   },
 
   async dashboardWeather(): Promise<WeatherSummary> {

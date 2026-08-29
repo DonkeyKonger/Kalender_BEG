@@ -13,7 +13,6 @@ from app.api.routes import (
     customers,
     dashboard,
     exports,
-    gps,
     matrix,
     persons,
     sites,
@@ -51,7 +50,6 @@ CROSS_PAGE_READ_POLICIES = [
     (time_entries.CAN_ACCESS, "sites"),
     (exports.CAN_EXPORT, "export"),
     (exports.CAN_PAYROLL_EXPORT, "payroll"),
-    (gps.CAN_READ_GPS, "map"),
     (admin_ctrack.CAN_READ_VEHICLE_POSITIONS, "map"),
     (persons.CAN_LIST, "miscellaneous"),
 ]

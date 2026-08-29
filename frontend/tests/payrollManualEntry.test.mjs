@@ -164,7 +164,7 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   assert.match(source, /searchPlaceholder="Nummer, Name oder Ort suchen…"/);
   assert.ok(createStart >= 0);
   assert.ok(editStart > createStart);
-  assert.doesNotMatch(source.slice(createStart, editStart), /Eingetragene Monteurstunden|Erkannte Handy GPS Stunden/);
+  assert.doesNotMatch(source.slice(createStart, editStart), /Eingetragene Monteurstunden|Erkannte Fahrzeug GPS Stunden/);
   assert.doesNotMatch(source.slice(createStart, editStart), /Fahrtzeit \(Min\.\)|payrollManualTravelMinutes/);
   assert.match(source, /site_id: payrollManualSiteId,[\s\S]*?travel_minutes: "0",[\s\S]*?work_date: payrollManualWorkDate,/);
   assert.doesNotMatch(source, /setPayrollManualTravelMinutes|payrollManualTravelMinutes/);

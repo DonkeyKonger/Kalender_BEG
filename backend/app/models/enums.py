@@ -121,6 +121,8 @@ class MatrixCellMark(StrEnum):
 
 class GpsSourceType(StrEnum):
     VEHICLE = "vehicle"
+    # Alte Handy-Punkte bleiben wegen bestehender Datenbankwerte lesbar, werden
+    # aber weder angenommen noch in Prüfungen ausgewertet.
     PHONE = "phone"
 
 

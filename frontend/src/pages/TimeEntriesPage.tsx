@@ -1,4 +1,4 @@
-import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, RefreshCw, Search, Trash2, Wrench } from "lucide-react";
+import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, Search, Trash2, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -24,7 +24,6 @@ import {
 import {
   formatGermanDateKey as formatDate,
   formatGermanDateKeyRange as formatRangeLabel,
-  formatGermanDateTimeShort as formatDateTime,
   formatGermanDetailDate as formatDetailDate,
   formatGermanTimeShort as formatTime,
   formatGermanWeekdayShort as formatWeekday,
@@ -43,13 +42,12 @@ import {
   PAYROLL_WEEK_VISIBLE_COUNT,
 } from "../lib/weekStrip";
 import type { Absence } from "../types/absence";
-import type { GpsRecentLocationPoint } from "../types/gps";
 import type { AbsenceType } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { OvernightStatus, TimeEntry, TimeEntryGpsStatus, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview } from "../types/timeEntry";
+import type { OvernightStatus, TimeEntry, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview } from "../types/timeEntry";
 
-type TimeSubtab = "review" | "gpsVerification" | "evaluation";
+type TimeSubtab = "review" | "evaluation";
 type TimeReviewIssue = {
   id: number;
   entry: TimeEntry;
@@ -193,17 +191,8 @@ const TIME_REVIEW_API_PAYROLL_WEEK = "payroll week";
 const TIME_REVIEW_API_WEEKLY_REVIEWS = "weekly reviews";
 const timeSubtabs: { key: TimeSubtab; label: string }[] = [
   { key: "review", label: "Stundenprüfung" },
-  { key: "gpsVerification", label: "GPS-Prüfung" },
   { key: "evaluation", label: "Auswertung" },
 ];
-
-const gpsStatusLabels: Record<TimeEntryGpsStatus, string> = {
-  matched: "passt",
-  missing: "fehlt",
-  partial: "teilweise",
-  mismatch: "abweichend",
-  not_checkable: "nicht pruefbar",
-};
 
 export function TimeEntriesPage() {
   const { user } = useAuth();
@@ -215,19 +204,16 @@ export function TimeEntriesPage() {
   const [reviewPayrollWeek, setReviewPayrollWeek] = useState<TimeEntryPayrollWeek | null>(null);
   const [reviewWeeklyReviews, setReviewWeeklyReviews] = useState<TimeEntryWeeklyReview[]>([]);
   const [reviewWeekCompletionReviews, setReviewWeekCompletionReviews] = useState<TimeEntryWeeklyReview[]>([]);
-  const [recentGpsPoints, setRecentGpsPoints] = useState<GpsRecentLocationPoint[]>([]);
   const [sites, setSites] = useState<SiteSummary[]>([]);
   const [isLoadingSites, setIsLoadingSites] = useState(true);
   const [sitesError, setSitesError] = useState<string | null>(null);
   const [isLoadingPeople, setIsLoadingPeople] = useState(true);
   const [isLoadingReviewEntries, setIsLoadingReviewEntries] = useState(false);
   const [isLoadingReviewAllEntries, setIsLoadingReviewAllEntries] = useState(false);
-  const [isLoadingRecentGps, setIsLoadingRecentGps] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reviewEntriesError, setReviewEntriesError] = useState<string | null>(null);
   const [reviewAllEntriesError, setReviewAllEntriesError] = useState<string | null>(null);
   const [reviewPayrollWeekError, setReviewPayrollWeekError] = useState<string | null>(null);
-  const [recentGpsError, setRecentGpsError] = useState<string | null>(null);
   const [reviewActionError, setReviewActionError] = useState<string | null>(null);
   const [payrollDatePicker, setPayrollDatePicker] = useState<PayrollDatePickerState | null>(null);
   const [payrollDeleteDialog, setPayrollDeleteDialog] = useState<PayrollDeleteDialogState | null>(null);
@@ -274,10 +260,7 @@ export function TimeEntriesPage() {
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const [evaluationWeekScrollState, setEvaluationWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const canManageTimeEntries = canEditMainPage(user, "payroll");
-  const canViewGpsVerification = user?.role === "admin";
-  const visibleTimeSubtabs = canViewGpsVerification
-    ? timeSubtabs
-    : timeSubtabs.filter((tab) => tab.key !== "gpsVerification");
+  const visibleTimeSubtabs = timeSubtabs;
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
   const evaluationWeekStripRef = useRef<HTMLDivElement | null>(null);
   const timeReviewWorkerPanelRef = useRef<HTMLDivElement | null>(null);
@@ -441,20 +424,6 @@ export function TimeEntriesPage() {
     void loadPeople();
   }, []);
 
-  useEffect(() => {
-    if (!canViewGpsVerification) {
-      setRecentGpsPoints([]);
-      return;
-    }
-    void loadRecentGpsPoints();
-  }, [canViewGpsVerification]);
-
-  useEffect(() => {
-    if (!canViewGpsVerification && activeTimeSubtab === "gpsVerification") {
-      setActiveTimeSubtab("review");
-    }
-  }, [activeTimeSubtab, canViewGpsVerification]);
-
   async function loadPeople() {
     setIsLoadingPeople(true);
     setError(null);
@@ -465,20 +434,6 @@ export function TimeEntriesPage() {
       setError(readApiError(requestError, "Monteure konnten nicht geladen werden."));
     } finally {
       setIsLoadingPeople(false);
-    }
-  }
-
-  async function loadRecentGpsPoints(): Promise<void> {
-    setIsLoadingRecentGps(true);
-    setRecentGpsError(null);
-    try {
-      const pointData = await api.recentGpsLocationPoints({ limit: 20 });
-      setRecentGpsPoints(pointData);
-    } catch (requestError) {
-      setRecentGpsPoints([]);
-      setRecentGpsError(readApiError(requestError, "GPS-Pruefdaten konnten nicht geladen werden."));
-    } finally {
-      setIsLoadingRecentGps(false);
     }
   }
 
@@ -2336,66 +2291,6 @@ export function TimeEntriesPage() {
         </div>
       )}
 
-      {activeTimeSubtab === "gpsVerification" && canViewGpsVerification && (
-        <div className="time-entries-main">
-          <div className="gps-verification-panel">
-            <div className="gps-verification-header">
-              <div>
-                <h2>GPS-Prüfung</h2>
-                <p>Letzte mobile Standortsendungen mit geplanter Baustelle und Geofence-Status.</p>
-              </div>
-              <button className="time-table-action" disabled={isLoadingRecentGps} type="button" onClick={() => void loadRecentGpsPoints()}>
-                <RefreshCw aria-hidden="true" size={14} />
-                Aktualisieren
-              </button>
-            </div>
-            {recentGpsError && <p className="time-table-note">{recentGpsError}</p>}
-            <div className="time-table-scroll">
-              <table className="time-entries-table gps-verification-table">
-                <thead>
-                  <tr>
-                    <th>Monteur</th>
-                    <th>Zeitpunkt</th>
-                    <th>Geplante Baustelle</th>
-                    <th>Plausibilität</th>
-                    <th>Abstand</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoadingRecentGps && (
-                    <tr>
-                      <td className="time-empty-row" colSpan={5}>
-                        GPS-Prüfdaten werden geladen...
-                      </td>
-                    </tr>
-                  )}
-                  {!isLoadingRecentGps && !recentGpsError && recentGpsPoints.length === 0 && (
-                    <tr>
-                      <td className="time-empty-row" colSpan={5}>
-                        Noch keine mobilen Standortsendungen vorhanden.
-                      </td>
-                    </tr>
-                  )}
-                  {!isLoadingRecentGps && !recentGpsError && recentGpsPoints.map((point) => (
-                    <tr key={point.id}>
-                      <td>{point.person_name}</td>
-                      <td>{formatDateTime(point.captured_at)}</td>
-                      <td>{point.planned_site_label ?? "-"}</td>
-                      <td>
-                        <StatusBadge tone={gpsStatusTone(point.plausibility_status)}>
-                          {gpsStatusLabels[point.plausibility_status]}
-                        </StatusBadge>
-                      </td>
-                      <td>{formatDistance(point.distance_to_planned_site_m, point.geofence_radius_m)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
       {timeReviewDiagnosticEntry && (
         <div
           className="time-review-diagnostic-backdrop"
@@ -3762,18 +3657,11 @@ function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
       total: hasSubmittedTime ? formatTimeEntryMinutes(entry.work_minutes, "hours") : "-",
     },
     {
-      source: "Erkannte Handy GPS Stunden",
+      source: "Erkannte Fahrzeug GPS Stunden",
       start: formatTimeEntryClock(entry.gps_first_seen_at),
       end: formatTimeEntryClock(entry.gps_last_seen_at),
       break: "-",
       total: formatTimeEntryMinutes(entry.gps_work_minutes, "hours"),
-    },
-    {
-      source: "Erkannte Fahrzeug GPS Stunden",
-      start: "-",
-      end: "-",
-      break: "-",
-      total: "-",
     },
   ];
 }
@@ -3791,16 +3679,10 @@ function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): L
       location: siteLocationLabel(originalSite),
     },
     {
-      source: "Erkannte Handy-GPS-Baustelle",
+      source: "Erkannte Fahrzeug-GPS-Baustelle",
       siteName: hasGpsSiteMatch(entry) ? displayDiagnosticValue(entry.gps_detected_site_name) : "-",
       siteNumber: hasGpsSiteMatch(entry) ? displayDiagnosticValue(entry.gps_detected_site_number) : "-",
       location: hasGpsSiteMatch(entry) ? siteLocationLabel(gpsSite) : "-",
-    },
-    {
-      source: "Erkannte Fahrzeug-GPS-Baustelle",
-      siteName: "-",
-      siteNumber: "-",
-      location: "-",
     },
   ];
   if (hasManualLocationReview(entry)) {
@@ -4247,26 +4129,6 @@ function formatDecimalHoursValue(hours: number): string {
   }).format(hours);
 }
 
-function formatDistance(distanceMeters: number | null, radiusMeters: number | null): string {
-  if (distanceMeters === null) {
-    return "-";
-  }
-  const distanceLabel = distanceMeters >= 1000
-    ? `${formatDecimalNumber(distanceMeters / 1000, 1)} km`
-    : `${Math.round(distanceMeters)} m`;
-  if (radiusMeters === null) {
-    return distanceLabel;
-  }
-  return `${distanceLabel} / Radius ${radiusMeters} m`;
-}
-
-function formatDecimalNumber(value: number, fractionDigits: number): string {
-  return value.toLocaleString("de-DE", {
-    maximumFractionDigits: fractionDigits,
-    minimumFractionDigits: fractionDigits,
-  });
-}
-
 function buildPayrollCorrectionPayload(
   form: PayrollCorrectionFormState,
 ): { ok: true; payload: TimeEntryPayrollCorrection } | { ok: false; error: string } {
@@ -4453,19 +4315,6 @@ function locationReviewSiteSearchText(site: SiteSummary): string {
     site.city,
     site.customer,
   ].filter(Boolean).join(" ").toLowerCase();
-}
-
-function gpsStatusTone(status: TimeEntryGpsStatus): StatusBadgeTone {
-  if (status === "matched") {
-    return "active";
-  }
-  if (status === "partial") {
-    return "planned";
-  }
-  if (status === "mismatch") {
-    return "warning";
-  }
-  return "neutral";
 }
 
 function comparePeople(left: Person, right: Person): number {

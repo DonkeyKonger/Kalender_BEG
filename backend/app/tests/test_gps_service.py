@@ -3,8 +3,6 @@ from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
-from fastapi import HTTPException
-from pydantic import ValidationError
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
@@ -16,8 +14,8 @@ from app.models.enums import GpsSourceType, SiteStatus, UserRole
 from app.models.gps_point import GpsPoint
 from app.models.person import Person
 from app.models.site import Site
+from app.models.vehicle import Vehicle, VehicleAsset, VehiclePositionLog
 from app.models.work_time_entry import WorkTimeEntry
-from app.schemas.gps import GpsLocationPointCreate
 from app.services.geo_service import is_point_inside_site_geofence
 from app.services import gps_service
 from app.services.gps_service import (
@@ -44,66 +42,80 @@ def db_session() -> Session:
     return Session(engine)
 
 
-def test_monteur_cannot_send_gps_point_for_other_person():
-    current_user = SimpleNamespace(role=UserRole.MONTEUR, person_id=5)
-
-    with pytest.raises(HTTPException) as error:
-        service()._effective_person_id(current_user, 6)
-
-    assert error.value.status_code == 403
-
-
-def test_admin_can_send_test_gps_point_for_person():
-    current_user = SimpleNamespace(role=UserRole.ADMIN, person_id=None)
-
-    assert service()._effective_person_id(current_user, 6) == 6
-
-
-def test_gps_point_rejects_invalid_coordinates():
-    with pytest.raises(ValidationError):
-        GpsLocationPointCreate(
-            person_id=1,
-            captured_at=datetime.now(UTC),
-            latitude=120,
-            longitude=9.0263,
-        )
-
-
-@pytest.mark.parametrize(
-    ("captured_at", "should_accept"),
-    [
-        (datetime(2026, 6, 10, 4, 59, tzinfo=BERLIN), False),
-        (datetime(2026, 6, 10, 5, 0, tzinfo=BERLIN), True),
-        (datetime(2026, 6, 10, 18, 59, tzinfo=BERLIN), True),
-        (datetime(2026, 6, 10, 19, 0, tzinfo=BERLIN), False),
-    ],
-)
-def test_gps_location_point_is_saved_only_inside_allowed_berlin_window(captured_at: datetime, should_accept: bool):
+def test_vehicle_gps_is_evaluated_while_legacy_phone_points_are_ignored():
     db = db_session()
-    person = Person(
-        first_name="Max",
-        last_name="Monteur",
-        display_name="Max Monteur",
-        short_code="MM",
-    )
-    db.add(person)
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8001", name="Baustelle", latitude=53.0142, longitude=9.0263)
+    db.add_all([person, site])
+    db.flush()
+    timestamp = datetime(2026, 6, 10, 8, 0, tzinfo=UTC)
+    db.add_all([
+        GpsPoint(
+            source_type=GpsSourceType.PHONE,
+            source_id="legacy-phone",
+            person_id=person.id,
+            latitude=53.0142,
+            longitude=9.0263,
+            timestamp=timestamp,
+        ),
+        GpsPoint(
+            source_type=GpsSourceType.VEHICLE,
+            source_id="vehicle-gps",
+            person_id=person.id,
+            latitude=53.0142,
+            longitude=9.0263,
+            timestamp=timestamp,
+        ),
+    ])
     db.commit()
-    current_user = SimpleNamespace(id=7, role=UserRole.MONTEUR, person_id=person.id)
-    payload = GpsLocationPointCreate(
-        captured_at=captured_at.astimezone(UTC),
+
+    result = GpsPresenceService(db).evaluate_presence(
+        person_id=person.id,
+        site_id=site.id,
+        start_datetime=timestamp,
+        end_datetime=timestamp,
+    )
+
+    assert result.status == "matched"
+    assert result.total_points == 1
+
+
+def test_ctrack_vehicle_position_log_is_evaluated_for_assigned_person():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8002", name="Baustelle", latitude=53.0142, longitude=9.0263)
+    db.add_all([person, site])
+    db.flush()
+    asset = VehicleAsset(source="ctrack", external_id="ctrack-vehicle-1", assigned_person_id=person.id)
+    db.add(asset)
+    db.flush()
+    vehicle = Vehicle(
+        license_plate="HB-M 8002",
+        name="Servicewagen",
+        manufacturer="BEG",
+        assigned_person_id=person.id,
+        ctrack_vehicle_asset_id=asset.id,
+    )
+    db.add(vehicle)
+    timestamp = datetime(2026, 6, 10, 8, 0, tzinfo=UTC)
+    db.add(VehiclePositionLog(
+        vehicle_asset_id=asset.id,
+        source="ctrack",
+        event_time_utc=timestamp,
         latitude=53.0142,
         longitude=9.0263,
+    ))
+    db.commit()
+
+    result = GpsPresenceService(db).evaluate_presence(
+        person_id=person.id,
+        site_id=site.id,
+        start_datetime=timestamp,
+        end_datetime=timestamp,
     )
 
-    if should_accept:
-        point = GpsPresenceService(db).create_location_point(payload, current_user)
-        assert point.id is not None
-        assert list(db.scalars(select(GpsPoint))) == [point]
-    else:
-        with pytest.raises(HTTPException) as error:
-            GpsPresenceService(db).create_location_point(payload, current_user)
-        assert error.value.status_code == 422
-        assert list(db.scalars(select(GpsPoint))) == []
+    assert result.status == "matched"
+    assert result.total_points == 1
 
 
 def test_evaluate_presence_ignores_gps_points_outside_allowed_window():
@@ -126,16 +138,16 @@ def test_evaluate_presence_ignores_gps_points_outside_allowed_window():
     db.commit()
     db.add_all([
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
-            source_id="mobile:test",
+            source_type=GpsSourceType.VEHICLE,
+            source_id="vehicle:test",
             person_id=person.id,
             latitude=53.0142,
             longitude=9.0263,
             timestamp=datetime(2026, 6, 10, 4, 59, tzinfo=BERLIN).astimezone(UTC),
         ),
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
-            source_id="mobile:test",
+            source_type=GpsSourceType.VEHICLE,
+            source_id="vehicle:test",
             person_id=person.id,
             latitude=53.0142,
             longitude=9.0263,
@@ -270,7 +282,7 @@ def test_gps_stay_prefers_planned_site_when_multiple_sites_match():
     ))
     db.add_all([
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=52.0,
@@ -278,7 +290,7 @@ def test_gps_stay_prefers_planned_site_when_multiple_sites_match():
             timestamp=datetime(2026, 6, 4, 8, 0, tzinfo=UTC),
         ),
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=52.0,
@@ -316,7 +328,7 @@ def test_gps_stay_ignores_inactive_unplanned_site_but_allows_inactive_planned_si
 
     db.add_all([
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=52.0,
@@ -324,7 +336,7 @@ def test_gps_stay_ignores_inactive_unplanned_site_but_allows_inactive_planned_si
             timestamp=datetime(2026, 6, 5, 8, 0, tzinfo=UTC),
         ),
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=52.0,
@@ -382,7 +394,7 @@ def test_gps_stay_uses_nearest_active_site_when_no_planned_site_matches():
 
     db.add_all([
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=52.0,
@@ -390,7 +402,7 @@ def test_gps_stay_uses_nearest_active_site_when_no_planned_site_matches():
             timestamp=datetime(2026, 6, 6, 8, 0, tzinfo=UTC),
         ),
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=52.0,
@@ -466,7 +478,7 @@ def matrix_manual_gps_review_response(
         gps_site = sites[gps_site_key]
         db.add_all([
             GpsPoint(
-                source_type=GpsSourceType.PHONE,
+                source_type=GpsSourceType.VEHICLE,
                 source_id="mobile:test",
                 person_id=person.id,
                 latitude=gps_site.latitude,
@@ -474,7 +486,7 @@ def matrix_manual_gps_review_response(
                 timestamp=datetime(2026, 6, 7, 8, 0, tzinfo=UTC),
             ),
             GpsPoint(
-                source_type=GpsSourceType.PHONE,
+                source_type=GpsSourceType.VEHICLE,
                 source_id="mobile:test",
                 person_id=person.id,
                 latitude=gps_site.latitude,
@@ -628,7 +640,7 @@ def test_time_entry_response_uses_site_contact_range_for_gps_work_time():
         status="draft",
     )
     older_outside_point = GpsPoint(
-        source_type=GpsSourceType.PHONE,
+        source_type=GpsSourceType.VEHICLE,
         source_id="mobile:test",
         person_id=person.id,
         latitude=53.8,
@@ -636,7 +648,7 @@ def test_time_entry_response_uses_site_contact_range_for_gps_work_time():
         timestamp=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
     )
     first_inside_point = GpsPoint(
-        source_type=GpsSourceType.PHONE,
+        source_type=GpsSourceType.VEHICLE,
         source_id="mobile:test",
         person_id=person.id,
         latitude=53.0142,
@@ -644,7 +656,7 @@ def test_time_entry_response_uses_site_contact_range_for_gps_work_time():
         timestamp=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
     )
     latest_inside_point = GpsPoint(
-        source_type=GpsSourceType.PHONE,
+        source_type=GpsSourceType.VEHICLE,
         source_id="mobile:test",
         person_id=person.id,
         latitude=53.0142,
@@ -711,7 +723,7 @@ def test_time_entry_response_uses_first_and_last_site_contact_across_multiple_si
         status="draft",
     )
     early_tracking_point = GpsPoint(
-        source_type=GpsSourceType.PHONE,
+        source_type=GpsSourceType.VEHICLE,
         source_id="mobile:test",
         person_id=person.id,
         latitude=51.0,
@@ -719,7 +731,7 @@ def test_time_entry_response_uses_first_and_last_site_contact_across_multiple_si
         timestamp=datetime(2026, 6, 8, 5, 30, tzinfo=UTC),
     )
     first_site_point = GpsPoint(
-        source_type=GpsSourceType.PHONE,
+        source_type=GpsSourceType.VEHICLE,
         source_id="mobile:test",
         person_id=person.id,
         latitude=52.0,
@@ -727,7 +739,7 @@ def test_time_entry_response_uses_first_and_last_site_contact_across_multiple_si
         timestamp=datetime(2026, 6, 8, 6, 0, tzinfo=UTC),
     )
     transfer_point = GpsPoint(
-        source_type=GpsSourceType.PHONE,
+        source_type=GpsSourceType.VEHICLE,
         source_id="mobile:test",
         person_id=person.id,
         latitude=52.5,
@@ -735,7 +747,7 @@ def test_time_entry_response_uses_first_and_last_site_contact_across_multiple_si
         timestamp=datetime(2026, 6, 8, 10, 0, tzinfo=UTC),
     )
     last_site_point = GpsPoint(
-        source_type=GpsSourceType.PHONE,
+        source_type=GpsSourceType.VEHICLE,
         source_id="mobile:test",
         person_id=person.id,
         latitude=53.0,
@@ -743,7 +755,7 @@ def test_time_entry_response_uses_first_and_last_site_contact_across_multiple_si
         timestamp=datetime(2026, 6, 8, 16, 12, tzinfo=UTC),
     )
     late_tracking_point = GpsPoint(
-        source_type=GpsSourceType.PHONE,
+        source_type=GpsSourceType.VEHICLE,
         source_id="mobile:test",
         person_id=person.id,
         latitude=51.0,
@@ -798,7 +810,7 @@ def test_time_entry_response_has_no_gps_work_time_without_site_contact():
     db.add_all([
         entry,
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=53.8,
@@ -806,7 +818,7 @@ def test_time_entry_response_has_no_gps_work_time_without_site_contact():
             timestamp=datetime(2026, 6, 9, 5, 13, tzinfo=UTC),
         ),
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=53.9,
@@ -863,7 +875,7 @@ def test_current_work_date_hides_gps_work_time_until_next_day(monkeypatch: pytes
     db.add_all([
         entry,
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=53.0142,
@@ -871,7 +883,7 @@ def test_current_work_date_hides_gps_work_time_until_next_day(monkeypatch: pytes
             timestamp=datetime(2026, 6, 10, 8, 0, tzinfo=UTC),
         ),
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=53.0142,
@@ -934,7 +946,7 @@ def test_review_response_flags_planned_site_gps_mismatch():
     db.add(entry)
     db.add_all([
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=53.0142,
@@ -942,7 +954,7 @@ def test_review_response_flags_planned_site_gps_mismatch():
             timestamp=datetime(2026, 6, 3, 8, 0, tzinfo=UTC),
         ),
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=53.0142,
@@ -1009,7 +1021,7 @@ def test_review_response_adds_gps_suggestion_for_unreported_site_only():
     )
     gps_points = [
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=53.0142,
@@ -1017,7 +1029,7 @@ def test_review_response_adds_gps_suggestion_for_unreported_site_only():
             timestamp=datetime(2026, 6, 2, 8, 0, tzinfo=UTC),
         ),
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=53.0142,
@@ -1025,7 +1037,7 @@ def test_review_response_adds_gps_suggestion_for_unreported_site_only():
             timestamp=datetime(2026, 6, 2, 12, 0, tzinfo=UTC),
         ),
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=52.2799,
@@ -1033,7 +1045,7 @@ def test_review_response_adds_gps_suggestion_for_unreported_site_only():
             timestamp=datetime(2026, 6, 2, 13, 0, tzinfo=UTC),
         ),
         GpsPoint(
-            source_type=GpsSourceType.PHONE,
+            source_type=GpsSourceType.VEHICLE,
             source_id="mobile:test",
             person_id=person.id,
             latitude=52.2799,
