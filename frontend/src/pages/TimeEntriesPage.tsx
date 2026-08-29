@@ -9,6 +9,14 @@ import { PayrollOvernightStatusControl } from "../components/PayrollOvernightSta
 import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import {
+  buildCalendarMonthOptions,
+  calendarMonthRange,
+  currentCalendarMonth,
+  formatCalendarMonth,
+  type CalendarMonthSelection,
+} from "../lib/calendarMonth";
+import { calculatePayrollEvaluationTotals } from "../lib/payrollEvaluation";
+import {
   applyPayrollTimeBasisChange,
   buildPayrollManualEntryPayload,
   calculatePayrollTime,
@@ -224,7 +232,7 @@ export function TimeEntriesPage() {
   const [payrollDateError, setPayrollDateError] = useState<string | null>(null);
   const [payrollOvernightSavingKey, setPayrollOvernightSavingKey] = useState<string | null>(null);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
-  const [selectedEvaluationWeek, setSelectedEvaluationWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
+  const [selectedEvaluationMonth, setSelectedEvaluationMonth] = useState<CalendarMonthSelection>(() => currentCalendarMonth());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [timeReviewDialogMode, setTimeReviewDialogMode] = useState<TimeReviewDialogMode | null>(null);
@@ -258,11 +266,9 @@ export function TimeEntriesPage() {
   const [reviewWorkerSearch, setReviewWorkerSearch] = useState("");
   const [reviewWorkerFilter, setReviewWorkerFilter] = useState<TimeReviewWorkerFilter>("all");
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
-  const [evaluationWeekScrollState, setEvaluationWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const canManageTimeEntries = canEditMainPage(user, "payroll");
   const visibleTimeSubtabs = timeSubtabs;
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
-  const evaluationWeekStripRef = useRef<HTMLDivElement | null>(null);
   const timeReviewWorkerPanelRef = useRef<HTMLDivElement | null>(null);
   const reviewWeekActionsMenuControlRef = useRef<HTMLDivElement | null>(null);
   const reviewWeekActionsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -273,7 +279,6 @@ export function TimeEntriesPage() {
   const payrollDatePickerMenuRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledVisibleReviewWeekRef = useRef(false);
   const lastAlignedReviewWeekKeyRef = useRef<string | null>(null);
-  const hasAutoScrolledVisibleEvaluationWeekRef = useRef(false);
   const timeReviewPerfRef = useRef<TimeReviewPerfState | null>(null);
   const timeReviewRenderCountRef = useRef(0);
   timeReviewRenderCountRef.current += 1;
@@ -442,14 +447,18 @@ export function TimeEntriesPage() {
     () => isoWeekRange(selectedReviewWeek.year, selectedReviewWeek.week),
     [selectedReviewWeek.week, selectedReviewWeek.year],
   );
-  const evaluationWeekRange = useMemo(
-    () => isoWeekRange(selectedEvaluationWeek.year, selectedEvaluationWeek.week),
-    [selectedEvaluationWeek.week, selectedEvaluationWeek.year],
+  const evaluationMonthRange = useMemo(
+    () => calendarMonthRange(selectedEvaluationMonth),
+    [selectedEvaluationMonth.month, selectedEvaluationMonth.year],
   );
-  const reviewDataRange = activeTimeSubtab === "evaluation" ? evaluationWeekRange : reviewWeekRange;
+  const reviewDataRange = activeTimeSubtab === "evaluation" ? evaluationMonthRange : reviewWeekRange;
   const reviewWeekOptions = useMemo(
     () => buildCalendarWeekOptions(currentReviewWeek),
     [currentReviewWeek],
+  );
+  const evaluationMonthOptions = useMemo(
+    () => buildCalendarMonthOptions(selectedEvaluationMonth),
+    [selectedEvaluationMonth],
   );
   const payrollReviewWorkerIds = useMemo(
     () => people.filter(isPayrollReviewWorker).map((person) => person.id),
@@ -554,7 +563,7 @@ export function TimeEntriesPage() {
     [payrollDatePicker, selectedReviewWeekDays],
   );
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
-  const finalHoursTotals = useMemo(() => calculateFinalHoursTotals(finalHoursEntries), [finalHoursEntries]);
+  const finalHoursTotals = useMemo(() => calculatePayrollEvaluationTotals(finalHoursEntries), [finalHoursEntries]);
   useEffect(() => {
     let ignore = false;
     setIsLoadingSites(true);
@@ -865,23 +874,6 @@ export function TimeEntriesPage() {
     };
   }, [activeTimeSubtab, reviewWeekOptions, selectedReviewWeek]);
 
-  useLayoutEffect(() => {
-    if (activeTimeSubtab !== "evaluation") {
-      hasAutoScrolledVisibleEvaluationWeekRef.current = false;
-      return;
-    }
-    if (hasAutoScrolledVisibleEvaluationWeekRef.current) {
-      return;
-    }
-    const animationFrameId = window.requestAnimationFrame(() => {
-      scrollWeekStripToSelection(evaluationWeekStripRef.current, reviewWeekOptions, selectedEvaluationWeek);
-      updateEvaluationWeekScrollState();
-      hasAutoScrolledVisibleEvaluationWeekRef.current = true;
-    });
-
-    return () => window.cancelAnimationFrame(animationFrameId);
-  }, [activeTimeSubtab, reviewWeekOptions, selectedEvaluationWeek]);
-
   useEffect(() => {
     if (activeTimeSubtab !== "review") {
       return;
@@ -896,23 +888,6 @@ export function TimeEntriesPage() {
     return () => {
       container.removeEventListener("scroll", updateReviewWeekScrollState);
       window.removeEventListener("resize", updateReviewWeekScrollState);
-    };
-  }, [activeTimeSubtab, reviewWeekOptions]);
-
-  useEffect(() => {
-    if (activeTimeSubtab !== "evaluation") {
-      return;
-    }
-    const container = evaluationWeekStripRef.current;
-    if (!container) {
-      return;
-    }
-    updateEvaluationWeekScrollState();
-    container.addEventListener("scroll", updateEvaluationWeekScrollState, { passive: true });
-    window.addEventListener("resize", updateEvaluationWeekScrollState);
-    return () => {
-      container.removeEventListener("scroll", updateEvaluationWeekScrollState);
-      window.removeEventListener("resize", updateEvaluationWeekScrollState);
     };
   }, [activeTimeSubtab, reviewWeekOptions]);
 
@@ -1150,15 +1125,22 @@ export function TimeEntriesPage() {
     });
   }
 
-  function selectEvaluationWeek(option: CalendarWeekSelection): void {
-    if (option.year === selectedEvaluationWeek.year && option.week === selectedEvaluationWeek.week) {
+  function selectEvaluationMonth(option: CalendarMonthSelection): void {
+    if (option.year === selectedEvaluationMonth.year && option.month === selectedEvaluationMonth.month) {
       return;
     }
     const scrollPosition = { left: window.scrollX, top: window.scrollY };
-    setSelectedEvaluationWeek({ year: option.year, week: option.week });
+    setSelectedEvaluationMonth({ year: option.year, month: option.month });
     window.requestAnimationFrame(() => {
       window.scrollTo({ ...scrollPosition, behavior: "auto" });
     });
+  }
+
+  function selectEvaluationYear(year: number): void {
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      return;
+    }
+    selectEvaluationMonth({ year, month: selectedEvaluationMonth.month });
   }
 
   function updateReviewWeekScrollState(): void {
@@ -1174,34 +1156,12 @@ export function TimeEntriesPage() {
     });
   }
 
-  function updateEvaluationWeekScrollState(): void {
-    const container = evaluationWeekStripRef.current;
-    if (!container) {
-      setEvaluationWeekScrollState({ canScrollLeft: false, canScrollRight: false });
-      return;
-    }
-    const maxScrollLeft = container.scrollWidth - container.clientWidth;
-    setEvaluationWeekScrollState({
-      canScrollLeft: container.scrollLeft > 1,
-      canScrollRight: container.scrollLeft < maxScrollLeft - 1,
-    });
-  }
-
   function scrollReviewWeeks(direction: -1 | 1): void {
     const container = reviewWeekStripRef.current;
     if (!container) {
       return;
     }
     scrollWeekStripByWholeWeek(container, direction);
-  }
-
-  function scrollEvaluationWeeks(direction: -1 | 1): void {
-    const container = evaluationWeekStripRef.current;
-    if (!container) {
-      return;
-    }
-    const scrollAmount = Math.min(420, Math.max(260, container.clientWidth * 0.75));
-    container.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
   }
 
   async function togglePayrollRowReview(entry: TimeEntry): Promise<void> {
@@ -2225,55 +2185,67 @@ export function TimeEntriesPage() {
 
       {activeTimeSubtab === "evaluation" && (
         <div className="time-entries-main time-review-main time-evaluation-main">
-          <div className="time-week-nav-panel" aria-label="Kalenderwochen Auswertung">
+          <div className="time-week-nav-panel time-evaluation-month-nav" aria-label="Monat für die Auswertung auswählen">
             <div className="time-week-nav-title">
-              <span>Kalenderwoche</span>
-              <strong>KW {selectedEvaluationWeek.week}</strong>
+              <span>Auswertungsmonat</span>
+              <strong>{formatCalendarMonth(selectedEvaluationMonth)}</strong>
             </div>
-            <div className="time-week-strip-shell">
+            <div className="time-evaluation-month-controls">
               <button
                 className="time-week-scroll-button"
-                disabled={!evaluationWeekScrollState.canScrollLeft}
+                disabled={selectedEvaluationMonth.year <= 2000}
                 type="button"
-                aria-label="Kalenderwochen nach links scrollen"
-                onClick={() => scrollEvaluationWeeks(-1)}
+                aria-label="Vorheriges Jahr auswählen"
+                onClick={() => selectEvaluationYear(selectedEvaluationMonth.year - 1)}
               >
                 <ChevronLeft aria-hidden="true" size={16} />
               </button>
-              <div className="time-week-strip" ref={evaluationWeekStripRef}>
-                {reviewWeekOptions.map((option, index) => (
-                  <button
-                    className={[
-                      option.year === selectedEvaluationWeek.year && option.week === selectedEvaluationWeek.week ? "is-active" : "",
-                      option.isCurrent ? "is-current" : "",
-                      completedReviewWeekKeys.has(reviewWeekKey(option)) ? "is-fully-reviewed" : "",
-                    ].filter(Boolean).join(" ")}
-                    data-week-index={index}
-                    key={`${option.year}-${option.week}`}
-                    title={`${formatRangeLabel(option.start, option.end)} · ${option.year}`}
-                    type="button"
-                    onClick={() => selectEvaluationWeek(option)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+              <label className="time-evaluation-year-select">
+                <span>Jahr</span>
+                <input
+                  aria-label="Auswertungsjahr"
+                  inputMode="numeric"
+                  max={2100}
+                  min={2000}
+                  type="number"
+                  value={selectedEvaluationMonth.year}
+                  onChange={(event) => selectEvaluationYear(Number(event.target.value))}
+                />
+              </label>
               <button
                 className="time-week-scroll-button"
-                disabled={!evaluationWeekScrollState.canScrollRight}
+                disabled={selectedEvaluationMonth.year >= 2100}
                 type="button"
-                aria-label="Kalenderwochen nach rechts scrollen"
-                onClick={() => scrollEvaluationWeeks(1)}
+                aria-label="Nächstes Jahr auswählen"
+                onClick={() => selectEvaluationYear(selectedEvaluationMonth.year + 1)}
               >
                 <ChevronRight aria-hidden="true" size={16} />
               </button>
+            </div>
+            <div className="time-evaluation-month-grid" role="group" aria-label={`Monat im Jahr ${selectedEvaluationMonth.year} auswählen`}>
+              {evaluationMonthOptions.map((option) => (
+                <button
+                  className={[
+                    option.month === selectedEvaluationMonth.month ? "is-active" : "",
+                    option.isCurrent ? "is-current" : "",
+                  ].filter(Boolean).join(" ")}
+                  key={option.month}
+                  title={`${option.label} ${option.year} · ${formatRangeLabel(calendarMonthRange(option).start, calendarMonthRange(option).end)}`}
+                  type="button"
+                  aria-current={option.isCurrent ? "date" : undefined}
+                  aria-pressed={option.month === selectedEvaluationMonth.month}
+                  onClick={() => selectEvaluationMonth(option)}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
           </div>
           <div className="time-final-hours-panel">
             <div className="time-entries-toolbar">
               <div>
                 <h2>Auswertung</h2>
-                <p>KW {selectedEvaluationWeek.week} · {formatRangeLabel(evaluationWeekRange.start, evaluationWeekRange.end)}</p>
+                <p>{formatCalendarMonth(selectedEvaluationMonth)} · {formatRangeLabel(evaluationMonthRange.start, evaluationMonthRange.end)}</p>
               </div>
             </div>
             {reviewAllEntriesError && <p className="time-table-note">{reviewAllEntriesError}</p>}
@@ -4035,33 +4007,6 @@ function buildFinalHoursEntries(entries: TimeEntry[]): FinalHoursEntry[] {
       || left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
       || left.id - right.id
     ));
-}
-
-function calculateFinalHoursTotals(entries: FinalHoursEntry[]): {
-  totalMinutes: number;
-  byPerson: { label: string; minutes: number }[];
-  bySite: { label: string; minutes: number }[];
-} {
-  const byPerson = new Map<string, number>();
-  const bySite = new Map<string, number>();
-  let totalMinutes = 0;
-  for (const entry of entries) {
-    const minutes = entry.finalMinutes ?? 0;
-    totalMinutes += minutes;
-    byPerson.set(entry.personName, (byPerson.get(entry.personName) ?? 0) + minutes);
-    bySite.set(entry.siteKey, (bySite.get(entry.siteKey) ?? 0) + minutes);
-  }
-  return {
-    totalMinutes,
-    byPerson: mapTotalsToRows(byPerson),
-    bySite: mapTotalsToRows(bySite),
-  };
-}
-
-function mapTotalsToRows(totals: Map<string, number>): { label: string; minutes: number }[] {
-  return [...totals.entries()]
-    .map(([label, minutes]) => ({ label, minutes }))
-    .sort((left, right) => left.label.localeCompare(right.label, "de", { sensitivity: "base" }));
 }
 
 function finalStatusLabel(entry: TimeEntry): string {

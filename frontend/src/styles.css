@@ -17309,6 +17309,85 @@ body.mobile-modal-scroll-locked {
   box-shadow: inset 0 0 0 1px #6f9f7a;
 }
 
+.time-evaluation-month-nav {
+  grid-template-columns: minmax(160px, auto) minmax(0, 1fr);
+}
+
+.time-evaluation-month-controls {
+  display: flex;
+  align-items: end;
+  gap: 6px;
+}
+
+.time-evaluation-year-select {
+  display: grid;
+  gap: 2px;
+}
+
+.time-evaluation-year-select span {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.time-evaluation-year-select input {
+  width: 86px;
+  min-height: 30px;
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 850;
+  padding: 3px 6px;
+}
+
+.time-evaluation-year-select input:focus-visible {
+  border-color: #9bbce0;
+  background: #f3f8ff;
+  outline: none;
+}
+
+.time-evaluation-month-grid {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.time-evaluation-month-grid button {
+  min-height: 30px;
+  border: 1px solid #d7e1ee;
+  border-radius: 0;
+  background: #ffffff;
+  color: #42526a;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.time-evaluation-month-grid button:hover,
+.time-evaluation-month-grid button:focus-visible {
+  border-color: #9bbce0;
+  background: #f3f8ff;
+  color: #174678;
+  outline: none;
+}
+
+.time-evaluation-month-grid button.is-current {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.time-evaluation-month-grid button.is-active {
+  border-color: var(--time-week-active-blue);
+  background: var(--time-week-active-blue);
+  color: #ffffff;
+}
+
 .time-review-worker-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -19883,6 +19962,14 @@ body.mobile-modal-scroll-locked {
 @media (max-width: 760px) {
   .time-entries-page.is-figma-times-workspace .time-review-main {
     --time-review-layout-inline: 12px;
+  }
+
+  .time-evaluation-month-nav {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .time-evaluation-month-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .time-entries-page.is-figma-times-workspace .page-header {

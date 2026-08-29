@@ -347,6 +347,35 @@ def test_old_time_entry_without_site_is_serialized_without_guessed_site():
     assert response.site_number is None
 
 
+def test_list_entries_includes_exact_calendar_month_boundaries_in_leap_year():
+    db = db_session()
+    person = Person(
+        first_name="Monat",
+        last_name="Grenze",
+        display_name="Monat Grenze",
+        short_code="MG",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="office-month-range", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    entries = [
+        WorkTimeEntry(person=person, work_date=date(2028, 1, 31), work_minutes=60, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=date(2028, 2, 1), work_minutes=120, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=date(2028, 2, 29), work_minutes=180, break_minutes=0, travel_minutes=0),
+        WorkTimeEntry(person=person, work_date=date(2028, 3, 1), work_minutes=240, break_minutes=0, travel_minutes=0),
+    ]
+    db.add_all([person, user, *entries])
+    db.commit()
+
+    loaded = TimeEntryService(db).list_entries(
+        current_user=user,
+        date_from=date(2028, 2, 1),
+        date_to=date(2028, 2, 29),
+    )
+
+    assert [entry.work_date for entry in loaded] == [date(2028, 2, 29), date(2028, 2, 1)]
+    assert sum(entry.work_minutes for entry in loaded) == 300
+
+
 @pytest.mark.parametrize(
     "overnight_status",
     [OvernightStatus.NONE, OvernightStatus.SELF_PAID, OvernightStatus.BEG_PAID],
