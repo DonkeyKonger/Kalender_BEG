@@ -270,12 +270,24 @@ test("the scroll table keeps five days and multiple entries at natural row heigh
 });
 
 test("payroll table abbreviates headers from its container width without hiding accessible names", () => {
-  assert.match(pageSource, /role="columnheader" aria-label="Montagebeginn" title="Montagebeginn"><span className="time-review-column-label-full">Montagebeginn<\/span><span className="time-review-column-label-short" aria-hidden="true">MA<\/span>/);
-  assert.match(pageSource, /role="columnheader" aria-label="Montageende" title="Montageende"[\s\S]*?time-review-column-label-short" aria-hidden="true">ME/);
+  assert.match(pageSource, /role="columnheader" aria-label="Beginn" title="Beginn"><span className="time-review-column-label-full">Beginn<\/span><span className="time-review-column-label-short" aria-hidden="true">MA<\/span>/);
+  assert.match(pageSource, /role="columnheader" aria-label="Ende" title="Ende"[\s\S]*?time-review-column-label-short" aria-hidden="true">ME/);
   assert.match(pageSource, /role="columnheader" aria-label="Montagezeit" title="Montagezeit"[\s\S]*?time-review-column-label-short" aria-hidden="true">MZ/);
   assert.match(pageSource, /role="columnheader" aria-label="Arbeitszeit" title="Arbeitszeit"[\s\S]*?time-review-column-label-short" aria-hidden="true">AZ/);
   assert.match(styles, /\.time-review-column-label-short\s*\{[^}]*display:\s*none;/s);
   assert.match(styles, /@container time-review-detail \(max-width: 1050px\)\s*\{[\s\S]*?\.time-review-column-label-full\s*\{[^}]*display:\s*none;[\s\S]*?\.time-review-column-label-short\s*\{[^}]*display:\s*inline;/s);
+});
+
+test("payroll header aligns the day and type labels with their existing row content", () => {
+  const tableStart = pageSource.indexOf('className="time-review-week-check-table"');
+  const tableEnd = pageSource.indexOf("{selectedReviewWeekDays.map", tableStart);
+  const tableSource = pageSource.slice(tableStart, tableEnd);
+
+  assert.match(tableSource, /className="time-review-column-day" role="columnheader" aria-label="Tag" title="Tag"/);
+  assert.match(tableSource, /className="time-review-column-type" role="columnheader" aria-label="Eintragstyp" title="Eintragstyp"/);
+  assert.match(styles, /\.time-review-column-day\s*\{[^}]*justify-self:\s*start;[^}]*margin-left:\s*-38px;/s);
+  assert.match(styles, /\.time-review-column-type\s*\{[^}]*justify-self:\s*center;[^}]*text-align:\s*center;/s);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-review-column-day\s*\{[^}]*margin-left:\s*-34px;/s);
 });
 
 test("payroll table adds compact semantic groups without changing its detailed columns", () => {
@@ -284,7 +296,7 @@ test("payroll table adds compact semantic groups without changing its detailed c
   const tableSource = pageSource.slice(tableStart, tableEnd);
 
   assert.match(tableSource, /className="time-review-week-check-group-head" role="row"[\s\S]*?aria-colspan=\{3\} aria-label="Spaltengruppe Auftrag">Auftrag[\s\S]*?aria-colspan=\{4\} aria-label="Spaltengruppe Arbeitszeit">Arbeitszeit[\s\S]*?aria-colspan=\{3\} aria-label="Spaltengruppe Prüfung und Status">Prüfung \/ Status/s);
-  assert.match(tableSource, /aria-label="Tag" title="Tag"[\s\S]*?aria-label="Eintragstyp" title="Eintragstyp"[\s\S]*?aria-label="Baustelle" title="Baustelle"[\s\S]*?aria-label="Montagebeginn" title="Montagebeginn"[\s\S]*?aria-label="Geprüft" title="Geprüft"/s);
+  assert.match(tableSource, /aria-label="Tag" title="Tag"[\s\S]*?aria-label="Eintragstyp" title="Eintragstyp"[\s\S]*?aria-label="Baustelle" title="Baustelle"[\s\S]*?aria-label="Beginn" title="Beginn"[\s\S]*?aria-label="Geprüft" title="Geprüft"/s);
   assert.match(styles, /\.time-review-week-check-group-head\s*\{[^}]*height:\s*24px;[^}]*font-size:\s*0\.6rem;[^}]*text-transform:\s*uppercase;/s);
   assert.match(styles, /\.time-review-column-group\.is-order\s*\{[^}]*grid-column:\s*2 \/ 5;/s);
   assert.match(styles, /\.time-review-column-group\.is-work-time\s*\{[^}]*grid-column:\s*5 \/ 9;/s);

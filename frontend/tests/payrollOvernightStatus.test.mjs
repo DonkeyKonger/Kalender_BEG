@@ -76,7 +76,7 @@ test("the day header shows one overnight editor and time rows contain no overnig
   assert.ok(tableEnd > tableStart);
   assert.match(
     tableSource,
-    /<span role="columnheader" aria-label="Baustelle" title="Baustelle">[\s\S]*?<span className="time-review-column-label-full">Baustelle<\/span>[\s\S]*?<span role="columnheader" aria-label="Montagebeginn" title="Montagebeginn">/,
+    /<span role="columnheader" aria-label="Baustelle" title="Baustelle">[\s\S]*?<span className="time-review-column-label-full">Baustelle<\/span>[\s\S]*?<span role="columnheader" aria-label="Beginn" title="Beginn">/,
   );
   assert.doesNotMatch(tableSource, /aria-label="Übernachtung" title="Übernachtung"/);
   assert.match(tableSource, /<PayrollOvernightStatusControl/);

@@ -2083,11 +2083,11 @@ export function TimeEntriesPage() {
                   </div>
                   <div className="time-review-week-check-head" role="row">
                     <span role="columnheader" aria-label="Tag ändern"></span>
-                    <span role="columnheader" aria-label="Tag" title="Tag"><span className="time-review-column-label-full">Tag</span><span className="time-review-column-label-short" aria-hidden="true">Tg</span></span>
-                    <span role="columnheader" aria-label="Eintragstyp" title="Eintragstyp"><span className="time-review-column-label-full">Typ</span><span className="time-review-column-label-short" aria-hidden="true">Typ</span></span>
+                    <span className="time-review-column-day" role="columnheader" aria-label="Tag" title="Tag"><span className="time-review-column-label-full">Tag</span><span className="time-review-column-label-short" aria-hidden="true">Tg</span></span>
+                    <span className="time-review-column-type" role="columnheader" aria-label="Eintragstyp" title="Eintragstyp"><span className="time-review-column-label-full">Typ</span><span className="time-review-column-label-short" aria-hidden="true">Typ</span></span>
                     <span role="columnheader" aria-label="Baustelle" title="Baustelle"><span className="time-review-column-label-full">Baustelle</span><span className="time-review-column-label-short" aria-hidden="true">BS</span></span>
-                    <span role="columnheader" aria-label="Montagebeginn" title="Montagebeginn"><span className="time-review-column-label-full">Montagebeginn</span><span className="time-review-column-label-short" aria-hidden="true">MA</span></span>
-                    <span role="columnheader" aria-label="Montageende" title="Montageende"><span className="time-review-column-label-full">Montageende</span><span className="time-review-column-label-short" aria-hidden="true">ME</span></span>
+                    <span role="columnheader" aria-label="Beginn" title="Beginn"><span className="time-review-column-label-full">Beginn</span><span className="time-review-column-label-short" aria-hidden="true">MA</span></span>
+                    <span role="columnheader" aria-label="Ende" title="Ende"><span className="time-review-column-label-full">Ende</span><span className="time-review-column-label-short" aria-hidden="true">ME</span></span>
                     <span role="columnheader" aria-label="Pause" title="Pause"><span className="time-review-column-label-full">Pause</span><span className="time-review-column-label-short" aria-hidden="true">Pa</span></span>
                     <span role="columnheader" aria-label="Montagezeit" title="Montagezeit"><span className="time-review-column-label-full">Montagezeit</span><span className="time-review-column-label-short" aria-hidden="true">MZ</span></span>
                     <span role="columnheader" aria-label="Ort" title="Ort"><span className="time-review-column-label-full">Ort</span><span className="time-review-column-label-short" aria-hidden="true">O</span></span>

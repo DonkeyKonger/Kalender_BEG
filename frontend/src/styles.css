@@ -17528,6 +17528,16 @@ body.mobile-modal-scroll-locked {
   text-align: center;
 }
 
+.time-review-column-day {
+  justify-self: start;
+  margin-left: -38px;
+}
+
+.time-review-column-type {
+  justify-self: center;
+  text-align: center;
+}
+
 .time-review-week-check-row > :nth-child(9),
 .time-review-week-check-row > :nth-child(11) {
   display: grid;
@@ -18752,6 +18762,10 @@ body.mobile-modal-scroll-locked {
   .time-review-week-check-head {
     font-size: 0.62rem;
     line-height: 1.2;
+  }
+
+  .time-review-column-day {
+    margin-left: -34px;
   }
 }
 
