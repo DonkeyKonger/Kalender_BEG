@@ -139,7 +139,7 @@ test("the consolidated actions menu keeps exports keyboard accessible", () => {
   assert.match(pageSource, /querySelectorAll<HTMLButtonElement>\("button:not\(:disabled\)"\)/);
   assert.match(styles, /\.time-review-week-actions-menu\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*100;[^}]*right:\s*0;[^}]*min-width:\s*235px;/s);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-week-check-head\s*\{[^}]*position:\s*sticky;[^}]*z-index:\s*3;/s);
-  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*overflow:\s*auto;/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*overflow-x:\s*auto;[^}]*overflow-y:\s*auto;/s);
 });
 
 test("weekly review distinguishes the neutral action from the green reviewed state and preserves reset", () => {
@@ -220,26 +220,28 @@ test("payroll review squares its framed surfaces within the active review worksp
   assert.doesNotMatch(styles, /is-payroll-review-workspace \.time-review-queue-status/);
 });
 
-test("payroll review fills the available app area while only queue and table scroll independently", () => {
-  assert.match(styles, /\.content-area:has\(> \.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace\)\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*100dvh;[^}]*flex-direction:\s*column;[^}]*padding-bottom:\s*0;/s);
-  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace\s*\{[^}]*display:\s*flex;[^}]*flex:\s*1 0 auto;[^}]*flex-direction:\s*column;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
+test("payroll review is viewport-bound while only queue and table scroll independently", () => {
+  assert.match(styles, /\.app-main:has\(> \.content-area > \.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace\)\s*\{[^}]*height:\s*100dvh;[^}]*overflow:\s*hidden;/s);
+  assert.match(styles, /\.content-area:has\(> \.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace\)\s*\{[^}]*display:\s*flex;[^}]*height:\s*100%;[^}]*min-height:\s*0;[^}]*box-sizing:\s*border-box;[^}]*flex-direction:\s*column;[^}]*overflow:\s*hidden;[^}]*padding-bottom:\s*0;/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace\s*\{[^}]*display:\s*flex;[^}]*height:\s*100%;[^}]*flex:\s*1 1 auto;[^}]*flex-direction:\s*column;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
   assert.doesNotMatch(styles, /is-payroll-review-workspace\s*\{[^}]*height:\s*calc\(100dvh - 96px\)/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-queue-panel\s*\{[^}]*grid-template-rows:\s*auto auto auto auto minmax\(0, 1fr\) auto;[^}]*min-height:\s*0;/s);
   assert.match(styles, /is-payroll-review-workspace > \.page-header,[\s\S]*?is-payroll-review-workspace > \.time-main-subtabs\s*\{[^}]*flex:\s*0 0 auto;/s);
   assert.match(styles, /is-payroll-review-workspace > \.time-main-subtabs\s*\{[^}]*overflow:\s*visible;/s);
-  assert.match(styles, /is-payroll-review-workspace \.time-review-workspace-layout\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);[^}]*height:\s*calc\(100% - 40px\);/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-workspace-layout\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);[^}]*height:\s*auto;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-detail-shell\s*\{[^}]*overflow:\s*hidden;[^}]*container-name:\s*time-review-detail;[^}]*container-type:\s*inline-size;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-worker-detail\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /\.time-review-worker-detail-head\s*\{[^}]*flex:\s*0 0 auto;/s);
-  assert.match(styles, /is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
+  assert.match(styles, /\.time-review-queue-list\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-x:\s*auto;[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
   assert.match(pageSource, /time-review-worker-detail-head[\s\S]*?time-review-week-check-table/);
   assert.match(pageSource, /time-review-week-check-table[\s\S]*?selectedReviewWeekDays\.map\(\(day\)[\s\S]*?time-review-day-group-entries[\s\S]*?time-review-week-check-row/s);
 });
 
 test("the scroll table keeps five days and multiple entries at natural row height", () => {
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-week-check-table\s*\{[^}]*align-content:\s*start;[^}]*grid-auto-rows:\s*max-content;[^}]*gap:\s*0;/s);
-  assert.match(styles, /is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*auto;/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*min-height:\s*0;[^}]*overflow-x:\s*auto;[^}]*overflow-y:\s*auto;/s);
   assert.match(styles, /\.time-review-day-group\s*\{[^}]*align-content:\s*start;[^}]*grid-auto-rows:\s*max-content;[^}]*min-height:\s*max-content;[^}]*overflow:\s*visible;/s);
   assert.doesNotMatch(styles, /\.time-review-day-group\s*\{[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /\.time-review-day-group-entries\s*\{[^}]*align-content:\s*start;[^}]*grid-auto-rows:\s*max-content;/s);
