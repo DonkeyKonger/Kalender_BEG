@@ -1,4 +1,4 @@
-import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, RefreshCw, RotateCcw, Search, Trash2, Wrench } from "lucide-react";
+import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, RefreshCw, Search, Trash2, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -1947,9 +1947,7 @@ export function TimeEntriesPage() {
                               void markSelectedReviewWeekReviewed();
                             }}
                           >
-                            {selectedReviewWorker.isReviewed
-                              ? <RotateCcw aria-hidden="true" size={17} />
-                              : <Check aria-hidden="true" size={18} />}
+                            <Check aria-hidden="true" size={18} />
                           </button>
                           {selectedReviewWorker.isReviewed && reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && reviewWeekStatusMenuPosition && typeof document !== "undefined" && createPortal(
                             <div

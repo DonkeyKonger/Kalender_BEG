@@ -159,8 +159,8 @@ test("weekly review distinguishes the neutral action from the green reviewed sta
   assert.match(pageSource, /window\.addEventListener\("scroll", closeStatusMenuOnViewportChange, true\)/);
   assert.match(pageSource, /event\.key !== "Escape"[\s\S]*?reviewWeekStatusMenuTriggerRef\.current\?\.focus\(\)/);
   assert.match(pageSource, /resolveViewportPopoverPosition\(\{[\s\S]*?triggerTop: reviewWeekStatusMenuPosition\.triggerTop[\s\S]*?menuHeight: menu\.scrollHeight/s);
-  assert.match(pageSource, /selectedReviewWorker\.isReviewed\s*\? <RotateCcw aria-hidden="true" size=\{17\} \/>\s*:\s*<Check aria-hidden="true" size=\{18\} \/>/s);
-  assert.match(pageSource, /import \{[\s\S]*?RotateCcw[\s\S]*?\} from "lucide-react";/);
+  assert.match(pageSource, /className=\{`time-review-week-review-button\$\{selectedReviewWorker\.isReviewed \? " is-reviewed" : ""\}`\}[\s\S]*?<Check aria-hidden="true" size=\{18\} \/>/s);
+  assert.doesNotMatch(pageSource, /RotateCcw/);
   assert.match(styles, /\.time-review-worker-detail-head \.icon-button\s*\{[^}]*min-height:\s*29px;[^}]*border-radius:\s*7px;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*width:\s*29px;[^}]*height:\s*29px;[^}]*min-height:\s*29px;[^}]*border:\s*1px solid #a7b4c6;[^}]*border-radius:\s*50%;[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:hover,[\s\S]*?\.time-review-week-review-button:focus-visible\s*\{[^}]*background:\s*#f5f8fc;[^}]*box-shadow:/s);
