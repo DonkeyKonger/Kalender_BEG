@@ -58,14 +58,16 @@ test("payroll overnight states keep their compact marker, badge and accessible m
 });
 
 
-test("the indicator uses one bed icon, visible text badges and matching tooltip labels", () => {
+test("the indicator keeps payer text inside the bed square with matching tooltip labels", () => {
   assert.match(componentSource, /import \{ BedDouble \} from "lucide-react"/);
   assert.match(componentSource, /aria-label=\{label\}/);
   assert.match(componentSource, /title=\{label\}/);
   assert.match(componentSource, /role="img"/);
   assert.match(componentSource, /time-review-overnight-bed/);
   assert.match(componentSource, /time-review-overnight-marker/);
+  assert.match(componentSource, /time-review-overnight-payer-strip/);
   assert.match(componentSource, /\{presentation\.badge\}/);
+  assert.doesNotMatch(componentSource, /time-review-overnight-badge/);
   assert.doesNotMatch(componentSource, /🏨|🛏|💶|🧾/);
 });
 
@@ -121,8 +123,11 @@ test("the desktop table reserves a compact type column after removing the repeat
   assert.match(styles, /\.time-review-week-check-(?:head|row)[\s\S]*?min-width:\s*924px/);
   assert.match(styles, /\.time-review-overnight-marker\s*\{[\s\S]*?border-radius:\s*2px/);
   assert.match(styles, /\.time-review-overnight-bed\s*\{[\s\S]*?border-radius:\s*2px/);
-  assert.match(styles, /\.time-review-overnight-indicator\.is-self-paid \.time-review-overnight-badge\s*\{[^}]*background:\s*#d9f3df/s);
-  assert.match(styles, /\.time-review-overnight-indicator\.is-beg-paid \.time-review-overnight-badge\s*\{[^}]*background:\s*#f8d761/s);
+  assert.match(styles, /\.time-review-overnight-bed\s*\{[^}]*position:\s*relative;[^}]*width:\s*var\(--time-review-overnight-symbol-width\);[^}]*height:\s*28px;[^}]*overflow:\s*hidden;/s);
+  assert.match(styles, /\.time-review-overnight-payer-strip\s*\{[^}]*position:\s*absolute;[^}]*right:\s*1px;[^}]*bottom:\s*1px;[^}]*left:\s*1px;[^}]*height:\s*12px;[^}]*border-top:\s*1px solid;[^}]*font-size:\s*0\.5rem;/s);
+  assert.match(styles, /\.time-review-overnight-indicator\.is-self-paid \.time-review-overnight-payer-strip\s*\{[^}]*border-color:\s*rgb\(79 125 88 \/ 36%\);[^}]*background:\s*rgb\(143 184 150 \/ 54%\);[^}]*color:\s*#14532d;/s);
+  assert.match(styles, /\.time-review-overnight-indicator\.is-beg-paid \.time-review-overnight-payer-strip\s*\{[^}]*border-color:\s*rgb\(151 112 48 \/ 34%\);[^}]*background:\s*rgb\(215 180 115 \/ 55%\);[^}]*color:\s*#6b4f15;/s);
+  assert.doesNotMatch(styles, /\.time-review-overnight-badge/);
 });
 
 
@@ -137,7 +142,7 @@ test("all payroll overnight states share one axis and align in the day header", 
   );
   assert.match(styles, /\.time-review-overnight-marker\s*\{[^}]*width:\s*var\(--time-review-overnight-symbol-width\);[^}]*height:\s*28px;[^}]*flex:\s*0 0 var\(--time-review-overnight-symbol-width\)/s);
   assert.match(styles, /\.time-review-overnight-bed\s*\{[^}]*width:\s*var\(--time-review-overnight-symbol-width\);[^}]*height:\s*28px;[^}]*flex:\s*0 0 var\(--time-review-overnight-symbol-width\)/s);
-  assert.match(styles, /\.time-review-overnight-badge\s*\{[^}]*height:\s*16px;[^}]*flex:\s*0 0 auto/s);
+  assert.match(styles, /\.time-review-overnight-payer-strip\s*\{[^}]*right:\s*1px;[^}]*bottom:\s*1px;[^}]*left:\s*1px;[^}]*height:\s*12px;/s);
   assert.match(styles, /\.time-review-overnight-indicator\.is-conflict \.time-review-overnight-marker\s*\{[^}]*background:\s*#fff4d6/s);
   assert.doesNotMatch(styles, /\.time-review-overnight-indicator[^}]*transform:/s);
   assert.equal(styles.includes(["is", "unknown"].join("-")), false);

@@ -51,8 +51,8 @@ export function OvernightStatusIndicator({
     >
       <span className="time-review-overnight-bed" aria-hidden="true">
         <BedDouble size={17} strokeWidth={2.25} />
+        <span className="time-review-overnight-payer-strip">{presentation.badge}</span>
       </span>
-      <span className="time-review-overnight-badge" aria-hidden="true">{presentation.badge}</span>
     </span>
   );
 }

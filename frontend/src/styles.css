@@ -17542,6 +17542,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-overnight-bed {
+  position: relative;
   display: inline-grid;
   width: var(--time-review-overnight-symbol-width);
   height: 28px;
@@ -17551,34 +17552,35 @@ body.mobile-modal-scroll-locked {
   border-radius: 2px;
   background: #ffffff;
   color: #173a63;
+  overflow: hidden;
 }
 
-.time-review-overnight-badge {
-  display: inline-grid;
-  min-width: 22px;
-  height: 16px;
-  flex: 0 0 auto;
+.time-review-overnight-payer-strip {
+  position: absolute;
+  z-index: 1;
+  right: 1px;
+  bottom: 1px;
+  left: 1px;
+  display: grid;
+  height: 12px;
   place-items: center;
-  margin-left: -1px;
-  border: 1px solid;
-  border-radius: 2px;
-  padding: 0 3px;
-  font-size: 0.54rem;
-  font-weight: 900;
+  border-top: 1px solid;
+  font-size: 0.5rem;
+  font-weight: 950;
   letter-spacing: 0;
   line-height: 1;
 }
 
-.time-review-overnight-indicator.is-self-paid .time-review-overnight-badge {
-  border-color: #91cda2;
-  background: #d9f3df;
-  color: #166534;
+.time-review-overnight-indicator.is-self-paid .time-review-overnight-payer-strip {
+  border-color: rgb(79 125 88 / 36%);
+  background: rgb(143 184 150 / 54%);
+  color: #14532d;
 }
 
-.time-review-overnight-indicator.is-beg-paid .time-review-overnight-badge {
-  border-color: #deb33d;
-  background: #f8d761;
-  color: #614700;
+.time-review-overnight-indicator.is-beg-paid .time-review-overnight-payer-strip {
+  border-color: rgb(151 112 48 / 34%);
+  background: rgb(215 180 115 / 55%);
+  color: #6b4f15;
 }
 
 .time-review-overnight-indicator.is-conflict .time-review-overnight-marker {
@@ -19819,7 +19821,7 @@ body.mobile-modal-scroll-locked {
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-day-move-button,
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-overnight-marker,
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-overnight-bed,
-.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-overnight-badge,
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-overnight-payer-strip,
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-review-overnight-trigger {
   border-radius: 0;
 }
