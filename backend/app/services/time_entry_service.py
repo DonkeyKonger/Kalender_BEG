@@ -387,12 +387,6 @@ class TimeEntryService:
         elif decision == "assign_site":
             if reviewed_site_id is None:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte eine Baustelle auswaehlen.")
-            self._mark_time_review(
-                entry,
-                status_value="manually_approved",
-                method="assign_site",
-                current_user=current_user,
-            )
         elif decision == "mark_not_verifiable":
             self._mark_time_review(
                 entry,

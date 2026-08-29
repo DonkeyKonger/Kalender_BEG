@@ -3469,6 +3469,10 @@ function highestPriorityAbsenceTypeForPersonDate(
 }
 
 function classifyTimeReviewLocationCheck(entry: TimeEntry): TimeReviewCheckState {
+  if (hasManualLocationReview(entry)) {
+    return "ok";
+  }
+
   if (
     entry.gps_not_checkable
     || entry.gps_status === "not_checkable"
@@ -3698,7 +3702,7 @@ function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): L
 }
 
 function hasManualLocationReview(entry: TimeEntry): boolean {
-  return entry.time_review_method === "assign_site";
+  return entry.original_site_id !== null && entry.original_site_id !== entry.site_id;
 }
 
 function hasGpsSiteMatch(entry: TimeEntry): boolean {

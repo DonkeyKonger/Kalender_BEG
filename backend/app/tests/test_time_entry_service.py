@@ -2220,21 +2220,24 @@ def test_review_decision_assign_site_preserves_original_site_before_override():
 
     assert updated.original_site_id == 10
     assert updated.site_id == 20
-    assert updated.time_review_method == "assign_site"
-    assert updated.status == "reviewed"
+    assert updated.time_review_status == "open"
+    assert updated.time_review_method is None
+    assert updated.status == "draft"
+    assert updated.reviewed_by_user_id is None
+    assert updated.reviewed_at is None
 
 
-def test_review_decision_assign_site_keeps_existing_original_site():
+def test_review_decision_assign_site_keeps_existing_time_review_unchanged():
     entry = SimpleNamespace(
         id=1,
         person_id=4,
         site_id=20,
         original_site_id=10,
-        status="draft",
-        time_review_status="open",
-        time_review_method="assign_site",
-        reviewed_by_user_id=None,
-        reviewed_at=None,
+        status="reviewed",
+        time_review_status="corrected",
+        time_review_method="manual_correction",
+        reviewed_by_user_id=8,
+        reviewed_at=datetime(2026, 7, 1, 8, 0),
     )
     item = TimeEntryService.__new__(TimeEntryService)
     item.db = SimpleNamespace(
@@ -2253,6 +2256,11 @@ def test_review_decision_assign_site_keeps_existing_original_site():
 
     assert updated.original_site_id == 10
     assert updated.site_id == 30
+    assert updated.status == "reviewed"
+    assert updated.time_review_status == "corrected"
+    assert updated.time_review_method == "manual_correction"
+    assert updated.reviewed_by_user_id == 8
+    assert updated.reviewed_at == datetime(2026, 7, 1, 8, 0)
 
 
 def test_deadline_auto_closes_previous_month_open_review_case():
