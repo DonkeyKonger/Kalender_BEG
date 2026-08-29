@@ -17494,10 +17494,16 @@ body.mobile-modal-scroll-locked {
 
 .time-review-entry-type {
   display: inline-flex;
+  box-sizing: border-box;
+  min-height: 24px;
   align-items: center;
   gap: 4px;
   justify-self: start;
-  color: #64748b;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #475569;
+  padding: 4px 5px;
   font-size: 0.7rem;
   font-weight: 800;
   line-height: 1;
@@ -17505,11 +17511,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-entry-type.is-travel {
-  border: 1px solid #dfbd73;
-  border-radius: 4px;
+  border-color: #dfbd73;
   background: #fff7e5;
   color: #8a5b00;
-  padding: 4px 5px;
 }
 
 .time-review-overnight-indicator {
@@ -19530,6 +19534,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-entries-page.is-figma-times-workspace .time-review-worker-detail-head {
+  position: relative;
+  z-index: 4;
   display: grid;
   flex: 0 0 auto;
   grid-template-columns: minmax(220px, 1fr) auto;
@@ -19595,14 +19601,14 @@ body.mobile-modal-scroll-locked {
 .time-review-worker-detail-head .time-review-week-review-button {
   display: inline-flex;
   min-width: 172px;
-  height: 44px;
-  min-height: 44px;
+  height: 36px;
+  min-height: 36px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   gap: 7px;
   border: 1px solid #a7b4c6;
-  border-radius: 5px;
+  border-radius: 7px;
   background: #ffffff;
   color: #334155;
   cursor: pointer;
@@ -19623,16 +19629,15 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed {
-  min-width: 104px;
-  border-color: #237a49;
-  background: #237a49;
+  border-color: #2f855a;
+  background: #2f855a;
   color: #ffffff;
 }
 
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed:hover,
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed:focus-visible {
-  border-color: #185d38;
-  background: #185d38;
+  border-color: #276f4b;
+  background: #276f4b;
   color: #ffffff;
 }
 

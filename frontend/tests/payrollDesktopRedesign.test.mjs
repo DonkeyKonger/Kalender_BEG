@@ -123,7 +123,7 @@ test("the fixed worker header is one compact action row directly above the table
   assert.match(pageSource, /role="menu"[\s\S]*?aria-label="Excel-Exporte"[\s\S]*?Diese Woche als Excel[\s\S]*?Alle Arbeitsstunden als Excel/s);
   assert.doesNotMatch(pageSource, /time-review-week-xlsx-button/);
   assert.match(pageSource, /<\/div>\s*\{payrollDateError && <p className="time-review-week-error">[\s\S]*?<div className="time-review-week-check-table"/s);
-  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-worker-detail-head\s*\{[^}]*flex:\s*0 0 auto;[^}]*grid-template-columns:\s*minmax\(220px, 1fr\) auto;[^}]*align-items:\s*center;[^}]*padding:\s*6px 14px;/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-worker-detail-head\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*4;[^}]*flex:\s*0 0 auto;[^}]*grid-template-columns:\s*minmax\(220px, 1fr\) auto;[^}]*align-items:\s*center;[^}]*padding:\s*6px 14px;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-worker-detail-action-stack\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;/s);
   assert.match(styles, /@container time-review-detail \(max-width: 600px\)[\s\S]*?\.time-entries-page\.is-figma-times-workspace \.time-review-worker-detail-head\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?\.time-review-worker-detail-action-stack\s*\{[^}]*flex-wrap:\s*wrap;/s);
   assert.match(styles, /\.time-review-week-action-separator\s*\{[^}]*width:\s*1px;[^}]*height:\s*24px;[^}]*background:\s*#dfe5ed;/s);
@@ -137,7 +137,9 @@ test("the consolidated actions menu keeps exports keyboard accessible", () => {
   assert.match(pageSource, /document\.addEventListener\("keydown", closeActionsMenuOnEscape\)/);
   assert.match(pageSource, /\["ArrowDown", "ArrowUp", "Home", "End"\]/);
   assert.match(pageSource, /querySelectorAll<HTMLButtonElement>\("button:not\(:disabled\)"\)/);
-  assert.match(styles, /\.time-review-week-actions-menu\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*100;[^}]*min-width:\s*235px;/s);
+  assert.match(styles, /\.time-review-week-actions-menu\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*100;[^}]*right:\s*0;[^}]*min-width:\s*235px;/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-week-check-head\s*\{[^}]*position:\s*sticky;[^}]*z-index:\s*3;/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-week-check-table\s*\{[^}]*overflow:\s*auto;/s);
 });
 
 test("weekly review distinguishes the neutral action from the green reviewed state and preserves reset", () => {
@@ -151,9 +153,12 @@ test("weekly review distinguishes the neutral action from the green reviewed sta
   assert.match(pageSource, /role="menuitem"[\s\S]*?void resetSelectedReviewWeekReview\(\)/);
   assert.match(pageSource, /selectedReviewWorker\.isReviewed \? "Geprüft" : "Als geprüft markieren"/);
   assert.match(pageSource, /selectedReviewWorker\.isReviewed \? "Wird zurückgesetzt\.\.\." : "Wird geprüft\.\.\."/);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*min-width:\s*172px;[^}]*height:\s*44px;[^}]*border:\s*1px solid #a7b4c6;[^}]*border-radius:\s*5px;[^}]*background:\s*#ffffff;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.icon-button\s*\{[^}]*min-height:\s*36px;[^}]*border-radius:\s*7px;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*min-width:\s*172px;[^}]*height:\s*36px;[^}]*min-height:\s*36px;[^}]*border:\s*1px solid #a7b4c6;[^}]*border-radius:\s*7px;[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:hover,[\s\S]*?\.time-review-week-review-button:focus-visible\s*\{[^}]*background:\s*#f5f8fc;[^}]*box-shadow:/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*min-width:\s*104px;[^}]*background:\s*#237a49;[^}]*color:\s*#ffffff;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*border-color:\s*#2f855a;[^}]*background:\s*#2f855a;[^}]*color:\s*#ffffff;/s);
+  assert.doesNotMatch(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*min-width:/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed:hover,[\s\S]*?\.time-review-week-review-button\.is-reviewed:focus-visible\s*\{[^}]*border-color:\s*#276f4b;[^}]*background:\s*#276f4b;/s);
   assert.match(pageSource, /className="icon-button secondary time-review-manual-create-button"/);
 });
 
@@ -192,11 +197,13 @@ test("travel time is identified in its own type column without tinting the compl
     /aria-label="Tag" title="Tag"[\s\S]*?aria-label="Eintragstyp" title="Eintragstyp"[\s\S]*?aria-label="Baustelle" title="Baustelle"/,
   );
   assert.match(tableSource, /<CarFront aria-hidden="true" size=\{14\} \/>[\s\S]*?<span>Fahrt<\/span>/);
-  assert.match(tableSource, /className="time-review-entry-type is-work">Arbeit/);
+  assert.match(tableSource, /<Wrench aria-hidden="true" size=\{14\} \/>[\s\S]*?<span>Arbeit<\/span>/);
   assert.match(tableSource, /<strong>\{timeReviewSiteName\(check\.entry\)\}<\/strong>/);
   assert.match(tableSource, /className="time-review-week-type" role="cell" aria-label="Keine Zeitmeldung"/);
   assert.doesNotMatch(tableSource, /is-travel-time/);
-  assert.match(styles, /\.time-review-entry-type\.is-travel\s*\{[^}]*border:\s*1px solid #dfbd73;[^}]*border-radius:\s*4px;[^}]*background:\s*#fff7e5;/s);
+  assert.match(styles, /\.time-review-entry-type\s*\{[^}]*box-sizing:\s*border-box;[^}]*min-height:\s*24px;[^}]*gap:\s*4px;[^}]*border:\s*1px solid #cbd5e1;[^}]*border-radius:\s*4px;[^}]*padding:\s*4px 5px;/s);
+  assert.match(styles, /\.time-review-entry-type\.is-travel\s*\{[^}]*border-color:\s*#dfbd73;[^}]*background:\s*#fff7e5;[^}]*color:\s*#8a5b00;/s);
+  assert.doesNotMatch(tableSource, /<button[^>]*time-review-entry-type/);
   assert.doesNotMatch(styles, /\.time-review-week-check-row\.is-travel-time/);
   assert.match(tableSource, /aria-label=\{isTravelTimeEntry\(check\.entry\) \? "Eintragstyp Fahrt" : "Eintragstyp Arbeit"\}/);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?grid-template-columns:\s*28px minmax\(58px, 0\.75fr\) 64px minmax\(120px, 1\.25fr\)[\s\S]*?min-width:\s*818px/s);

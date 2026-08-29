@@ -1,4 +1,4 @@
-import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, RefreshCw, Search, Trash2 } from "lucide-react";
+import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, RefreshCw, Search, Trash2, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -1984,7 +1984,10 @@ export function TimeEntriesPage() {
                               <span>Fahrt</span>
                             </span>
                           ) : (
-                            <span className="time-review-entry-type is-work">Arbeit</span>
+                            <span className="time-review-entry-type is-work" title="Arbeitszeit">
+                              <Wrench aria-hidden="true" size={14} />
+                              <span>Arbeit</span>
+                            </span>
                           )}
                         </div>
                         <div className="time-review-week-site" role="cell">
