@@ -147,6 +147,7 @@ test("manual payroll date is German and does not parse through UTC", () => {
 
 test("manual create and existing-entry diagnostics use explicit dialog modes", async () => {
   const source = await readFile(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
   const createStart = source.indexOf('timeReviewDialogMode === "create" ? (');
   const editStart = source.indexOf('aria-label="Arbeitszeit-Diagnosewerte"', createStart);
   const weekSiteCellStart = source.indexOf('<div className="time-review-week-site" role="cell">');
@@ -162,6 +163,14 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   assert.match(source, /"Zeit manuell eintragen" : "Arbeitszeit-Prüfung"/);
   assert.match(source, /id="payroll-manual-site-label">Baustelle \*<\/span>/);
   assert.match(source, /searchPlaceholder="Nummer, Name oder Ort suchen…"/);
+  assert.match(source, /className="time-review-manual-info" role="note">[\s\S]*?Gesamtstunden werden aus Beginn, Ende und Pause automatisch berechnet\./);
+  assert.match(source, /className="icon-button secondary time-review-diagnostic-cancel"[\s\S]*?onClick=\{closeTimeReviewDiagnostic\}[\s\S]*?>[\s\S]*?Abbrechen/);
+  assert.match(source, /className="icon-button time-review-diagnostic-save"/);
+  assert.match(styles, /\.time-review-diagnostic-popover\.is-create \{[^}]*width: min\(780px, calc\(100vw - 32px\)\);/s);
+  assert.match(styles, /\.time-review-manual-site-field \{[^}]*border-left: 3px solid #1763c5;[^}]*background: #f4f8ff;/s);
+  assert.match(styles, /\.time-review-manual-time-grid \{[^}]*grid-template-columns: repeat\(4, minmax\(110px, 1fr\)\);[^}]*background: #f8fafc;/s);
+  assert.match(styles, /\.time-review-diagnostic-save \{[^}]*background: #1763c5;/s);
+  assert.match(styles, /@media \(max-width: 480px\) \{[\s\S]*?\.time-review-manual-time-grid \{[^}]*grid-template-columns: 1fr;/s);
   assert.ok(createStart >= 0);
   assert.ok(editStart > createStart);
   assert.doesNotMatch(source.slice(createStart, editStart), /Eingetragene Monteurstunden|Erkannte Fahrzeug GPS Stunden/);

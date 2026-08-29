@@ -2311,7 +2311,7 @@ export function TimeEntriesPage() {
             <div className="time-review-diagnostic-head">
               <div>
                 <span>{timeReviewDialogMode === "create" ? "Lohnprüfung" : "Diagnose"}</span>
-                <h4>{timeReviewDialogMode === "create" ? "Zeit manuell eintragen" : "Arbeitszeit-Prüfung"}</h4>
+                <h4 id="time-review-diagnostic-title">{timeReviewDialogMode === "create" ? "Zeit manuell eintragen" : "Arbeitszeit-Prüfung"}</h4>
               </div>
               <button
                 className="time-review-diagnostic-close"
@@ -2323,7 +2323,7 @@ export function TimeEntriesPage() {
               </button>
             </div>
             {timeReviewDialogMode === "create" ? (
-              <div className="time-review-manual-form" aria-label="Manueller Zeiteintrag">
+              <div className="time-review-manual-form" aria-labelledby="time-review-diagnostic-title">
                 <div className="time-review-manual-context">
                   <div>
                     <span>Monteur</span>
@@ -2422,6 +2422,9 @@ export function TimeEntriesPage() {
                     <small id="payroll-manual-total-help">Aus Anfang, Ende und Pause berechnet.</small>
                   </label>
                 </div>
+                <p className="time-review-manual-info" role="note">
+                  Die Gesamtstunden werden aus Beginn, Ende und Pause automatisch berechnet.
+                </p>
               </div>
             ) : (
               <div className="time-review-diagnostic-table" role="table" aria-label="Arbeitszeit-Diagnosewerte">
@@ -2498,7 +2501,15 @@ export function TimeEntriesPage() {
             <div className="time-review-diagnostic-actions">
               {payrollCorrectionError && <p className="time-review-diagnostic-error">{payrollCorrectionError}</p>}
               <button
-                className="icon-button secondary time-review-diagnostic-save"
+                className="icon-button secondary time-review-diagnostic-cancel"
+                type="button"
+                disabled={isSavingPayrollCorrection}
+                onClick={closeTimeReviewDiagnostic}
+              >
+                Abbrechen
+              </button>
+              <button
+                className="icon-button time-review-diagnostic-save"
                 type="button"
                 disabled={!canManageTimeEntries || isSavingPayrollCorrection}
                 onClick={() => void savePayrollTimeCorrection()}
