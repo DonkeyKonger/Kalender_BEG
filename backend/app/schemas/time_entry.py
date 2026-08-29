@@ -282,6 +282,11 @@ class TimeEntryRead(BaseModel):
     payroll_review_state: TimeEntryPayrollReviewStateRead
 
 
+class TimeEntryReviewWeekRead(BaseModel):
+    entries: list[TimeEntryRead] = Field(default_factory=list)
+    open_entries: list[TimeEntryRead] = Field(default_factory=list)
+
+
 class PersonWorkDayRead(BaseModel):
     person_id: int
     work_date: Date

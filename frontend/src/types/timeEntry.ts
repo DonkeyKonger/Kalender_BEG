@@ -164,3 +164,8 @@ export type TimeEntryPayrollWeek = {
   end_date: string;
   persons: TimeEntryPayrollWeekPerson[];
 };
+
+export type TimeEntryReviewWeek = {
+  entries: TimeEntry[];
+  open_entries: TimeEntry[];
+};

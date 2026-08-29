@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
 
@@ -97,40 +98,95 @@ class GpsPresenceService:
         self.db = db
 
     def evaluate_time_entry(self, entry: WorkTimeEntry) -> GpsPresenceEvaluation:
-        if is_current_local_work_date(entry.work_date):
-            planned_sites = self._planned_sites_for_person_date(entry.person_id, entry.work_date)
-            planned_context = self._planned_gps_context(entry, planned_sites, None)
-            return GpsPresenceEvaluation(
-                "not_checkable",
-                0,
-                0,
-                "gps_work_time_available_next_day",
-                **gps_range_from_points([]),
-                **planned_context,
+        return self.evaluate_time_entries([entry])[entry.id]
+
+    def evaluate_time_entries(self, entries: list[WorkTimeEntry]) -> dict[int, GpsPresenceEvaluation]:
+        """Evaluate a response batch without repeating GPS master-data queries per entry."""
+        if not entries:
+            return {}
+
+        person_ids = {entry.person_id for entry in entries}
+        first_date = min(entry.work_date for entry in entries)
+        last_date = max(entry.work_date for entry in entries)
+        assignments_by_person: dict[int, list[Assignment]] = defaultdict(list)
+        assignments = self.db.scalars(
+            select(Assignment)
+            .options(selectinload(Assignment.site))
+            .where(
+                Assignment.person_id.in_(person_ids),
+                Assignment.start_date <= last_date,
+                Assignment.end_date >= first_date,
             )
-
-        start_at, end_at = day_window(entry.work_date)
-        points = self._location_points_for_person(
-            person_id=entry.person_id,
-            start_datetime=start_at,
-            end_datetime=end_at,
         )
-        planned_sites = self._planned_sites_for_person_date(entry.person_id, entry.work_date)
-        contact_points = self._site_contact_points(points, planned_sites)
-        gps_range = gps_range_from_points(contact_points)
-        planned_context = self._planned_gps_context(entry, planned_sites, contact_points[-1] if contact_points else None)
-        if not planned_sites:
-            return GpsPresenceEvaluation("not_checkable", 0, len(points), "planned_site_missing", **gps_range, **planned_context)
-        if not points:
-            return GpsPresenceEvaluation("not_checkable", 0, 0, "no_gps_point_for_work_date", **gps_range, **planned_context)
-        if not contact_points:
-            return GpsPresenceEvaluation("not_checkable", 0, len(points), "no_site_contact_for_work_date", **gps_range, **planned_context)
+        for assignment in assignments:
+            assignments_by_person[assignment.person_id].append(assignment)
 
-        plausibility = self._evaluate_point_against_planned_sites(contact_points[-1], planned_sites)
-        return self._presence_evaluation_from_point_plausibility(
-            plausibility,
-            gps_range={**gps_range, **planned_context},
-        )
+        active_site_by_id = {
+            site.id: site
+            for site in self.db.scalars(select(Site).where(Site.status == SiteStatus.ACTIVE))
+            if has_valid_coordinates(site)
+        }
+        points_by_person_date: dict[tuple[int, date], list[GpsReviewPoint]] = defaultdict(list)
+        for point, point_person_id in self._vehicle_point_rows(
+            start_datetime=day_window(first_date)[0],
+            end_datetime=day_window(last_date)[1],
+            person_ids=person_ids,
+        ):
+            points_by_person_date[(point_person_id, ensure_aware_utc(point.timestamp).date())].append(point)
+
+        evaluations: dict[int, GpsPresenceEvaluation] = {}
+        for entry in entries:
+            planned_sites = planned_sites_from_assignments(
+                assignments_by_person[entry.person_id],
+                entry.person_id,
+                entry.work_date,
+            )
+            candidate_sites = matching_candidate_sites(active_site_by_id, planned_sites)
+            if is_current_local_work_date(entry.work_date):
+                planned_context = self._planned_gps_context(
+                    entry,
+                    planned_sites,
+                    None,
+                    candidate_sites=candidate_sites,
+                )
+                evaluations[entry.id] = GpsPresenceEvaluation(
+                    "not_checkable",
+                    0,
+                    0,
+                    "gps_work_time_available_next_day",
+                    **gps_range_from_points([]),
+                    **planned_context,
+                )
+                continue
+
+            points = points_by_person_date[(entry.person_id, entry.work_date)]
+            contact_points = self._site_contact_points(points, planned_sites, candidate_sites=candidate_sites)
+            gps_range = gps_range_from_points(contact_points)
+            planned_context = self._planned_gps_context(
+                entry,
+                planned_sites,
+                contact_points[-1] if contact_points else None,
+                candidate_sites=candidate_sites,
+            )
+            if not planned_sites:
+                evaluations[entry.id] = GpsPresenceEvaluation(
+                    "not_checkable", 0, len(points), "planned_site_missing", **gps_range, **planned_context,
+                )
+            elif not points:
+                evaluations[entry.id] = GpsPresenceEvaluation(
+                    "not_checkable", 0, 0, "no_gps_point_for_work_date", **gps_range, **planned_context,
+                )
+            elif not contact_points:
+                evaluations[entry.id] = GpsPresenceEvaluation(
+                    "not_checkable", 0, len(points), "no_site_contact_for_work_date", **gps_range, **planned_context,
+                )
+            else:
+                plausibility = self._evaluate_point_against_planned_sites(contact_points[-1], planned_sites)
+                evaluations[entry.id] = self._presence_evaluation_from_point_plausibility(
+                    plausibility,
+                    gps_range={**gps_range, **planned_context},
+                )
+        return evaluations
 
     def list_site_stays_for_review(
         self,
@@ -275,9 +331,11 @@ class GpsPresenceService:
         entry: WorkTimeEntry,
         planned_sites: list[Site],
         point: GpsReviewPoint | None,
+        *,
+        candidate_sites: list[Site] | None = None,
     ) -> dict[str, object]:
         planned_labels = tuple(site_label(site) for site in planned_sites)
-        candidate_sites = self._matching_candidate_sites(planned_sites)
+        candidate_sites = candidate_sites if candidate_sites is not None else self._matching_candidate_sites(planned_sites)
         planned_site_ids = {site.id for site in planned_sites}
         detected_site = self._matched_site_for_point(point, candidate_sites, planned_site_ids=planned_site_ids) if point is not None else None
         detected_label = site_label(detected_site) if detected_site is not None else None
@@ -313,8 +371,14 @@ class GpsPresenceService:
         ]
         return matching_candidate_sites({site.id: site for site in active_sites}, planned_sites)
 
-    def _site_contact_points(self, points: list[GpsReviewPoint], planned_sites: list[Site]) -> list[GpsReviewPoint]:
-        candidate_sites = self._matching_candidate_sites(planned_sites)
+    def _site_contact_points(
+        self,
+        points: list[GpsReviewPoint],
+        planned_sites: list[Site],
+        *,
+        candidate_sites: list[Site] | None = None,
+    ) -> list[GpsReviewPoint]:
+        candidate_sites = candidate_sites if candidate_sites is not None else self._matching_candidate_sites(planned_sites)
         planned_site_ids = {site.id for site in planned_sites}
         return [
             point
@@ -345,6 +409,7 @@ class GpsPresenceService:
         start_datetime: datetime,
         end_datetime: datetime,
         person_id: int | None = None,
+        person_ids: set[int] | None = None,
     ) -> list[tuple[GpsReviewPoint, int]]:
         """Return only vehicle-derived positions, including the C-Track store.
 
@@ -381,6 +446,9 @@ class GpsPresenceService:
         if person_id is not None:
             legacy_statement = legacy_statement.where(legacy_person_id == person_id)
             ctrack_statement = ctrack_statement.where(ctrack_person_id == person_id)
+        elif person_ids is not None:
+            legacy_statement = legacy_statement.where(legacy_person_id.in_(person_ids))
+            ctrack_statement = ctrack_statement.where(ctrack_person_id.in_(person_ids))
 
         point_rows: list[tuple[GpsReviewPoint, int]] = [
             (point, assigned_person_id)

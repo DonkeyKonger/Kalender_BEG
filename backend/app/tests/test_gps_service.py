@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 
 from app.api.routes.time_entries import list_time_entries, time_entry_read
@@ -78,6 +78,65 @@ def test_vehicle_gps_is_evaluated_while_legacy_phone_points_are_ignored():
 
     assert result.status == "matched"
     assert result.total_points == 1
+
+
+def test_batch_time_entry_gps_evaluation_uses_constant_query_count_for_a_week():
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="8001", name="Baustelle", latitude=53.0142, longitude=9.0263)
+    db.add_all([person, site])
+    db.flush()
+    first_work_date = date(2026, 6, 10)
+    db.add(Assignment(
+        person_id=person.id,
+        site_id=site.id,
+        start_date=first_work_date,
+        end_date=date(2026, 6, 11),
+    ))
+    entries = [
+        WorkTimeEntry(
+            person_id=person.id,
+            site_id=site.id,
+            work_date=work_date,
+            work_minutes=480,
+            break_minutes=0,
+            travel_minutes=0,
+        )
+        for work_date in (first_work_date, date(2026, 6, 11))
+    ]
+    db.add_all(entries)
+    db.add_all([
+        GpsPoint(
+            source_type=GpsSourceType.VEHICLE,
+            source_id=f"vehicle:{work_date.isoformat()}",
+            person_id=person.id,
+            latitude=site.latitude,
+            longitude=site.longitude,
+            timestamp=datetime.combine(work_date, datetime.min.time(), tzinfo=UTC).replace(hour=8),
+        )
+        for work_date in (first_work_date, date(2026, 6, 11))
+    ])
+    db.commit()
+    entries = db.query(WorkTimeEntry).order_by(WorkTimeEntry.work_date).all()
+
+    query_count = 0
+
+    def count_selects(_conn, _cursor, statement, _parameters, _context, _executemany):
+        nonlocal query_count
+        if statement.lstrip().upper().startswith("SELECT"):
+            query_count += 1
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", count_selects)
+    try:
+        evaluations = GpsPresenceService(db).evaluate_time_entries(entries)
+    finally:
+        event.remove(engine, "before_cursor_execute", count_selects)
+
+    assert [evaluations[entry.id].status for entry in entries] == ["matched", "matched"]
+    # Assignments, sites and both GPS stores are loaded once for the whole response,
+    # rather than once per time entry.
+    assert query_count <= 5
 
 
 def test_ctrack_vehicle_position_log_is_evaluated_for_assigned_person():

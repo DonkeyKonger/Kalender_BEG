@@ -192,8 +192,7 @@ type FinalHoursEntry = {
 const GPS_TIME_TOLERANCE_MINUTES = 15;
 const GPS_NOT_CHECKABLE_NOTICE = "GPS nicht eindeutig prüfbar";
 const TIME_REVIEW_PERF_STORAGE_KEY = "beg_time_review_perf";
-const TIME_REVIEW_API_OPEN_ENTRIES = "timeEntries(open review)";
-const TIME_REVIEW_API_ALL_ENTRIES = "timeEntries(all week)";
+const TIME_REVIEW_API_REVIEW_WEEK = "review week";
 const TIME_REVIEW_API_ABSENCES = "absences";
 const TIME_REVIEW_API_PAYROLL_WEEK = "payroll week";
 const TIME_REVIEW_API_WEEKLY_REVIEWS = "weekly reviews";
@@ -753,7 +752,7 @@ export function TimeEntriesPage() {
   }, [locationReviewDiagnosticEntry, timeReviewDiagnosticEntry]);
 
   useEffect(() => {
-    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
+    if (activeTimeSubtab !== "review") {
       return;
     }
 
@@ -762,31 +761,34 @@ export function TimeEntriesPage() {
     let perfRows: number | undefined;
     let perfOk = false;
     setIsLoadingReviewEntries(true);
+    setIsLoadingReviewAllEntries(true);
     setReviewEntriesError(null);
+    setReviewAllEntriesError(null);
 
-    api.timeEntries({
+    api.timeEntryReviewWeek({
       dateFrom: reviewDataRange.start,
       dateTo: reviewDataRange.end,
-      includeGpsStatus: true,
-      reviewOpenOnly: true,
     })
-      .then((entryData) => {
-        perfRows = entryData.length;
+      .then((reviewWeek) => {
+        perfRows = reviewWeek.entries.length;
         perfOk = true;
         if (!ignore) {
-          setReviewEntries(entryData);
+          setReviewEntries(reviewWeek.open_entries);
+          setReviewAllEntries(reviewWeek.entries);
         }
       })
       .catch((requestError) => {
         if (!ignore) {
           setReviewEntries([]);
+          setReviewAllEntries([]);
           setReviewEntriesError(readApiError(requestError, "Stundenpruefung konnte nicht geladen werden."));
         }
       })
       .finally(() => {
         if (!ignore) {
           setIsLoadingReviewEntries(false);
-          recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_OPEN_ENTRIES, perfStart, {
+          setIsLoadingReviewAllEntries(false);
+          recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_REVIEW_WEEK, perfStart, {
             details: `${reviewDataRange.start} bis ${reviewDataRange.end}`,
             ok: perfOk,
             rows: perfRows,
@@ -1052,7 +1054,7 @@ export function TimeEntriesPage() {
   }, [activeTimeSubtab, canManageTimeEntries, payrollReviewWorkerIds.length, reviewWeekOptions]);
 
   useEffect(() => {
-    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
+    if (activeTimeSubtab !== "evaluation") {
       return;
     }
 
@@ -1084,7 +1086,7 @@ export function TimeEntriesPage() {
       .finally(() => {
         if (!ignore) {
           setIsLoadingReviewAllEntries(false);
-          recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_ALL_ENTRIES, perfStart, {
+          recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_REVIEW_WEEK, perfStart, {
             details: `${reviewDataRange.start} bis ${reviewDataRange.end}`,
             ok: perfOk,
             rows: perfRows,
@@ -2734,8 +2736,7 @@ function startTimeReviewPerfSession(
     calculations: [],
     completedApiCalls: new Set(),
     expectedApiCalls: [
-      TIME_REVIEW_API_OPEN_ENTRIES,
-      TIME_REVIEW_API_ALL_ENTRIES,
+      TIME_REVIEW_API_REVIEW_WEEK,
       TIME_REVIEW_API_ABSENCES,
       TIME_REVIEW_API_PAYROLL_WEEK,
       ...(includeWeeklyReviews ? [TIME_REVIEW_API_WEEKLY_REVIEWS] : []),

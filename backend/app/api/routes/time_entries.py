@@ -17,6 +17,7 @@ from app.schemas.time_entry import (
     TimeEntryPayrollWeekDayRead,
     TimeEntryPayrollWeekPersonRead,
     TimeEntryPayrollWeekRead,
+    TimeEntryReviewWeekRead,
     PersonWorkDayRead,
     PersonWorkDayOvernightUpdate,
     TimeEntryPayrollReviewUpdate,
@@ -84,6 +85,63 @@ def get_time_entry_payroll_week(
     )
 
 
+@router.get("/review-week", response_model=TimeEntryReviewWeekRead)
+def get_time_entry_review_week(
+    date_from: date,
+    date_to: date,
+    current_user: User = Depends(CAN_ACCESS),
+    db: Session = Depends(get_db),
+) -> TimeEntryReviewWeekRead:
+    """Load the full and open review queues from one GPS evaluation pass."""
+    service = TimeEntryService(db)
+    entries = service.list_entries(
+        current_user=current_user,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    gps_service = GpsPresenceService(db)
+    gps_evaluations = gps_service.evaluate_time_entries(entries)
+    manual_site_keys = {
+        (entry.person_id, entry.work_date, entry.site_id)
+        for entry in entries
+        if entry.site_id is not None
+    }
+    service.auto_close_deadline_reviews(
+        entries,
+        {entry_id: evaluation.work_minutes for entry_id, evaluation in gps_evaluations.items()},
+    )
+    response_by_entry_id = {
+        entry.id: time_entry_read(entry, gps_evaluation=gps_evaluations.get(entry.id))
+        for entry in entries
+    }
+    open_entries = [
+        response_by_entry_id[entry.id]
+        for entry in entries
+        if (
+            service.is_open_time_review_case(entry, gps_evaluations.get(entry.id).work_minutes)
+            or gps_evaluations.get(entry.id).has_source_mismatch
+            or bool(gps_evaluations.get(entry.id).review_notices)
+        )
+    ]
+    gps_suggestions = [
+        stay
+        for stay in gps_service.list_site_stays_for_review(
+            date_from=date_from,
+            date_to=date_to,
+            person_id=current_user.person_id if current_user.role == UserRole.MONTEUR else None,
+        )
+        if (stay.person_id, stay.work_date, stay.site_id) not in manual_site_keys
+    ]
+    open_entries.extend(
+        gps_suggestion_read(stay, synthetic_id=-(index + 1))
+        for index, stay in enumerate(gps_suggestions)
+    )
+    return TimeEntryReviewWeekRead(
+        entries=list(response_by_entry_id.values()),
+        open_entries=open_entries,
+    )
+
+
 @router.get("", response_model=list[TimeEntryRead])
 def list_time_entries(
     person_id: int | None = None,
@@ -107,7 +165,7 @@ def list_time_entries(
     gps_service = GpsPresenceService(db) if include_gps_status or review_open_only or project_mounting_only else None
     gps_evaluations: dict[int, GpsPresenceEvaluation] = {}
     if gps_service is not None:
-        gps_evaluations = {entry.id: gps_service.evaluate_time_entry(entry) for entry in entries}
+        gps_evaluations = gps_service.evaluate_time_entries(entries)
     manual_site_keys = {
         (entry.person_id, entry.work_date, entry.site_id)
         for entry in entries
