@@ -18391,16 +18391,6 @@ body.mobile-modal-scroll-locked {
   font-weight: 850;
 }
 
-.time-review-diagnostic-row.is-manual-review {
-  border-left: 3px solid #b45309;
-  color: #8a1f16;
-}
-
-.time-review-diagnostic-row.is-manual-review strong,
-.time-review-diagnostic-row.is-manual-review span {
-  color: #8a1f16;
-}
-
 .time-review-diagnostic-row.is-editable {
   background: #fffaf2;
 }

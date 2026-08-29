@@ -28,8 +28,9 @@ test("desktop diagnostics retain manual and vehicle GPS sources without phone GP
   assert.doesNotMatch(page, /gpsVerification|GPS-Prüfung|Handy[ -]?GPS|mobile Standortsendungen/i);
   assert.match(page, /source: "Eingetragene Monteursstunden"/);
   assert.match(page, /source: "Erkannte Fahrzeug GPS Stunden"[\s\S]*?start: formatTimeEntryClock\(entry\.gps_first_seen_at\)[\s\S]*?total: formatTimeEntryMinutes\(entry\.gps_work_minutes, "hours"\)/);
-  assert.match(page, /source: "Eingetragene Monteursbaustelle"/);
-  assert.match(page, /source: "Erkannte Fahrzeug-GPS-Baustelle"[\s\S]*?siteName: hasGpsSiteMatch\(entry\)/);
+  assert.match(page, /source: "Mobile Erfassung"/);
+  assert.match(page, /source: "GPS-Erfassung"[\s\S]*?siteName: hasGpsSiteMatch\(entry\)/);
+  assert.match(page, /source: "Büroerfassung"/);
 });
 
 test("backend accepts no phone upload route and evaluates only vehicle GPS points", async () => {

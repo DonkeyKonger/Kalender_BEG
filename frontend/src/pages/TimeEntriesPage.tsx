@@ -147,7 +147,6 @@ type LocationReviewDiagnosticRow = {
   siteName: string;
   siteNumber: string;
   location: string;
-  isManualReview?: boolean;
 };
 type TimeReviewPerfApiCall = {
   name: string;
@@ -2709,7 +2708,7 @@ export function TimeEntriesPage() {
                 <span role="columnheader">Ort / Adresse</span>
               </div>
               {locationReviewDiagnosticRows(locationReviewDiagnosticEntry, sites).map((row) => (
-                <div className={`time-review-diagnostic-row is-location ${row.isManualReview ? "is-manual-review" : ""}`} key={row.source} role="row">
+                <div className="time-review-diagnostic-row is-location" key={row.source} role="row">
                   <strong role="cell">{row.source}</strong>
                   <span role="cell">{row.siteName}</span>
                   <span role="cell">{row.siteNumber}</span>
@@ -3792,32 +3791,30 @@ function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
 
 function locationReviewDiagnosticRows(entry: TimeEntry, sites: SiteSummary[]): LocationReviewDiagnosticRow[] {
   const hasSubmittedSite = !isOfficeOnlyTimeEntry(entry);
+  const hasManualOfficeReview = hasManualLocationReview(entry);
   const originalSite = hasSubmittedSite ? findSiteSummary(sites, entry.original_site_id ?? entry.site_id) : null;
-  const reviewedSite = findSiteSummary(sites, entry.site_id);
+  const reviewedSite = hasManualOfficeReview ? findSiteSummary(sites, entry.site_id) : null;
   const gpsSite = hasGpsSiteMatch(entry) ? findSiteSummary(sites, entry.gps_detected_site_id) : null;
   const rows: LocationReviewDiagnosticRow[] = [
     {
-      source: "Eingetragene Monteursbaustelle",
+      source: "Mobile Erfassung",
       siteName: hasSubmittedSite ? displayDiagnosticValue(originalTimeEntrySiteName(entry)) : "-",
       siteNumber: hasSubmittedSite ? displayDiagnosticValue(entry.original_site_id !== null ? entry.original_site_number : entry.site_number) : "-",
       location: siteLocationLabel(originalSite),
     },
     {
-      source: "Erkannte Fahrzeug-GPS-Baustelle",
+      source: "GPS-Erfassung",
       siteName: hasGpsSiteMatch(entry) ? displayDiagnosticValue(entry.gps_detected_site_name) : "-",
       siteNumber: hasGpsSiteMatch(entry) ? displayDiagnosticValue(entry.gps_detected_site_number) : "-",
       location: hasGpsSiteMatch(entry) ? siteLocationLabel(gpsSite) : "-",
     },
+    {
+      source: "Büroerfassung",
+      siteName: hasManualOfficeReview ? displayDiagnosticValue(timeEntrySiteName(entry)) : "-",
+      siteNumber: hasManualOfficeReview ? displayDiagnosticValue(entry.site_number) : "-",
+      location: hasManualOfficeReview ? siteLocationLabel(reviewedSite) : "-",
+    },
   ];
-  if (hasManualLocationReview(entry)) {
-    rows.push({
-      source: "manuell geprüfte Baustelle",
-      siteName: displayDiagnosticValue(timeEntrySiteName(entry)),
-      siteNumber: displayDiagnosticValue(entry.site_number),
-      location: siteLocationLabel(reviewedSite),
-      isManualReview: true,
-    });
-  }
   return rows;
 }
 
