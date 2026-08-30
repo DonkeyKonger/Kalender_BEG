@@ -61,8 +61,7 @@ test("the indicator distinguishes no overnight stays from an unrecorded status",
   assert.match(componentSource, /if \(status === null \|\| status === undefined\) \{[\s\S]*?className="time-review-overnight-indicator is-unset"[\s\S]*?time-review-overnight-marker[\s\S]*?–/);
   assert.match(componentSource, /presentation\.tone === "none"[\s\S]*?time-review-overnight-no-stay-mark[\s\S]*?<X size=\{10\} strokeWidth=\{3\} \/>/);
   assert.doesNotMatch(componentSource, /presentation\.marker/);
-  assert.match(componentSource, /time-review-overnight-payer-strip/);
-  assert.match(componentSource, /\{presentation\.badge\}/);
+  assert.match(componentSource, /presentation\.badge \? \([\s\S]*?time-review-overnight-payer-strip[\s\S]*?\{presentation\.badge\}[\s\S]*?\) : null/s);
   assert.doesNotMatch(componentSource, /time-review-overnight-badge/);
   assert.doesNotMatch(componentSource, /🏨|🛏|💶|🧾/);
 });
@@ -122,6 +121,7 @@ test("the desktop table reserves a compact type column after removing the repeat
   assert.match(styles, /\.time-review-overnight-bed\s*\{[^}]*position:\s*relative;[^}]*width:\s*var\(--time-review-overnight-symbol-width\);[^}]*height:\s*28px;[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /\.time-review-overnight-payer-strip\s*\{[^}]*position:\s*absolute;[^}]*right:\s*1px;[^}]*bottom:\s*1px;[^}]*left:\s*1px;[^}]*height:\s*12px;[^}]*border-top:\s*1px solid;[^}]*font-size:\s*0\.5rem;/s);
   assert.match(styles, /\.time-review-overnight-no-stay-mark\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*2;[^}]*top:\s*2px;[^}]*right:\s*2px;[^}]*width:\s*10px;[^}]*height:\s*10px;[^}]*color:\s*#b42318;/s);
+  assert.match(componentSource, /presentation\.tone === "none"[\s\S]*?time-review-overnight-no-stay-mark[\s\S]*?presentation\.badge \? \(/s);
   assert.match(styles, /\.time-review-overnight-indicator\.is-self-paid \.time-review-overnight-payer-strip\s*\{[^}]*border-color:\s*rgb\(79 125 88 \/ 36%\);[^}]*background:\s*rgb\(143 184 150 \/ 54%\);[^}]*color:\s*#14532d;/s);
   assert.match(styles, /\.time-review-overnight-indicator\.is-beg-paid \.time-review-overnight-payer-strip\s*\{[^}]*border-color:\s*rgb\(151 112 48 \/ 34%\);[^}]*background:\s*rgb\(215 180 115 \/ 55%\);[^}]*color:\s*#6b4f15;/s);
   assert.doesNotMatch(styles, /\.time-review-overnight-badge/);

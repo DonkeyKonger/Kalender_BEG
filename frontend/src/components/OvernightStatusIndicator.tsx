@@ -56,7 +56,9 @@ export function OvernightStatusIndicator({
             <X size={10} strokeWidth={3} />
           </span>
         )}
-        <span className="time-review-overnight-payer-strip">{presentation.badge}</span>
+        {presentation.badge ? (
+          <span className="time-review-overnight-payer-strip">{presentation.badge}</span>
+        ) : null}
       </span>
     </span>
   );

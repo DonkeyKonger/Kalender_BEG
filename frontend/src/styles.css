@@ -17977,23 +17977,37 @@ body.mobile-modal-scroll-locked {
   font-weight: 900;
 }
 
-.time-review-reviewed-indicator {
-  --time-review-reviewed-background: #def3e4;
-  --time-review-reviewed-color: #1c8b4a;
+.time-review-reviewed-indicator,
+.time-review-pending-indicator {
   display: inline-grid;
   width: 18px;
   height: 18px;
   place-items: center;
   border-radius: 999px;
-  background: var(--time-review-reviewed-background);
-  color: var(--time-review-reviewed-color);
   font-size: 0.67rem;
   font-weight: 950;
   line-height: 1;
 }
 
+.time-review-reviewed-indicator {
+  --time-review-reviewed-background: #def3e4;
+  --time-review-reviewed-color: #1c8b4a;
+  background: var(--time-review-reviewed-background);
+  color: var(--time-review-reviewed-color);
+}
+
+.time-review-pending-indicator {
+  border: 1px solid #d7e1ee;
+  background: #ffffff;
+  color: transparent;
+}
+
 .time-review-payroll-mark.time-review-reviewed-indicator {
   border: 0;
+}
+
+.time-review-payroll-mark.time-review-pending-indicator {
+  border: 1px solid #d7e1ee;
 }
 
 .time-review-payroll-mark.is-reviewed {
@@ -19884,6 +19898,12 @@ body.mobile-modal-scroll-locked {
 
 .time-review-worker-detail-head .time-review-week-review-button .time-review-reviewed-indicator {
   pointer-events: none;
+}
+
+.time-review-worker-detail-head .time-review-week-review-button .time-review-reviewed-indicator.is-week-review {
+  width: 21px;
+  height: 21px;
+  font-size: 0.78rem;
 }
 
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed:hover,

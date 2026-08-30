@@ -2161,7 +2161,9 @@ export function TimeEntriesPage() {
                               void markSelectedReviewWeekReviewed();
                             }}
                           >
-                          <span className="time-review-reviewed-indicator" aria-hidden="true">✓</span>
+                          {selectedReviewWorker.isReviewed && (
+                            <span className="time-review-reviewed-indicator is-week-review" aria-hidden="true">✓</span>
+                          )}
                           </button>
                           {selectedReviewWorker.isReviewed && reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && reviewWeekStatusMenuPosition && typeof document !== "undefined" && createPortal(
                             <div
@@ -4251,14 +4253,17 @@ function renderPayrollReviewMark(
   const isReviewed = entry.payroll_reviewed_at !== null;
   return (
     <button
-      className={["time-review-payroll-mark", isReviewed ? "is-reviewed time-review-reviewed-indicator" : ""].filter(Boolean).join(" ")}
+      className={[
+        "time-review-payroll-mark",
+        isReviewed ? "is-reviewed time-review-reviewed-indicator" : "is-pending time-review-pending-indicator",
+      ].join(" ")}
       type="button"
       disabled={options.disabled}
       aria-label={isReviewed ? "Zeilenprüfung entfernen" : "Zeile als geprüft markieren"}
       title={isReviewed ? "Zeilenprüfung entfernen" : "Zeile als geprüft markieren"}
       onClick={options.onToggle}
     >
-      {options.isBusy ? "..." : isReviewed ? "✓" : "-"}
+      {options.isBusy ? "..." : isReviewed ? "✓" : null}
     </button>
   );
 }
