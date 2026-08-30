@@ -17532,6 +17532,12 @@ body.mobile-modal-scroll-locked {
   text-align: center;
 }
 
+.time-review-week-check-head > .time-review-column-work-time-start,
+.time-review-week-check-head > .time-review-column-status-start {
+  justify-self: start;
+  text-align: left;
+}
+
 .time-review-column-day {
   justify-self: start;
   margin-left: -38px;
@@ -17606,6 +17612,10 @@ body.mobile-modal-scroll-locked {
   background: #fbfcfe;
 }
 
+.time-review-overnight-indicator.is-unset .time-review-overnight-marker {
+  color: #94a3b8;
+}
+
 .time-review-overnight-bed {
   position: relative;
   display: inline-grid;
@@ -17634,6 +17644,22 @@ body.mobile-modal-scroll-locked {
   font-weight: 950;
   letter-spacing: 0;
   line-height: 1;
+}
+
+.time-review-overnight-no-stay-mark {
+  position: absolute;
+  z-index: 2;
+  top: 2px;
+  right: 2px;
+  display: inline-grid;
+  width: 10px;
+  height: 10px;
+  place-items: center;
+  color: #b42318;
+}
+
+.time-review-overnight-no-stay-mark svg {
+  display: block;
 }
 
 .time-review-overnight-indicator.is-self-paid .time-review-overnight-payer-strip {
@@ -17929,9 +17955,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-payroll-mark.is-reviewed {
-  border-color: transparent;
-  background: transparent;
-  color: #166534;
+  border-color: #2f855a;
+  background: #2f855a;
+  color: #ffffff;
 }
 
 .time-review-payroll-mark.is-empty,
@@ -17955,7 +17981,8 @@ body.mobile-modal-scroll-locked {
 
 .time-review-payroll-mark.is-reviewed:not(:disabled):hover,
 .time-review-payroll-mark.is-reviewed:not(:disabled):focus-visible {
-  background: #f8fbff;
+  border-color: #276f4b;
+  background: #276f4b;
 }
 
 .time-review-payroll-corrected-time {
@@ -19582,7 +19609,10 @@ body.mobile-modal-scroll-locked {
   font-weight: 850;
 }
 
-.time-review-queue-columns span:nth-child(2),
+.time-review-queue-columns span:nth-child(2) {
+  text-align: left;
+}
+
 .time-review-queue-columns span:nth-child(3) {
   text-align: center;
 }
@@ -19625,7 +19655,7 @@ body.mobile-modal-scroll-locked {
   color: #42526a;
   font-size: 0.7rem;
   font-weight: 800;
-  text-align: center;
+  text-align: left;
   white-space: nowrap;
 }
 
@@ -19968,6 +19998,18 @@ body.mobile-modal-scroll-locked {
   border-color: #d8e0ea;
   background: #f8fafc;
   color: #718096;
+}
+
+.time-review-week-check-row .time-review-check-mark.is-ok {
+  border-color: transparent;
+  background: transparent;
+}
+
+.time-review-week-check-row .time-review-check-mark.is-ok.is-clickable:hover,
+.time-review-week-check-row .time-review-check-mark.is-ok.is-clickable:focus-visible {
+  border-color: transparent;
+  background: transparent;
+  outline-color: #7fbf91;
 }
 
 /* Keep the active payroll-review workspace rectilinear without flattening shared controls elsewhere. */

@@ -1,4 +1,4 @@
-import { BedDouble } from "lucide-react";
+import { BedDouble, X } from "lucide-react";
 
 import { getOvernightStatusPresentation } from "../lib/overnightStatus";
 import type { OvernightStatus } from "../types/timeEntry";
@@ -29,14 +29,16 @@ export function OvernightStatusIndicator({
     );
   }
 
-  if (presentation.tone === "none") {
+  if (status === null || status === undefined) {
     return (
       <span
         aria-label={label}
-        className={`time-review-overnight-indicator is-${presentation.tone}`}
+        className="time-review-overnight-indicator is-unset"
         role="img"
         title={label}
-      />
+      >
+        <span className="time-review-overnight-marker" aria-hidden="true">–</span>
+      </span>
     );
   }
 
@@ -49,6 +51,11 @@ export function OvernightStatusIndicator({
     >
       <span className="time-review-overnight-bed" aria-hidden="true">
         <BedDouble size={17} strokeWidth={2.25} />
+        {presentation.tone === "none" && (
+          <span className="time-review-overnight-no-stay-mark">
+            <X size={10} strokeWidth={3} />
+          </span>
+        )}
         <span className="time-review-overnight-payer-strip">{presentation.badge}</span>
       </span>
     </span>

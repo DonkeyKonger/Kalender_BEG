@@ -52,13 +52,14 @@ test("payroll overnight states keep their payer badge and accessible meaning", (
 });
 
 
-test("the indicator keeps payer text inside the bed square while no overnight stays visually empty", () => {
-  assert.match(componentSource, /import \{ BedDouble \} from "lucide-react"/);
+test("the indicator distinguishes no overnight stays from an unrecorded status", () => {
+  assert.match(componentSource, /import \{ BedDouble, X \} from "lucide-react"/);
   assert.match(componentSource, /aria-label=\{label\}/);
   assert.match(componentSource, /title=\{label\}/);
   assert.match(componentSource, /role="img"/);
   assert.match(componentSource, /time-review-overnight-bed/);
-  assert.match(componentSource, /if \(presentation\.tone === "none"\) \{[\s\S]*?className=\{`time-review-overnight-indicator is-\$\{presentation\.tone\}`\}[\s\S]*?\/>/);
+  assert.match(componentSource, /if \(status === null \|\| status === undefined\) \{[\s\S]*?className="time-review-overnight-indicator is-unset"[\s\S]*?time-review-overnight-marker[\s\S]*?–/);
+  assert.match(componentSource, /presentation\.tone === "none"[\s\S]*?time-review-overnight-no-stay-mark[\s\S]*?<X size=\{10\} strokeWidth=\{3\} \/>/);
   assert.doesNotMatch(componentSource, /presentation\.marker/);
   assert.match(componentSource, /time-review-overnight-payer-strip/);
   assert.match(componentSource, /\{presentation\.badge\}/);
@@ -76,7 +77,7 @@ test("the day header shows one overnight editor and time rows contain no overnig
   assert.ok(tableEnd > tableStart);
   assert.match(
     tableSource,
-    /<span role="columnheader" aria-label="Baustelle" title="Baustelle">[\s\S]*?<span className="time-review-column-label-full">Baustelle<\/span>[\s\S]*?<span role="columnheader" aria-label="Beginn" title="Beginn">/,
+    /<span role="columnheader" aria-label="Baustelle" title="Baustelle">[\s\S]*?<span className="time-review-column-label-full">Baustelle<\/span>[\s\S]*?<span className="time-review-column-work-time-start" role="columnheader" aria-label="Beginn" title="Beginn">/,
   );
   assert.doesNotMatch(tableSource, /aria-label="Übernachtung" title="Übernachtung"/);
   assert.match(tableSource, /<PayrollOvernightStatusControl/);
@@ -120,6 +121,7 @@ test("the desktop table reserves a compact type column after removing the repeat
   assert.match(styles, /\.time-review-overnight-bed\s*\{[\s\S]*?border-radius:\s*2px/);
   assert.match(styles, /\.time-review-overnight-bed\s*\{[^}]*position:\s*relative;[^}]*width:\s*var\(--time-review-overnight-symbol-width\);[^}]*height:\s*28px;[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /\.time-review-overnight-payer-strip\s*\{[^}]*position:\s*absolute;[^}]*right:\s*1px;[^}]*bottom:\s*1px;[^}]*left:\s*1px;[^}]*height:\s*12px;[^}]*border-top:\s*1px solid;[^}]*font-size:\s*0\.5rem;/s);
+  assert.match(styles, /\.time-review-overnight-no-stay-mark\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*2;[^}]*top:\s*2px;[^}]*right:\s*2px;[^}]*width:\s*10px;[^}]*height:\s*10px;[^}]*color:\s*#b42318;/s);
   assert.match(styles, /\.time-review-overnight-indicator\.is-self-paid \.time-review-overnight-payer-strip\s*\{[^}]*border-color:\s*rgb\(79 125 88 \/ 36%\);[^}]*background:\s*rgb\(143 184 150 \/ 54%\);[^}]*color:\s*#14532d;/s);
   assert.match(styles, /\.time-review-overnight-indicator\.is-beg-paid \.time-review-overnight-payer-strip\s*\{[^}]*border-color:\s*rgb\(151 112 48 \/ 34%\);[^}]*background:\s*rgb\(215 180 115 \/ 55%\);[^}]*color:\s*#6b4f15;/s);
   assert.doesNotMatch(styles, /\.time-review-overnight-badge/);
@@ -136,6 +138,7 @@ test("all payroll overnight states share one axis and align in the day header", 
     /\.time-review-overnight-indicator\s*\{[^}]*width:\s*var\(--time-review-overnight-status-width\);[^}]*height:\s*28px;[^}]*align-items:\s*flex-end;[^}]*justify-content:\s*flex-start/s,
   );
   assert.match(styles, /\.time-review-overnight-marker\s*\{[^}]*width:\s*var\(--time-review-overnight-symbol-width\);[^}]*height:\s*28px;[^}]*flex:\s*0 0 var\(--time-review-overnight-symbol-width\)/s);
+  assert.match(styles, /\.time-review-overnight-indicator\.is-unset \.time-review-overnight-marker\s*\{[^}]*color:\s*#94a3b8;/s);
   assert.match(styles, /\.time-review-overnight-bed\s*\{[^}]*width:\s*var\(--time-review-overnight-symbol-width\);[^}]*height:\s*28px;[^}]*flex:\s*0 0 var\(--time-review-overnight-symbol-width\)/s);
   assert.match(styles, /\.time-review-overnight-payer-strip\s*\{[^}]*right:\s*1px;[^}]*bottom:\s*1px;[^}]*left:\s*1px;[^}]*height:\s*12px;/s);
   assert.match(styles, /\.time-review-overnight-indicator\.is-conflict \.time-review-overnight-marker\s*\{[^}]*background:\s*#fff4d6/s);

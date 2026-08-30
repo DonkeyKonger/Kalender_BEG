@@ -26,9 +26,10 @@ test("payroll review uses the requested master-detail queue with consolidated ac
 
 test("queue hours header and values use the same border-box grid axis", () => {
   assert.match(styles, /\.time-review-queue-columns,[\s\S]*?\.time-review-queue-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 82px 42px;[^}]*gap:\s*8px;/s);
-  assert.match(styles, /\.time-review-queue-columns span:nth-child\(2\),[\s\S]*?\.time-review-queue-columns span:nth-child\(3\)\s*\{[^}]*text-align:\s*center;/s);
+  assert.match(styles, /\.time-review-queue-columns span:nth-child\(2\)\s*\{[^}]*text-align:\s*left;/s);
+  assert.match(styles, /\.time-review-queue-columns span:nth-child\(3\)\s*\{[^}]*text-align:\s*center;/s);
   assert.match(styles, /\.time-review-queue-row\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;[^}]*padding:\s*7px 12px;/s);
-  assert.match(styles, /\.time-review-queue-hours\s*\{[^}]*text-align:\s*center;/s);
+  assert.match(styles, /\.time-review-queue-hours\s*\{[^}]*text-align:\s*left;/s);
 });
 
 test("review week navigation fills the shared queue width with four complete cards", () => {
@@ -292,13 +293,24 @@ test("payroll header aligns its group, day, and type labels with their existing 
 
   assert.match(tableSource, /className="time-review-column-day" role="columnheader" aria-label="Tag" title="Tag"/);
   assert.match(tableSource, /className="time-review-column-type" role="columnheader" aria-label="Eintragstyp" title="Eintragstyp"/);
+  assert.match(tableSource, /className="time-review-column-work-time-start" role="columnheader" aria-label="Beginn" title="Beginn"[\s\S]*?time-review-column-label-short" aria-hidden="true">MA/);
+  assert.match(tableSource, /className="time-review-column-status-start" role="columnheader" aria-label="Ort" title="Ort"[\s\S]*?time-review-column-label-short" aria-hidden="true">O/);
   assert.match(styles, /\.time-review-column-day\s*\{[^}]*justify-self:\s*start;[^}]*margin-left:\s*-38px;/s);
   assert.match(styles, /\.time-review-column-group\.is-order\s*\{[^}]*grid-column:\s*2 \/ 5;[^}]*justify-self:\s*start;[^}]*margin-left:\s*-38px;/s);
   assert.match(styles, /\.time-review-column-group\.is-work-time\s*\{[^}]*grid-column:\s*5 \/ 9;[^}]*justify-self:\s*start;/s);
   assert.match(styles, /\.time-review-column-group\.is-status\s*\{[^}]*grid-column:\s*9 \/ 12;[^}]*justify-self:\s*start;/s);
+  assert.match(styles, /\.time-review-week-check-head > \.time-review-column-work-time-start,[\s\S]*?\.time-review-week-check-head > \.time-review-column-status-start\s*\{[^}]*justify-self:\s*start;[^}]*text-align:\s*left;/s);
   assert.match(styles, /\.time-review-day-group-label\s*\{[^}]*grid-column:\s*1 \/ 10;/s);
   assert.match(styles, /\.time-review-column-type\s*\{[^}]*justify-self:\s*center;[^}]*text-align:\s*center;/s);
   assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-review-column-day\s*\{[^}]*margin-left:\s*-34px;[\s\S]*?\.time-review-column-group\.is-order\s*\{[^}]*margin-left:\s*-34px;/s);
+});
+
+test("payroll queue hours and reviewed-state marks align with their intended columns", () => {
+  assert.match(styles, /\.time-review-queue-columns span:nth-child\(2\)\s*\{[^}]*text-align:\s*left;/s);
+  assert.match(styles, /\.time-review-queue-columns span:nth-child\(3\)\s*\{[^}]*text-align:\s*center;/s);
+  assert.match(styles, /\.time-review-week-check-row \.time-review-check-mark\.is-ok\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.time-review-payroll-mark\.is-reviewed\s*\{[^}]*border-color:\s*#2f855a;[^}]*background:\s*#2f855a;[^}]*color:\s*#ffffff;/s);
+  assert.match(styles, /\.time-review-payroll-mark\.is-reviewed:not\(:disabled\):hover,[\s\S]*?\.time-review-payroll-mark\.is-reviewed:not\(:disabled\):focus-visible\s*\{[^}]*border-color:\s*#276f4b;[^}]*background:\s*#276f4b;/s);
 });
 
 test("payroll table adds compact semantic groups without changing its detailed columns", () => {
