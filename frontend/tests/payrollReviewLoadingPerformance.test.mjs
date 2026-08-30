@@ -20,3 +20,10 @@ test("Auswertung lädt keine ungenutzte offene Stundenprüfungs-Queue", () => {
   const reviewLoadEffect = pageSource.slice(Math.max(0, reviewLoadStart - 650), reviewLoadStart + 180);
   assert.match(reviewLoadEffect, /activeTimeSubtab !== "review"/);
 });
+
+test("Baustellen-Auswertung lädt weder Monatsdetails mit GPS noch Abwesenheiten", () => {
+  assert.match(pageSource, /if \(activeTimeSubtab !== "evaluation" \|\| activeEvaluationSubtab !== "workers"\) \{\s*return;/);
+  assert.match(pageSource, /const needsDetailedEntries = activeTimeSubtab === "review"[\s\S]*?activeEvaluationSubtab === "workers"/s);
+  assert.match(pageSource, /activeEvaluationSubtab !== "sites"[\s\S]*?api\.payrollSiteCockpit\(/s);
+  assert.match(apiSource, /payrollSiteCockpit[\s\S]*?\/time-entries\/payroll-site-cockpit\?/s);
+});

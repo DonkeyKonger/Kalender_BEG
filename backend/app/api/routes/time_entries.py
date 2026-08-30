@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_business_page, require_office_page
@@ -8,6 +8,10 @@ from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
+from app.schemas.payroll_site_cockpit import (
+    PayrollSiteCockpitHistoryRead,
+    PayrollSiteCockpitRead,
+)
 from app.schemas.time_entry import (
     TimeEntryCorrection,
     TimeEntryCreate,
@@ -29,6 +33,7 @@ from app.schemas.time_entry import (
 )
 from app.services.gps_service import GpsPresenceEvaluation, GpsPresenceService, GpsSiteStay
 from app.services.person_hours_account_service import PersonHoursAccountService
+from app.services.payroll_site_cockpit_service import PayrollSiteCockpitService
 from app.services.time_entry_service import TimeEntryService
 
 router = APIRouter(prefix="/time-entries", tags=["time-entries"])
@@ -43,6 +48,36 @@ CAN_WRITE = require_office_page(
     roles=(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.MONTEUR),
 )
 CAN_REVIEW = require_business_page("payroll")
+
+
+@router.get("/payroll-site-cockpit", response_model=PayrollSiteCockpitRead)
+def get_payroll_site_cockpit(
+    response: Response,
+    date_from: date,
+    date_to: date,
+    _current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> PayrollSiteCockpitRead:
+    response.headers["Cache-Control"] = "no-store"
+    return PayrollSiteCockpitService(db).get_cockpit(
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get(
+    "/payroll-site-cockpit/{site_id}/history",
+    response_model=PayrollSiteCockpitHistoryRead,
+)
+def get_payroll_site_cockpit_history(
+    site_id: int,
+    response: Response,
+    date_to: date,
+    _current_user: User = Depends(CAN_REVIEW),
+    db: Session = Depends(get_db),
+) -> PayrollSiteCockpitHistoryRead:
+    response.headers["Cache-Control"] = "no-store"
+    return PayrollSiteCockpitService(db).get_history(site_id=site_id, date_to=date_to)
 
 
 @router.get("/payroll-week", response_model=TimeEntryPayrollWeekRead)

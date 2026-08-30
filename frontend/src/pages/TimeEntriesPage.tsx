@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
 import { DashboardNotePicker } from "../components/DashboardNotePickers";
+import { PayrollSiteCockpit } from "../components/PayrollSiteCockpit";
 import { PayrollOvernightStatusControl } from "../components/PayrollOvernightStatusControl";
 import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
@@ -12,10 +13,9 @@ import {
   buildCalendarMonthOptions,
   calendarMonthRange,
   currentCalendarMonth,
-  formatCalendarMonth,
   type CalendarMonthSelection,
 } from "../lib/calendarMonth";
-import { calculatePayrollEvaluationTotals } from "../lib/payrollEvaluation";
+import { resolvePayrollSiteActionItems, resolvePayrollSiteHistoryView, selectPayrollSiteId } from "../lib/payrollSiteCockpit";
 import {
   applyPayrollTimeBasisChange,
   buildPayrollManualEntryPayload,
@@ -53,7 +53,7 @@ import type { Absence } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { OvernightStatus, TimeEntry, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview } from "../types/timeEntry";
+import type { OvernightStatus, PayrollSiteCockpit as PayrollSiteCockpitData, PayrollSiteHistory, TimeEntry, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview } from "../types/timeEntry";
 
 type TimeSubtab = "review" | "evaluation";
 type EvaluationSubtab = "workers" | "sites";
@@ -173,22 +173,6 @@ type TimeReviewPerfState = {
   startedAt: number;
   to: CalendarWeekSelection;
 };
-type FinalHoursEntry = {
-  id: number;
-  workDate: string;
-  personName: string;
-  siteLabel: string;
-  siteKey: string;
-  finalMinutes: number | null;
-  statusLabel: string;
-  basisLabel: string;
-  originalMinutes: number | null;
-  gpsMinutes: number | null;
-  deviationMinutes: number | null;
-  note: string;
-  reviewedAt: string | null;
-  reviewedByUserId: number | null;
-};
 const GPS_TIME_TOLERANCE_MINUTES = 15;
 const GPS_NOT_CHECKABLE_NOTICE = "GPS nicht eindeutig prüfbar";
 const TIME_REVIEW_PERF_STORAGE_KEY = "beg_time_review_perf";
@@ -239,6 +223,16 @@ export function TimeEntriesPage() {
   const [selectedEvaluationMonth, setSelectedEvaluationMonth] = useState<CalendarMonthSelection>(() => currentCalendarMonth());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [selectedEvaluationPersonId, setSelectedEvaluationPersonId] = useState<number | null>(null);
+  const [payrollSiteCockpit, setPayrollSiteCockpit] = useState<PayrollSiteCockpitData | null>(null);
+  const [payrollSiteCockpitError, setPayrollSiteCockpitError] = useState<string | null>(null);
+  const [isLoadingPayrollSiteCockpit, setIsLoadingPayrollSiteCockpit] = useState(false);
+  const [payrollSiteCockpitRefreshKey, setPayrollSiteCockpitRefreshKey] = useState(0);
+  const [selectedEvaluationSiteId, setSelectedEvaluationSiteId] = useState<number | null>(null);
+  const [payrollSiteHistory, setPayrollSiteHistory] = useState<PayrollSiteHistory | null>(null);
+  const [payrollSiteHistoryError, setPayrollSiteHistoryError] = useState<string | null>(null);
+  const [isLoadingPayrollSiteHistory, setIsLoadingPayrollSiteHistory] = useState(false);
+  const [payrollSiteHistoryRequestKey, setPayrollSiteHistoryRequestKey] = useState<string | null>(null);
+  const [payrollSiteHistoryRefreshKey, setPayrollSiteHistoryRefreshKey] = useState(0);
   const [expandedEvaluationDayKeys, setExpandedEvaluationDayKeys] = useState<Set<string>>(() => new Set());
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [timeReviewDialogMode, setTimeReviewDialogMode] = useState<TimeReviewDialogMode | null>(null);
@@ -465,6 +459,19 @@ export function TimeEntriesPage() {
     [selectedEvaluationMonth],
   );
   const evaluationRangeKey = reviewDataRangeKey(evaluationMonthRange);
+  const isPayrollSiteCockpitReady = payrollSiteCockpit !== null
+    && reviewDataRangeKey({ start: payrollSiteCockpit.date_from, end: payrollSiteCockpit.date_to }) === evaluationRangeKey;
+  const payrollSiteHistorySelectionKey = isPayrollSiteCockpitReady && selectedEvaluationSiteId !== null
+    ? `${selectedEvaluationSiteId}:${evaluationMonthRange.end}`
+    : null;
+  const payrollSiteHistoryView = resolvePayrollSiteHistoryView({
+    error: payrollSiteHistoryError,
+    history: payrollSiteHistory,
+    isLoading: isLoadingPayrollSiteHistory,
+    requestKey: payrollSiteHistoryRequestKey,
+    selectedRequestKey: payrollSiteHistorySelectionKey,
+    selectedSiteId: selectedEvaluationSiteId,
+  });
   const reviewDataRange = activeTimeSubtab === "evaluation" ? evaluationMonthRange : reviewWeekRange;
   const reviewWeekOptions = useMemo(
     () => buildCalendarWeekOptions(currentReviewWeek),
@@ -515,7 +522,6 @@ export function TimeEntriesPage() {
     [siteOptions],
   );
   const payrollManualTimeCalculation = calculatePayrollTime(payrollCorrectionForm);
-  const evaluationTimeReviewIssues = useMemo(() => buildTimeReviewIssues(reviewAllEntries), [reviewAllEntries]);
   const reviewedWorkerIds = useMemo(
     () => new Set(reviewWeeklyReviews.filter(isWeeklyReviewReviewed).map((review) => review.person_id)),
     [reviewWeeklyReviews],
@@ -587,12 +593,11 @@ export function TimeEntriesPage() {
     [payrollDatePicker, selectedReviewWeekDays],
   );
   const isEvaluationDataReady = activeTimeSubtab === "evaluation"
+    && activeEvaluationSubtab === "workers"
     && reviewAllEntriesRangeKey === evaluationRangeKey
     && reviewAbsencesRangeKey === evaluationRangeKey;
   const evaluationEntries = isEvaluationDataReady ? reviewAllEntries : EMPTY_REVIEW_ENTRIES;
   const evaluationAbsences = isEvaluationDataReady ? reviewAbsences : EMPTY_REVIEW_ABSENCES;
-  const finalHoursEntries = useMemo(() => buildFinalHoursEntries(evaluationEntries), [evaluationEntries]);
-  const finalHoursTotals = useMemo(() => calculatePayrollEvaluationTotals(finalHoursEntries), [finalHoursEntries]);
   const evaluationReviewedWorkerIds = useMemo(
     () => reviewedWorkersWithAllEntriesReviewed(evaluationEntries),
     [evaluationEntries],
@@ -1045,8 +1050,11 @@ export function TimeEntriesPage() {
   }, [activeTimeSubtab, selectedEvaluationMonth.month, selectedEvaluationMonth.year]);
 
   useEffect(() => {
-    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
+    const needsDetailedEntries = activeTimeSubtab === "review"
+      || (activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers");
+    if (!needsDetailedEntries) {
       setReviewAbsences([]);
+      setReviewAbsencesRangeKey(null);
       return;
     }
 
@@ -1082,7 +1090,7 @@ export function TimeEntriesPage() {
     return () => {
       ignore = true;
     };
-  }, [activeTimeSubtab, reviewDataRange]);
+  }, [activeEvaluationSubtab, activeTimeSubtab, reviewDataRange]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review") {
@@ -1207,7 +1215,7 @@ export function TimeEntriesPage() {
   }, [activeTimeSubtab, canManageTimeEntries, payrollReviewWorkerIds.length, reviewWeekOptions]);
 
   useEffect(() => {
-    if (activeTimeSubtab !== "evaluation") {
+    if (activeTimeSubtab !== "evaluation" || activeEvaluationSubtab !== "workers") {
       return;
     }
 
@@ -1252,7 +1260,104 @@ export function TimeEntriesPage() {
     return () => {
       ignore = true;
     };
-  }, [activeTimeSubtab, reviewDataRange]);
+  }, [activeEvaluationSubtab, activeTimeSubtab, reviewDataRange]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "evaluation" || activeEvaluationSubtab !== "sites") {
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsLoadingPayrollSiteCockpit(true);
+    setPayrollSiteCockpitError(null);
+    setPayrollSiteCockpit(null);
+    api.payrollSiteCockpit({
+      dateFrom: evaluationMonthRange.start,
+      dateTo: evaluationMonthRange.end,
+      signal: controller.signal,
+    })
+      .then((cockpit) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setPayrollSiteCockpit(cockpit);
+        setSelectedEvaluationSiteId((currentSiteId) => selectPayrollSiteId(
+          currentSiteId,
+          cockpit.sites,
+          resolvePayrollSiteActionItems(cockpit),
+        ));
+      })
+      .catch((requestError) => {
+        if (!controller.signal.aborted) {
+          setPayrollSiteCockpitError(readApiError(requestError, "Baustellen-Cockpit konnte nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsLoadingPayrollSiteCockpit(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [
+    activeEvaluationSubtab,
+    activeTimeSubtab,
+    evaluationMonthRange.end,
+    evaluationMonthRange.start,
+    payrollSiteCockpitRefreshKey,
+  ]);
+
+  useEffect(() => {
+    if (
+      activeTimeSubtab !== "evaluation"
+      || activeEvaluationSubtab !== "sites"
+      || !isPayrollSiteCockpitReady
+      || selectedEvaluationSiteId === null
+      || !payrollSiteCockpit?.sites.some((site) => site.site_id === selectedEvaluationSiteId)
+    ) {
+      setPayrollSiteHistory(null);
+      setPayrollSiteHistoryError(null);
+      setIsLoadingPayrollSiteHistory(false);
+      setPayrollSiteHistoryRequestKey(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    setPayrollSiteHistoryRequestKey(`${selectedEvaluationSiteId}:${evaluationMonthRange.end}`);
+    setPayrollSiteHistory(null);
+    setPayrollSiteHistoryError(null);
+    setIsLoadingPayrollSiteHistory(true);
+    api.payrollSiteHistory({
+      siteId: selectedEvaluationSiteId,
+      dateTo: evaluationMonthRange.end,
+      signal: controller.signal,
+    })
+      .then((history) => {
+        if (!controller.signal.aborted) {
+          setPayrollSiteHistory(history);
+        }
+      })
+      .catch((requestError) => {
+        if (!controller.signal.aborted) {
+          setPayrollSiteHistoryError(readApiError(requestError, "Stundenverlauf konnte nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsLoadingPayrollSiteHistory(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [
+    activeEvaluationSubtab,
+    activeTimeSubtab,
+    evaluationMonthRange.end,
+    isPayrollSiteCockpitReady,
+    payrollSiteCockpit,
+    payrollSiteHistoryRefreshKey,
+    selectedEvaluationSiteId,
+  ]);
 
   function applyUpdatedTimeEntry(updatedEntry: TimeEntry): void {
     setReviewEntries((current) => replaceTimeEntryInList(current, updatedEntry));
@@ -2562,24 +2667,18 @@ export function TimeEntriesPage() {
               )}
             </>
           ) : (
-          <div className="time-final-hours-panel">
-            <div className="time-entries-toolbar">
-              <div>
-                <h2>Auswertung</h2>
-                <p>{formatCalendarMonth(selectedEvaluationMonth)} · {formatRangeLabel(evaluationMonthRange.start, evaluationMonthRange.end)}</p>
-              </div>
-            </div>
-            {!isEvaluationDataReady ? <div className="time-evaluation-loading-state" role="status">Auswertung wird geladen...</div> : <>
-            {reviewAllEntriesError && <p className="time-table-note">{reviewAllEntriesError}</p>}
-            <div className="time-summary-strip">
-              <div><span>Gesamtsumme</span><strong>{formatMinutes(finalHoursTotals.totalMinutes)}</strong></div>
-              <div><span>Baustellen</span><strong>{finalHoursTotals.bySite.length}</strong></div>
-            </div>
-            <div className="time-final-summary-grid">
-              <FinalSummaryList title="Summe je Baustelle" rows={finalHoursTotals.bySite} />
-            </div>
-            </>}
-          </div>
+            <PayrollSiteCockpit
+              data={isPayrollSiteCockpitReady ? payrollSiteCockpit : null}
+              error={payrollSiteCockpitError}
+              history={payrollSiteHistoryView.history}
+              historyError={payrollSiteHistoryView.error}
+              isHistoryLoading={payrollSiteHistoryView.isLoading}
+              isLoading={isLoadingPayrollSiteCockpit || (!isPayrollSiteCockpitReady && payrollSiteCockpitError === null)}
+              onRetry={() => setPayrollSiteCockpitRefreshKey((current) => current + 1)}
+              onRetryHistory={() => setPayrollSiteHistoryRefreshKey((current) => current + 1)}
+              onSelectSite={setSelectedEvaluationSiteId}
+              selectedSiteId={selectedEvaluationSiteId}
+            />
           )}
         </div>
       )}
@@ -3194,20 +3293,6 @@ function formatPerfMs(value: number): string {
   return `${Math.round(value)} ms`;
 }
 
-function FinalSummaryList({ title, rows }: { title: string; rows: { label: string; minutes: number }[] }) {
-  return (
-    <div className="time-final-summary-list">
-      <h3>{title}</h3>
-      {rows.length ? rows.map((row) => (
-        <div key={row.label}>
-          <span>{row.label}</span>
-          <strong>{formatMinutes(row.minutes)}</strong>
-        </div>
-      )) : <p>Keine Summen vorhanden.</p>}
-    </div>
-  );
-}
-
 function PayrollReviewTableHeaders() {
   return (
     <>
@@ -3612,18 +3697,6 @@ function parseDateInput(value: string): Date {
 
 function formatWeekdayLong(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { weekday: "long" }).format(parseDateInput(value));
-}
-
-function buildTimeReviewIssues(entries: TimeEntry[]): TimeReviewIssue[] {
-  return entries
-    .map((entry) => timeReviewIssue(entry))
-    .filter((issue): issue is TimeReviewIssue => issue !== null)
-    .sort((left, right) => (
-      left.priority - right.priority
-      || left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
-      || left.workDate.localeCompare(right.workDate)
-      || left.id - right.id
-    ));
 }
 
 function replaceTimeEntryInList(entries: TimeEntry[], updatedEntry: TimeEntry): TimeEntry[] {
@@ -4623,105 +4696,6 @@ function downloadBlobFile(blob: Blob, filename: string): void {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-}
-
-function buildFinalHoursEntries(entries: TimeEntry[]): FinalHoursEntry[] {
-  return entries
-    .map((entry) => {
-      const originalMinutes = entry.original_work_minutes ?? entry.work_minutes;
-      const gpsMinutes = entry.gps_work_minutes;
-      const finalMinutes = effectivePayrollWorkMinutes(entry);
-      return {
-        id: entry.id,
-        workDate: entry.work_date,
-        personName: entry.person_name,
-        siteLabel: timeEntrySiteLabel(entry),
-        siteKey: timeEntrySiteLabel(entry),
-        finalMinutes,
-        statusLabel: finalStatusLabel(entry),
-        basisLabel: finalBasisLabel(entry),
-        originalMinutes,
-        gpsMinutes,
-        deviationMinutes: gpsMinutes === null ? null : gpsMinutes - originalMinutes,
-        note: entry.note || finalNoteLabel(entry),
-        reviewedAt: entry.reviewed_at,
-        reviewedByUserId: entry.reviewed_by_user_id,
-      };
-    })
-    .sort((left, right) => (
-      left.workDate.localeCompare(right.workDate)
-      || left.personName.localeCompare(right.personName, "de", { sensitivity: "base" })
-      || left.id - right.id
-    ));
-}
-
-function finalStatusLabel(entry: TimeEntry): string {
-  if (entry.time_review_status === "open") {
-    if (isAutoPlausibleEntry(entry)) {
-      return "automatisch plausibel";
-    }
-    return "offen";
-  }
-  if (entry.time_review_status === "manually_approved") {
-    return "geprüft";
-  }
-  if (entry.time_review_status === "corrected") {
-    return "korrigiert";
-  }
-  if (entry.time_review_status === "not_verifiable") {
-    return "nicht prüfbar";
-  }
-  if (entry.time_review_status === "clarification") {
-    return "zur Klärung";
-  }
-  if (entry.time_review_status === "auto_closed_by_deadline") {
-    return "automatisch abgeschlossen";
-  }
-  return entry.time_review_status;
-}
-
-function finalBasisLabel(entry: TimeEntry): string {
-  if (hasPayrollTimeCorrection(entry)) {
-    return "Bürozeit geprüft";
-  }
-  if (entry.time_review_method === "accept_manual" || entry.time_review_method === "manual_confirmed") {
-    return "manuelle Zeit übernommen";
-  }
-  if (entry.time_review_method === "accept_gps") {
-    return "GPS-Zeit übernommen";
-  }
-  if (entry.time_review_method === "manual_correction") {
-    return "korrigiert";
-  }
-  if (entry.time_review_method === "assign_site") {
-    return "Baustelle zugeordnet";
-  }
-  if (entry.time_review_method === "mark_not_verifiable") {
-    return "nicht prüfbar markiert";
-  }
-  if (entry.time_review_method === "clarification") {
-    return "zur Klärung";
-  }
-  if (entry.time_review_method === "deadline") {
-    return "Monatsfrist";
-  }
-  if (isAutoPlausibleEntry(entry)) {
-    return "automatisch plausibel";
-  }
-  return "offen";
-}
-
-function finalNoteLabel(entry: TimeEntry): string {
-  if (!entry.site_id) {
-    return "Baustelle fehlt oder wurde noch nicht zugeordnet.";
-  }
-  if (entry.time_review_status === "clarification") {
-    return "Fall ist bewusst zur Klärung markiert.";
-  }
-  if (entry.time_review_status === "not_verifiable") {
-    return "GPS konnte nicht verlässlich geprüft werden.";
-  }
-  return "-";
 }
 
 function formatDecimalHours(minutes: number): string {

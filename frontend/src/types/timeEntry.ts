@@ -169,3 +169,74 @@ export type TimeEntryReviewWeek = {
   entries: TimeEntry[];
   open_entries: TimeEntry[];
 };
+
+export type PayrollSiteRiskLevel = "critical" | "warning" | "none" | "missing_data";
+export type PayrollSiteOfferBudgetBasis = "current_active_released_measurement_base";
+
+export type PayrollSiteCockpitTotals = {
+  offer_minutes: number | null;
+  actual_minutes: number;
+  forecast_minutes: number | null;
+  forecast_reason: string | null;
+  variance_minutes: number | null;
+  site_count: number;
+  budget_site_count: number;
+  forecast_site_count: number;
+};
+
+export type PayrollSiteCockpitSite = {
+  site_id: number;
+  site_number: string | null;
+  site_name: string;
+  offer_minutes: number | null;
+  actual_minutes: number;
+  forecast_minutes: number | null;
+  forecast_reason: string | null;
+  variance_minutes: number | null;
+  utilization_percent: number | null;
+  risk_level: PayrollSiteRiskLevel;
+  risk_reason: string | null;
+};
+
+export type PayrollSiteActionItem = {
+  rank: number;
+  site_id: number;
+  site_number: string | null;
+  site_name: string;
+  risk_level: Exclude<PayrollSiteRiskLevel, "none">;
+  reason: string;
+  variance_minutes: number | null;
+  utilization_percent: number | null;
+};
+
+export type PayrollSiteCockpit = {
+  date_from: string;
+  date_to: string;
+  effective_as_of: string;
+  offer_budget_basis: PayrollSiteOfferBudgetBasis;
+  offer_budget_as_of: string;
+  totals: PayrollSiteCockpitTotals;
+  sites: PayrollSiteCockpitSite[];
+  action_items: PayrollSiteActionItem[];
+};
+
+export type PayrollSiteHistoryPoint = {
+  date: string;
+  actual_minutes: number;
+  forecast_minutes: number | null;
+};
+
+export type PayrollSiteHistory = {
+  site_id: number;
+  site_number: string | null;
+  site_name: string;
+  date_from: string;
+  date_to: string;
+  effective_as_of: string;
+  offer_budget_basis: PayrollSiteOfferBudgetBasis;
+  offer_budget_as_of: string;
+  offer_minutes: number | null;
+  forecast_minutes: number | null;
+  forecast_reason: string | null;
+  points: PayrollSiteHistoryPoint[];
+};

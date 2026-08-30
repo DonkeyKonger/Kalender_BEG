@@ -82,7 +82,7 @@ test("Monteur-Untertab verwendet die gemeinsame Prüfwarteschlange mit Monatsdat
   assert.match(pageSource, /const \[activeEvaluationSubtab, setActiveEvaluationSubtab\] = useState<EvaluationSubtab>\("workers"\)/);
   assert.match(pageSource, /\["workers", "Monteure"\],[\s\S]*?\["sites", "Baustellen"\]/);
   assert.match(pageSource, /activeEvaluationSubtab === "workers" \? \([\s\S]*?<MonthlyPayrollWorkerWorkspace/s);
-  assert.match(pageSource, /\) : \(\s*<div className="time-final-hours-panel">/);
+  assert.match(pageSource, /\) : \(\s*<PayrollSiteCockpit/);
   assert.match(pageSource, /buildTimeReviewMonthDays\([\s\S]*?evaluationMonthRange\.start,[\s\S]*?evaluationMonthRange\.end/s);
   assert.match(pageSource, /function buildTimeReviewMonthDays\(/);
   assert.match(pageSource, /className="time-review-queue-list" role="listbox" aria-label="Monteure für die Monatsauswertung"/);
@@ -93,15 +93,15 @@ test("Monteur-Untertab verwendet die gemeinsame Prüfwarteschlange mit Monatsdat
   assert.match(pageSource, /activeTimeSubtab === "review" \|\| \(activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers"\)/);
 });
 
-test("Baustellen-Untertab zeigt nur baustellenbezogene Kennzahlen und Summen", () => {
-  const sitesStart = pageSource.indexOf(') : (\n          <div className="time-final-hours-panel">');
+test("Baustellen-Untertab verwendet das eigenständige aggregierte Forecast-Cockpit", () => {
+  const sitesStart = pageSource.indexOf(') : (\n            <PayrollSiteCockpit');
   const sitesEnd = pageSource.indexOf('\n          )}\n        </div>', sitesStart);
   const sitesWorkspace = pageSource.slice(sitesStart, sitesEnd);
 
   assert.ok(sitesStart >= 0);
   assert.ok(sitesEnd > sitesStart);
-  assert.match(sitesWorkspace, /Gesamtsumme[\s\S]*?Baustellen[\s\S]*?Summe je Baustelle/);
-  assert.doesNotMatch(sitesWorkspace, /Offene Prüffälle|<span>Monteure<\/span>|Summe je Monteur/);
+  assert.match(sitesWorkspace, /<PayrollSiteCockpit[\s\S]*?data=\{isPayrollSiteCockpitReady[\s\S]*?selectedSiteId=\{selectedEvaluationSiteId\}/);
+  assert.doesNotMatch(sitesWorkspace, /finalHoursTotals|Summe je Baustelle|includeGpsStatus/);
   assert.match(pageSource, /activeEvaluationSubtab === "workers" \? \([\s\S]*?<MonthlyPayrollWorkerWorkspace/s);
 });
 
