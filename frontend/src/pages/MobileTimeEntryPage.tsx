@@ -890,9 +890,9 @@ export function MobileTimeEntryPage() {
                           <span className="mobile-time-recent-copy">
                             <strong>{site.site_number || site.name}</strong>
                             <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
+                            <small>zuletzt {formatShortDate(site.lastPlannedDate)}</small>
                           </span>
                         </span>
-                        <small>zuletzt {formatShortDate(site.lastPlannedDate)}</small>
                       </button>
                     ))}
                   </div>

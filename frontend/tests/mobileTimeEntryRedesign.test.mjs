@@ -17,7 +17,7 @@ test("mobile time entry keeps the designed day-view information hierarchy", () =
   assert.doesNotMatch(pageSource.slice(quickActionStart, quickActionEnd), /ChevronRight/);
   assert.doesNotMatch(pageSource.slice(recentCardsStart, recentCardsEnd), /ChevronRight/);
   assert.match(pageSource, /className="mobile-time-entry-status"[\s\S]*?<Check/);
-  assert.match(pageSource, /className="mobile-time-recent-icon"[\s\S]*?<MapPin/);
+  assert.match(pageSource, /className="mobile-time-recent-icon"[\s\S]*?<MapPin[\s\S]*?className="mobile-time-recent-copy"[\s\S]*?<small>zuletzt/);
 });
 
 test("mobile time entry uses navy primary actions and compact accessible cards", () => {
@@ -27,6 +27,8 @@ test("mobile time entry uses navy primary actions and compact accessible cards",
   assert.match(styles, /\.mobile-time-recent-strip \{[^}]*overflow-x:\s*auto;/s);
   assert.match(styles, /\.mobile-time-entry-copy strong \{[^}]*overflow-wrap:\s*anywhere;/s);
   assert.match(styles, /\.mobile-time-picker-section\.is-secondary \.mobile-time-site-card strong \{[^}]*overflow-wrap:\s*anywhere;/s);
+  assert.match(styles, /\.mobile-time-picker-section\.is-secondary \.mobile-time-site-card \{[^}]*min-height:\s*112px;[^}]*align-content:\s*start;/s);
+  assert.match(styles, /\.mobile-time-recent-copy small \{[^}]*margin-top:\s*2px;/s);
   assert.match(styles, /\.mobile-time-manual-actions \.mobile-time-manual-card \{[^}]*min-height:\s*96px;[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\);/s);
   assert.doesNotMatch(styles, /\.mobile-time-(?:manual|recent)-chevron/);
 });

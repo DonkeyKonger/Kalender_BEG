@@ -8899,13 +8899,13 @@ body.mobile-modal-scroll-locked {
 .mobile-time-picker-section.is-secondary .mobile-time-site-card {
   min-width: 226px;
   max-width: 226px;
-  min-height: 158px;
-  align-content: space-between;
-  gap: 10px;
+  min-height: 112px;
+  align-content: start;
+  gap: 8px;
   border-color: #e1e7ef;
   border-radius: 16px;
   background: #ffffff;
-  padding: 14px;
+  padding: 12px;
   box-shadow: 0 5px 15px rgb(18 36 62 / 6%);
 }
 
@@ -8947,24 +8947,28 @@ body.mobile-modal-scroll-locked {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .mobile-time-recent-icon {
   display: inline-flex;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
+  border-radius: 12px;
   background: #e8f4ee;
   color: #378d5b;
 }
 
 .mobile-time-recent-copy {
   display: grid;
-  gap: 5px;
+  gap: 2px;
   min-width: 0;
+}
+
+.mobile-time-recent-copy small {
+  margin-top: 2px;
 }
 
 .mobile-time-picker-empty {
