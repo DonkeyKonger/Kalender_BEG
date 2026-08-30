@@ -789,7 +789,6 @@ export function MobileTimeEntryPage() {
                       <strong>Fahrtzeit</strong>
                       <span>erfassen</span>
                     </span>
-                    <ChevronRight className="mobile-time-manual-chevron" aria-hidden="true" size={21} />
                   </button>
                   <button
                     className="mobile-time-manual-card is-manual"
@@ -805,7 +804,6 @@ export function MobileTimeEntryPage() {
                       <strong>Manuell</strong>
                       <span>erfassen</span>
                     </span>
-                    <ChevronRight className="mobile-time-manual-chevron" aria-hidden="true" size={21} />
                   </button>
                 </div>
               </section>
@@ -893,7 +891,6 @@ export function MobileTimeEntryPage() {
                             <strong>{site.site_number || site.name}</strong>
                             <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
                           </span>
-                          <ChevronRight className="mobile-time-recent-chevron" aria-hidden="true" size={22} />
                         </span>
                         <small>zuletzt {formatShortDate(site.lastPlannedDate)}</small>
                       </button>
