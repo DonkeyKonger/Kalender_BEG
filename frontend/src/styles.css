@@ -17944,6 +17944,23 @@ body.mobile-modal-scroll-locked {
   overflow: visible;
 }
 
+.time-review-week-time-end {
+  position: relative;
+  overflow: visible;
+}
+
+.time-review-week-time-end::after {
+  position: absolute;
+  top: 50%;
+  right: -4px;
+  width: 1px;
+  height: 18px;
+  background: #dfe5ed;
+  content: "";
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
 .time-review-time-range-arrow {
   position: absolute;
   z-index: 1;

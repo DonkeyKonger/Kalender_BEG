@@ -365,9 +365,15 @@ test("payroll break values use the existing subdued secondary-time treatment", (
   const tableEnd = pageSource.indexOf("{payrollDatePicker &&", tableStart);
   const tableSource = pageSource.slice(tableStart, tableEnd);
 
-  assert.match(tableSource, /className="time-review-week-time time-review-week-time-start" role="cell">\{renderPayrollClock\(check\.entry, "start"\)\}[\s\S]*?className="time-review-week-time" role="cell">\{renderPayrollClock\(check\.entry, "end"\)\}<\/div>[\s\S]*?className="time-review-week-time time-review-week-break" role="cell">\{renderTimeReviewBreakMinutes\(check\.entry\)\}<\/div>[\s\S]*?className="time-review-week-time time-review-week-total"/s);
+  assert.match(tableSource, /className="time-review-week-time time-review-week-time-start" role="cell">\{renderPayrollClock\(check\.entry, "start"\)\}[\s\S]*?className="time-review-week-time time-review-week-time-end" role="cell">\{renderPayrollClock\(check\.entry, "end"\)\}<\/div>[\s\S]*?className="time-review-week-time time-review-week-break" role="cell">\{renderTimeReviewBreakMinutes\(check\.entry\)\}<\/div>[\s\S]*?className="time-review-week-time time-review-week-total"/s);
   assert.match(tableSource, /className="time-review-week-time time-review-week-break" role="cell">-<\/div>/);
   assert.match(styles, /\.time-review-week-break\s*\{[^}]*color:\s*#64748b;[^}]*font-size:\s*0\.7rem;[^}]*font-weight:\s*700;/s);
+});
+
+test("the start and end time range has a subtle separator before later time details", () => {
+  assert.match(pageSource, /className="time-review-week-time time-review-week-time-end" role="cell">\{renderPayrollClock\(check\.entry, "end"\)\}<\/div>/);
+  assert.match(styles, /\.time-review-week-time-end::after\s*\{[^}]*top:\s*50%;[^}]*right:\s*-4px;[^}]*width:\s*1px;[^}]*height:\s*18px;[^}]*background:\s*#dfe5ed;[^}]*pointer-events:\s*none;/s);
+  assert.match(styles, /\.time-review-time-range-arrow\s*\{[^}]*right:\s*-14px;/s);
 });
 
 test("payroll queue filters stay on one compact row until the viewport is truly narrow", () => {
