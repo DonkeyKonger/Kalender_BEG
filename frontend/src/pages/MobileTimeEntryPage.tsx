@@ -1,4 +1,4 @@
-import { ArrowLeft, BedDouble, BriefcaseBusiness, Building2, Car, Check, ChevronLeft, ChevronRight, Clock3, Coffee, Hotel, Pause, Pencil, ReceiptText } from "lucide-react";
+import { ArrowLeft, BedDouble, BriefcaseBusiness, Building2, CalendarDays, Car, Check, ChevronLeft, ChevronRight, Clock3, Coffee, Hotel, MapPin, Pause, Pencil, ReceiptText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -634,7 +634,11 @@ export function MobileTimeEntryPage() {
             <ArrowLeft aria-hidden="true" size={18} />
             <span>Monat</span>
           </button>
-          <strong>{formatMonth(visibleMonth)}</strong>
+          <button className="mobile-calendar-month-button" type="button" onClick={() => setActiveView("month")}>
+            <strong>{formatMonth(visibleMonth)}</strong>
+            <CalendarDays aria-hidden="true" size={22} />
+            <span className="sr-only">Monatsansicht öffnen</span>
+          </button>
         </header>
       )}
 
@@ -772,7 +776,7 @@ export function MobileTimeEntryPage() {
                 </div>
                 <div className="mobile-time-manual-actions">
                   <button
-                    className="mobile-time-manual-card"
+                    className="mobile-time-manual-card is-travel"
                     disabled={isSelectedWeekLocked}
                     title={isSelectedWeekLocked ? "Diese Woche wurde vom Büro geprüft." : "Fahrtzeit erfassen"}
                     type="button"
@@ -781,11 +785,14 @@ export function MobileTimeEntryPage() {
                     <span className="mobile-time-quick-icon" aria-hidden="true">
                       <Car size={21} />
                     </span>
-                    <strong>Fahrtzeit</strong>
-                    <span>erfassen</span>
+                    <span className="mobile-time-manual-copy">
+                      <strong>Fahrtzeit</strong>
+                      <span>erfassen</span>
+                    </span>
+                    <ChevronRight className="mobile-time-manual-chevron" aria-hidden="true" size={21} />
                   </button>
                   <button
-                    className="mobile-time-manual-card"
+                    className="mobile-time-manual-card is-manual"
                     disabled={isSelectedWeekLocked}
                     title={isSelectedWeekLocked ? "Diese Woche wurde vom Büro geprüft." : "Manuell erfassen"}
                     type="button"
@@ -794,8 +801,11 @@ export function MobileTimeEntryPage() {
                     <span className="mobile-time-quick-icon" aria-hidden="true">
                       <Pencil size={21} />
                     </span>
-                    <strong>Manuell</strong>
-                    <span>erfassen</span>
+                    <span className="mobile-time-manual-copy">
+                      <strong>Manuell</strong>
+                      <span>erfassen</span>
+                    </span>
+                    <ChevronRight className="mobile-time-manual-chevron" aria-hidden="true" size={21} />
                   </button>
                 </div>
               </section>
@@ -833,8 +843,11 @@ export function MobileTimeEntryPage() {
                             type="button"
                             onClick={() => editEntry(entry)}
                           >
-                            <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
-                            <span>{formatEntryBubbleMeta(entry)}</span>
+                            <span className="mobile-time-entry-status" aria-hidden="true"><Check size={23} strokeWidth={2.5} /></span>
+                            <span className="mobile-time-entry-copy">
+                              <strong>{formatEntryBubbleTitle(entry, siteById)}</strong>
+                              <span>{formatEntryBubbleMeta(entry)}</span>
+                            </span>
                           </button>
                           {isLocked ? (
                             <span className="mobile-time-entry-lock-badge">
@@ -874,8 +887,14 @@ export function MobileTimeEntryPage() {
                         type="button"
                         onClick={() => openSiteEntry(site.id)}
                       >
-                        <strong>{site.site_number || site.name}</strong>
-                        <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
+                        <span className="mobile-time-recent-head">
+                          <span className="mobile-time-recent-icon" aria-hidden="true"><MapPin size={22} /></span>
+                          <span className="mobile-time-recent-copy">
+                            <strong>{site.site_number || site.name}</strong>
+                            <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
+                          </span>
+                          <ChevronRight className="mobile-time-recent-chevron" aria-hidden="true" size={22} />
+                        </span>
                         <small>zuletzt {formatShortDate(site.lastPlannedDate)}</small>
                       </button>
                     ))}

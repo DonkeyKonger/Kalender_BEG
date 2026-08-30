@@ -8283,7 +8283,7 @@ body.mobile-modal-scroll-locked {
 .mobile-time-page.is-day-view {
   max-width: 448px;
   gap: 0;
-  background: #eef3f8;
+  background: #f5f8fc;
 }
 
 .mobile-calendar-nav,
@@ -8295,12 +8295,16 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-calendar-nav {
-  min-height: 38px;
+  min-height: 64px;
+  border-bottom: 1px solid #dbe3ed;
+  background: #ffffff;
+  padding: max(8px, env(safe-area-inset-top, 0px)) 20px 8px;
 }
 
 .mobile-calendar-nav strong {
-  color: #111827;
-  font-size: 0.96rem;
+  color: #123563;
+  font-size: 1.05rem;
+  font-weight: 800;
 }
 
 .mobile-calendar-back,
@@ -8310,9 +8314,9 @@ body.mobile-modal-scroll-locked {
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 999px;
+  border-radius: 10px;
   background: transparent;
-  color: #d9342b;
+  color: #123b6d;
   font: inherit;
   font-size: 0.95rem;
   font-weight: 700;
@@ -8320,7 +8324,19 @@ body.mobile-modal-scroll-locked {
 
 .mobile-calendar-back {
   gap: 12px;
+  min-height: 44px;
   padding: 6px 0;
+}
+
+.mobile-calendar-month-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: #123b6d;
+  font: inherit;
 }
 
 .mobile-calendar-today {
@@ -8526,27 +8542,29 @@ body.mobile-modal-scroll-locked {
 .mobile-week-strip {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
-  border-bottom: 1px solid #e5ebf3;
+  gap: 2px;
+  border-bottom: 1px solid #dbe3ed;
   border-radius: 0;
   background: #ffffff;
-  padding: 8px 14px 10px;
+  padding: 18px 18px 22px;
   box-shadow: none;
 }
 
 .mobile-week-day {
   display: grid;
   justify-items: center;
-  gap: 5px;
+  gap: 8px;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: #65738a;
-  padding: 7px 2px;
+  min-height: 74px;
+  padding: 2px;
 }
 
 .mobile-week-day span {
-  font-size: 0.66rem;
+  color: #466082;
+  font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -8555,21 +8573,22 @@ body.mobile-modal-scroll-locked {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 31px;
-  height: 31px;
+  width: 48px;
+  height: 48px;
   border-radius: 999px;
   color: #111827;
-  font-size: 1rem;
+  font-size: 1.08rem;
 }
 
 .mobile-week-day.is-today strong,
 .mobile-week-day.is-selected strong {
-  background: #d9342b;
+  background: #123f76;
   color: #ffffff;
+  box-shadow: 0 5px 12px rgb(18 63 118 / 18%);
 }
 
 .mobile-week-day.is-selected span {
-  color: #d9342b;
+  color: #123f76;
 }
 
 .mobile-week-day.is-weekend:not(.is-selected) strong {
@@ -8613,17 +8632,17 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-time-day-panel {
-  gap: 18px;
+  gap: 0;
   border: 0;
   border-radius: 0;
-  background: #eef3f8;
-  padding: 16px;
+  background: #f5f8fc;
+  padding: 32px 18px calc(32px + env(safe-area-inset-bottom, 0px));
   box-shadow: none;
 }
 
 .mobile-time-site-picker {
   display: grid;
-  gap: 18px;
+  gap: 32px;
 }
 
 .mobile-time-manual-card,
@@ -8631,12 +8650,12 @@ body.mobile-modal-scroll-locked {
   display: grid;
   gap: 4px;
   min-width: 0;
-  border: 1px solid #d8e1ee;
-  border-radius: 12px;
+  border: 1px solid #dfe6ef;
+  border-radius: 16px;
   background: #ffffff;
   color: #111827;
   font: inherit;
-  padding: 9px 10px;
+  padding: 12px;
   text-align: left;
   box-shadow: 0 6px 14px rgb(18 29 52 / 5%);
 }
@@ -8675,18 +8694,18 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-time-site-card.is-planned {
-  gap: 14px;
-  border-color: #d8e1ee;
+  gap: 22px;
+  border-color: #dde5ee;
   background: #ffffff;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgb(15 23 42 / 7%);
+  padding: 28px;
+  box-shadow: 0 8px 20px rgb(18 36 62 / 7%);
 }
 
 .mobile-time-site-card-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
-  gap: 12px;
+  gap: 18px;
 }
 
 .mobile-time-site-icon,
@@ -8695,34 +8714,34 @@ body.mobile-modal-scroll-locked {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #f2f5f9;
-  color: #173764;
+  background: #fbf0df;
+  color: #aa7418;
 }
 
 .mobile-time-site-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
 }
 
 .mobile-time-site-card.is-planned strong {
   display: -webkit-box;
   overflow: hidden;
   color: #111827;
-  font-size: 1.25rem;
+  font-size: 1.35rem;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
 }
 
 .mobile-time-site-copy {
   display: grid;
-  gap: 2px;
+  gap: 5px;
   min-width: 0;
 }
 
 .mobile-time-picker-section {
   display: grid;
-  gap: 8px;
+  gap: 16px;
 }
 
 .mobile-time-picker-section.is-primary {
@@ -8750,17 +8769,17 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-time-picker-heading span {
-  color: #143c6d;
-  font-size: 0.7rem;
+  color: #294f80;
+  font-size: 0.78rem;
   font-weight: 850;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .mobile-time-picker-section.is-secondary .mobile-time-picker-heading span {
-  color: #7a8798;
-  font-size: 0.66rem;
-  font-weight: 760;
+  color: #5e718f;
+  font-size: 0.76rem;
+  font-weight: 800;
 }
 
 .mobile-time-picker-section.is-secondary .mobile-time-picker-heading small {
@@ -8802,16 +8821,16 @@ body.mobile-modal-scroll-locked {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 42px;
-  border: 1px solid #234a7f;
-  border-radius: 10px;
-  background: #244a7b;
+  min-height: 56px;
+  border: 1px solid #123f76;
+  border-radius: 12px;
+  background: #123f76;
   color: #ffffff;
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 1rem;
   font-weight: 850;
-  padding: 9px 12px;
-  box-shadow: none;
+  padding: 12px 16px;
+  box-shadow: 0 5px 11px rgb(18 63 118 / 15%);
 }
 
 .mobile-time-site-action:disabled,
@@ -8830,19 +8849,19 @@ body.mobile-modal-scroll-locked {
 .mobile-time-manual-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 14px;
 }
 
 .mobile-time-manual-action .mobile-time-manual-card,
 .mobile-time-manual-actions .mobile-time-manual-card {
   width: 100%;
-  min-height: 118px;
+  min-height: 120px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-items: center;
-  gap: 5px;
+  gap: 12px;
   border-style: solid;
-  text-align: center;
-  box-shadow: 0 2px 8px rgb(15 23 42 / 7%);
+  text-align: left;
+  box-shadow: 0 5px 15px rgb(18 36 62 / 6%);
 }
 
 .mobile-time-manual-actions .mobile-time-manual-card strong {
@@ -8850,50 +8869,71 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-time-quick-icon {
-  width: 44px;
-  height: 44px;
-  margin-bottom: 6px;
-  border-radius: 14px;
+  width: 64px;
+  height: 64px;
+  margin: 0;
+  border-radius: 18px;
+  background: #eaf3fd;
+  color: #1466bf;
+}
+
+.mobile-time-manual-card.is-manual .mobile-time-quick-icon {
+  background: #f1eafa;
+  color: #7b3fc4;
+}
+
+.mobile-time-manual-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.mobile-time-manual-copy strong {
+  font-size: 0.94rem;
+}
+
+.mobile-time-manual-copy span,
+.mobile-time-manual-chevron {
+  color: #6d7f99;
 }
 
 .mobile-time-picker-section.is-secondary .mobile-time-site-card {
-  min-width: 156px;
-  max-width: 156px;
-  gap: 4px;
+  min-width: 226px;
+  max-width: 226px;
+  min-height: 196px;
+  align-content: space-between;
+  gap: 14px;
   border-color: #e1e7ef;
-  border-radius: 12px;
+  border-radius: 16px;
   background: #ffffff;
-  padding: 12px;
-  box-shadow: 0 2px 8px rgb(15 23 42 / 7%);
+  padding: 20px;
+  box-shadow: 0 5px 15px rgb(18 36 62 / 6%);
 }
 
 .mobile-time-picker-section.is-secondary .mobile-time-site-card strong {
-  display: -webkit-box;
-  overflow: hidden;
   color: #111827;
-  font-size: 0.92rem;
+  font-size: 1.1rem;
   font-weight: 850;
   line-height: 1.16;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
+  overflow-wrap: anywhere;
 }
 
 .mobile-time-picker-section.is-secondary .mobile-time-site-card span {
   color: #7a8798;
-  font-size: 0.76rem;
+  font-size: 0.86rem;
   font-weight: 690;
   line-height: 1.18;
 }
 
 .mobile-time-picker-section.is-secondary .mobile-time-site-card small {
-  color: #8da0bd;
-  font-size: 0.68rem;
+  color: #7891b5;
+  font-size: 0.78rem;
   font-weight: 720;
 }
 
 .mobile-time-recent-strip {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   overflow-x: auto;
   padding: 1px 1px 2px;
   overscroll-behavior-x: contain;
@@ -8904,11 +8944,40 @@ body.mobile-modal-scroll-locked {
   display: none;
 }
 
+.mobile-time-recent-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.mobile-time-recent-icon {
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: #e8f4ee;
+  color: #378d5b;
+}
+
+.mobile-time-recent-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mobile-time-recent-chevron {
+  color: #9aa8bb;
+}
+
 .mobile-time-picker-empty {
   margin: 0;
-  border-radius: 10px;
-  background: #f5f7fa;
-  padding: 8px 9px;
+  border: 1px dashed #cfdae8;
+  border-radius: 14px;
+  background: #fbfcfe;
+  padding: 14px;
 }
 
 .mobile-time-sheet-backdrop {
@@ -9508,7 +9577,7 @@ body.mobile-modal-scroll-locked {
 
 .mobile-time-day-entries {
   display: grid;
-  gap: 8px;
+  gap: 16px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -9524,9 +9593,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-time-day-entries-heading span {
-  color: #65738a;
-  font-size: 0.7rem;
-  font-weight: 800;
+  color: #5e718f;
+  font-size: 0.76rem;
+  font-weight: 850;
   text-transform: uppercase;
 }
 
@@ -9555,12 +9624,12 @@ body.mobile-modal-scroll-locked {
   display: grid;
   justify-items: center;
   gap: 8px;
-  min-height: 160px;
-  border: 1px solid #e2e8f0;
+  min-height: 148px;
+  border: 1px dashed #d3deea;
   border-radius: 16px;
   background: #ffffff;
   color: #8fa0bb;
-  padding: 30px 18px 24px;
+  padding: 24px 18px;
   text-align: center;
   box-shadow: 0 2px 8px rgb(15 23 42 / 7%);
 }
@@ -9586,23 +9655,23 @@ body.mobile-modal-scroll-locked {
 
 .mobile-time-entry-bubbles {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .mobile-time-entry-bubble {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
-  gap: 4px;
+  gap: 8px;
   width: 100%;
-  border: 1px solid #d8e1ee;
-  border-radius: 14px;
+  border: 1px solid #dfe6ef;
+  border-radius: 16px;
   background: #ffffff;
   color: #111827;
   font: inherit;
-  padding: 2px 4px 2px 0;
+  padding: 6px 10px 6px 0;
   text-align: left;
-  box-shadow: 0 8px 18px rgb(18 29 52 / 5%);
+  box-shadow: 0 6px 16px rgb(18 36 62 / 6%);
 }
 
 .mobile-time-entry-bubble.is-locked {
@@ -9618,15 +9687,18 @@ body.mobile-modal-scroll-locked {
 
 .mobile-time-entry-bubble-open {
   display: grid;
-  gap: 3px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
   min-width: 0;
   border: 0;
-  border-radius: 13px;
+  border-radius: 12px;
   background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
-  padding: 9px 10px;
+  min-height: 76px;
+  padding: 9px 16px;
   text-align: left;
 }
 
@@ -9638,37 +9710,57 @@ body.mobile-modal-scroll-locked {
   color: #64748b;
 }
 
-.mobile-time-entry-bubble strong,
-.mobile-time-entry-bubble span {
+.mobile-time-entry-copy > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.mobile-time-entry-bubble strong {
-  font-size: 0.92rem;
-  line-height: 1.15;
+.mobile-time-entry-copy {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
 }
 
-.mobile-time-entry-bubble span {
-  color: #536179;
-  font-size: 0.76rem;
+.mobile-time-entry-copy strong {
+  color: #121d31;
+  font-size: 1rem;
+  font-weight: 850;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.mobile-time-entry-copy > span {
+  color: #657b9d;
+  font-size: 0.88rem;
   font-weight: 750;
+}
+
+.mobile-time-entry-status {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d8eadc;
+  border-radius: 999px;
+  background: #e9f7ec;
+  color: #3c9156;
 }
 
 .mobile-time-entry-delete {
   display: inline-grid;
   align-self: center;
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   place-items: center;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: #b8c2d0;
+  border: 1px solid #e9eef4;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #95a4b8;
   cursor: pointer;
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 1.4rem;
   font-weight: 650;
   line-height: 1;
   padding: 0;
@@ -9708,9 +9800,12 @@ body.mobile-modal-scroll-locked {
     grid-template-columns: 1fr;
   }
 
-  .mobile-time-calendar-panel,
-  .mobile-time-entry-panel {
+  .mobile-time-calendar-panel {
     padding: 9px;
+  }
+
+  .mobile-time-entry-panel.mobile-time-day-panel {
+    padding: 28px 14px calc(28px + env(safe-area-inset-bottom, 0px));
   }
 
   .mobile-calendar-day {
@@ -9722,6 +9817,41 @@ body.mobile-modal-scroll-locked {
   .mobile-calendar-more-chip,
   .mobile-calendar-day-plan {
     font-size: 0.6rem;
+  }
+}
+
+@media (max-width: 370px) {
+  .mobile-calendar-nav {
+    padding-inline: 14px;
+  }
+
+  .mobile-week-strip {
+    padding-inline: 8px;
+  }
+
+  .mobile-week-day strong {
+    width: 42px;
+    height: 42px;
+  }
+
+  .mobile-time-manual-actions {
+    gap: 8px;
+  }
+
+  .mobile-time-manual-action .mobile-time-manual-card,
+  .mobile-time-manual-actions .mobile-time-manual-card {
+    gap: 7px;
+    padding: 9px;
+  }
+
+  .mobile-time-quick-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 15px;
+  }
+
+  .mobile-time-manual-copy strong {
+    font-size: 0.86rem;
   }
 }
 
