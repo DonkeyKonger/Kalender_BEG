@@ -107,7 +107,7 @@ test("Baustellen-Untertab zeigt nur baustellenbezogene Kennzahlen und Summen", (
 
 test("Auswertungs-Untertabs liegen in einer eigenen Workspace-Zeile", () => {
   assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/s);
-  assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*46px;[^}]*width:\s*100%;[^}]*padding:\s*8px 24px;/s);
+  assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*46px;[^}]*width:\s*100%;[^}]*border-right:\s*0;[^}]*border-left:\s*0;[^}]*border-radius:\s*0;[^}]*padding:\s*8px 24px;/s);
   assert.match(styles, /\.time-evaluation-subtabs button:focus-visible\s*\{[^}]*box-shadow:/s);
   assert.match(styles, /\.time-evaluation-subtabs button\s*\{[^}]*min-height:\s*28px;[^}]*border-radius:\s*0;[^}]*background:\s*#f1f5f9;[^}]*color:\s*#475569;/s);
   assert.match(styles, /\.time-evaluation-subtabs button\.is-active\s*\{[^}]*background:\s*var\(--time-week-active-blue\);[^}]*color:\s*#ffffff;[^}]*box-shadow:\s*none;/s);

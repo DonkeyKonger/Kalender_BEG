@@ -17411,8 +17411,11 @@ body.mobile-modal-scroll-locked {
   gap: 8px;
   width: 100%;
   margin: 0;
+  border-right: 0;
+  border-left: 0;
   border-top: 1px solid #e2e8f0;
   border-bottom: 1px solid #e2e8f0;
+  border-radius: 0;
   background: #ffffff;
   padding: 8px 24px;
 }
