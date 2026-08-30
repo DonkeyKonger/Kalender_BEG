@@ -26,6 +26,8 @@ test("payroll review uses the requested master-detail queue with consolidated ac
 
 test("queue hours header and values use the same border-box grid axis", () => {
   assert.match(styles, /\.time-review-queue-columns,[\s\S]*?\.time-review-queue-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 82px 42px;[^}]*gap:\s*8px;/s);
+  assert.match(pageSource, /className="time-review-queue-list" role="listbox"[\s\S]*?<div className="time-review-queue-columns" aria-hidden="true">[\s\S]*?Std\. erfasst/s);
+  assert.match(styles, /\.time-review-queue-columns\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/s);
   assert.match(styles, /\.time-review-queue-columns span:nth-child\(2\)\s*\{[^}]*text-align:\s*left;/s);
   assert.match(styles, /\.time-review-queue-columns span:nth-child\(3\)\s*\{[^}]*text-align:\s*center;/s);
   assert.match(styles, /\.time-review-queue-row\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;[^}]*padding:\s*7px 12px;/s);
@@ -172,16 +174,16 @@ test("weekly review distinguishes the neutral action from the green reviewed sta
   assert.match(pageSource, /window\.addEventListener\("scroll", closeStatusMenuOnViewportChange, true\)/);
   assert.match(pageSource, /event\.key !== "Escape"[\s\S]*?reviewWeekStatusMenuTriggerRef\.current\?\.focus\(\)/);
   assert.match(pageSource, /resolveViewportPopoverPosition\(\{[\s\S]*?triggerTop: reviewWeekStatusMenuPosition\.triggerTop[\s\S]*?menuHeight: menu\.scrollHeight/s);
-  assert.match(pageSource, /className=\{`time-review-week-review-button\$\{selectedReviewWorker\.isReviewed \? " is-reviewed" : ""\}`\}[\s\S]*?<Check aria-hidden="true" size=\{18\} \/>/s);
+  assert.match(pageSource, /className=\{`time-review-week-review-button\$\{selectedReviewWorker\.isReviewed \? " is-reviewed" : ""\}`\}[\s\S]*?<span className="time-review-reviewed-indicator" aria-hidden="true">✓<\/span>/s);
   assert.doesNotMatch(pageSource, /RotateCcw/);
   assert.match(styles, /\.time-review-worker-detail-head \.icon-button\s*\{[^}]*min-height:\s*29px;[^}]*border-radius:\s*7px;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*width:\s*29px;[^}]*height:\s*29px;[^}]*min-height:\s*29px;[^}]*border:\s*1px solid #a7b4c6;[^}]*border-radius:\s*50%;[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:hover,[\s\S]*?\.time-review-week-review-button:focus-visible\s*\{[^}]*background:\s*#f5f8fc;[^}]*box-shadow:/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*border-color:\s*#2f855a;[^}]*background:\s*#2f855a;[^}]*color:\s*#ffffff;[^}]*opacity:\s*1;/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed svg\s*\{[^}]*color:\s*#ffffff;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*border-color:\s*#a7b4c6;[^}]*background:\s*#ffffff;[^}]*opacity:\s*1;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button \.time-review-reviewed-indicator\s*\{[^}]*pointer-events:\s*none;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:disabled\s*\{[^}]*opacity:\s*0\.62;/s);
   assert.doesNotMatch(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*min-width:/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed:hover,[\s\S]*?\.time-review-week-review-button\.is-reviewed:focus-visible\s*\{[^}]*border-color:\s*#276f4b;[^}]*background:\s*#276f4b;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed:hover,[\s\S]*?\.time-review-week-review-button\.is-reviewed:focus-visible\s*\{[^}]*border-color:\s*#6f8fab;[^}]*background:\s*#f5f8fc;/s);
   assert.match(styles, /\.time-review-worker-detail\.is-reviewed\s*\{[^}]*filter:\s*grayscale\(0\.45\);[^}]*opacity:\s*0\.82;/s);
   assert.match(styles, /\.time-review-week-review-menu\s*\{[^}]*position:\s*fixed;[^}]*z-index:\s*110;[^}]*min-width:\s*132px;/s);
   assert.match(pageSource, /className="icon-button secondary time-review-manual-create-button"/);
@@ -240,7 +242,7 @@ test("travel time is identified in its own type column without tinting the compl
 });
 
 test("payroll review squares its framed surfaces within the active review workspace", () => {
-  assert.match(pageSource, /activeTimeSubtab === "review" \? " is-payroll-review-workspace" : ""/);
+  assert.match(pageSource, /activeTimeSubtab === "review" \|\| \(activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers"\) \? " is-payroll-review-workspace" : ""/);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-queue-panel,[\s\S]*?\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-day-group,[\s\S]*?border-radius:\s*0;/s);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-week-nav \.time-week-strip button,[\s\S]*?\.time-entries-page\.is-figma-times-workspace\.is-payroll-review-workspace \.time-review-week-check-head,[\s\S]*?border-radius:\s*0;/s);
   assert.match(styles, /\.time-review-queue-status\s*\{[^}]*border-radius:\s*999px;/s);
@@ -309,8 +311,12 @@ test("payroll queue hours and reviewed-state marks align with their intended col
   assert.match(styles, /\.time-review-queue-columns span:nth-child\(2\)\s*\{[^}]*text-align:\s*left;/s);
   assert.match(styles, /\.time-review-queue-columns span:nth-child\(3\)\s*\{[^}]*text-align:\s*center;/s);
   assert.match(styles, /\.time-review-week-check-row \.time-review-check-mark\.is-ok\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;/s);
-  assert.match(styles, /\.time-review-payroll-mark\.is-reviewed\s*\{[^}]*border-color:\s*#2f855a;[^}]*background:\s*#2f855a;[^}]*color:\s*#ffffff;/s);
-  assert.match(styles, /\.time-review-payroll-mark\.is-reviewed:not\(:disabled\):hover,[\s\S]*?\.time-review-payroll-mark\.is-reviewed:not\(:disabled\):focus-visible\s*\{[^}]*border-color:\s*#276f4b;[^}]*background:\s*#276f4b;/s);
+  assert.match(pageSource, /time-review-queue-status\$\{workerStatus === "reviewed" \? " time-review-reviewed-indicator" : ""\}/);
+  assert.match(pageSource, /time-review-payroll-mark", isReviewed \? "is-reviewed time-review-reviewed-indicator"/);
+  assert.match(pageSource, /time-review-week-review-button[\s\S]*?time-review-reviewed-indicator/s);
+  assert.match(styles, /\.time-review-reviewed-indicator\s*\{[^}]*border-radius:\s*999px;[^}]*background:\s*var\(--time-review-reviewed-background\);[^}]*color:\s*var\(--time-review-reviewed-color\);/s);
+  assert.match(styles, /\.time-review-queue-status\.is-reviewed\s*\{[^}]*background:\s*var\(--time-review-reviewed-background\);[^}]*color:\s*var\(--time-review-reviewed-color\);/s);
+  assert.match(styles, /\.time-review-payroll-mark\.time-review-reviewed-indicator\s*\{[^}]*border:\s*0;/s);
 });
 
 test("payroll table adds compact semantic groups without changing its detailed columns", () => {

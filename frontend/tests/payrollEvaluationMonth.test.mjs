@@ -53,14 +53,34 @@ test("Auswertung lädt den gewählten Monatsbereich über die vorhandene Datumsb
   assert.match(pageSource, /calendarMonthRange\(selectedEvaluationMonth\)/);
   assert.match(pageSource, /dateFrom: reviewDataRange\.start,[\s\S]*dateTo: reviewDataRange\.end,/);
   assert.match(pageSource, /aria-label="Auswertungsjahr"/);
-  assert.match(pageSource, /Monat im Jahr \$\{selectedEvaluationMonth\.year\} auswählen/);
+  assert.match(pageSource, /Monat im Jahr " \+ selectedEvaluationMonth\.year \+ " auswählen/);
   assert.doesNotMatch(pageSource, /selectedEvaluationWeek|evaluationWeekRange/);
   assert.match(pageSource, /selectedReviewWeek/);
   assert.match(pageSource, /time-review-week-nav/);
 });
 
-test("Monatsauswahl bleibt in der vorhandenen Formsprache responsiv erreichbar", () => {
-  assert.match(styles, /\.time-evaluation-month-grid\s*\{[^}]*grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\);/s);
-  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-month-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s);
-  assert.match(styles, /\.time-evaluation-month-grid button\.is-active\s*\{[^}]*background:\s*var\(--time-week-active-blue\);/s);
+test("Monatsnavigation bleibt einzeilig, scrollbar und hebt die Auswahl hervor", () => {
+  assert.match(pageSource, /time-evaluation-month-strip-shell[\s\S]*?Monate nach links scrollen[\s\S]*?time-evaluation-month-strip[\s\S]*?data-month=\{option\.month\}[\s\S]*?Monate nach rechts scrollen/s);
+  assert.match(pageSource, /scrollEvaluationMonths\(-1\)[\s\S]*?scrollEvaluationMonths\(1\)/s);
+  assert.match(pageSource, /scrollIntoView\(\{ block: "nearest", inline: "center", behavior: "auto" \}\)/);
+  assert.match(styles, /\.time-evaluation-month-strip\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;[^}]*scrollbar-width:\s*none;/s);
+  assert.match(styles, /\.time-evaluation-month-strip button\s*\{[^}]*flex:\s*0 0 calc\(16\.666% - 5px\);/s);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*flex-basis:\s*calc\(33\.333% - 4px\);/s);
+  assert.match(styles, /\.time-evaluation-month-strip button\.is-active\s*\{[^}]*background:\s*var\(--time-week-active-blue\);/s);
+  assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
+});
+
+test("Monteur-Untertab verwendet die gemeinsame Prüfwarteschlange mit Monatsdaten", () => {
+  assert.match(pageSource, /const \[activeEvaluationSubtab, setActiveEvaluationSubtab\] = useState<EvaluationSubtab>\("workers"\)/);
+  assert.match(pageSource, /\["workers", "Monteure"\],[\s\S]*?\["sites", "Baustellen"\]/);
+  assert.match(pageSource, /activeEvaluationSubtab === "workers" \? \([\s\S]*?<MonthlyPayrollWorkerWorkspace/s);
+  assert.match(pageSource, /\) : \(\s*<div className="time-final-hours-panel">/);
+  assert.match(pageSource, /buildTimeReviewMonthDays\([\s\S]*?evaluationMonthRange\.start,[\s\S]*?evaluationMonthRange\.end/s);
+  assert.match(pageSource, /function buildTimeReviewMonthDays\(/);
+  assert.match(pageSource, /className="time-review-queue-list" role="listbox" aria-label="Monteure für die Monatsauswertung"/);
+  assert.match(pageSource, /className="time-review-week-check-table" role="table" aria-label=\{"Monatsprüfung " \+ selectedWorker\.personName\}/);
+  assert.match(pageSource, /onOpenEntryActions=\{togglePayrollDatePicker\}/);
+  assert.match(pageSource, /aria-label="Aktionen für Zeiteintrag öffnen"[\s\S]*?onOpenEntryActions\(check\.entry, event\.currentTarget\)/s);
+  assert.match(pageSource, /activeReviewDayOptions\.map\(\(option\) => \([\s\S]*?movePayrollEntryDate\(activePayrollDatePickerEntry, option\.date\)/s);
+  assert.match(pageSource, /activeTimeSubtab === "review" \|\| \(activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers"\)/);
 });

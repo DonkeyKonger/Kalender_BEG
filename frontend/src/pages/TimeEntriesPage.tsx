@@ -1,4 +1,4 @@
-import { CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, Search, Trash2, Wrench } from "lucide-react";
+import { CalendarPlus, CarFront, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, Search, Trash2, Wrench } from "lucide-react";
 import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -56,6 +56,7 @@ import type { SiteSummary } from "../types/site";
 import type { OvernightStatus, TimeEntry, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview } from "../types/timeEntry";
 
 type TimeSubtab = "review" | "evaluation";
+type EvaluationSubtab = "workers" | "sites";
 type TimeReviewIssue = {
   id: number;
   entry: TimeEntry;
@@ -204,6 +205,7 @@ export function TimeEntriesPage() {
   const { user } = useAuth();
   const [people, setPeople] = useState<Person[]>([]);
   const [activeTimeSubtab, setActiveTimeSubtab] = useState<TimeSubtab>("review");
+  const [activeEvaluationSubtab, setActiveEvaluationSubtab] = useState<EvaluationSubtab>("workers");
   const [reviewEntries, setReviewEntries] = useState<TimeEntry[]>([]);
   const [reviewAllEntries, setReviewAllEntries] = useState<TimeEntry[]>([]);
   const [reviewAbsences, setReviewAbsences] = useState<Absence[]>([]);
@@ -232,6 +234,7 @@ export function TimeEntriesPage() {
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedEvaluationMonth, setSelectedEvaluationMonth] = useState<CalendarMonthSelection>(() => currentCalendarMonth());
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
+  const [selectedEvaluationPersonId, setSelectedEvaluationPersonId] = useState<number | null>(null);
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [timeReviewDialogMode, setTimeReviewDialogMode] = useState<TimeReviewDialogMode | null>(null);
   const [timeReviewPopupTop, setTimeReviewPopupTop] = useState<number | null>(null);
@@ -265,10 +268,14 @@ export function TimeEntriesPage() {
   const [reviewHoursDownloadError, setReviewHoursDownloadError] = useState<string | null>(null);
   const [reviewWorkerSearch, setReviewWorkerSearch] = useState("");
   const [reviewWorkerFilter, setReviewWorkerFilter] = useState<TimeReviewWorkerFilter>("all");
+  const [evaluationWorkerSearch, setEvaluationWorkerSearch] = useState("");
+  const [evaluationWorkerFilter, setEvaluationWorkerFilter] = useState<TimeReviewWorkerFilter>("all");
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
+  const [evaluationMonthScrollState, setEvaluationMonthScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const canManageTimeEntries = canEditMainPage(user, "payroll");
   const visibleTimeSubtabs = timeSubtabs;
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
+  const evaluationMonthStripRef = useRef<HTMLDivElement | null>(null);
   const timeReviewWorkerPanelRef = useRef<HTMLDivElement | null>(null);
   const reviewWeekActionsMenuControlRef = useRef<HTMLDivElement | null>(null);
   const reviewWeekActionsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -575,6 +582,56 @@ export function TimeEntriesPage() {
   );
   const finalHoursEntries = useMemo(() => buildFinalHoursEntries(reviewAllEntries), [reviewAllEntries]);
   const finalHoursTotals = useMemo(() => calculatePayrollEvaluationTotals(finalHoursEntries), [finalHoursEntries]);
+  const evaluationReviewedWorkerIds = useMemo(
+    () => reviewedWorkersWithAllEntriesReviewed(reviewAllEntries),
+    [reviewAllEntries],
+  );
+  const evaluationWorkers = useMemo(
+    () => buildTimeReviewWorkerSummaries(
+      people,
+      reviewAllEntries,
+      reviewAllEntries.filter((entry) => entry.payroll_reviewed_at === null),
+      reviewAbsences,
+      evaluationReviewedWorkerIds,
+      new Set<number>(),
+      new Map<number, TimeEntryPayrollWeekPerson>(),
+    ),
+    [evaluationReviewedWorkerIds, people, reviewAbsences, reviewAllEntries],
+  );
+  const evaluationWorkerFilterCounts = useMemo(
+    () => countTimeReviewWorkersByFilter(evaluationWorkers),
+    [evaluationWorkers],
+  );
+  const filteredEvaluationWorkers = useMemo(
+    () => filterTimeReviewWorkers(evaluationWorkers, evaluationWorkerSearch, evaluationWorkerFilter),
+    [evaluationWorkerFilter, evaluationWorkerSearch, evaluationWorkers],
+  );
+  const selectedEvaluationWorker = useMemo(
+    () => evaluationWorkers.find((worker) => worker.personId === selectedEvaluationPersonId) ?? null,
+    [evaluationWorkers, selectedEvaluationPersonId],
+  );
+  const selectedEvaluationMonthDays = useMemo(
+    () => buildTimeReviewMonthDays(
+      selectedEvaluationWorker?.entries ?? [],
+      reviewAbsences,
+      selectedEvaluationWorker?.personId ?? null,
+      evaluationMonthRange.start,
+      evaluationMonthRange.end,
+    ),
+    [evaluationMonthRange.end, evaluationMonthRange.start, reviewAbsences, selectedEvaluationWorker],
+  );
+  const evaluationMonthDayOptions = useMemo(
+    () => buildReviewPeriodDayOptions(evaluationMonthRange.start, evaluationMonthRange.end),
+    [evaluationMonthRange.end, evaluationMonthRange.start],
+  );
+  const isEvaluationWorkerReview = activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers";
+  const activeReviewWorker = isEvaluationWorkerReview ? selectedEvaluationWorker : selectedReviewWorker;
+  const activeReviewDays = isEvaluationWorkerReview ? selectedEvaluationMonthDays : selectedReviewWeekDays;
+  const activeReviewDayOptions = isEvaluationWorkerReview ? evaluationMonthDayOptions : selectedReviewWeekDayOptions;
+  const activePayrollDatePickerEntry = useMemo(
+    () => payrollDatePicker ? findEntryInReviewWeekDays(activeReviewDays, payrollDatePicker.entryId) : null,
+    [activeReviewDays, payrollDatePicker],
+  );
   useEffect(() => {
     let ignore = false;
     setIsLoadingSites(true);
@@ -608,6 +665,12 @@ export function TimeEntriesPage() {
       setSelectedReviewPersonId(null);
     }
   }, [selectedReviewPersonId, timeReviewWorkers]);
+
+  useEffect(() => {
+    if (selectedEvaluationPersonId !== null && !evaluationWorkers.some((worker) => worker.personId === selectedEvaluationPersonId)) {
+      setSelectedEvaluationPersonId(null);
+    }
+  }, [evaluationWorkers, selectedEvaluationPersonId]);
 
   useEffect(() => {
     setTimeReviewDiagnosticEntry(null);
@@ -931,8 +994,35 @@ export function TimeEntriesPage() {
     };
   }, [activeTimeSubtab, reviewWeekOptions]);
 
+  useLayoutEffect(() => {
+    if (activeTimeSubtab !== "evaluation") {
+      return;
+    }
+    const container = evaluationMonthStripRef.current;
+    const selectedButton = container?.querySelector<HTMLButtonElement>(`button[data-month="${selectedEvaluationMonth.month}"]`);
+    selectedButton?.scrollIntoView({ block: "nearest", inline: "center", behavior: "auto" });
+    updateEvaluationMonthScrollState();
+  }, [activeTimeSubtab, selectedEvaluationMonth.month, selectedEvaluationMonth.year]);
+
   useEffect(() => {
-    if (activeTimeSubtab !== "review") {
+    if (activeTimeSubtab !== "evaluation") {
+      return;
+    }
+    const container = evaluationMonthStripRef.current;
+    if (!container) {
+      return;
+    }
+    updateEvaluationMonthScrollState();
+    container.addEventListener("scroll", updateEvaluationMonthScrollState, { passive: true });
+    window.addEventListener("resize", updateEvaluationMonthScrollState);
+    return () => {
+      container.removeEventListener("scroll", updateEvaluationMonthScrollState);
+      window.removeEventListener("resize", updateEvaluationMonthScrollState);
+    };
+  }, [activeTimeSubtab, selectedEvaluationMonth.year]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "review" && activeTimeSubtab !== "evaluation") {
       setReviewAbsences([]);
       return;
     }
@@ -941,7 +1031,7 @@ export function TimeEntriesPage() {
     const perfStart = timeReviewPerfNow();
     let perfRows: number | undefined;
     let perfOk = false;
-    api.absences({ start: reviewWeekRange.start, end: reviewWeekRange.end })
+    api.absences({ start: reviewDataRange.start, end: reviewDataRange.end })
       .then((absenceData) => {
         perfRows = absenceData.length;
         perfOk = true;
@@ -957,7 +1047,7 @@ export function TimeEntriesPage() {
       .finally(() => {
         if (!ignore) {
           recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_ABSENCES, perfStart, {
-            details: `${reviewWeekRange.start} bis ${reviewWeekRange.end}`,
+            details: `${reviewDataRange.start} bis ${reviewDataRange.end}`,
             ok: perfOk,
             rows: perfRows,
           });
@@ -967,7 +1057,7 @@ export function TimeEntriesPage() {
     return () => {
       ignore = true;
     };
-  }, [activeTimeSubtab, reviewWeekRange.end, reviewWeekRange.start]);
+  }, [activeTimeSubtab, reviewDataRange.end, reviewDataRange.start]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review") {
@@ -1204,6 +1294,29 @@ export function TimeEntriesPage() {
     scrollWeekStripByWholeWeek(container, direction);
   }
 
+  function updateEvaluationMonthScrollState(): void {
+    const container = evaluationMonthStripRef.current;
+    if (!container) {
+      setEvaluationMonthScrollState({ canScrollLeft: false, canScrollRight: false });
+      return;
+    }
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+    setEvaluationMonthScrollState({
+      canScrollLeft: container.scrollLeft > 1,
+      canScrollRight: container.scrollLeft < maxScrollLeft - 1,
+    });
+  }
+
+  function scrollEvaluationMonths(direction: -1 | 1): void {
+    const container = evaluationMonthStripRef.current;
+    if (!container) {
+      return;
+    }
+    const monthButton = container.querySelector<HTMLButtonElement>("button");
+    const step = monthButton ? monthButton.offsetWidth + 6 : container.clientWidth * 0.6;
+    container.scrollBy({ left: direction * step * 3, behavior: "smooth" });
+  }
+
   async function togglePayrollRowReview(entry: TimeEntry): Promise<void> {
     if (!canManageTimeEntries || payrollReviewActionEntryId !== null || entry.id < 0) {
       return;
@@ -1233,15 +1346,15 @@ export function TimeEntriesPage() {
   }
 
   function openManualTimeEntryDialog(): void {
-    if (!canManageTimeEntries || !selectedReviewWorker || selectedReviewWorker.isReviewed) {
+    if (!canManageTimeEntries || !activeReviewWorker || (!isEvaluationWorkerReview && activeReviewWorker.isReviewed)) {
       return;
     }
-    const initialDay = selectedReviewWeekDays.find((day) => day.entries.length === 0 && day.absenceType === null)
-      ?? selectedReviewWeekDays[0];
-    const workDate = initialDay?.date ?? reviewWeekRange.start;
+    const initialDay = activeReviewDays.find((day) => day.entries.length === 0 && day.absenceType === null)
+      ?? activeReviewDays[0];
+    const workDate = initialDay?.date ?? (isEvaluationWorkerReview ? evaluationMonthRange.start : reviewWeekRange.start);
     setTimeReviewPopupTop(payrollPanelTop());
     setTimeReviewDialogMode("create");
-    setTimeReviewDiagnosticEntry(buildMissingTimeReviewEntry(selectedReviewWorker, workDate));
+    setTimeReviewDiagnosticEntry(buildMissingTimeReviewEntry(activeReviewWorker, workDate));
   }
 
   function closeTimeReviewDiagnostic(): void {
@@ -1372,7 +1485,7 @@ export function TimeEntriesPage() {
     closePayrollDatePicker();
     setPayrollDeleteDialog({
       entry,
-      weeklyReviewed: selectedReviewWorker?.isReviewed === true,
+      weeklyReviewed: !isEvaluationWorkerReview && selectedReviewWorker?.isReviewed === true,
     });
     setPayrollDeleteError(null);
   }
@@ -1399,7 +1512,9 @@ export function TimeEntriesPage() {
         setReviewWeeklyReviews((current) => resetMatchingWeeklyReview(current, result));
         setReviewWeekCompletionReviews((current) => resetMatchingWeeklyReview(current, result));
       }
-      await refreshSelectedReviewPayrollWeekSummary();
+      if (!isEvaluationWorkerReview) {
+        await refreshSelectedReviewPayrollWeekSummary();
+      }
       setPayrollDeleteDialog(null);
     } catch (requestError) {
       setPayrollDeleteError(readApiError(requestError, "Zeiteintrag konnte nicht gelöscht werden."));
@@ -1437,8 +1552,8 @@ export function TimeEntriesPage() {
     const dayKey = `${personId}:${workDate}`;
     if (
       !canManageTimeEntries
-      || selectedReviewWorker?.personId !== personId
-      || selectedReviewWorker.isReviewed
+      || activeReviewWorker?.personId !== personId
+      || (!isEvaluationWorkerReview && activeReviewWorker.isReviewed)
       || payrollOvernightSavingKey !== null
     ) {
       return;
@@ -1457,16 +1572,16 @@ export function TimeEntriesPage() {
       setReviewActionError(readApiError(requestError, "Übernachtungsstatus konnte nicht gespeichert werden."));
       const [dayStatusResult, weeklyReviewsResult] = await Promise.allSettled([
         api.timeEntryDayStatus({ personId, workDate }),
-        api.timeEntryWeeklyReviews({
+        ...(isEvaluationWorkerReview ? [] : [api.timeEntryWeeklyReviews({
           isoYear: selectedReviewWeek.year,
           isoWeek: selectedReviewWeek.week,
-        }),
+        })]),
       ]);
       if (dayStatusResult.status === "fulfilled") {
         setReviewEntries((current) => applyOvernightStatusToWorkDate(current, dayStatusResult.value));
         setReviewAllEntries((current) => applyOvernightStatusToWorkDate(current, dayStatusResult.value));
       }
-      if (weeklyReviewsResult.status === "fulfilled") {
+      if (weeklyReviewsResult?.status === "fulfilled") {
         setReviewWeeklyReviews(weeklyReviewsResult.value);
       }
     } finally {
@@ -1493,7 +1608,9 @@ export function TimeEntriesPage() {
     try {
       const updatedEntry = await api.setTimeEntryPayrollCorrection(timeReviewDiagnosticEntry.id, payload.payload);
       applyUpdatedTimeEntry(updatedEntry);
-      void refreshSelectedReviewPayrollWeekSummary();
+      if (!isEvaluationWorkerReview) {
+        void refreshSelectedReviewPayrollWeekSummary();
+      }
       setTimeReviewDiagnosticEntry((currentEntry) => (
         currentEntry?.id === timeReviewDiagnosticEntry.id || currentEntry?.id === updatedEntry.id
           ? mergeTimeEntryReviewUpdate(timeReviewDiagnosticEntry, updatedEntry)
@@ -1701,7 +1818,7 @@ export function TimeEntriesPage() {
   }
 
   return (
-    <section className={`time-entries-page is-figma-times-workspace${activeTimeSubtab === "review" ? " is-payroll-review-workspace" : ""}`}>
+    <section className={`time-entries-page is-figma-times-workspace${activeTimeSubtab === "review" || (activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers") ? " is-payroll-review-workspace" : ""}`}>
       <div className="page-header entity-page-header">
         <div>
           <h1>Lohnprüfung</h1>
@@ -1809,12 +1926,12 @@ export function TimeEntriesPage() {
                   </button>
                 ))}
               </div>
-              <div className="time-review-queue-columns" aria-hidden="true">
-                <span>Monteur</span>
-                <span>Std. erfasst</span>
-                <span>Status</span>
-              </div>
               <div className="time-review-queue-list" role="listbox" aria-label="Monteure für die Lohnprüfung">
+                <div className="time-review-queue-columns" aria-hidden="true">
+                  <span>Monteur</span>
+                  <span>Std. erfasst</span>
+                  <span>Status</span>
+                </div>
                 {isLoadingPeople && timeReviewWorkers.length === 0 && (
                   <div className="time-review-queue-state">Monteure werden geladen...</div>
                 )}
@@ -1848,7 +1965,7 @@ export function TimeEntriesPage() {
                         {worker.submittedMinutes > 0 ? `${formatSubmittedHours(worker.submittedMinutes)} Std.` : "–"}
                       </span>
                       <span
-                        className={`time-review-queue-status is-${workerStatus}`}
+                        className={`time-review-queue-status${workerStatus === "reviewed" ? " time-review-reviewed-indicator" : ""} is-${workerStatus}`}
                         aria-label={timeReviewWorkerStatusLabel(workerStatus)}
                         title={timeReviewWorkerStatusLabel(workerStatus)}
                       >
@@ -2044,7 +2161,7 @@ export function TimeEntriesPage() {
                               void markSelectedReviewWeekReviewed();
                             }}
                           >
-                            <Check aria-hidden="true" size={18} />
+                          <span className="time-review-reviewed-indicator" aria-hidden="true">✓</span>
                           </button>
                           {selectedReviewWorker.isReviewed && reviewWeekStatusMenuPersonId === selectedReviewWorker.personId && reviewWeekStatusMenuPosition && typeof document !== "undefined" && createPortal(
                             <div
@@ -2340,13 +2457,18 @@ export function TimeEntriesPage() {
                 <ChevronRight aria-hidden="true" size={16} />
               </button>
             </div>
-            <div className="time-evaluation-month-grid" role="group" aria-label={`Monat im Jahr ${selectedEvaluationMonth.year} auswählen`}>
+            <div className="time-evaluation-month-strip-shell" role="group" aria-label={"Monat im Jahr " + selectedEvaluationMonth.year + " auswählen"}>
+              <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollLeft} type="button" aria-label="Monate nach links scrollen" onClick={() => scrollEvaluationMonths(-1)}>
+                <ChevronLeft aria-hidden="true" size={16} />
+              </button>
+              <div className="time-evaluation-month-strip" ref={evaluationMonthStripRef}>
               {evaluationMonthOptions.map((option) => (
                 <button
                   className={[
                     option.month === selectedEvaluationMonth.month ? "is-active" : "",
                     option.isCurrent ? "is-current" : "",
                   ].filter(Boolean).join(" ")}
+                  data-month={option.month}
                   key={option.month}
                   title={`${option.label} ${option.year} · ${formatRangeLabel(calendarMonthRange(option).start, calendarMonthRange(option).end)}`}
                   type="button"
@@ -2357,8 +2479,74 @@ export function TimeEntriesPage() {
                   {option.label}
                 </button>
               ))}
+              </div>
+              <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollRight} type="button" aria-label="Monate nach rechts scrollen" onClick={() => scrollEvaluationMonths(1)}>
+                <ChevronRight aria-hidden="true" size={16} />
+              </button>
             </div>
           </div>
+          <div className="project-record-subtabs time-evaluation-subtabs" role="tablist" aria-label="Monatsauswertung Bereiche">
+            {([
+              ["workers", "Monteure"],
+              ["sites", "Baustellen"],
+            ] as const).map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeEvaluationSubtab === tab}
+                className={activeEvaluationSubtab === tab ? "is-active" : ""}
+                onClick={() => setActiveEvaluationSubtab(tab)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {activeEvaluationSubtab === "workers" ? (
+            <>
+              <MonthlyPayrollWorkerWorkspace
+              days={selectedEvaluationMonthDays}
+              filteredWorkers={filteredEvaluationWorkers}
+              filter={evaluationWorkerFilter}
+              filterCounts={evaluationWorkerFilterCounts}
+              isLoading={isLoadingPeople || isLoadingReviewAllEntries}
+              canManageTimeEntries={canManageTimeEntries}
+              onChangeFilter={setEvaluationWorkerFilter}
+              onChangeSearch={setEvaluationWorkerSearch}
+              onOpenLocationDiagnostic={openLocationReviewDiagnostic}
+              onOpenEntryActions={togglePayrollDatePicker}
+              onOpenTimeDiagnostic={openTimeReviewDiagnostic}
+              onUpdateOvernight={(personId, workDate, status) => updatePayrollOvernightStatus(personId, workDate, status)}
+              onSelectWorker={setSelectedEvaluationPersonId}
+              onToggleReview={(entry) => void togglePayrollRowReview(entry)}
+              search={evaluationWorkerSearch}
+              selectedWorker={selectedEvaluationWorker}
+              />
+              {payrollDatePicker && activePayrollDatePickerEntry && typeof document !== "undefined" && createPortal(
+                <div
+                  className={`time-review-day-move-popover${payrollDatePicker.position ? ` is-open-${payrollDatePicker.position.placement}` : ""}`}
+                  ref={payrollDatePickerMenuRef}
+                  role="menu"
+                  aria-label="Aktionen für Zeiteintrag"
+                  style={{
+                    left: `${payrollDatePicker.position?.left ?? payrollDatePicker.triggerLeft}px`,
+                    top: `${payrollDatePicker.position?.top ?? payrollDatePicker.triggerBottom + 4}px`,
+                    maxHeight: payrollDatePicker.position ? `${payrollDatePicker.position.maxHeight}px` : undefined,
+                    maxWidth: payrollDatePicker.position ? `${payrollDatePicker.position.maxWidth}px` : undefined,
+                    visibility: payrollDatePicker.position ? "visible" : "hidden",
+                  }}
+                >
+                  {activeReviewDayOptions.map((option) => (
+                    <button className={option.date === activePayrollDatePickerEntry.work_date ? "is-selected" : ""} key={option.date} type="button" role="menuitemradio" aria-checked={option.date === activePayrollDatePickerEntry.work_date} onClick={() => void movePayrollEntryDate(activePayrollDatePickerEntry, option.date)}>
+                      {option.label}
+                    </button>
+                  ))}
+                  <button className="time-review-day-delete-action" type="button" role="menuitem" onClick={() => openPayrollDeleteDialog(activePayrollDatePickerEntry)}><Trash2 aria-hidden="true" size={13} />Eintrag löschen</button>
+                </div>,
+                document.body,
+              )}
+            </>
+          ) : (
           <div className="time-final-hours-panel">
             <div className="time-entries-toolbar">
               <div>
@@ -2378,6 +2566,7 @@ export function TimeEntriesPage() {
               <FinalSummaryList title="Summe je Baustelle" rows={finalHoursTotals.bySite} />
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -3005,6 +3194,116 @@ function FinalSummaryList({ title, rows }: { title: string; rows: { label: strin
   );
 }
 
+function MonthlyPayrollWorkerWorkspace({
+  canManageTimeEntries,
+  days,
+  filteredWorkers,
+  filter,
+  filterCounts,
+  isLoading,
+  onChangeFilter,
+  onChangeSearch,
+  onOpenEntryActions,
+  onOpenLocationDiagnostic,
+  onOpenTimeDiagnostic,
+  onUpdateOvernight,
+  onSelectWorker,
+  onToggleReview,
+  search,
+  selectedWorker,
+}: {
+  canManageTimeEntries: boolean;
+  days: TimeReviewWeekDay[];
+  filteredWorkers: TimeReviewWorkerSummary[];
+  filter: TimeReviewWorkerFilter;
+  filterCounts: Record<TimeReviewWorkerFilter, number>;
+  isLoading: boolean;
+  onChangeFilter: (filter: TimeReviewWorkerFilter) => void;
+  onChangeSearch: (value: string) => void;
+  onOpenEntryActions: (entry: TimeEntry, button: HTMLButtonElement) => void;
+  onOpenLocationDiagnostic: (entry: TimeEntry) => void;
+  onOpenTimeDiagnostic: (entry: TimeEntry) => void;
+  onUpdateOvernight: (personId: number, workDate: string, status: OvernightStatus) => Promise<void>;
+  onSelectWorker: (personId: number) => void;
+  onToggleReview: (entry: TimeEntry) => void;
+  search: string;
+  selectedWorker: TimeReviewWorkerSummary | null;
+}) {
+  return (
+    <div className="time-review-workspace-layout time-evaluation-worker-workspace">
+      <aside className="time-review-queue-panel" aria-label="Monteursliste für die Monatsauswertung">
+        <div className="time-review-queue-head"><h2>Monteure</h2><span>Monat</span></div>
+        <label className="time-review-queue-search">
+          <Search aria-hidden="true" size={15} />
+          <input type="search" value={search} placeholder="Monteur suchen..." aria-label="Monteur suchen" onChange={(event) => onChangeSearch(event.currentTarget.value)} />
+        </label>
+        <div className="time-review-queue-filters" role="group" aria-label="Statusfilter">
+          {([
+            ["all", "Alle"],
+            ["open", "Offen"],
+            ["missing", "Keine Meldung"],
+            ["reviewed", "Geprüft"],
+          ] as const).map(([nextFilter, label]) => (
+            <button className={filter === nextFilter ? "is-active" : ""} key={nextFilter} type="button" aria-pressed={filter === nextFilter} onClick={() => onChangeFilter(nextFilter)}>
+              <span>{label}</span><small>{filterCounts[nextFilter]}</small>
+            </button>
+          ))}
+        </div>
+        <div className="time-review-queue-list" role="listbox" aria-label="Monteure für die Monatsauswertung">
+          <div className="time-review-queue-columns" aria-hidden="true"><span>Monteur</span><span>Std. erfasst</span><span>Status</span></div>
+          {isLoading && <div className="time-review-queue-state">Monatsauswertung wird geladen...</div>}
+          {!isLoading && filteredWorkers.map((worker) => {
+            const status = timeReviewWorkerStatus(worker);
+            return (
+              <button className={["time-review-queue-row", selectedWorker?.personId === worker.personId ? "is-active" : ""].filter(Boolean).join(" ")} key={worker.personId} type="button" role="option" aria-selected={selectedWorker?.personId === worker.personId} onClick={() => onSelectWorker(worker.personId)}>
+                <span className="time-review-worker-name">{worker.personName}</span>
+                <span className="time-review-queue-hours">{worker.submittedMinutes > 0 ? formatSubmittedHours(worker.submittedMinutes) + " Std." : "–"}</span>
+                <span className={`time-review-queue-status${status === "reviewed" ? " time-review-reviewed-indicator" : ""} is-${status}`} aria-label={timeReviewWorkerStatusLabel(status)}>{status === "reviewed" ? "✓" : status === "open" ? "!" : "–"}</span>
+              </button>
+            );
+          })}
+          {!isLoading && !filteredWorkers.length && <div className="time-review-queue-state">Keine Monteure für diesen Filter.</div>}
+        </div>
+      </aside>
+      <div className="time-review-detail-shell">
+        {selectedWorker ? (
+          <div className="time-review-worker-detail">
+            <div className="time-review-worker-detail-head">
+              <div className="time-review-worker-identity"><h3>{selectedWorker.personName}</h3><span className="time-review-worker-hours"><strong>{formatSubmittedHours(selectedWorker.submittedMinutes)} Std.</strong></span></div>
+            </div>
+            <div className="time-review-week-check-table" role="table" aria-label={"Monatsprüfung " + selectedWorker.personName}>
+              <div className="time-review-week-check-group-head" role="row"><span aria-hidden="true"></span><span className="time-review-column-group is-order" role="columnheader" aria-colspan={3}>Auftrag</span><span className="time-review-column-group is-work-time" role="columnheader" aria-colspan={4}>Arbeitszeit</span><span className="time-review-column-group is-status" role="columnheader" aria-colspan={3}>Prüfung / Status</span></div>
+              <div className="time-review-week-check-head" role="row"><span role="columnheader" aria-label="Aktion"></span><span className="time-review-column-day" role="columnheader">Tag</span><span className="time-review-column-type" role="columnheader">Typ</span><span role="columnheader">Baustelle</span><span className="time-review-column-work-time-start" role="columnheader">Beginn</span><span role="columnheader">Ende</span><span role="columnheader">Pause</span><span role="columnheader">Montagezeit</span><span className="time-review-column-status-start" role="columnheader">Ort</span><span role="columnheader">Arbeitszeit</span><span role="columnheader">Geprüft</span></div>
+              {days.map((day) => (
+                <section className="time-review-day-group" key={day.date} role="rowgroup" aria-label={day.weekdayLabel + ", " + formatDate(day.date)}>
+                  <div className="time-review-day-group-head" role="row">
+                    <span className="time-review-day-group-label" role="rowheader"><span className="time-review-day-group-summary"><strong className="time-review-day-group-weekday">{day.weekdayLabel}</strong>{day.entries.length > 0 && <PayrollOvernightStatusControl editable={canManageTimeEntries} hasConflict={day.hasOvernightStatusConflict} saving={false} status={day.overnightStatus} onChange={(status) => onUpdateOvernight(selectedWorker.personId, day.date, status)} />}</span></span>
+                    <span className="time-review-day-group-total time-review-work-time-cell" role="cell">{formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}</span>
+                  </div>
+                  <div className="time-review-day-group-entries">
+                    {day.entries.map((check) => (
+                      <div className="time-review-week-check-row" key={check.entry.id} role="row">
+                        <div className="time-review-week-move" role="cell"><button className="time-review-day-move-button" type="button" aria-label="Aktionen für Zeiteintrag öffnen" aria-haspopup="menu" disabled={!canManageTimeEntries || check.entry.id < 0} onClick={(event) => onOpenEntryActions(check.entry, event.currentTarget)}><ChevronsUpDown aria-hidden="true" size={14} /></button></div><div className="time-review-week-day" role="cell"></div>
+                        <div className="time-review-week-type" role="cell">{isTravelTimeEntry(check.entry) ? <span className="time-review-entry-type is-travel"><CarFront aria-hidden="true" size={14} /><span>Fahrt</span></span> : <span className="time-review-entry-type is-work"><Wrench aria-hidden="true" size={14} /><span>Arbeit</span></span>}</div>
+                        <div className="time-review-week-site" role="cell"><strong>{timeReviewSiteName(check.entry)}</strong>{check.entry.site_number && <span>{check.entry.site_number}</span>}</div>
+                        <div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "start")}</div><div className="time-review-week-time" role="cell">{renderPayrollClock(check.entry, "end")}</div><div className="time-review-week-time time-review-week-break" role="cell">{renderTimeReviewBreakMinutes(check.entry)}</div><div className="time-review-week-time time-review-week-total" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
+                        <div role="cell">{renderTimeReviewCheckMark(check.locationCheck, { onClick: () => onOpenLocationDiagnostic(check.entry), label: "Ort-Diagnose öffnen" })}</div>
+                        <div className="time-review-work-time-cell" role="cell">{renderTimeReviewCheckMark(check.timeCheck, { onClick: () => onOpenTimeDiagnostic(check.entry), label: "Arbeitszeit-Diagnose öffnen" })}</div>
+                        <div role="cell">{renderPayrollReviewMark(check.entry, { disabled: !canManageTimeEntries || check.entry.id < 0, isBusy: false, onToggle: () => onToggleReview(check.entry) })}</div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+            {!days.length && <div className="time-review-worker-empty-detail">Keine Zeitmeldungen in diesem Monat.</div>}
+          </div>
+        ) : <div className="time-review-worker-empty-detail">Monteur auswählen, um die Monatsauswertung zu öffnen.</div>}
+      </div>
+    </div>
+  );
+}
+
 function currentIsoWeek(): CalendarWeekSelection {
   return isoWeekFromDate(new Date());
 }
@@ -3337,6 +3636,21 @@ function timeReviewWorkerStatus(worker: TimeReviewWorkerSummary): TimeReviewWork
   return worker.submittedMinutes > 0 ? "open" : "missing";
 }
 
+function reviewedWorkersWithAllEntriesReviewed(entries: TimeEntry[]): Set<number> {
+  const reviewStateByPerson = new Map<number, { hasEntries: boolean; allReviewed: boolean }>();
+  entries.forEach((entry) => {
+    const current = reviewStateByPerson.get(entry.person_id) ?? { hasEntries: false, allReviewed: true };
+    current.hasEntries = true;
+    current.allReviewed = current.allReviewed && entry.payroll_reviewed_at !== null;
+    reviewStateByPerson.set(entry.person_id, current);
+  });
+  return new Set(
+    [...reviewStateByPerson.entries()]
+      .filter(([, state]) => state.hasEntries && state.allReviewed)
+      .map(([personId]) => personId),
+  );
+}
+
 function timeReviewWorkerStatusLabel(status: TimeReviewWorkerStatus): string {
   if (status === "reviewed") {
     return "Geprüft";
@@ -3478,11 +3792,60 @@ function buildTimeReviewWeekDays(
   }).filter((day, index) => index < 5 || day.entries.length > 0 || day.absenceType !== null);
 }
 
-function buildReviewWeekDayOptions(weekStart: string): Array<{ date: string; label: string }> {
-  return numberRange(0, 6).map((dayOffset) => {
-    const date = addDaysToDateInput(weekStart, dayOffset);
-    return { date, label: formatWeekday(date) };
+function buildTimeReviewMonthDays(
+  entries: TimeEntry[],
+  absences: Absence[],
+  personId: number | null,
+  monthStart: string,
+  monthEnd: string,
+): TimeReviewWeekDay[] {
+  return buildTimeReviewPeriodDays(entries, absences, personId, monthStart, monthEnd)
+    .filter((day) => day.entries.length > 0 || day.absenceType !== null);
+}
+
+function buildTimeReviewPeriodDays(
+  entries: TimeEntry[],
+  absences: Absence[],
+  personId: number | null,
+  start: string,
+  end: string,
+): TimeReviewWeekDay[] {
+  const entriesByDate = new Map<string, TimeEntry[]>();
+  for (const entry of entries) {
+    const dayEntries = entriesByDate.get(entry.work_date) ?? [];
+    dayEntries.push(entry);
+    entriesByDate.set(entry.work_date, dayEntries);
+  }
+  return buildReviewPeriodDayOptions(start, end).map(({ date }) => {
+    const dayEntries = (entriesByDate.get(date) ?? []).slice().sort(compareTimeReviewWorkerEntries);
+    const absenceType = personId === null ? null : highestPriorityAbsenceTypeForPersonDate(absences, personId, date);
+    const overnightSummary = summarizeOvernightStatuses(dayEntries.map((entry) => entry.overnight_status));
+    return {
+      date,
+      weekdayLabel: formatWeekdayLong(date),
+      absenceType,
+      overnightStatus: overnightSummary.status,
+      hasOvernightStatusConflict: overnightSummary.hasConflict,
+      vacationCreditMinutes: 0,
+      entries: dayEntries.map((entry) => ({
+        entry,
+        locationCheck: classifyTimeReviewLocationCheck(entry),
+        timeCheck: classifyTimeReviewTimeCheck(entry, { hasMultipleEntriesOnDay: dayEntries.length > 1 }),
+      })),
+    };
   });
+}
+
+function buildReviewWeekDayOptions(weekStart: string): Array<{ date: string; label: string }> {
+  return buildReviewPeriodDayOptions(weekStart, addDaysToDateInput(weekStart, 6));
+}
+
+function buildReviewPeriodDayOptions(start: string, end: string): Array<{ date: string; label: string }> {
+  const options: Array<{ date: string; label: string }> = [];
+  for (let date = start; date <= end; date = addDaysToDateInput(date, 1)) {
+    options.push({ date, label: formatWeekday(date) });
+  }
+  return options;
 }
 
 function buildMissingTimeReviewEntry(worker: TimeReviewWorkerSummary | null, workDate: string): TimeEntry {
@@ -3888,7 +4251,7 @@ function renderPayrollReviewMark(
   const isReviewed = entry.payroll_reviewed_at !== null;
   return (
     <button
-      className={["time-review-payroll-mark", isReviewed ? "is-reviewed" : ""].filter(Boolean).join(" ")}
+      className={["time-review-payroll-mark", isReviewed ? "is-reviewed time-review-reviewed-indicator" : ""].filter(Boolean).join(" ")}
       type="button"
       disabled={options.disabled}
       aria-label={isReviewed ? "Zeilenprüfung entfernen" : "Zeile als geprüft markieren"}

@@ -17350,14 +17350,29 @@ body.mobile-modal-scroll-locked {
   outline: none;
 }
 
-.time-evaluation-month-grid {
+.time-evaluation-month-strip-shell {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: 26px minmax(0, 1fr) 26px;
+  align-items: center;
   gap: 6px;
 }
 
-.time-evaluation-month-grid button {
+.time-evaluation-month-strip {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.time-evaluation-month-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.time-evaluation-month-strip button {
+  flex: 0 0 calc(16.666% - 5px);
+  min-width: 84px;
   min-height: 30px;
   border: 1px solid #d7e1ee;
   border-radius: 0;
@@ -17368,24 +17383,32 @@ body.mobile-modal-scroll-locked {
   font-weight: 850;
 }
 
-.time-evaluation-month-grid button:hover,
-.time-evaluation-month-grid button:focus-visible {
+.time-evaluation-month-strip button:hover,
+.time-evaluation-month-strip button:focus-visible {
   border-color: #9bbce0;
   background: #f3f8ff;
   color: #174678;
   outline: none;
 }
 
-.time-evaluation-month-grid button.is-current {
+.time-evaluation-month-strip button.is-current {
   border-color: #3b82f6;
   background: #eff6ff;
   color: #1e40af;
 }
 
-.time-evaluation-month-grid button.is-active {
+.time-evaluation-month-strip button.is-active {
   border-color: var(--time-week-active-blue);
   background: var(--time-week-active-blue);
   color: #ffffff;
+}
+
+.time-evaluation-subtabs {
+  margin: 0 24px;
+}
+
+.time-evaluation-worker-workspace {
+  margin-top: 0;
 }
 
 .time-review-worker-name {
@@ -17954,10 +17977,27 @@ body.mobile-modal-scroll-locked {
   font-weight: 900;
 }
 
+.time-review-reviewed-indicator {
+  --time-review-reviewed-background: #def3e4;
+  --time-review-reviewed-color: #1c8b4a;
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--time-review-reviewed-background);
+  color: var(--time-review-reviewed-color);
+  font-size: 0.67rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.time-review-payroll-mark.time-review-reviewed-indicator {
+  border: 0;
+}
+
 .time-review-payroll-mark.is-reviewed {
-  border-color: #2f855a;
-  background: #2f855a;
-  color: #ffffff;
+  box-shadow: none;
 }
 
 .time-review-payroll-mark.is-empty,
@@ -17981,8 +18021,8 @@ body.mobile-modal-scroll-locked {
 
 .time-review-payroll-mark.is-reviewed:not(:disabled):hover,
 .time-review-payroll-mark.is-reviewed:not(:disabled):focus-visible {
-  border-color: #276f4b;
-  background: #276f4b;
+  border-color: #9bbce0;
+  background: #def3e4;
 }
 
 .time-review-payroll-corrected-time {
@@ -19600,6 +19640,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-queue-columns {
+  position: sticky;
+  z-index: 1;
+  top: 0;
   border-top: 1px solid #e7ecf2;
   border-bottom: 1px solid #e7ecf2;
   background: #f8fafc;
@@ -19673,8 +19716,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-queue-status.is-reviewed {
-  background: #def3e4;
-  color: #1c8b4a;
+  background: var(--time-review-reviewed-background);
+  color: var(--time-review-reviewed-color);
 }
 
 .time-review-queue-status.is-open {
@@ -19833,21 +19876,21 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed {
-  border-color: #2f855a;
-  background: #2f855a;
-  color: #ffffff;
+  border-color: #a7b4c6;
+  background: #ffffff;
+  color: #334155;
   opacity: 1;
 }
 
-.time-review-worker-detail-head .time-review-week-review-button.is-reviewed svg {
-  color: #ffffff;
+.time-review-worker-detail-head .time-review-week-review-button .time-review-reviewed-indicator {
+  pointer-events: none;
 }
 
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed:hover,
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed:focus-visible {
-  border-color: #276f4b;
-  background: #276f4b;
-  color: #ffffff;
+  border-color: #6f8fab;
+  background: #f5f8fc;
+  color: #243348;
 }
 
 .time-review-worker-detail-head .time-review-week-review-button:disabled {
@@ -20108,12 +20151,9 @@ body.mobile-modal-scroll-locked {
     --time-review-layout-inline: 12px;
   }
 
-  .time-evaluation-month-nav {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .time-evaluation-month-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .time-evaluation-month-strip button {
+    flex-basis: calc(33.333% - 4px);
+    min-width: 72px;
   }
 
   .time-entries-page.is-figma-times-workspace .page-header {

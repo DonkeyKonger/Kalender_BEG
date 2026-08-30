@@ -17,7 +17,7 @@ test("manual payroll entry action opens the explicit create mode", () => {
   assert.match(source, /disabled=\{selectedReviewWorker\.isReviewed \|\| markingReviewWeekPersonId/);
   assert.match(source, /onClick=\{openManualTimeEntryDialog\}/);
   assert.match(source, /setTimeReviewDialogMode\("create"\)/);
-  assert.match(source, /setTimeReviewDiagnosticEntry\(buildMissingTimeReviewEntry\(selectedReviewWorker, workDate\)\)/);
+  assert.match(source, /setTimeReviewDiagnosticEntry\(buildMissingTimeReviewEntry\(activeReviewWorker, workDate\)\)/);
   assert.match(source, /options=\{payrollManualDateOptions\}/);
   assert.match(source, /buildPayrollManualEntryPayload\(/);
   assert.match(source, /await api\.createTimeEntry\(result\.payload\)/);
