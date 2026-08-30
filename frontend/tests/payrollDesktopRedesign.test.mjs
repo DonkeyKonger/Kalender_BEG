@@ -179,18 +179,27 @@ test("weekly review distinguishes the neutral action from the green reviewed sta
   assert.match(styles, /\.time-review-worker-detail-head \.icon-button\s*\{[^}]*min-height:\s*29px;[^}]*border-radius:\s*7px;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*width:\s*29px;[^}]*height:\s*29px;[^}]*min-height:\s*29px;[^}]*border:\s*1px solid #a7b4c6;[^}]*border-radius:\s*50%;[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:hover,[\s\S]*?\.time-review-week-review-button:focus-visible\s*\{[^}]*background:\s*#f5f8fc;[^}]*box-shadow:/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*border-color:\s*#a7b4c6;[^}]*background:\s*#ffffff;[^}]*opacity:\s*1;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;[^}]*opacity:\s*1;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button \.time-review-reviewed-indicator\s*\{[^}]*pointer-events:\s*none;/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button \.time-review-reviewed-indicator\.is-week-review\s*\{[^}]*width:\s*21px;[^}]*height:\s*21px;[^}]*font-size:\s*0\.78rem;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button \.time-review-reviewed-indicator\.is-week-review\s*\{[^}]*width:\s*29px;[^}]*height:\s*29px;[^}]*font-size:\s*0\.98rem;/s);
   assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button:disabled\s*\{[^}]*opacity:\s*0\.62;/s);
   assert.doesNotMatch(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*min-width:/s);
-  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed:hover,[\s\S]*?\.time-review-week-review-button\.is-reviewed:focus-visible\s*\{[^}]*border-color:\s*#6f8fab;[^}]*background:\s*#f5f8fc;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed:hover,[\s\S]*?\.time-review-week-review-button\.is-reviewed:focus-visible\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;[^}]*box-shadow:/s);
   assert.match(styles, /\.time-review-worker-detail\.is-reviewed\s*\{[^}]*filter:\s*grayscale\(0\.45\);[^}]*opacity:\s*0\.82;/s);
   assert.match(styles, /\.time-review-week-review-menu\s*\{[^}]*position:\s*fixed;[^}]*z-index:\s*110;[^}]*min-width:\s*132px;/s);
   assert.match(pageSource, /className="icon-button secondary time-review-manual-create-button"/);
 });
 
+test("reviewed week control fills its single visible circle without an inner badge ring", () => {
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\.is-reviewed\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button \.time-review-reviewed-indicator\.is-week-review\s*\{[^}]*width:\s*29px;[^}]*height:\s*29px;[^}]*font-size:\s*0\.98rem;/s);
+  assert.match(styles, /\.time-review-worker-detail-head \.time-review-week-review-button\s*\{[^}]*width:\s*29px;[^}]*height:\s*29px;[^}]*overflow:\s*visible;/s);
+});
+
 test("weekday separators show the full weekday, overnight assignment, and one aligned work-time total", () => {
+  const tableStart = pageSource.indexOf('className="time-review-week-check-table"');
+  const tableEnd = pageSource.indexOf("{payrollDatePicker &&", tableStart);
+  const weeklyTableSource = pageSource.slice(tableStart, tableEnd);
   assert.match(pageSource, /<section className="time-review-day-group" key=\{day\.date\} role="rowgroup"/);
   assert.match(pageSource, /className="time-review-day-group-head" role="row"/);
   assert.match(pageSource, /function formatWeekdayLong\(value: string\)[\s\S]*?weekday: "long"/);
@@ -199,7 +208,7 @@ test("weekday separators show the full weekday, overnight assignment, and one al
   assert.match(pageSource, /className="time-review-day-group-summary"[\s\S]*?<PayrollOvernightStatusControl/);
   assert.match(styles, /\.time-review-day-group-summary\s*\{[^}]*--time-review-weekday-label-inline-size:\s*80px;[^}]*display:\s*inline-grid;[^}]*grid-template-columns:\s*var\(--time-review-weekday-label-inline-size\) max-content;[^}]*column-gap:\s*7px;[^}]*max-width:\s*100%;/s);
   assert.match(styles, /\.time-review-day-group-weekday\s*\{[^}]*inline-size:\s*var\(--time-review-weekday-label-inline-size\);/s);
-  assert.doesNotMatch(pageSource, /<span>\{formatDate\(day\.date\)\}<\/span>/);
+  assert.doesNotMatch(weeklyTableSource, /<span>\{formatDate\(day\.date\)\}<\/span>/);
   assert.doesNotMatch(pageSource, /time-review-day-group-status|Gesamtmontagezeit/);
   assert.match(pageSource, /className="time-review-day-group-total time-review-work-time-cell"[\s\S]*?aria-label=\{`Gesamtarbeitszeit[\s\S]*?\{formatTimeEntryMinutes\(timeReviewDayTotalMinutes\(day\), "hours"\)\}/);
   assert.match(pageSource, /timeReviewDayTotalMinutes\(day\)/);
@@ -223,7 +232,7 @@ test("travel time is identified in its own type column without tinting the compl
   const tableSource = pageSource.slice(tableStart, tableEnd);
 
   assert.match(
-    tableSource,
+    pageSource,
     /aria-label="Tag" title="Tag"[\s\S]*?aria-label="Eintragstyp" title="Eintragstyp"[\s\S]*?aria-label="Baustelle" title="Baustelle"/,
   );
   assert.match(tableSource, /<CarFront aria-hidden="true" size=\{14\} \/>[\s\S]*?<span>Fahrt<\/span>/);
@@ -290,9 +299,9 @@ test("payroll table abbreviates headers from its container width without hiding 
 });
 
 test("payroll header aligns its group, day, and type labels with their existing row content", () => {
-  const tableStart = pageSource.indexOf('className="time-review-week-check-table"');
-  const tableEnd = pageSource.indexOf("{selectedReviewWeekDays.map", tableStart);
-  const tableSource = pageSource.slice(tableStart, tableEnd);
+  const headerStart = pageSource.indexOf("function PayrollReviewTableHeaders");
+  const headerEnd = pageSource.indexOf("function MonthlyPayrollWorkerWorkspace", headerStart);
+  const tableSource = pageSource.slice(headerStart, headerEnd);
 
   assert.match(tableSource, /className="time-review-column-day" role="columnheader" aria-label="Tag" title="Tag"/);
   assert.match(tableSource, /className="time-review-column-type" role="columnheader" aria-label="Eintragstyp" title="Eintragstyp"/);
@@ -324,9 +333,9 @@ test("payroll queue hours and reviewed-state marks align with their intended col
 });
 
 test("payroll table adds compact semantic groups without changing its detailed columns", () => {
-  const tableStart = pageSource.indexOf('className="time-review-week-check-table"');
-  const tableEnd = pageSource.indexOf("{selectedReviewWeekDays.map", tableStart);
-  const tableSource = pageSource.slice(tableStart, tableEnd);
+  const headerStart = pageSource.indexOf("function PayrollReviewTableHeaders");
+  const headerEnd = pageSource.indexOf("function MonthlyPayrollWorkerWorkspace", headerStart);
+  const tableSource = pageSource.slice(headerStart, headerEnd);
 
   assert.match(tableSource, /className="time-review-week-check-group-head" role="row"[\s\S]*?aria-colspan=\{3\} aria-label="Spaltengruppe Auftrag">Auftrag[\s\S]*?aria-colspan=\{4\} aria-label="Spaltengruppe Arbeitszeit">Arbeitszeit[\s\S]*?aria-colspan=\{3\} aria-label="Spaltengruppe Prüfung und Status">Prüfung \/ Status/s);
   assert.match(tableSource, /aria-label="Tag" title="Tag"[\s\S]*?aria-label="Eintragstyp" title="Eintragstyp"[\s\S]*?aria-label="Baustelle" title="Baustelle"[\s\S]*?aria-label="Beginn" title="Beginn"[\s\S]*?aria-label="Geprüft" title="Geprüft"/s);
@@ -356,7 +365,7 @@ test("payroll break values use the existing subdued secondary-time treatment", (
   const tableEnd = pageSource.indexOf("{payrollDatePicker &&", tableStart);
   const tableSource = pageSource.slice(tableStart, tableEnd);
 
-  assert.match(tableSource, /className="time-review-week-time" role="cell">\{renderPayrollClock\(check\.entry, "start"\)\}<\/div>[\s\S]*?className="time-review-week-time" role="cell">\{renderPayrollClock\(check\.entry, "end"\)\}<\/div>[\s\S]*?className="time-review-week-time time-review-week-break" role="cell">\{renderTimeReviewBreakMinutes\(check\.entry\)\}<\/div>[\s\S]*?className="time-review-week-time time-review-week-total"/s);
+  assert.match(tableSource, /className="time-review-week-time time-review-week-time-start" role="cell">\{renderPayrollClock\(check\.entry, "start"\)\}[\s\S]*?className="time-review-week-time" role="cell">\{renderPayrollClock\(check\.entry, "end"\)\}<\/div>[\s\S]*?className="time-review-week-time time-review-week-break" role="cell">\{renderTimeReviewBreakMinutes\(check\.entry\)\}<\/div>[\s\S]*?className="time-review-week-time time-review-week-total"/s);
   assert.match(tableSource, /className="time-review-week-time time-review-week-break" role="cell">-<\/div>/);
   assert.match(styles, /\.time-review-week-break\s*\{[^}]*color:\s*#64748b;[^}]*font-size:\s*0\.7rem;[^}]*font-weight:\s*700;/s);
 });

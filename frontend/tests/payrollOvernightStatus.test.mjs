@@ -75,7 +75,7 @@ test("the day header shows one overnight editor and time rows contain no overnig
   assert.ok(tableStart >= 0);
   assert.ok(tableEnd > tableStart);
   assert.match(
-    tableSource,
+    pageSource,
     /<span role="columnheader" aria-label="Baustelle" title="Baustelle">[\s\S]*?<span className="time-review-column-label-full">Baustelle<\/span>[\s\S]*?<span className="time-review-column-work-time-start" role="columnheader" aria-label="Beginn" title="Beginn">/,
   );
   assert.doesNotMatch(tableSource, /aria-label="Übernachtung" title="Übernachtung"/);

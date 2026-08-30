@@ -17363,7 +17363,9 @@ body.mobile-modal-scroll-locked {
   min-width: 0;
   gap: 6px;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
+  scroll-snap-type: x mandatory;
 }
 
 .time-evaluation-month-strip::-webkit-scrollbar {
@@ -17371,7 +17373,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-evaluation-month-strip button {
-  flex: 0 0 calc(16.666% - 5px);
+  flex: 0 0 calc((100% - 30px) / 6);
   min-width: 84px;
   min-height: 30px;
   border: 1px solid #d7e1ee;
@@ -17381,6 +17383,8 @@ body.mobile-modal-scroll-locked {
   font: inherit;
   font-size: 0.78rem;
   font-weight: 850;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 .time-evaluation-month-strip button:hover,
@@ -17404,11 +17408,53 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-evaluation-subtabs {
-  margin: 0 24px;
+  display: flex;
+  box-sizing: border-box;
+  min-height: 50px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 9px 24px;
+}
+
+.time-evaluation-subtabs button {
+  min-height: 30px;
+  padding: 6px 14px;
+}
+
+.time-evaluation-subtabs button:hover,
+.time-evaluation-subtabs button:focus-visible {
+  background: #edf4fb;
+  color: #174678;
+  outline: none;
+}
+
+.time-evaluation-subtabs button:focus-visible {
+  box-shadow: 0 0 0 3px rgb(31 95 159 / 16%);
 }
 
 .time-evaluation-worker-workspace {
   margin-top: 0;
+}
+
+.time-evaluation-workspace-loading,
+.time-evaluation-loading-state {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  border: 1px solid #d8e0ea;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.time-evaluation-workspace-loading {
+  grid-column: 1 / -1;
 }
 
 .time-review-worker-name {
@@ -17891,6 +17937,21 @@ body.mobile-modal-scroll-locked {
   color: #334155;
   font-size: 0.74rem;
   font-weight: 800;
+}
+
+.time-review-week-time-start {
+  position: relative;
+  overflow: visible;
+}
+
+.time-review-time-range-arrow {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: -14px;
+  color: #94a3b8;
+  pointer-events: none;
+  transform: translateY(-50%);
 }
 
 .time-review-week-total {
@@ -19115,6 +19176,10 @@ body.mobile-modal-scroll-locked {
   overflow: hidden;
 }
 
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-evaluation-main {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .time-entries-page.is-figma-times-workspace .time-entries-toolbar,
 .time-entries-page.is-figma-times-workspace .time-panel-header {
   align-items: center;
@@ -19876,6 +19941,7 @@ body.mobile-modal-scroll-locked {
   background: #ffffff;
   color: #334155;
   cursor: pointer;
+  overflow: visible;
   padding: 0;
   box-shadow: none;
 }
@@ -19890,8 +19956,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed {
-  border-color: #a7b4c6;
-  background: #ffffff;
+  border-color: transparent;
+  background: transparent;
   color: #334155;
   opacity: 1;
 }
@@ -19901,16 +19967,17 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-review-worker-detail-head .time-review-week-review-button .time-review-reviewed-indicator.is-week-review {
-  width: 21px;
-  height: 21px;
-  font-size: 0.78rem;
+  width: 29px;
+  height: 29px;
+  font-size: 0.98rem;
 }
 
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed:hover,
 .time-review-worker-detail-head .time-review-week-review-button.is-reviewed:focus-visible {
-  border-color: #6f8fab;
-  background: #f5f8fc;
+  border-color: transparent;
+  background: transparent;
   color: #243348;
+  box-shadow: 0 0 0 3px rgb(31 95 159 / 16%);
 }
 
 .time-review-worker-detail-head .time-review-week-review-button:disabled {
@@ -19995,6 +20062,61 @@ body.mobile-modal-scroll-locked {
 .time-review-day-group-label {
   grid-column: 1 / 10;
   min-width: 0;
+}
+
+.time-evaluation-day-group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-evaluation-day-toggle {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+  font: inherit;
+  padding: 2px 0;
+  text-align: left;
+}
+
+.time-evaluation-day-toggle:hover,
+.time-evaluation-day-toggle:focus-visible {
+  color: #174678;
+  outline: none;
+}
+
+.time-evaluation-day-toggle:focus-visible {
+  border-radius: 3px;
+  box-shadow: 0 0 0 3px rgb(31 95 159 / 16%);
+}
+
+.time-evaluation-day-toggle-icon {
+  flex: 0 0 auto;
+  color: #64748b;
+  transition: transform 120ms ease;
+}
+
+.time-evaluation-day-toggle[aria-expanded="true"] .time-evaluation-day-toggle-icon {
+  transform: rotate(90deg);
+}
+
+.time-evaluation-day-toggle-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.time-evaluation-day-toggle-label > span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
 .time-review-day-group-summary {
@@ -20172,8 +20294,13 @@ body.mobile-modal-scroll-locked {
   }
 
   .time-evaluation-month-strip button {
-    flex-basis: calc(33.333% - 4px);
+    flex-basis: calc((100% - 12px) / 3);
     min-width: 72px;
+  }
+
+  .time-evaluation-subtabs {
+    min-height: 46px;
+    padding-inline: 12px;
   }
 
   .time-entries-page.is-figma-times-workspace .page-header {

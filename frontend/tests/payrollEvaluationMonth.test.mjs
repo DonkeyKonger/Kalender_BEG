@@ -59,13 +59,15 @@ test("Auswertung lädt den gewählten Monatsbereich über die vorhandene Datumsb
   assert.match(pageSource, /time-review-week-nav/);
 });
 
-test("Monatsnavigation bleibt einzeilig, scrollbar und hebt die Auswahl hervor", () => {
+test("Monatsnavigation bleibt einzeilig, zeigt vollständige Buttons und hebt die Auswahl hervor", () => {
   assert.match(pageSource, /time-evaluation-month-strip-shell[\s\S]*?Monate nach links scrollen[\s\S]*?time-evaluation-month-strip[\s\S]*?data-month=\{option\.month\}[\s\S]*?Monate nach rechts scrollen/s);
   assert.match(pageSource, /scrollEvaluationMonths\(-1\)[\s\S]*?scrollEvaluationMonths\(1\)/s);
-  assert.match(pageSource, /scrollIntoView\(\{ block: "nearest", inline: "center", behavior: "auto" \}\)/);
-  assert.match(styles, /\.time-evaluation-month-strip\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;[^}]*scrollbar-width:\s*none;/s);
-  assert.match(styles, /\.time-evaluation-month-strip button\s*\{[^}]*flex:\s*0 0 calc\(16\.666% - 5px\);/s);
-  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*flex-basis:\s*calc\(33\.333% - 4px\);/s);
+  assert.match(pageSource, /function evaluationMonthVisibleButtonCount[\s\S]*?Math\.floor\(\(container\.clientWidth - firstButton\.offsetWidth\) \/ step\) \+ 1/s);
+  assert.match(pageSource, /function scrollEvaluationMonths[\s\S]*?targetIndex[\s\S]*?container\.scrollTo\(\{ left: buttons\[targetIndex\]\?\.offsetLeft/s);
+  assert.match(pageSource, /alignEvaluationMonthsToSelection\(container, selectedEvaluationMonth\.month\)/);
+  assert.match(styles, /\.time-evaluation-month-strip\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/s);
+  assert.match(styles, /\.time-evaluation-month-strip button\s*\{[^}]*flex:\s*0 0 calc\(\(100% - 30px\) \/ 6\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*flex-basis:\s*calc\(\(100% - 12px\) \/ 3\);/s);
   assert.match(styles, /\.time-evaluation-month-strip button\.is-active\s*\{[^}]*background:\s*var\(--time-week-active-blue\);/s);
   assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
 });
@@ -83,4 +85,44 @@ test("Monteur-Untertab verwendet die gemeinsame Prüfwarteschlange mit Monatsdat
   assert.match(pageSource, /aria-label="Aktionen für Zeiteintrag öffnen"[\s\S]*?onOpenEntryActions\(check\.entry, event\.currentTarget\)/s);
   assert.match(pageSource, /activeReviewDayOptions\.map\(\(option\) => \([\s\S]*?movePayrollEntryDate\(activePayrollDatePickerEntry, option\.date\)/s);
   assert.match(pageSource, /activeTimeSubtab === "review" \|\| \(activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers"\)/);
+});
+
+test("Auswertungs-Untertabs liegen in einer eigenen Workspace-Zeile", () => {
+  assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/s);
+  assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*50px;[^}]*width:\s*100%;[^}]*padding:\s*9px 24px;/s);
+  assert.match(styles, /\.time-evaluation-subtabs button:focus-visible\s*\{[^}]*box-shadow:/s);
+});
+
+test("Monats- und Wochenprüfung teilen responsive Tabellenüberschriften", () => {
+  assert.match(pageSource, /function PayrollReviewTableHeaders\(\)[\s\S]*?TG[\s\S]*?TYP[\s\S]*?BS[\s\S]*?MA[\s\S]*?ME[\s\S]*?PA[\s\S]*?MZ[\s\S]*?AZ[\s\S]*?GP/s);
+  assert.match(pageSource, /aria-label=\{`Lohnprüfung \$\{selectedReviewWorker\.personName\} KW \$\{selectedReviewWeek\.week\}`\}[\s\S]*?<PayrollReviewTableHeaders \/>/s);
+  assert.match(pageSource, /aria-label=\{"Monatsprüfung " \+ selectedWorker\.personName\}[\s\S]*?<PayrollReviewTableHeaders \/>/s);
+  assert.match(styles, /@container time-review-detail \(max-width: 1050px\)[\s\S]*?\.time-review-column-label-full\s*\{[^}]*display:\s*none;[\s\S]*?\.time-review-column-label-short\s*\{[^}]*display:\s*inline;/s);
+});
+
+test("Monatstage starten eingeklappt und behalten einen zugänglichen Einzel-Toggle", () => {
+  assert.match(pageSource, /const \[expandedEvaluationDayKeys, setExpandedEvaluationDayKeys\] = useState<Set<string>>\(\(\) => new Set\(\)\)/);
+  assert.match(pageSource, /setExpandedEvaluationDayKeys\(new Set\(\)\);[\s\S]*?selectedEvaluationMonth\.month, selectedEvaluationMonth\.year, selectedEvaluationPersonId/s);
+  assert.match(pageSource, /className="time-evaluation-day-toggle" type="button" aria-expanded=\{isExpanded\} aria-controls=\{dayPanelId\} onClick=\{\(\) => onToggleDay\(day\.date\)\}/);
+  assert.match(pageSource, /\{isExpanded && <div className="time-review-day-group-entries" id=\{dayPanelId\}>/);
+  assert.match(pageSource, /day\.entries\.length > 0 \? day\.entries\.map[\s\S]*?<strong>Keine Zeitmeldung<\/strong>/s);
+  assert.match(pageSource, /function buildTimeReviewMonthDays[\s\S]*?isPayrollWeekday\(day\.date\)/s);
+  assert.match(styles, /\.time-evaluation-day-toggle\[aria-expanded="true"\] \.time-evaluation-day-toggle-icon\s*\{[^}]*transform:\s*rotate\(90deg\);/s);
+});
+
+test("Zeitspannen erhalten nur bei vollständigen Zeiten einen dekorativen Pfeil", () => {
+  assert.match(pageSource, /function hasPayrollTimeRange\(entry: TimeEntry\): boolean \{[\s\S]*?effectivePayrollStartTime\(entry\) && effectivePayrollEndTime\(entry\)/);
+  assert.match(pageSource, /hasPayrollTimeRange\(check\.entry\) && <ArrowRight className="time-review-time-range-arrow" aria-hidden="true"/);
+  assert.match(styles, /\.time-review-time-range-arrow\s*\{[^}]*position:\s*absolute;[^}]*color:\s*#94a3b8;[^}]*pointer-events:\s*none;/s);
+});
+
+test("Monatsworkspace rendert nur Daten des aktuell geladenen Bereichs", () => {
+  assert.match(pageSource, /const evaluationRangeKey = reviewDataRangeKey\(evaluationMonthRange\)/);
+  assert.match(pageSource, /const isEvaluationDataReady = activeTimeSubtab === "evaluation"[\s\S]*?reviewAllEntriesRangeKey === evaluationRangeKey[\s\S]*?reviewAbsencesRangeKey === evaluationRangeKey/s);
+  assert.match(pageSource, /const evaluationEntries = isEvaluationDataReady \? reviewAllEntries : EMPTY_REVIEW_ENTRIES;/);
+  assert.match(pageSource, /const evaluationAbsences = isEvaluationDataReady \? reviewAbsences : EMPTY_REVIEW_ABSENCES;/);
+  assert.match(pageSource, /setReviewAllEntriesRangeKey\(reviewDataRangeKey\(reviewDataRange\)\)/);
+  assert.match(pageSource, /setReviewAbsencesRangeKey\(reviewDataRangeKey\(reviewDataRange\)\)/);
+  assert.match(pageSource, /if \(!isEvaluationDataReady\) \{\s*return;\s*\}[\s\S]*?setSelectedEvaluationPersonId\(null\)/);
+  assert.match(pageSource, /if \(!isReady\) \{[\s\S]*?aria-busy="true"[\s\S]*?Monatsauswertung wird geladen/);
 });
