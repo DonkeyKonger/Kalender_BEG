@@ -2446,68 +2446,55 @@ export function TimeEntriesPage() {
       {activeTimeSubtab === "evaluation" && (
         <div className="time-entries-main time-review-main time-evaluation-main">
           <div className="time-week-nav-panel time-evaluation-month-nav" aria-label="Monat für die Auswertung auswählen">
-            <div className="time-week-nav-title">
-              <span>Auswertungsmonat</span>
-              <strong>{formatCalendarMonth(selectedEvaluationMonth)}</strong>
-            </div>
-            <div className="time-evaluation-month-controls">
-              <button
-                className="time-week-scroll-button"
-                disabled={selectedEvaluationMonth.year <= 2000}
-                type="button"
-                aria-label="Vorheriges Jahr auswählen"
-                onClick={() => selectEvaluationYear(selectedEvaluationMonth.year - 1)}
-              >
-                <ChevronLeft aria-hidden="true" size={16} />
-              </button>
-              <label className="time-evaluation-year-select">
-                <span>Jahr</span>
-                <input
-                  aria-label="Auswertungsjahr"
-                  inputMode="numeric"
-                  max={2100}
-                  min={2000}
-                  type="number"
-                  value={selectedEvaluationMonth.year}
-                  onChange={(event) => selectEvaluationYear(Number(event.target.value))}
-                />
-              </label>
-              <button
-                className="time-week-scroll-button"
-                disabled={selectedEvaluationMonth.year >= 2100}
-                type="button"
-                aria-label="Nächstes Jahr auswählen"
-                onClick={() => selectEvaluationYear(selectedEvaluationMonth.year + 1)}
-              >
-                <ChevronRight aria-hidden="true" size={16} />
-              </button>
-            </div>
-            <div className="time-evaluation-month-strip-shell" role="group" aria-label={"Monat im Jahr " + selectedEvaluationMonth.year + " auswählen"}>
-              <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollLeft} type="button" aria-label="Monate nach links scrollen" onClick={() => scrollEvaluationMonths(-1)}>
-                <ChevronLeft aria-hidden="true" size={16} />
-              </button>
-              <div className="time-evaluation-month-strip" ref={evaluationMonthStripRef}>
-              {evaluationMonthOptions.map((option) => (
-                <button
-                  className={[
-                    option.month === selectedEvaluationMonth.month ? "is-active" : "",
-                    option.isCurrent ? "is-current" : "",
-                  ].filter(Boolean).join(" ")}
-                  data-month={option.month}
-                  key={option.month}
-                  title={`${option.label} ${option.year} · ${formatRangeLabel(calendarMonthRange(option).start, calendarMonthRange(option).end)}`}
-                  type="button"
-                  aria-current={option.isCurrent ? "date" : undefined}
-                  aria-pressed={option.month === selectedEvaluationMonth.month}
-                  onClick={() => selectEvaluationMonth(option)}
-                >
-                  {option.label}
+            <div className="time-evaluation-period-controls">
+              <div className="time-evaluation-month-strip-shell" role="group" aria-label={"Monat im Jahr " + selectedEvaluationMonth.year + " auswählen"}>
+                <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollLeft} type="button" aria-label="Monate nach links scrollen" onClick={() => scrollEvaluationMonths(-1)}>
+                  <ChevronLeft aria-hidden="true" size={16} />
                 </button>
-              ))}
+                <div className="time-evaluation-month-strip" ref={evaluationMonthStripRef}>
+                {evaluationMonthOptions.map((option) => (
+                  <button
+                    className={[
+                      option.month === selectedEvaluationMonth.month ? "is-active" : "",
+                      option.isCurrent ? "is-current" : "",
+                    ].filter(Boolean).join(" ")}
+                    data-month={option.month}
+                    key={option.month}
+                    title={`${option.label} ${option.year} · ${formatRangeLabel(calendarMonthRange(option).start, calendarMonthRange(option).end)}`}
+                    type="button"
+                    aria-current={option.isCurrent ? "date" : undefined}
+                    aria-pressed={option.month === selectedEvaluationMonth.month}
+                    onClick={() => selectEvaluationMonth(option)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                </div>
+                <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollRight} type="button" aria-label="Monate nach rechts scrollen" onClick={() => scrollEvaluationMonths(1)}>
+                  <ChevronRight aria-hidden="true" size={16} />
+                </button>
               </div>
-              <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollRight} type="button" aria-label="Monate nach rechts scrollen" onClick={() => scrollEvaluationMonths(1)}>
-                <ChevronRight aria-hidden="true" size={16} />
-              </button>
+              <div className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr">
+                <button
+                  className="time-week-scroll-button"
+                  disabled={selectedEvaluationMonth.year <= 2000}
+                  type="button"
+                  aria-label="Vorheriges Jahr auswählen"
+                  onClick={() => selectEvaluationYear(selectedEvaluationMonth.year - 1)}
+                >
+                  <ChevronLeft aria-hidden="true" size={16} />
+                </button>
+                <span aria-live="polite">{selectedEvaluationMonth.year}</span>
+                <button
+                  className="time-week-scroll-button"
+                  disabled={selectedEvaluationMonth.year >= 2100}
+                  type="button"
+                  aria-label="Nächstes Jahr auswählen"
+                  onClick={() => selectEvaluationYear(selectedEvaluationMonth.year + 1)}
+                >
+                  <ChevronRight aria-hidden="true" size={16} />
+                </button>
+              </div>
             </div>
           </div>
           <div className="project-record-subtabs time-evaluation-subtabs" role="tablist" aria-label="Monatsauswertung Bereiche">
@@ -3302,7 +3289,6 @@ function MonthlyPayrollWorkerWorkspace({
   return (
     <div className="time-review-workspace-layout time-evaluation-worker-workspace">
       <aside className="time-review-queue-panel" aria-label="Monteursliste für die Monatsauswertung">
-        <div className="time-review-queue-head"><h2>Monteure</h2><span>Monat</span></div>
         <label className="time-review-queue-search">
           <Search aria-hidden="true" size={15} />
           <input type="search" value={search} placeholder="Monteur suchen..." aria-label="Monteur suchen" onChange={(event) => onChangeSearch(event.currentTarget.value)} />
@@ -3354,8 +3340,10 @@ function MonthlyPayrollWorkerWorkspace({
                         <ChevronRight className="time-evaluation-day-toggle-icon" aria-hidden="true" size={15} />
                         <span className="time-evaluation-day-toggle-label"><strong className="time-review-day-group-weekday">{day.weekdayLabel}</strong><span>{formatDate(day.date)}</span></span>
                       </button>
-                      {day.entries.length > 0 && <PayrollOvernightStatusControl editable={canManageTimeEntries} hasConflict={day.hasOvernightStatusConflict} saving={false} status={day.overnightStatus} onChange={(status) => onUpdateOvernight(selectedWorker.personId, day.date, status)} />}
-                      {!day.entries.length && day.absenceType && <StatusBadge tone={day.absenceType} className="time-review-absence-badge">{absenceTypeLabels[day.absenceType]}</StatusBadge>}
+                      <span className="time-evaluation-day-status">
+                        {day.entries.length > 0 && <PayrollOvernightStatusControl editable={canManageTimeEntries} hasConflict={day.hasOvernightStatusConflict} saving={false} status={day.overnightStatus} onChange={(status) => onUpdateOvernight(selectedWorker.personId, day.date, status)} />}
+                        {!day.entries.length && day.absenceType && <StatusBadge tone={day.absenceType} className="time-review-absence-badge">{absenceTypeLabels[day.absenceType]}</StatusBadge>}
+                      </span>
                     </span>
                     <span className="time-review-day-group-total time-review-work-time-cell" role="cell">{formatTimeEntryMinutes(timeReviewDayTotalMinutes(day), "hours")}</span>
                   </div>

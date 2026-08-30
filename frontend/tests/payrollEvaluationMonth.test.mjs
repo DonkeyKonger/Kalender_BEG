@@ -52,22 +52,28 @@ test("Auswertung lädt den gewählten Monatsbereich über die vorhandene Datumsb
   assert.match(pageSource, /selectedEvaluationMonth/);
   assert.match(pageSource, /calendarMonthRange\(selectedEvaluationMonth\)/);
   assert.match(pageSource, /dateFrom: reviewDataRange\.start,[\s\S]*dateTo: reviewDataRange\.end,/);
-  assert.match(pageSource, /aria-label="Auswertungsjahr"/);
+  assert.match(pageSource, /className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr"/);
   assert.match(pageSource, /Monat im Jahr " \+ selectedEvaluationMonth\.year \+ " auswählen/);
   assert.doesNotMatch(pageSource, /selectedEvaluationWeek|evaluationWeekRange/);
   assert.match(pageSource, /selectedReviewWeek/);
   assert.match(pageSource, /time-review-week-nav/);
 });
 
-test("Monatsnavigation bleibt einzeilig, zeigt vollständige Buttons und hebt die Auswahl hervor", () => {
+test("Monatsnavigation zeigt fünf Monate und eine schlichte Jahressteuerung rechts", () => {
   assert.match(pageSource, /time-evaluation-month-strip-shell[\s\S]*?Monate nach links scrollen[\s\S]*?time-evaluation-month-strip[\s\S]*?data-month=\{option\.month\}[\s\S]*?Monate nach rechts scrollen/s);
   assert.match(pageSource, /scrollEvaluationMonths\(-1\)[\s\S]*?scrollEvaluationMonths\(1\)/s);
   assert.match(pageSource, /function evaluationMonthVisibleButtonCount[\s\S]*?Math\.floor\(\(container\.clientWidth - firstButton\.offsetWidth\) \/ step\) \+ 1/s);
   assert.match(pageSource, /function scrollEvaluationMonths[\s\S]*?targetIndex[\s\S]*?container\.scrollTo\(\{ left: buttons\[targetIndex\]\?\.offsetLeft/s);
   assert.match(pageSource, /alignEvaluationMonthsToSelection\(container, selectedEvaluationMonth\.month\)/);
   assert.match(styles, /\.time-evaluation-month-strip\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/s);
-  assert.match(styles, /\.time-evaluation-month-strip button\s*\{[^}]*flex:\s*0 0 calc\(\(100% - 30px\) \/ 6\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s);
+  assert.match(pageSource, /time-evaluation-period-controls[\s\S]*?time-evaluation-month-strip-shell[\s\S]*?time-evaluation-year-navigation/s);
+  assert.match(pageSource, /className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr"[\s\S]*?Vorheriges Jahr auswählen[\s\S]*?\{selectedEvaluationMonth\.year\}[\s\S]*?Nächstes Jahr auswählen/s);
+  assert.doesNotMatch(pageSource, /time-evaluation-year-select|time-evaluation-month-controls/);
+  assert.match(styles, /\.time-evaluation-period-controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*gap:\s*12px;/s);
+  assert.match(styles, /\.time-evaluation-month-strip button\s*\{[^}]*flex:\s*0 0 calc\(\(100% - 24px\) \/ 5\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s);
+  assert.match(styles, /\.time-evaluation-year-navigation \.time-week-scroll-button\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;/s);
   assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*flex-basis:\s*calc\(\(100% - 12px\) \/ 3\);/s);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-period-controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?\.time-evaluation-year-navigation\s*\{[^}]*justify-self:\s*end;/s);
   assert.match(styles, /\.time-evaluation-month-strip button\.is-active\s*\{[^}]*background:\s*var\(--time-week-active-blue\);/s);
   assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
 });
@@ -89,8 +95,11 @@ test("Monteur-Untertab verwendet die gemeinsame Prüfwarteschlange mit Monatsdat
 
 test("Auswertungs-Untertabs liegen in einer eigenen Workspace-Zeile", () => {
   assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/s);
-  assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*50px;[^}]*width:\s*100%;[^}]*padding:\s*9px 24px;/s);
+  assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*46px;[^}]*width:\s*100%;[^}]*padding:\s*8px 24px;/s);
   assert.match(styles, /\.time-evaluation-subtabs button:focus-visible\s*\{[^}]*box-shadow:/s);
+  assert.match(styles, /\.time-evaluation-subtabs button\s*\{[^}]*min-height:\s*28px;[^}]*border-radius:\s*0;[^}]*background:\s*#f1f5f9;[^}]*color:\s*#475569;/s);
+  assert.match(styles, /\.time-evaluation-subtabs button\.is-active\s*\{[^}]*background:\s*var\(--time-week-active-blue\);[^}]*color:\s*#ffffff;[^}]*box-shadow:\s*none;/s);
+  assert.match(styles, /\.time-evaluation-subtabs button:hover,[\s\S]*?\.time-evaluation-subtabs button:focus-visible\s*\{[^}]*background:\s*#e2e8f0;[^}]*color:\s*#334155;/s);
 });
 
 test("Monats- und Wochenprüfung teilen responsive Tabellenüberschriften", () => {
@@ -108,6 +117,31 @@ test("Monatstage starten eingeklappt und behalten einen zugänglichen Einzel-Tog
   assert.match(pageSource, /day\.entries\.length > 0 \? day\.entries\.map[\s\S]*?<strong>Keine Zeitmeldung<\/strong>/s);
   assert.match(pageSource, /function buildTimeReviewMonthDays[\s\S]*?isPayrollWeekday\(day\.date\)/s);
   assert.match(styles, /\.time-evaluation-day-toggle\[aria-expanded="true"\] \.time-evaluation-day-toggle-icon\s*\{[^}]*transform:\s*rotate\(90deg\);/s);
+});
+
+test("Monatstage halten Wochentag, Datum und Status in festen nebeneinanderliegenden Spalten", () => {
+  const monthlyStart = pageSource.indexOf('function MonthlyPayrollWorkerWorkspace');
+  const monthlySource = pageSource.slice(monthlyStart);
+
+  assert.ok(monthlyStart >= 0);
+  assert.match(monthlySource, /className="time-review-day-group-label time-evaluation-day-group-label" role="rowheader"[\s\S]*?className="time-evaluation-day-toggle"[\s\S]*?className="time-review-day-group-weekday"[\s\S]*?\{formatDate\(day\.date\)\}[\s\S]*?className="time-evaluation-day-status"[\s\S]*?<PayrollOvernightStatusControl/s);
+  assert.match(styles, /\.time-evaluation-day-group-label\s*\{[^}]*--time-review-weekday-label-inline-size:\s*80px;[^}]*--time-evaluation-day-date-inline-size:\s*76px;[^}]*display:\s*flex;[^}]*gap:\s*8px;/s);
+  assert.match(styles, /\.time-evaluation-day-toggle\s*\{[^}]*display:\s*grid;[^}]*flex:\s*0 0 calc\([^}]*grid-template-columns:\s*var\(--time-evaluation-day-toggle-icon-size\) var\(--time-review-weekday-label-inline-size\) var\(--time-evaluation-day-date-inline-size\);/s);
+  assert.match(styles, /\.time-evaluation-day-toggle-label\s*\{[^}]*display:\s*contents;/s);
+  assert.match(styles, /\.time-evaluation-day-toggle-label > \.time-review-day-group-weekday\s*\{[^}]*grid-column:\s*2;/s);
+  assert.match(styles, /\.time-evaluation-day-toggle-label > span\s*\{[^}]*grid-column:\s*3;/s);
+  assert.match(styles, /\.time-evaluation-day-status\s*\{[^}]*flex:\s*0 0 var\(--time-review-overnight-status-width\);[^}]*width:\s*var\(--time-review-overnight-status-width\);/s);
+});
+
+test("Monatsauswertung entfernt nur ihren Monteur-Kopfblock", () => {
+  const monthlyStart = pageSource.indexOf('className="time-review-workspace-layout time-evaluation-worker-workspace"');
+  const monthlyEnd = pageSource.indexOf('function currentIsoWeek', monthlyStart);
+  const monthlyWorkspace = pageSource.slice(monthlyStart, monthlyEnd);
+
+  assert.ok(monthlyStart >= 0);
+  assert.doesNotMatch(monthlyWorkspace, /time-review-queue-head/);
+  assert.match(monthlyWorkspace, /time-review-queue-search[\s\S]*?time-review-queue-filters[\s\S]*?time-review-queue-list/s);
+  assert.match(styles, /\.time-evaluation-worker-workspace \.time-review-queue-panel\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/s);
 });
 
 test("Zeitspannen erhalten nur bei vollständigen Zeiten einen dekorativen Pfeil", () => {

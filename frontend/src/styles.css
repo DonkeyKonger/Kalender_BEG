@@ -17310,49 +17310,45 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-evaluation-month-nav {
-  grid-template-columns: minmax(160px, auto) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.time-evaluation-month-controls {
-  display: flex;
-  align-items: end;
-  gap: 6px;
-}
-
-.time-evaluation-year-select {
+.time-evaluation-period-controls {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.time-evaluation-year-navigation {
+  display: inline-flex;
+  align-items: center;
   gap: 2px;
 }
 
-.time-evaluation-year-select span {
-  color: #64748b;
-  font-size: 0.7rem;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-
-.time-evaluation-year-select input {
-  width: 86px;
-  min-height: 30px;
-  border: 1px solid #d7e1ee;
-  border-radius: 0;
-  background: #ffffff;
-  color: #172033;
-  font: inherit;
+.time-evaluation-year-navigation > span {
+  min-width: 46px;
+  color: #334155;
   font-size: 0.82rem;
   font-weight: 850;
-  padding: 3px 6px;
+  text-align: center;
 }
 
-.time-evaluation-year-select input:focus-visible {
-  border-color: #9bbce0;
-  background: #f3f8ff;
-  outline: none;
+.time-evaluation-year-navigation .time-week-scroll-button {
+  width: 26px;
+  height: 26px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.time-entries-page.is-figma-times-workspace .time-evaluation-year-navigation .time-week-scroll-button,
+.time-entries-page.is-figma-times-workspace .time-evaluation-year-navigation .time-week-scroll-button:disabled {
+  border-color: transparent;
+  background: transparent;
 }
 
 .time-evaluation-month-strip-shell {
   display: grid;
-  grid-column: 1 / -1;
   grid-template-columns: 26px minmax(0, 1fr) 26px;
   align-items: center;
   gap: 6px;
@@ -17373,7 +17369,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-evaluation-month-strip button {
-  flex: 0 0 calc((100% - 30px) / 6);
+  flex: 0 0 calc((100% - 24px) / 5);
   min-width: 84px;
   min-height: 30px;
   border: 1px solid #d7e1ee;
@@ -17410,7 +17406,7 @@ body.mobile-modal-scroll-locked {
 .time-evaluation-subtabs {
   display: flex;
   box-sizing: border-box;
-  min-height: 50px;
+  min-height: 46px;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -17418,19 +17414,36 @@ body.mobile-modal-scroll-locked {
   border-top: 1px solid #e2e8f0;
   border-bottom: 1px solid #e2e8f0;
   background: #ffffff;
-  padding: 9px 24px;
+  padding: 8px 24px;
 }
 
 .time-evaluation-subtabs button {
-  min-height: 30px;
-  padding: 6px 14px;
+  min-height: 28px;
+  border-radius: 0;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 750;
+  padding: 6px 11px;
+}
+
+.time-evaluation-subtabs button.is-active {
+  background: var(--time-week-active-blue);
+  color: #ffffff;
+  box-shadow: none;
 }
 
 .time-evaluation-subtabs button:hover,
 .time-evaluation-subtabs button:focus-visible {
-  background: #edf4fb;
-  color: #174678;
+  background: #e2e8f0;
+  color: #334155;
   outline: none;
+}
+
+.time-evaluation-subtabs button.is-active:hover,
+.time-evaluation-subtabs button.is-active:focus-visible {
+  background: var(--time-week-active-blue);
+  color: #ffffff;
 }
 
 .time-evaluation-subtabs button:focus-visible {
@@ -17439,6 +17452,10 @@ body.mobile-modal-scroll-locked {
 
 .time-evaluation-worker-workspace {
   margin-top: 0;
+}
+
+.time-evaluation-worker-workspace .time-review-queue-panel {
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .time-evaluation-workspace-loading,
@@ -20082,16 +20099,21 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-evaluation-day-group-label {
+  --time-review-weekday-label-inline-size: 80px;
+  --time-evaluation-day-toggle-icon-size: 15px;
+  --time-evaluation-day-date-inline-size: 76px;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .time-evaluation-day-toggle {
-  display: inline-flex;
+  display: grid;
+  flex: 0 0 calc(var(--time-evaluation-day-toggle-icon-size) + var(--time-review-weekday-label-inline-size) + var(--time-evaluation-day-date-inline-size) + 12px);
+  grid-template-columns: var(--time-evaluation-day-toggle-icon-size) var(--time-review-weekday-label-inline-size) var(--time-evaluation-day-date-inline-size);
   min-width: 0;
   align-items: center;
-  gap: 5px;
+  column-gap: 6px;
   border: 0;
   background: transparent;
   color: #334155;
@@ -20113,7 +20135,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-evaluation-day-toggle-icon {
-  flex: 0 0 auto;
+  grid-column: 1;
   color: #64748b;
   transition: transform 120ms ease;
 }
@@ -20123,10 +20145,23 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-evaluation-day-toggle-label {
-  display: inline-flex;
+  display: contents;
+}
+
+.time-evaluation-day-toggle-label > .time-review-day-group-weekday {
+  grid-column: 2;
+}
+
+.time-evaluation-day-toggle-label > span {
+  grid-column: 3;
   min-width: 0;
-  align-items: baseline;
-  gap: 6px;
+}
+
+.time-evaluation-day-status {
+  display: flex;
+  flex: 0 0 var(--time-review-overnight-status-width);
+  width: var(--time-review-overnight-status-width);
+  align-items: center;
 }
 
 .time-evaluation-day-toggle-label > span {
@@ -20308,6 +20343,14 @@ body.mobile-modal-scroll-locked {
 @media (max-width: 760px) {
   .time-entries-page.is-figma-times-workspace .time-review-main {
     --time-review-layout-inline: 12px;
+  }
+
+  .time-evaluation-period-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .time-evaluation-year-navigation {
+    justify-self: end;
   }
 
   .time-evaluation-month-strip button {
