@@ -2573,12 +2573,9 @@ export function TimeEntriesPage() {
             {reviewAllEntriesError && <p className="time-table-note">{reviewAllEntriesError}</p>}
             <div className="time-summary-strip">
               <div><span>Gesamtsumme</span><strong>{formatMinutes(finalHoursTotals.totalMinutes)}</strong></div>
-              <div><span>Offene Prüffälle</span><strong>{evaluationTimeReviewIssues.length}</strong></div>
-              <div><span>Monteure</span><strong>{finalHoursTotals.byPerson.length}</strong></div>
               <div><span>Baustellen</span><strong>{finalHoursTotals.bySite.length}</strong></div>
             </div>
             <div className="time-final-summary-grid">
-              <FinalSummaryList title="Summe je Monteur" rows={finalHoursTotals.byPerson} />
               <FinalSummaryList title="Summe je Baustelle" rows={finalHoursTotals.bySite} />
             </div>
             </>}

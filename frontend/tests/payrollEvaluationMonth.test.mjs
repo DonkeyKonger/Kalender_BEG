@@ -93,6 +93,18 @@ test("Monteur-Untertab verwendet die gemeinsame Prüfwarteschlange mit Monatsdat
   assert.match(pageSource, /activeTimeSubtab === "review" \|\| \(activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers"\)/);
 });
 
+test("Baustellen-Untertab zeigt nur baustellenbezogene Kennzahlen und Summen", () => {
+  const sitesStart = pageSource.indexOf(') : (\n          <div className="time-final-hours-panel">');
+  const sitesEnd = pageSource.indexOf('\n          )}\n        </div>', sitesStart);
+  const sitesWorkspace = pageSource.slice(sitesStart, sitesEnd);
+
+  assert.ok(sitesStart >= 0);
+  assert.ok(sitesEnd > sitesStart);
+  assert.match(sitesWorkspace, /Gesamtsumme[\s\S]*?Baustellen[\s\S]*?Summe je Baustelle/);
+  assert.doesNotMatch(sitesWorkspace, /Offene Prüffälle|<span>Monteure<\/span>|Summe je Monteur/);
+  assert.match(pageSource, /activeEvaluationSubtab === "workers" \? \([\s\S]*?<MonthlyPayrollWorkerWorkspace/s);
+});
+
 test("Auswertungs-Untertabs liegen in einer eigenen Workspace-Zeile", () => {
   assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/s);
   assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*46px;[^}]*width:\s*100%;[^}]*padding:\s*8px 24px;/s);
