@@ -13,7 +13,7 @@ from app.models.assignment import Assignment
 from app.models.enums import AbsenceStatus, PersonType
 from app.models.person import Person
 from app.models.site import Site
-from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry
+from app.models.extra_work_ticket import ExtraWorkTicket
 from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch, SiteMeasurementEntry, SiteMeasurementItem
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.payroll_site_cockpit import (
