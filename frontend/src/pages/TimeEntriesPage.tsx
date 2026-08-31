@@ -1924,7 +1924,7 @@ export function TimeEntriesPage() {
           <div className="project-record-subtabs time-evaluation-subtabs" role="tablist" aria-label="Monatsauswertung Bereiche">
             {([
               ["workers", "Monteure"],
-              ["sites", "Baustellen"],
+              ["sites", "Baustellen (Beta)"],
             ] as const).map(([tab, label]) => (
               <button
                 key={tab}

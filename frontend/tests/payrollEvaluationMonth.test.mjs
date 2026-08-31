@@ -96,7 +96,7 @@ test("Monatsabrechnungen für alle und den ausgewählten Monteur sind als Platzh
 
 test("Monteur-Untertab verwendet die gemeinsame Prüfwarteschlange mit Monatsdaten", () => {
   assert.match(pageSource, /const \[activeEvaluationSubtab, setActiveEvaluationSubtab\] = useState<EvaluationSubtab>\("workers"\)/);
-  assert.match(pageSource, /\["workers", "Monteure"\],[\s\S]*?\["sites", "Baustellen"\]/);
+  assert.match(pageSource, /\["workers", "Monteure"\],[\s\S]*?\["sites", "Baustellen \(Beta\)"\]/);
   assert.match(pageSource, /activeEvaluationSubtab === "workers" \? \([\s\S]*?<MonthlyPayrollWorkerWorkspace/s);
   assert.match(pageSource, /\) : \(\s*<PayrollSiteCockpit/);
   assert.match(pageSource, /buildTimeReviewMonthDays\([\s\S]*?evaluationMonthRange\.start,[\s\S]*?evaluationMonthRange\.end/s);
