@@ -241,6 +241,7 @@ def test_manual_measurement_status_reset_to_draft_is_allowed_from_every_workflow
         status=initial_status,
         origin=MeasurementBatchOrigin.OFFICE.value,
         position_mode=MeasurementPositionMode.BLANK.value,
+        first_submitted_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
         customer_signed_at=datetime.now(timezone.utc),
         customer_signature_name="Kunde Beispiel",
         customer_signature_place="Musterstadt",
@@ -280,6 +281,7 @@ def test_manual_measurement_status_reset_to_draft_is_allowed_from_every_workflow
     assert reset.status == "draft"
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     assert stored_batch is not None
+    assert stored_batch.first_submitted_at.date() == date(2026, 8, 1)
     assert db.get(SiteMeasurementEntry, entry.id).status == "draft"
     assert stored_batch.customer_signed_at is None
     assert stored_batch.customer_signature_name is None
@@ -1426,6 +1428,9 @@ def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
     assert submitted.status == "submitted"
     assert submitted.submitted_by_user_id == user.id
     assert submitted.submitted_at is not None
+    stored_batch = db.get(SiteMeasurementBatch, batch.id)
+    assert stored_batch is not None
+    assert stored_batch.first_submitted_at == stored_batch.submitted_at
 
     with pytest.raises(HTTPException) as locked:
         service.create_mobile_entry(

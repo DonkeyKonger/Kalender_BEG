@@ -174,6 +174,11 @@ export type PayrollSiteRiskLevel = "critical" | "warning" | "none" | "missing_da
 export type PayrollSiteOfferBudgetBasis = "current_active_released_measurement_base";
 
 export type PayrollSiteCockpitTotals = {
+  measurement_minutes: number;
+  supplementary_minutes: number;
+  performance_minutes: number;
+  realized_actual_minutes: number;
+  result_minutes: number;
   offer_minutes: number | null;
   actual_minutes: number;
   forecast_minutes: number | null;
@@ -188,6 +193,12 @@ export type PayrollSiteCockpitSite = {
   site_id: number;
   site_number: string | null;
   site_name: string;
+  measurement_minutes: number;
+  supplementary_minutes: number;
+  performance_minutes: number;
+  realized_actual_minutes: number;
+  result_minutes: number;
+  result_tone: "positive" | "negative" | "neutral";
   offer_minutes: number | null;
   actual_minutes: number;
   forecast_minutes: number | null;
@@ -212,6 +223,7 @@ export type PayrollSiteActionItem = {
 export type PayrollSiteCockpit = {
   date_from: string;
   date_to: string;
+  accounting_basis: "measurement_submission_realization";
   effective_as_of: string;
   offer_budget_basis: PayrollSiteOfferBudgetBasis;
   offer_budget_as_of: string;

@@ -20317,18 +20317,41 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-evaluation-week-group-head {
-  display: flex;
-  min-height: 25px;
+  display: grid;
+  grid-template-columns: 30px minmax(72px, 0.65fr) minmax(66px, 0.5fr) minmax(140px, 1.35fr) repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
+  gap: 8px;
+  min-height: 29px;
   align-items: center;
   border-top: 1px solid #dfe5ed;
   border-bottom: 1px solid #e7ecf2;
-  background: #f8fafc;
-  color: #64748b;
+  background: #eef3f8;
+  color: #475569;
   font-size: 0.68rem;
   font-weight: 850;
   letter-spacing: 0.01em;
   padding: 3px 10px;
 }
+
+.time-evaluation-week-group-label { grid-column: 2 / 10; font-size: .72rem; }
+.time-evaluation-week-group-total { grid-column: 10; color: #334155; font-size: .72rem; font-weight: 900; }
+
+.payroll-site-realization { display: grid; gap: 14px; padding: 18px 24px; }
+.payroll-site-realization-head h2 { margin: 0; font-size: 1rem; }
+.payroll-site-realization-head p { margin: 3px 0 0; color: #64748b; font-size: .8rem; }
+.payroll-site-calculation-info { border: 1px solid #dfe5ed; background: #f8fafc; color: #475569; font-size: .78rem; padding: 8px 10px; }
+.payroll-site-calculation-info summary { display: flex; align-items: center; gap: 6px; cursor: pointer; color: #243b5a; font-weight: 850; }
+.payroll-site-calculation-info p { margin: 8px 0 0; line-height: 1.45; }
+.payroll-site-realization-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.payroll-site-realization-list { display: grid; gap: 8px; }
+.payroll-site-realization-row { border: 1px solid #dfe5ed; border-left: 4px solid #94a3b8; padding: 10px; }
+.payroll-site-realization-row.is-positive { border-left-color: #16a34a; }
+.payroll-site-realization-row.is-negative { border-left-color: #dc2626; }
+.payroll-site-realization-row header { display: flex; justify-content: space-between; gap: 8px; }
+.payroll-site-realization-row small { color: #64748b; }
+.payroll-site-realization-row dl { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 10px 0 0; }
+.payroll-site-realization-row dt { color: #64748b; font-size: .68rem; font-weight: 750; }
+.payroll-site-realization-row dd { margin: 2px 0 0; color: #1e293b; font-size: .78rem; font-weight: 850; }
+@media (max-width: 760px) { .payroll-site-realization { padding: 14px; } .payroll-site-realization-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .payroll-site-realization-row dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .time-review-day-group-head {
   display: grid;
@@ -20657,6 +20680,8 @@ body.mobile-modal-scroll-locked {
     gap: 6px;
     padding: 7px;
   }
+
+  .time-evaluation-week-group-head { grid-template-columns: 28px minmax(58px, 0.75fr) 64px minmax(120px, 1.25fr) repeat(4, 58px) 54px 72px 56px; gap: 6px; padding: 5px 7px; }
 }
 
 @media (max-width: 580px) {

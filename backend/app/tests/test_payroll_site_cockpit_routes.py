@@ -106,10 +106,16 @@ def test_cockpit_route_has_expected_shape_and_disables_caching(monkeypatch) -> N
     assert response.json() == {
         "date_from": "2026-08-01",
         "date_to": "2026-08-31",
+        "accounting_basis": "measurement_submission_realization",
         "effective_as_of": "2026-08-31",
         "offer_budget_basis": OFFER_BUDGET_BASIS,
         "offer_budget_as_of": "2026-08-30",
         "totals": {
+            "measurement_minutes": 0.0,
+            "supplementary_minutes": 0.0,
+            "performance_minutes": 0.0,
+            "realized_actual_minutes": 0.0,
+            "result_minutes": 0.0,
             "offer_minutes": 600.0,
             "actual_minutes": 420,
             "forecast_minutes": None,

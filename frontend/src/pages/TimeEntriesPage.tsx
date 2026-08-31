@@ -15,7 +15,6 @@ import {
   currentCalendarMonth,
   type CalendarMonthSelection,
 } from "../lib/calendarMonth";
-import { resolvePayrollSiteActionItems, resolvePayrollSiteHistoryView, selectPayrollSiteId } from "../lib/payrollSiteCockpit";
 import {
   applyPayrollTimeBasisChange,
   buildPayrollManualEntryPayload,
@@ -53,7 +52,7 @@ import type { Absence } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
 import type { Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
-import type { OvernightStatus, PayrollSiteCockpit as PayrollSiteCockpitData, PayrollSiteHistory, TimeEntry, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview } from "../types/timeEntry";
+import type { OvernightStatus, PayrollSiteCockpit as PayrollSiteCockpitData, TimeEntry, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview } from "../types/timeEntry";
 
 type TimeSubtab = "review" | "evaluation";
 type EvaluationSubtab = "workers" | "sites";
@@ -233,12 +232,6 @@ export function TimeEntriesPage() {
   const [payrollSiteCockpitError, setPayrollSiteCockpitError] = useState<string | null>(null);
   const [isLoadingPayrollSiteCockpit, setIsLoadingPayrollSiteCockpit] = useState(false);
   const [payrollSiteCockpitRefreshKey, setPayrollSiteCockpitRefreshKey] = useState(0);
-  const [selectedEvaluationSiteId, setSelectedEvaluationSiteId] = useState<number | null>(null);
-  const [payrollSiteHistory, setPayrollSiteHistory] = useState<PayrollSiteHistory | null>(null);
-  const [payrollSiteHistoryError, setPayrollSiteHistoryError] = useState<string | null>(null);
-  const [isLoadingPayrollSiteHistory, setIsLoadingPayrollSiteHistory] = useState(false);
-  const [payrollSiteHistoryRequestKey, setPayrollSiteHistoryRequestKey] = useState<string | null>(null);
-  const [payrollSiteHistoryRefreshKey, setPayrollSiteHistoryRefreshKey] = useState(0);
   const [expandedEvaluationDayKeys, setExpandedEvaluationDayKeys] = useState<Set<string>>(() => new Set());
   const [timeReviewDiagnosticEntry, setTimeReviewDiagnosticEntry] = useState<TimeEntry | null>(null);
   const [timeReviewDialogMode, setTimeReviewDialogMode] = useState<TimeReviewDialogMode | null>(null);
@@ -467,17 +460,6 @@ export function TimeEntriesPage() {
   const evaluationRangeKey = reviewDataRangeKey(evaluationMonthRange);
   const isPayrollSiteCockpitReady = payrollSiteCockpit !== null
     && reviewDataRangeKey({ start: payrollSiteCockpit.date_from, end: payrollSiteCockpit.date_to }) === evaluationRangeKey;
-  const payrollSiteHistorySelectionKey = isPayrollSiteCockpitReady && selectedEvaluationSiteId !== null
-    ? `${selectedEvaluationSiteId}:${evaluationMonthRange.end}`
-    : null;
-  const payrollSiteHistoryView = resolvePayrollSiteHistoryView({
-    error: payrollSiteHistoryError,
-    history: payrollSiteHistory,
-    isLoading: isLoadingPayrollSiteHistory,
-    requestKey: payrollSiteHistoryRequestKey,
-    selectedRequestKey: payrollSiteHistorySelectionKey,
-    selectedSiteId: selectedEvaluationSiteId,
-  });
   const reviewDataRange = activeTimeSubtab === "evaluation" ? evaluationMonthRange : reviewWeekRange;
   const reviewWeekOptions = useMemo(
     () => buildCalendarWeekOptions(currentReviewWeek),
@@ -1287,11 +1269,6 @@ export function TimeEntriesPage() {
           return;
         }
         setPayrollSiteCockpit(cockpit);
-        setSelectedEvaluationSiteId((currentSiteId) => selectPayrollSiteId(
-          currentSiteId,
-          cockpit.sites,
-          resolvePayrollSiteActionItems(cockpit),
-        ));
       })
       .catch((requestError) => {
         if (!controller.signal.aborted) {
@@ -1311,58 +1288,6 @@ export function TimeEntriesPage() {
     evaluationMonthRange.end,
     evaluationMonthRange.start,
     payrollSiteCockpitRefreshKey,
-  ]);
-
-  useEffect(() => {
-    if (
-      activeTimeSubtab !== "evaluation"
-      || activeEvaluationSubtab !== "sites"
-      || !isPayrollSiteCockpitReady
-      || selectedEvaluationSiteId === null
-      || !payrollSiteCockpit?.sites.some((site) => site.site_id === selectedEvaluationSiteId)
-    ) {
-      setPayrollSiteHistory(null);
-      setPayrollSiteHistoryError(null);
-      setIsLoadingPayrollSiteHistory(false);
-      setPayrollSiteHistoryRequestKey(null);
-      return;
-    }
-
-    const controller = new AbortController();
-    setPayrollSiteHistoryRequestKey(`${selectedEvaluationSiteId}:${evaluationMonthRange.end}`);
-    setPayrollSiteHistory(null);
-    setPayrollSiteHistoryError(null);
-    setIsLoadingPayrollSiteHistory(true);
-    api.payrollSiteHistory({
-      siteId: selectedEvaluationSiteId,
-      dateTo: evaluationMonthRange.end,
-      signal: controller.signal,
-    })
-      .then((history) => {
-        if (!controller.signal.aborted) {
-          setPayrollSiteHistory(history);
-        }
-      })
-      .catch((requestError) => {
-        if (!controller.signal.aborted) {
-          setPayrollSiteHistoryError(readApiError(requestError, "Stundenverlauf konnte nicht geladen werden."));
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setIsLoadingPayrollSiteHistory(false);
-        }
-      });
-
-    return () => controller.abort();
-  }, [
-    activeEvaluationSubtab,
-    activeTimeSubtab,
-    evaluationMonthRange.end,
-    isPayrollSiteCockpitReady,
-    payrollSiteCockpit,
-    payrollSiteHistoryRefreshKey,
-    selectedEvaluationSiteId,
   ]);
 
   function applyUpdatedTimeEntry(updatedEntry: TimeEntry): void {
@@ -2695,14 +2620,8 @@ export function TimeEntriesPage() {
             <PayrollSiteCockpit
               data={isPayrollSiteCockpitReady ? payrollSiteCockpit : null}
               error={payrollSiteCockpitError}
-              history={payrollSiteHistoryView.history}
-              historyError={payrollSiteHistoryView.error}
-              isHistoryLoading={payrollSiteHistoryView.isLoading}
               isLoading={isLoadingPayrollSiteCockpit || (!isPayrollSiteCockpitReady && payrollSiteCockpitError === null)}
               onRetry={() => setPayrollSiteCockpitRefreshKey((current) => current + 1)}
-              onRetryHistory={() => setPayrollSiteHistoryRefreshKey((current) => current + 1)}
-              onSelectSite={setSelectedEvaluationSiteId}
-              selectedSiteId={selectedEvaluationSiteId}
             />
           )}
         </div>
@@ -3453,7 +3372,8 @@ function MonthlyPayrollWorkerWorkspace({
               {weekGroups.map((weekGroup) => (
                 <div className="time-evaluation-week-group" key={weekGroup.key}>
                   <div className="time-evaluation-week-group-head">
-                    <span>KW {weekGroup.week} · {formatMonthlyWeekHours(weekGroup.totalMinutes)} Std.</span>
+                    <span className="time-evaluation-week-group-label">KW {weekGroup.week}</span>
+                    <span className="time-evaluation-week-group-total time-review-work-time-cell">{formatMonthlyWeekHours(weekGroup.totalMinutes)} Std.</span>
                   </div>
                   {weekGroup.days.map((day) => {
                     const isExpanded = expandedDayKeys.has(day.date);

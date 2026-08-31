@@ -54,6 +54,7 @@ class ExtraWorkTicket(TimestampMixin, Base):
         default=False,
         server_default="false",
     )
+    invoiced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

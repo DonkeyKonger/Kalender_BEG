@@ -109,15 +109,15 @@ test("Monteur-Untertab verwendet die gemeinsame Prüfwarteschlange mit Monatsdat
   assert.match(pageSource, /activeTimeSubtab === "review" \|\| \(activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers"\)/);
 });
 
-test("Baustellen-Untertab verwendet das eigenständige aggregierte Forecast-Cockpit", () => {
+test("Baustellen-Untertab verwendet die eigenständige monatliche Realisierungsaggregation", () => {
   const sitesStart = pageSource.indexOf(') : (\n            <PayrollSiteCockpit');
   const sitesEnd = pageSource.indexOf('\n          )}\n        </div>', sitesStart);
   const sitesWorkspace = pageSource.slice(sitesStart, sitesEnd);
 
   assert.ok(sitesStart >= 0);
   assert.ok(sitesEnd > sitesStart);
-  assert.match(sitesWorkspace, /<PayrollSiteCockpit[\s\S]*?data=\{isPayrollSiteCockpitReady[\s\S]*?selectedSiteId=\{selectedEvaluationSiteId\}/);
-  assert.doesNotMatch(sitesWorkspace, /finalHoursTotals|Summe je Baustelle|includeGpsStatus/);
+  assert.match(sitesWorkspace, /<PayrollSiteCockpit[\s\S]*?data=\{isPayrollSiteCockpitReady[\s\S]*?onRetry=\{/);
+  assert.doesNotMatch(sitesWorkspace, /finalHoursTotals|Summe je Baustelle|includeGpsStatus|selectedSiteId/);
   assert.match(pageSource, /activeEvaluationSubtab === "workers" \? \([\s\S]*?<MonthlyPayrollWorkerWorkspace/s);
 });
 
@@ -164,10 +164,12 @@ test("Monatsansicht gruppiert Tage nach ISO-Kalenderwoche und zeigt die Wochensu
 
   assert.ok(monthlyStart >= 0);
   assert.match(monthlySource, /const weekGroups = groupTimeReviewMonthDays\(days\);/);
-  assert.match(monthlySource, /weekGroups\.map\(\(weekGroup\) => \([\s\S]*?className="time-evaluation-week-group-head"[\s\S]*?KW \{weekGroup\.week\} · \{formatMonthlyWeekHours\(weekGroup\.totalMinutes\)\} Std\.[\s\S]*?weekGroup\.days\.map/s);
+  assert.match(monthlySource, /weekGroups\.map\(\(weekGroup\) => \([\s\S]*?className="time-evaluation-week-group-label">KW \{weekGroup\.week\}[\s\S]*?className="time-evaluation-week-group-total time-review-work-time-cell">\{formatMonthlyWeekHours\(weekGroup\.totalMinutes\)\} Std\.[\s\S]*?weekGroup\.days\.map/s);
   assert.match(pageSource, /function groupTimeReviewMonthDays\([\s\S]*?isoWeekFromDate\(parseDateInput\(day\.date\)\)[\s\S]*?timeReviewDayTotalMinutes\(day\)/s);
   assert.match(pageSource, /function formatMonthlyWeekHours\([\s\S]*?minimumFractionDigits: 0,[\s\S]*?maximumFractionDigits: 2,/s);
-  assert.match(styles, /\.time-evaluation-week-group-head\s*\{[^}]*min-height:\s*25px;[^}]*border-top:\s*1px solid #dfe5ed;[^}]*font-size:\s*0\.68rem;/s);
+  assert.match(styles, /\.time-evaluation-week-group-head\s*\{[^}]*grid-template-columns:[^}]*min-height:\s*29px;[^}]*border-top:\s*1px solid #dfe5ed;[^}]*font-size:\s*0\.68rem;/s);
+  assert.match(styles, /\.time-evaluation-week-group-label\s*\{[^}]*grid-column:\s*2 \/ 10/);
+  assert.match(styles, /\.time-evaluation-week-group-total\s*\{[^}]*grid-column:\s*10/);
 });
 
 test("Monatstage halten Wochentag, Datum und Status in festen nebeneinanderliegenden Spalten", () => {

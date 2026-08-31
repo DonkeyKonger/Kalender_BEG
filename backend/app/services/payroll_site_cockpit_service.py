@@ -1,19 +1,20 @@
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy import Integer, case, cast, extract, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.enums import AbsenceStatus, PersonType
 from app.models.person import Person
 from app.models.site import Site
-from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementItem
+from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry
+from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch, SiteMeasurementEntry, SiteMeasurementItem
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.payroll_site_cockpit import (
     PayrollSiteCockpitActionItemRead,
@@ -71,64 +72,115 @@ class PayrollSiteCockpitService:
                 "date_from und date_to müssen im selben Kalendermonat liegen.",
             )
 
-        budget_as_of = self._today_provider()
-        actual_effective_as_of = min(date_to, budget_as_of)
-        portfolio_site_ids = self._portfolio_site_ids(
-            date_from=date_from,
-            date_to=actual_effective_as_of,
-        )
-        if not portfolio_site_ids:
-            return self._empty_cockpit(
-                date_from=date_from,
-                date_to=date_to,
-                actual_effective_as_of=actual_effective_as_of,
-                budget_as_of=budget_as_of,
+        batches = list(self.db.scalars(
+            select(SiteMeasurementBatch)
+            .options(selectinload(SiteMeasurementBatch.entries).selectinload(SiteMeasurementEntry.measurement_item))
+            .where(SiteMeasurementBatch.deleted_at.is_(None), SiteMeasurementBatch.first_submitted_at.is_not(None))
+            .order_by(SiteMeasurementBatch.first_submitted_at, SiteMeasurementBatch.id)
+        ))
+        event_batches = [batch for batch in batches if batch.first_submitted_at and batch.first_submitted_at.date() <= date_to]
+        selected_site_ids = {
+            batch.site_id for batch in event_batches
+            if date_from <= batch.first_submitted_at.date() <= date_to
+        }
+        if not selected_site_ids:
+            return PayrollSiteCockpitRead(
+                date_from=date_from, date_to=date_to, effective_as_of=date_to,
+                offer_budget_basis=OFFER_BUDGET_BASIS, offer_budget_as_of=self._today_provider(),
+                totals=PayrollSiteCockpitTotalsRead(actual_minutes=0, forecast_reason=FORECAST_UNAVAILABLE_REASON, site_count=0, budget_site_count=0, forecast_site_count=0),
+                sites=[], action_items=[],
             )
-
-        cumulative_entries = self._load_cumulative_entries(
-            site_ids=portfolio_site_ids,
-            date_to=actual_effective_as_of,
-        )
-        actual_by_site, _actual_by_site_date = self._aggregate_actual_minutes(cumulative_entries)
+        effective_minutes = self._effective_work_minutes_expression()
+        actual_rows = self.db.execute(select(WorkTimeEntry.site_id, WorkTimeEntry.work_date, effective_minutes.label("minutes"))
+            .where(WorkTimeEntry.site_id.in_(selected_site_ids), WorkTimeEntry.work_date <= date_to, WorkTimeEntry.source != "gps_suggestion", effective_minutes > 0)
+            .order_by(WorkTimeEntry.site_id, WorkTimeEntry.work_date, WorkTimeEntry.id)).all()
+        actual_by_site: dict[int, list[tuple[date, float]]] = defaultdict(list)
+        for row in actual_rows:
+            actual_by_site[row.site_id].append((row.work_date, float(row.minutes)))
+        period_end = datetime.combine(date_to, time.max, tzinfo=UTC)
+        tickets = list(self.db.scalars(select(ExtraWorkTicket).options(selectinload(ExtraWorkTicket.entries)).where(
+            ExtraWorkTicket.site_id.in_(selected_site_ids), ExtraWorkTicket.deleted_at.is_(None),
+            ExtraWorkTicket.is_invoiced.is_(True), ExtraWorkTicket.invoiced_at.is_not(None), ExtraWorkTicket.invoiced_at <= period_end,
+        )).all())
+        totals_by_site: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        batches_by_site: dict[int, list[SiteMeasurementBatch]] = defaultdict(list)
+        for batch in event_batches:
+            if batch.site_id in selected_site_ids:
+                batches_by_site[batch.site_id].append(batch)
+        tickets_by_site: dict[int, list[ExtraWorkTicket]] = defaultdict(list)
+        for ticket in tickets:
+            tickets_by_site[ticket.site_id].append(ticket)
+        for site_id, events in batches_by_site.items():
+            actual_index = 0
+            site_actuals = actual_by_site.get(site_id, [])
+            previous_event_at = None
+            for batch in events:
+                event_at = batch.first_submitted_at
+                realized_actual = 0.0
+                while actual_index < len(site_actuals) and site_actuals[actual_index][0] <= event_at.date():
+                    realized_actual += site_actuals[actual_index][1]
+                    actual_index += 1
+                supplementary = sum(
+                    float((entry.estimated_hours or Decimal("0")) * Decimal("60"))
+                    for ticket in tickets_by_site.get(site_id, [])
+                    if ticket.invoiced_at and (previous_event_at is None or ticket.invoiced_at > previous_event_at) and ticket.invoiced_at <= event_at
+                    for entry in ticket.entries
+                )
+                measurement = sum(
+                    float(entry.quantity * (entry.measurement_item.minutes_per_unit or Decimal("0")))
+                    for entry in batch.entries if entry.measurement_item is not None
+                )
+                if date_from <= event_at.date() <= date_to:
+                    values = totals_by_site[site_id]
+                    values["measurement"] += measurement
+                    values["supplementary"] += supplementary
+                    values["actual"] += realized_actual
+                previous_event_at = event_at
         sites = [
             _SiteIdentity(id=row.id, site_number=row.site_number, name=row.name)
             for row in self.db.execute(
                 select(Site.id, Site.site_number, Site.name)
-                .where(Site.id.in_(portfolio_site_ids))
+                .where(Site.id.in_(selected_site_ids))
                 .order_by(Site.name, Site.id)
             ).all()
         ]
-        offers_by_site = self._active_offer_minutes_by_site(portfolio_site_ids)
-
         site_reads = [
-            self._site_read(
-                site,
-                actual_minutes=actual_by_site.get(site.id, 0),
-                offer_minutes=offers_by_site.get(site.id),
+            PayrollSiteCockpitSiteRead(
+                site_id=site.id, site_number=site.site_number, site_name=site.name,
+                measurement_minutes=totals_by_site[site.id]["measurement"],
+                supplementary_minutes=totals_by_site[site.id]["supplementary"],
+                performance_minutes=totals_by_site[site.id]["measurement"] + totals_by_site[site.id]["supplementary"],
+                realized_actual_minutes=totals_by_site[site.id]["actual"],
+                actual_minutes=int(totals_by_site[site.id]["actual"]),
+                result_minutes=totals_by_site[site.id]["measurement"] + totals_by_site[site.id]["supplementary"] - totals_by_site[site.id]["actual"],
+                result_tone="positive" if totals_by_site[site.id]["measurement"] + totals_by_site[site.id]["supplementary"] > totals_by_site[site.id]["actual"] else "negative" if totals_by_site[site.id]["measurement"] + totals_by_site[site.id]["supplementary"] < totals_by_site[site.id]["actual"] else "neutral",
+                forecast_reason=FORECAST_UNAVAILABLE_REASON, risk_level="none",
             )
             for site in sites
         ]
-        action_items = self._action_items(site_reads)
-        known_offers = [site.offer_minutes for site in site_reads if site.offer_minutes is not None]
+        measurement_total = sum(site.measurement_minutes for site in site_reads)
+        supplementary_total = sum(site.supplementary_minutes for site in site_reads)
+        actual_total = sum(site.realized_actual_minutes for site in site_reads)
 
         return PayrollSiteCockpitRead(
             date_from=date_from,
             date_to=date_to,
-            effective_as_of=actual_effective_as_of,
+            effective_as_of=date_to,
             offer_budget_basis=OFFER_BUDGET_BASIS,
-            offer_budget_as_of=budget_as_of,
+            offer_budget_as_of=self._today_provider(),
             totals=PayrollSiteCockpitTotalsRead(
-                offer_minutes=sum(known_offers) if known_offers else None,
-                actual_minutes=sum(site.actual_minutes for site in site_reads),
+                measurement_minutes=measurement_total, supplementary_minutes=supplementary_total,
+                performance_minutes=measurement_total + supplementary_total,
+                realized_actual_minutes=actual_total, result_minutes=measurement_total + supplementary_total - actual_total,
+                actual_minutes=int(actual_total),
                 forecast_minutes=None,
                 forecast_reason=FORECAST_UNAVAILABLE_REASON,
                 variance_minutes=None,
-                site_count=len(site_reads),
-                budget_site_count=len(known_offers),
+                site_count=len(site_reads), budget_site_count=0,
                 forecast_site_count=0,
             ),
             sites=site_reads,
-            action_items=action_items,
+            action_items=[],
         )
 
     def get_history(self, *, site_id: int, date_to: date) -> PayrollSiteCockpitHistoryRead:

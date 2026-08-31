@@ -429,6 +429,8 @@ class ExtraWorkService:
             return self._build_ticket_read(ticket)
         previous_status = ticket.status
         ticket.is_invoiced = is_invoiced
+        if is_invoiced and ticket.invoiced_at is None:
+            ticket.invoiced_at = datetime.now(UTC)
         status_changed = (
             is_invoiced
             and not is_extra_work_completed_status(previous_status)

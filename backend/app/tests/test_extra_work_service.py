@@ -426,6 +426,10 @@ def test_extra_work_invoiced_marker_completes_every_starting_status_directionall
 
     assert marked.is_invoiced is True
     assert reloaded.is_invoiced is True
+    stored_after_invoice = db.get(ExtraWorkTicket, created.id)
+    assert stored_after_invoice is not None
+    first_invoiced_at = stored_after_invoice.invoiced_at
+    assert first_invoiced_at is not None
     assert reloaded.status == "billed"
     assert reloaded.notes == "Bleibt im PDF erhalten"
     assert reloaded.manual_order_date == date(2026, 8, 25)
@@ -450,6 +454,7 @@ def test_extra_work_invoiced_marker_completes_every_starting_status_directionall
     )
     assert repeated.is_invoiced is True
     assert repeated.status == "billed"
+    assert db.get(ExtraWorkTicket, created.id).invoiced_at == first_invoiced_at
     assert archive_service.calls == expected_archive_calls
     assert db.query(AuditLog).filter_by(action="extra_work.invoiced_updated").count() == 1
 
@@ -463,6 +468,7 @@ def test_extra_work_invoiced_marker_completes_every_starting_status_directionall
     archived = service.list_site_tickets(site.id, archived_only=True)[0]
 
     assert cleared.is_invoiced is False
+    assert db.get(ExtraWorkTicket, created.id).invoiced_at == first_invoiced_at
     assert archived.is_invoiced is False
     assert archived.status == "billed"
     assert archived.notes == "Bleibt im PDF erhalten"

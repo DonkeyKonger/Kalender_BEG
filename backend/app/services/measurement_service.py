@@ -977,6 +977,8 @@ class MeasurementService:
         batch.status = "submitted"
         batch.submitted_by_user_id = current_user.id
         batch.submitted_at = submitted_at
+        if batch.first_submitted_at is None:
+            batch.first_submitted_at = submitted_at
         if batch.original_submitted_snapshot is None:
             batch.original_submitted_snapshot = self._build_original_submitted_snapshot(
                 batch=batch,
@@ -1718,6 +1720,8 @@ class MeasurementService:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id)
         batch.status = normalized_status
+        if normalized_status == "submitted" and batch.first_submitted_at is None:
+            batch.first_submitted_at = datetime.now(timezone.utc)
         for entry in _current_measurement_entries(list(batch.entries)):
             entry.status = normalized_status
         if normalized_status == "billed" and current_user is not None:
