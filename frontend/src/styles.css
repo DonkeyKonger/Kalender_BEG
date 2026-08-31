@@ -17457,6 +17457,51 @@ body.mobile-modal-scroll-locked {
   background: #ffffff;
 }
 
+.time-evaluation-period-actions {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-self: end;
+  gap: 8px;
+}
+
+.time-evaluation-monthly-download-button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--time-week-active-blue);
+  border-radius: 0;
+  background: var(--time-week-active-blue);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.15;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.time-evaluation-monthly-download-button:hover:not(:disabled),
+.time-evaluation-monthly-download-button:focus-visible:not(:disabled) {
+  background: #1d4268;
+  border-color: #1d4268;
+}
+
+.time-evaluation-monthly-download-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(40 79 118 / 22%);
+}
+
+.time-evaluation-monthly-download-button:disabled {
+  border-color: #cbd5e1;
+  background: #eef2f7;
+  color: #64748b;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .time-evaluation-year-navigation > span {
   display: inline-grid;
   min-width: 64px;
@@ -20534,7 +20579,7 @@ body.mobile-modal-scroll-locked {
     gap: 8px;
   }
 
-  .time-evaluation-year-navigation {
+  .time-evaluation-period-actions {
     justify-self: end;
   }
 
@@ -20613,6 +20658,18 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 420px) {
+  .time-evaluation-period-actions {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .time-evaluation-monthly-download-button {
+    min-width: 0;
+    padding-inline: 6px;
+    white-space: normal;
+  }
+
   .time-evaluation-month-strip button {
     min-width: 0;
     font-size: 0.78rem;

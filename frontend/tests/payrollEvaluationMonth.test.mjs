@@ -66,7 +66,7 @@ test("Monatsnavigation zeigt fünf Monate und eine schlichte Jahressteuerung rec
   assert.match(pageSource, /function scrollEvaluationMonths[\s\S]*?targetIndex[\s\S]*?container\.scrollTo\(\{ left: buttons\[targetIndex\]\?\.offsetLeft/s);
   assert.match(pageSource, /alignEvaluationMonthsToSelection\(container, selectedEvaluationMonth\.month\)/);
   assert.match(styles, /\.time-evaluation-month-strip\s*\{[^}]*display:\s*flex;[^}]*position:\s*relative;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/s);
-  assert.match(pageSource, /time-evaluation-period-controls[\s\S]*?time-evaluation-month-strip-shell[\s\S]*?time-evaluation-year-navigation/s);
+  assert.match(pageSource, /time-evaluation-period-controls[\s\S]*?time-evaluation-month-strip-shell[\s\S]*?time-evaluation-period-actions[\s\S]*?time-evaluation-year-navigation/s);
   assert.match(pageSource, /className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr"[\s\S]*?Vorheriges Jahr auswählen[\s\S]*?\{selectedEvaluationMonth\.year\}[\s\S]*?Nächstes Jahr auswählen/s);
   assert.doesNotMatch(pageSource, /time-evaluation-year-select|time-evaluation-month-controls/);
   assert.match(styles, /\.time-evaluation-period-controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*gap:\s*24px;/s);
@@ -74,10 +74,20 @@ test("Monatsnavigation zeigt fünf Monate und eine schlichte Jahressteuerung rec
   assert.match(styles, /\.time-evaluation-year-navigation\s*\{[^}]*border:\s*1px solid var\(--time-border\);[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /\.time-evaluation-year-navigation \.time-week-scroll-button\s*\{[^}]*width:\s*34px;[^}]*height:\s*34px;[^}]*border:\s*0;[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*flex-basis:\s*calc\(100% \/ 3\);/s);
-  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-period-controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*8px;[\s\S]*?\.time-evaluation-year-navigation\s*\{[^}]*justify-self:\s*end;/s);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-period-controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*8px;[\s\S]*?\.time-evaluation-period-actions\s*\{[^}]*justify-self:\s*end;/s);
   assert.match(styles, /@media \(max-width: 420px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*min-width:\s*0;[^}]*font-size:\s*0\.78rem;/s);
   assert.match(styles, /\.time-evaluation-month-strip button\.is-active\s*\{[^}]*border-color:\s*#1459e7;[^}]*background:\s*#1459e7;/s);
   assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
+});
+
+test("Monatsabrechnung für alle Monteure ist neben dem Jahr vorbereitet", () => {
+  assert.match(pageSource, /className="time-evaluation-period-actions"[\s\S]*?className="time-evaluation-year-navigation"[\s\S]*?className="time-evaluation-monthly-download-button"[\s\S]*?disabled[\s\S]*?Monatsabrechnung \(alle\)/s);
+  assert.match(pageSource, /aria-describedby="time-evaluation-monthly-download-status"[\s\S]*?Noch keine Excel-Vorlage für die Monatsabrechnung hinterlegt/);
+  assert.match(pageSource, /id="time-evaluation-monthly-download-status"[\s\S]*?sobald eine Excel-Vorlage hinterlegt ist/);
+  assert.match(styles, /\.time-evaluation-period-actions\s*\{[^}]*display:\s*inline-flex;[^}]*justify-self:\s*end;[^}]*gap:\s*8px;/s);
+  assert.match(styles, /\.time-evaluation-monthly-download-button\s*\{[^}]*min-height:\s*36px;[^}]*border-radius:\s*0;[^}]*font-size:\s*0\.78rem;[^}]*white-space:\s*nowrap;/s);
+  assert.match(styles, /\.time-evaluation-monthly-download-button:disabled\s*\{[^}]*background:\s*#eef2f7;[^}]*cursor:\s*not-allowed;[^}]*opacity:\s*1;/s);
+  assert.match(styles, /@media \(max-width: 420px\)\s*\{[\s\S]*?\.time-evaluation-period-actions\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\);[^}]*width:\s*100%;[\s\S]*?\.time-evaluation-monthly-download-button\s*\{[^}]*min-width:\s*0;[^}]*white-space:\s*normal;/s);
 });
 
 test("Monteur-Untertab verwendet die gemeinsame Prüfwarteschlange mit Monatsdaten", () => {

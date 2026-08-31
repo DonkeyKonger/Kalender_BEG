@@ -2600,26 +2600,41 @@ export function TimeEntriesPage() {
                   <ChevronRight aria-hidden="true" size={16} />
                 </button>
               </div>
-              <div className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr">
+              <div className="time-evaluation-period-actions">
+                <div className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr">
+                  <button
+                    className="time-week-scroll-button"
+                    disabled={selectedEvaluationMonth.year <= 2000}
+                    type="button"
+                    aria-label="Vorheriges Jahr auswählen"
+                    onClick={() => selectEvaluationYear(selectedEvaluationMonth.year - 1)}
+                  >
+                    <ChevronLeft aria-hidden="true" size={16} />
+                  </button>
+                  <span aria-live="polite">{selectedEvaluationMonth.year}</span>
+                  <button
+                    className="time-week-scroll-button"
+                    disabled={selectedEvaluationMonth.year >= 2100}
+                    type="button"
+                    aria-label="Nächstes Jahr auswählen"
+                    onClick={() => selectEvaluationYear(selectedEvaluationMonth.year + 1)}
+                  >
+                    <ChevronRight aria-hidden="true" size={16} />
+                  </button>
+                </div>
                 <button
-                  className="time-week-scroll-button"
-                  disabled={selectedEvaluationMonth.year <= 2000}
+                  aria-describedby="time-evaluation-monthly-download-status"
+                  className="time-evaluation-monthly-download-button"
+                  disabled
+                  title="Noch keine Excel-Vorlage für die Monatsabrechnung hinterlegt."
                   type="button"
-                  aria-label="Vorheriges Jahr auswählen"
-                  onClick={() => selectEvaluationYear(selectedEvaluationMonth.year - 1)}
                 >
-                  <ChevronLeft aria-hidden="true" size={16} />
+                  <Download aria-hidden="true" size={14} />
+                  <span>Monatsabrechnung (alle)</span>
                 </button>
-                <span aria-live="polite">{selectedEvaluationMonth.year}</span>
-                <button
-                  className="time-week-scroll-button"
-                  disabled={selectedEvaluationMonth.year >= 2100}
-                  type="button"
-                  aria-label="Nächstes Jahr auswählen"
-                  onClick={() => selectEvaluationYear(selectedEvaluationMonth.year + 1)}
-                >
-                  <ChevronRight aria-hidden="true" size={16} />
-                </button>
+                <span className="sr-only" id="time-evaluation-monthly-download-status">
+                  Der Download wird verfügbar, sobald eine Excel-Vorlage hinterlegt ist.
+                </span>
               </div>
             </div>
           </div>
