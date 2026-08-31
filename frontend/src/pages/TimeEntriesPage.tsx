@@ -136,6 +136,12 @@ type TimeReviewWeekDay = {
   vacationCreditMinutes: number;
   entries: TimeReviewEntryCheck[];
 };
+type TimeReviewMonthWeekGroup = {
+  key: string;
+  week: number;
+  totalMinutes: number;
+  days: TimeReviewWeekDay[];
+};
 type TimeReviewDiagnosticRow = {
   source: string;
   start: string;
@@ -3387,6 +3393,8 @@ function MonthlyPayrollWorkerWorkspace({
     );
   }
 
+  const weekGroups = groupTimeReviewMonthDays(days);
+
   return (
     <div className="time-review-workspace-layout time-evaluation-worker-workspace">
       <aside className="time-review-queue-panel" aria-label="Monteursliste für die Monatsauswertung">
@@ -3427,14 +3435,31 @@ function MonthlyPayrollWorkerWorkspace({
           <div className="time-review-worker-detail">
             <div className="time-review-worker-detail-head">
               <div className="time-review-worker-identity"><h3>{selectedWorker.personName}</h3><span className="time-review-worker-hours"><strong>{formatSubmittedHours(selectedWorker.submittedMinutes)} Std.</strong></span></div>
+              <div className="time-review-worker-detail-actions">
+                <button
+                  aria-describedby="time-evaluation-monthly-download-status"
+                  className="time-evaluation-monthly-download-button"
+                  disabled
+                  title="Noch keine Excel-Vorlage für die Monatsabrechnung hinterlegt."
+                  type="button"
+                >
+                  <Download aria-hidden="true" size={14} />
+                  <span>Monatsabrechnung</span>
+                </button>
+              </div>
             </div>
             <div className="time-review-week-check-table" role="table" aria-label={"Monatsprüfung " + selectedWorker.personName}>
               <PayrollReviewTableHeaders />
-              {days.map((day) => {
-                const isExpanded = expandedDayKeys.has(day.date);
-                const dayPanelId = `evaluation-month-day-${day.date}`;
-                return (
-                <section className="time-review-day-group" key={day.date} role="rowgroup" aria-label={day.weekdayLabel + ", " + formatDate(day.date)}>
+              {weekGroups.map((weekGroup) => (
+                <div className="time-evaluation-week-group" key={weekGroup.key}>
+                  <div className="time-evaluation-week-group-head">
+                    <span>KW {weekGroup.week} · {formatMonthlyWeekHours(weekGroup.totalMinutes)} Std.</span>
+                  </div>
+                  {weekGroup.days.map((day) => {
+                    const isExpanded = expandedDayKeys.has(day.date);
+                    const dayPanelId = `evaluation-month-day-${day.date}`;
+                    return (
+                    <section className="time-review-day-group" key={day.date} role="rowgroup" aria-label={day.weekdayLabel + ", " + formatDate(day.date)}>
                   <div className="time-review-day-group-head" role="row">
                     <span className="time-review-day-group-label time-evaluation-day-group-label" role="rowheader">
                       <button className="time-evaluation-day-toggle" type="button" aria-expanded={isExpanded} aria-controls={dayPanelId} onClick={() => onToggleDay(day.date)}>
@@ -3466,9 +3491,11 @@ function MonthlyPayrollWorkerWorkspace({
                       <div role="cell">-</div><div className="time-review-work-time-cell" role="cell">-</div><div role="cell">{renderPayrollReviewEmptyMark()}</div>
                     </div>}
                   </div>}
-                </section>
-                );
-              })}
+                    </section>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
             {!days.length && <div className="time-review-worker-empty-detail">Keine Zeitmeldungen in diesem Monat.</div>}
           </div>
@@ -3899,6 +3926,31 @@ function timeReviewDayTotalMinutes(day: TimeReviewWeekDay): number {
     return day.vacationCreditMinutes;
   }
   return day.entries.reduce((total, check) => total + (effectivePayrollWorkMinutes(check.entry) ?? 0), 0);
+}
+
+function groupTimeReviewMonthDays(days: TimeReviewWeekDay[]): TimeReviewMonthWeekGroup[] {
+  const groups = new Map<string, TimeReviewMonthWeekGroup>();
+  days.forEach((day) => {
+    const isoWeek = isoWeekFromDate(parseDateInput(day.date));
+    const key = `${isoWeek.year}-${isoWeek.week}`;
+    const group = groups.get(key) ?? {
+      key,
+      week: isoWeek.week,
+      totalMinutes: 0,
+      days: [],
+    };
+    group.totalMinutes += timeReviewDayTotalMinutes(day);
+    group.days.push(day);
+    groups.set(key, group);
+  });
+  return Array.from(groups.values());
+}
+
+function formatMonthlyWeekHours(minutes: number): string {
+  return new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(minutes / 60);
 }
 
 function isPayrollReviewWorker(person: Person): boolean {

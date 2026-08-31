@@ -80,10 +80,14 @@ test("Monatsnavigation zeigt fünf Monate und eine schlichte Jahressteuerung rec
   assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
 });
 
-test("Monatsabrechnung für alle Monteure ist neben dem Jahr vorbereitet", () => {
+test("Monatsabrechnungen für alle und den ausgewählten Monteur sind als Platzhalter vorbereitet", () => {
   assert.match(pageSource, /className="time-evaluation-period-actions"[\s\S]*?className="time-evaluation-year-navigation"[\s\S]*?className="time-evaluation-monthly-download-button"[\s\S]*?disabled[\s\S]*?Monatsabrechnung \(alle\)/s);
   assert.match(pageSource, /aria-describedby="time-evaluation-monthly-download-status"[\s\S]*?Noch keine Excel-Vorlage für die Monatsabrechnung hinterlegt/);
   assert.match(pageSource, /id="time-evaluation-monthly-download-status"[\s\S]*?sobald eine Excel-Vorlage hinterlegt ist/);
+  const monthlyStart = pageSource.indexOf("function MonthlyPayrollWorkerWorkspace");
+  const monthlySource = pageSource.slice(monthlyStart);
+  assert.ok(monthlyStart >= 0);
+  assert.match(monthlySource, /className="time-review-worker-detail-actions"[\s\S]*?className="time-evaluation-monthly-download-button"[\s\S]*?disabled[\s\S]*?Monatsabrechnung/s);
   assert.match(styles, /\.time-evaluation-period-actions\s*\{[^}]*display:\s*inline-flex;[^}]*justify-self:\s*end;[^}]*gap:\s*8px;/s);
   assert.match(styles, /\.time-evaluation-monthly-download-button\s*\{[^}]*min-height:\s*36px;[^}]*border-radius:\s*0;[^}]*font-size:\s*0\.78rem;[^}]*white-space:\s*nowrap;/s);
   assert.match(styles, /\.time-evaluation-monthly-download-button:disabled\s*\{[^}]*background:\s*#eef2f7;[^}]*cursor:\s*not-allowed;[^}]*opacity:\s*1;/s);
@@ -152,6 +156,18 @@ test("Monatstage starten eingeklappt und behalten einen zugänglichen Einzel-Tog
   assert.match(pageSource, /day\.entries\.length > 0 \? day\.entries\.map[\s\S]*?<strong>Keine Zeitmeldung<\/strong>/s);
   assert.match(pageSource, /function buildTimeReviewMonthDays[\s\S]*?isPayrollWeekday\(day\.date\)/s);
   assert.match(styles, /\.time-evaluation-day-toggle\[aria-expanded="true"\] \.time-evaluation-day-toggle-icon\s*\{[^}]*transform:\s*rotate\(90deg\);/s);
+});
+
+test("Monatsansicht gruppiert Tage nach ISO-Kalenderwoche und zeigt die Wochensumme", () => {
+  const monthlyStart = pageSource.indexOf("function MonthlyPayrollWorkerWorkspace");
+  const monthlySource = pageSource.slice(monthlyStart);
+
+  assert.ok(monthlyStart >= 0);
+  assert.match(monthlySource, /const weekGroups = groupTimeReviewMonthDays\(days\);/);
+  assert.match(monthlySource, /weekGroups\.map\(\(weekGroup\) => \([\s\S]*?className="time-evaluation-week-group-head"[\s\S]*?KW \{weekGroup\.week\} · \{formatMonthlyWeekHours\(weekGroup\.totalMinutes\)\} Std\.[\s\S]*?weekGroup\.days\.map/s);
+  assert.match(pageSource, /function groupTimeReviewMonthDays\([\s\S]*?isoWeekFromDate\(parseDateInput\(day\.date\)\)[\s\S]*?timeReviewDayTotalMinutes\(day\)/s);
+  assert.match(pageSource, /function formatMonthlyWeekHours\([\s\S]*?minimumFractionDigits: 0,[\s\S]*?maximumFractionDigits: 2,/s);
+  assert.match(styles, /\.time-evaluation-week-group-head\s*\{[^}]*min-height:\s*25px;[^}]*border-top:\s*1px solid #dfe5ed;[^}]*font-size:\s*0\.68rem;/s);
 });
 
 test("Monatstage halten Wochentag, Datum und Status in festen nebeneinanderliegenden Spalten", () => {

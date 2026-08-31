@@ -20310,6 +20310,26 @@ body.mobile-modal-scroll-locked {
   background: #ffffff;
 }
 
+.time-evaluation-week-group {
+  display: grid;
+  align-content: start;
+  min-width: 924px;
+}
+
+.time-evaluation-week-group-head {
+  display: flex;
+  min-height: 25px;
+  align-items: center;
+  border-top: 1px solid #dfe5ed;
+  border-bottom: 1px solid #e7ecf2;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+  padding: 3px 10px;
+}
+
 .time-review-day-group-head {
   display: grid;
   grid-template-columns: 30px minmax(72px, 0.65fr) minmax(66px, 0.5fr) minmax(140px, 1.35fr) repeat(4, minmax(64px, 0.56fr)) minmax(62px, 0.48fr) minmax(82px, 0.62fr) minmax(62px, 0.46fr);
@@ -20627,7 +20647,8 @@ body.mobile-modal-scroll-locked {
   }
 
   .time-review-day-group,
-  .time-review-day-group-head {
+  .time-review-day-group-head,
+  .time-evaluation-week-group {
     min-width: 818px;
   }
 
