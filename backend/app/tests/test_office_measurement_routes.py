@@ -156,6 +156,24 @@ def test_sites_permission_allows_manual_measurement_status_promotion(monkeypatch
 @pytest.mark.parametrize(
     "user",
     [
+        current_user(UserRole.ADMIN),
+        current_user(UserRole.PROJECT_MANAGER),
+        current_user(UserRole.OFFICE, "sites"),
+    ],
+)
+def test_sites_permission_allows_measurement_status_reset_to_draft(monkeypatch, user):
+    response = api_client(monkeypatch, user).patch(
+        "/api/sites/8/measurement-batches/12/status",
+        json={"status": "draft"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "draft"
+
+
+@pytest.mark.parametrize(
+    "user",
+    [
         current_user(UserRole.OFFICE),
         current_user(UserRole.OFFICE, "calendar"),
         current_user(UserRole.MONTEUR),

@@ -11,7 +11,7 @@ const pageSource = await readFile(new URL("../src/pages/SiteDetailPage.tsx", imp
 const apiSource = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-test("measurement status control offers only higher non-signature states", () => {
+test("measurement status control preserves forward transitions and offers a draft reset", () => {
   assert.deepEqual(measurementStatusPromotionOptions("draft", null).map(({ value }) => value), [
     "submitted",
     "reviewed",
@@ -20,11 +20,13 @@ test("measurement status control offers only higher non-signature states", () =>
   assert.deepEqual(measurementStatusPromotionOptions("submitted", null).map(({ value }) => value), [
     "reviewed",
     "billed",
+    "draft",
   ]);
-  assert.deepEqual(measurementStatusPromotionOptions("reviewed", null).map(({ value }) => value), ["billed"]);
-  assert.deepEqual(measurementStatusPromotionOptions("customer_signed", "2026-08-12T08:00:00Z").map(({ value }) => value), ["billed"]);
-  assert.deepEqual(measurementStatusPromotionOptions("billed", null), []);
-  assert.deepEqual(measurementStatusPromotionOptions("billed", "2026-08-12T08:00:00Z"), []);
+  assert.deepEqual(measurementStatusPromotionOptions("reviewed", null).map(({ value }) => value), ["billed", "draft"]);
+  assert.deepEqual(measurementStatusPromotionOptions("customer_signed", "2026-08-12T08:00:00Z").map(({ value }) => value), ["billed", "draft"]);
+  assert.deepEqual(measurementStatusPromotionOptions("billed", null).map(({ value }) => value), ["draft"]);
+  assert.deepEqual(measurementStatusPromotionOptions("completed", null).map(({ value }) => value), ["draft"]);
+  assert.deepEqual(measurementStatusPromotionOptions("billed", "2026-08-12T08:00:00Z").map(({ value }) => value), ["draft"]);
 });
 
 test("extra-work status control skips the protected signature state", () => {
@@ -44,6 +46,7 @@ test("both project-record lists use the shared anchored status popover and APIs"
   assert.match(pageSource, /document\.addEventListener\("pointerdown"/);
   assert.match(pageSource, /event\.key === "Escape"/);
   assert.match(pageSource, /measurementStatusPromotionOptions/);
+  assert.match(pageSource, /Status ändern/);
   assert.match(pageSource, /extraWorkStatusPromotionOptions/);
   assert.match(apiSource, /measurement-batches\/\$\{batchId\}\/status/);
   assert.match(apiSource, /extra-work-tickets\/\$\{ticketId\}\/status/);

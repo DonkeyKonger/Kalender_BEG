@@ -821,7 +821,7 @@ export function SiteDetailPage() {
       setMeasurementTimeAnalysisLoaded(false);
       setMeasurementReviewMessage(`${batch.title}: Status wurde auf ${getMeasurementBatchStatusBadge(updated).label} gesetzt.`);
     } catch (requestError) {
-      setMeasurementReviewError(readApiError(requestError, "Status konnte nicht aufgewertet werden."));
+      setMeasurementReviewError(readApiError(requestError, "Status konnte nicht geändert werden."));
     } finally {
       setMeasurementStatusActionId(null);
     }
@@ -2874,7 +2874,7 @@ function ProjectRecordStatusControl<T extends string>({
       {active ? createPortal(
         <div
           ref={popoverRef}
-          aria-label="Status aufwerten"
+          aria-label="Status ändern"
           className="project-record-status-popover"
           role="menu"
           style={{ left: position.left, top: position.top }}

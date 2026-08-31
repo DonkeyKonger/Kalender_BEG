@@ -1740,12 +1740,30 @@ class MeasurementService:
         target_status = validate_measurement_status_promotion(previous_status, target_status)
         AuditService(self.db).record(
             user_id=current_user.id,
-            action="measurement.status_promoted",
+            action=(
+                "measurement.status_reset_to_draft"
+                if target_status == "draft"
+                else "measurement.status_promoted"
+            ),
             entity_type="site_measurement_batch",
             entity_id=batch.id,
             old_value={"status": previous_status},
             new_value={"status": target_status},
         )
+        if target_status == "draft":
+            batch.status = target_status
+            batch.customer_signed_at = None
+            batch.customer_signature_name = None
+            batch.customer_signature_place = None
+            batch.customer_signature_strokes = None
+            batch.worker_signed_at = None
+            batch.worker_signature_name = None
+            batch.worker_signature_strokes = None
+            for entry in _current_measurement_entries(list(batch.entries)):
+                entry.status = target_status
+            self.db.commit()
+            self.db.refresh(batch)
+            return self._build_mobile_batch(batch)
         if target_status == "reviewed":
             return self.set_site_batch_reviewed(site_id=site_id, batch_id=batch_id)
         return self.set_site_batch_billing_status(

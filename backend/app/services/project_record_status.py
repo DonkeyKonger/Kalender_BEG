@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 
 
-MEASUREMENT_MANUAL_STATUS_TARGETS = ("submitted", "reviewed", "billed")
+MEASUREMENT_MANUAL_STATUS_TARGETS = ("draft", "submitted", "reviewed", "billed")
 EXTRA_WORK_MANUAL_STATUS_TARGETS = ("submitted", "billed")
 
 _MEASUREMENT_STATUS_RANK = {
@@ -37,6 +37,11 @@ _EXTRA_WORK_STATUS_RANK = {
 
 
 def validate_measurement_status_promotion(current_status: str, target_status: str) -> str:
+    normalized_target = (target_status or "").strip().lower()
+    # Returning an Aufmaß to draft is an intentional exception to the otherwise
+    # forward-only manual status workflow. It must also work after completion.
+    if normalized_target == "draft":
+        return normalized_target
     return _validate_promotion(
         current_status=current_status,
         target_status=target_status,

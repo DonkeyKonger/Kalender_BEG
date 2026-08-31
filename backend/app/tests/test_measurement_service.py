@@ -205,6 +205,99 @@ def test_manual_measurement_status_promotion_only_moves_up_and_never_fakes_signa
     ]
 
 
+@pytest.mark.parametrize(
+    "initial_status",
+    [
+        "draft",
+        "submitted",
+        "in_review",
+        "rejected",
+        "reviewed",
+        "checked",
+        "customer_signed",
+        "signed",
+        "billed",
+        "approved",
+        "closed",
+        "completed",
+        "finalized",
+        "abgeschlossen",
+    ],
+)
+def test_manual_measurement_status_reset_to_draft_is_allowed_from_every_workflow_state(initial_status):
+    db = db_session()
+    site = create_site(db)
+    actor = User(
+        username="reset-status-office",
+        display_name="Status Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+        office_page_permissions=["sites"],
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        number=1,
+        title="Aufmaß zurücksetzen",
+        status=initial_status,
+        origin=MeasurementBatchOrigin.OFFICE.value,
+        position_mode=MeasurementPositionMode.BLANK.value,
+        customer_signed_at=datetime.now(timezone.utc),
+        customer_signature_name="Kunde Beispiel",
+        customer_signature_place="Musterstadt",
+        customer_signature_strokes=[[{"x": 1.0, "y": 2.0}]],
+        customer_signed_snapshot={"version": "customer_signed"},
+        worker_signed_at=datetime.now(timezone.utc),
+        worker_signature_name="Monteur Beispiel",
+        worker_signature_strokes=[[{"x": 1.0, "y": 2.0}]],
+    )
+    item = SiteMeasurementItem(
+        site=site,
+        measurement_batch=batch,
+        position="1.1",
+        description="Freie Leistung",
+        unit="Stck",
+        is_free_position=True,
+        sort_order=1,
+    )
+    entry = SiteMeasurementEntry(
+        measurement_batch=batch,
+        measurement_item=item,
+        site=site,
+        quantity=Decimal("1"),
+        area_or_comment="EG",
+        status=initial_status,
+    )
+    db.add_all([actor, batch, item, entry])
+    db.commit()
+
+    reset = MeasurementService(db).promote_site_batch_status(
+        site_id=site.id,
+        batch_id=batch.id,
+        target_status="draft",
+        current_user=actor,
+    )
+
+    assert reset.status == "draft"
+    stored_batch = db.get(SiteMeasurementBatch, batch.id)
+    assert stored_batch is not None
+    assert db.get(SiteMeasurementEntry, entry.id).status == "draft"
+    assert stored_batch.customer_signed_at is None
+    assert stored_batch.customer_signature_name is None
+    assert stored_batch.customer_signature_place is None
+    assert stored_batch.customer_signature_strokes is None
+    assert stored_batch.worker_signed_at is None
+    assert stored_batch.worker_signature_name is None
+    assert stored_batch.worker_signature_strokes is None
+    audit_log = db.scalar(
+        select(AuditLog)
+        .where(AuditLog.action == "measurement.status_reset_to_draft")
+        .where(AuditLog.entity_id == batch.id)
+    )
+    assert audit_log is not None
+    assert audit_log.old_value_json == {"status": initial_status}
+    assert audit_log.new_value_json == {"status": "draft"}
+
+
 def parsed_timesheet() -> MeasurementTimesheetParseResult:
     return MeasurementTimesheetParseResult(
         source_project_number="8007 / P250092",

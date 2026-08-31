@@ -1,4 +1,4 @@
-export type MeasurementManualStatus = "submitted" | "reviewed" | "billed";
+export type MeasurementManualStatus = "draft" | "submitted" | "reviewed" | "billed";
 export type ExtraWorkManualStatus = "submitted" | "billed";
 
 export type ProjectRecordStatusOption<T extends string> = {
@@ -21,6 +21,11 @@ const measurementTargets: Array<ProjectRecordStatusOption<MeasurementManualStatu
   { value: "billed", label: "Abgeschlossen", rank: 4 },
 ];
 
+const measurementDraftResetOption: ProjectRecordStatusOption<MeasurementManualStatus> = {
+  value: "draft",
+  label: "Als Entwurf zurücksetzen",
+};
+
 const extraWorkTargets: Array<ProjectRecordStatusOption<ExtraWorkManualStatus> & { rank: number }> = [
   { value: "submitted", label: "Eingereicht", rank: 1 },
   { value: "billed", label: "Abgeschlossen", rank: 3 },
@@ -30,13 +35,18 @@ export function measurementStatusPromotionOptions(
   status: string,
   customerSignedAt: string | null,
 ): ProjectRecordStatusOption<MeasurementManualStatus>[] {
-  const statusRank = measurementStatusRank(status);
+  const normalizedStatus = status.trim().toLowerCase();
+  const statusRank = measurementStatusRank(normalizedStatus);
   const rank = statusRank === null
     ? (customerSignedAt ? 3 : null)
     : Math.max(statusRank, customerSignedAt ? 3 : statusRank);
-  return rank === null
-    ? []
-    : measurementTargets.filter((target) => target.rank > rank).map(({ value, label }) => ({ value, label }));
+  if (rank === null) return [];
+  const forwardOptions = measurementTargets
+    .filter((target) => target.rank > rank)
+    .map(({ value, label }) => ({ value, label }));
+  return normalizedStatus === "draft"
+    ? forwardOptions
+    : [...forwardOptions, measurementDraftResetOption];
 }
 
 export function extraWorkStatusPromotionOptions(
