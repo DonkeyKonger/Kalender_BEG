@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.models import Base
+from app.models.audit_log import AuditLog
 from app.models.assignment import Assignment
 from app.models.enums import AssignmentType, PersonType, SiteStatus
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry
@@ -65,6 +66,97 @@ def test_realization_partitions_hours_and_billed_supplements_into_measurement_ev
     assert september.supplementary_minutes == 180
     assert september.realized_actual_minutes == 0
     assert september.result_minutes == 180
+
+
+def test_realization_includes_only_audit_proven_legacy_invoiced_markers() -> None:
+    db = Session(create_engine("sqlite+pysqlite:///:memory:"))
+    Base.metadata.create_all(db.get_bind())
+    site = Site(site_number="8007", name="Schüchtermann Klinik", status=SiteStatus.ACTIVE)
+    item = SiteMeasurementItem(
+        site=site,
+        position="1",
+        description="Leistung",
+        minutes_per_unit=Decimal("1"),
+        sort_order=1,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        number=1,
+        title="August",
+        status="submitted",
+        first_submitted_at=datetime(2026, 8, 15, 9, tzinfo=UTC),
+    )
+    db.add_all([site, item, batch])
+    db.flush()
+    db.add(
+        SiteMeasurementEntry(
+            measurement_batch_id=batch.id,
+            measurement_item_id=item.id,
+            site_id=site.id,
+            quantity=Decimal("0"),
+            area_or_comment="",
+        )
+    )
+    invoiced_tickets = [
+        ExtraWorkTicket(
+            site_id=site.id,
+            sequence_number=sequence_number,
+            display_number=display_number,
+            title=display_number,
+            status="billed",
+            is_invoiced=True,
+        )
+        for sequence_number, display_number in [(5, "8007.SZ05"), (6, "8007.SZ06"), (7, "8007.SZ07")]
+    ]
+    unbilled_ticket = ExtraWorkTicket(
+        site_id=site.id,
+        sequence_number=8,
+        display_number="8007.SZ08",
+        title="8007.SZ08",
+        status="signed",
+        is_invoiced=False,
+    )
+    db.add_all([*invoiced_tickets, unbilled_ticket])
+    db.flush()
+    db.add_all(
+        [
+            ExtraWorkTicketEntry(
+                ticket_id=ticket.id,
+                site_id=site.id,
+                component="x",
+                floor="x",
+                estimated_hours=hours,
+                worker_rows=[],
+            )
+            for ticket, hours in [
+                (invoiced_tickets[0], Decimal("2")),
+                (invoiced_tickets[1], Decimal("5")),
+                (invoiced_tickets[2], Decimal("0.5")),
+                (unbilled_ticket, Decimal("6")),
+            ]
+        ]
+    )
+    db.add_all(
+        [
+            AuditLog(
+                action="extra_work.invoiced_updated",
+                entity_type="extra_work_ticket",
+                entity_id=ticket.id,
+                new_value_json={"is_invoiced": True},
+                created_at=datetime(2026, 8, day, 9, tzinfo=UTC),
+            )
+            for ticket, day in zip(invoiced_tickets, [5, 5, 6], strict=True)
+        ]
+    )
+    db.commit()
+
+    august = PayrollSiteCockpitService(db).get_cockpit(
+        date_from=date(2026, 8, 1),
+        date_to=date(2026, 8, 31),
+    ).sites[0]
+
+    assert august.supplementary_minutes == 450
+    assert august.performance_minutes == 450
 
 
 def test_realization_counts_external_monteurs_once_in_their_submission_interval() -> None:

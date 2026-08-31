@@ -9,6 +9,7 @@ from sqlalchemy import Integer, case, cast, extract, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.absence import Absence
+from app.models.audit_log import AuditLog
 from app.models.assignment import Assignment
 from app.models.enums import AbsenceStatus, PersonType
 from app.models.person import Person
@@ -123,33 +124,44 @@ class PayrollSiteCockpitService:
                 else TimeEntryService.project_mounting_work_minutes(entry)
             )
             actual_by_site[entry.site_id].append((entry.work_date, float(minutes)))
-        period_end = datetime.combine(date_to, time.max, tzinfo=UTC)
-        tickets = list(self.db.scalars(select(ExtraWorkTicket).options(selectinload(ExtraWorkTicket.entries)).where(
-            ExtraWorkTicket.site_id.in_(selected_site_ids), ExtraWorkTicket.deleted_at.is_(None),
-            ExtraWorkTicket.is_invoiced.is_(True), ExtraWorkTicket.invoiced_at.is_not(None), ExtraWorkTicket.invoiced_at <= period_end,
-        )).all())
+        period_end = datetime.combine(date_to, time.max)
+        tickets = list(
+            self.db.scalars(
+                select(ExtraWorkTicket)
+                .options(selectinload(ExtraWorkTicket.entries))
+                .where(
+                    ExtraWorkTicket.site_id.in_(selected_site_ids),
+                    ExtraWorkTicket.deleted_at.is_(None),
+                    ExtraWorkTicket.is_invoiced.is_(True),
+                )
+            ).all()
+        )
+        invoiced_at_by_ticket_id = self._invoiced_at_by_ticket_id(tickets)
         totals_by_site: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
         batches_by_site: dict[int, list[SiteMeasurementBatch]] = defaultdict(list)
         for batch in event_batches:
             if batch.site_id in selected_site_ids:
                 batches_by_site[batch.site_id].append(batch)
-        tickets_by_site: dict[int, list[ExtraWorkTicket]] = defaultdict(list)
+        tickets_by_site: dict[int, list[tuple[ExtraWorkTicket, datetime]]] = defaultdict(list)
         for ticket in tickets:
-            tickets_by_site[ticket.site_id].append(ticket)
+            invoice_timestamp = invoiced_at_by_ticket_id.get(ticket.id)
+            invoiced_at = self._comparison_datetime(invoice_timestamp) if invoice_timestamp else None
+            if invoiced_at is not None and invoiced_at <= period_end:
+                tickets_by_site[ticket.site_id].append((ticket, invoiced_at))
         for site_id, events in batches_by_site.items():
             actual_index = 0
             site_actuals = actual_by_site.get(site_id, [])
             previous_event_at = None
             for batch in events:
-                event_at = batch.first_submitted_at
+                event_at = self._comparison_datetime(batch.first_submitted_at)
                 realized_actual = 0.0
                 while actual_index < len(site_actuals) and site_actuals[actual_index][0] <= event_at.date():
                     realized_actual += site_actuals[actual_index][1]
                     actual_index += 1
                 supplementary = sum(
                     float((entry.estimated_hours or Decimal("0")) * Decimal("60"))
-                    for ticket in tickets_by_site.get(site_id, [])
-                    if ticket.invoiced_at and (previous_event_at is None or ticket.invoiced_at > previous_event_at) and ticket.invoiced_at <= event_at
+                    for ticket, invoiced_at in tickets_by_site.get(site_id, [])
+                    if (previous_event_at is None or invoiced_at > previous_event_at) and invoiced_at <= event_at
                     for entry in ticket.entries
                 )
                 measurement = sum(
@@ -208,6 +220,46 @@ class PayrollSiteCockpitService:
             sites=site_reads,
             action_items=[],
         )
+
+    def _invoiced_at_by_ticket_id(
+        self,
+        tickets: list[ExtraWorkTicket],
+    ) -> dict[int, datetime]:
+        timestamps = {
+            ticket.id: ticket.invoiced_at
+            for ticket in tickets
+            if ticket.id is not None and ticket.invoiced_at is not None
+        }
+        pending_ids = [
+            ticket.id
+            for ticket in tickets
+            if ticket.id is not None and ticket.id not in timestamps
+        ]
+        if not pending_ids:
+            return timestamps
+
+        audit_rows = self.db.execute(
+            select(AuditLog.entity_id, AuditLog.created_at, AuditLog.new_value_json)
+            .where(
+                AuditLog.action == "extra_work.invoiced_updated",
+                AuditLog.entity_type == "extra_work_ticket",
+                AuditLog.entity_id.in_(pending_ids),
+            )
+            .order_by(AuditLog.entity_id, AuditLog.created_at, AuditLog.id)
+        ).all()
+        for ticket_id, created_at, new_value in audit_rows:
+            if (
+                ticket_id is not None
+                and ticket_id not in timestamps
+                and isinstance(new_value, dict)
+                and new_value.get("is_invoiced") is True
+            ):
+                timestamps[ticket_id] = created_at
+        return timestamps
+
+    @staticmethod
+    def _comparison_datetime(value: datetime) -> datetime:
+        return value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
 
     def get_history(self, *, site_id: int, date_to: date) -> PayrollSiteCockpitHistoryRead:
         site_row = self.db.execute(
