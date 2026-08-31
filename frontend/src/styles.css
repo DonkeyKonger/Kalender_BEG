@@ -20332,7 +20332,11 @@ body.mobile-modal-scroll-locked {
   padding: 3px 10px;
 }
 
-.time-evaluation-week-group-label { grid-column: 2 / 10; font-size: .72rem; }
+.time-evaluation-week-group-label {
+  grid-column: 1 / 10;
+  padding-inline-start: 21px;
+  font-size: .72rem;
+}
 .time-evaluation-week-group-total { grid-column: 10; color: #334155; font-size: .72rem; font-weight: 900; }
 
 .payroll-site-realization { display: grid; gap: 14px; padding: 18px 24px; }

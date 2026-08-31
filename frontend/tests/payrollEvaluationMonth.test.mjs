@@ -168,7 +168,7 @@ test("Monatsansicht gruppiert Tage nach ISO-Kalenderwoche und zeigt die Wochensu
   assert.match(pageSource, /function groupTimeReviewMonthDays\([\s\S]*?isoWeekFromDate\(parseDateInput\(day\.date\)\)[\s\S]*?timeReviewDayTotalMinutes\(day\)/s);
   assert.match(pageSource, /function formatMonthlyWeekHours\([\s\S]*?minimumFractionDigits: 0,[\s\S]*?maximumFractionDigits: 2,/s);
   assert.match(styles, /\.time-evaluation-week-group-head\s*\{[^}]*grid-template-columns:[^}]*min-height:\s*29px;[^}]*border-top:\s*1px solid #dfe5ed;[^}]*font-size:\s*0\.68rem;/s);
-  assert.match(styles, /\.time-evaluation-week-group-label\s*\{[^}]*grid-column:\s*2 \/ 10/);
+  assert.match(styles, /\.time-evaluation-week-group-label\s*\{[^}]*grid-column:\s*1 \/ 10;[^}]*padding-inline-start:\s*21px;/s);
   assert.match(styles, /\.time-evaluation-week-group-total\s*\{[^}]*grid-column:\s*10/);
 });
 
