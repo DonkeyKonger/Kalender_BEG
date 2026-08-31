@@ -1546,7 +1546,12 @@ class MeasurementService:
             rows=rows,
         )
 
-    def get_site_measurement_time_analysis(self, site_id: int) -> MeasurementTimeAnalysisRead:
+    def get_site_measurement_time_analysis(
+        self,
+        site_id: int,
+        *,
+        invoiced_extra_work_only: bool = False,
+    ) -> MeasurementTimeAnalysisRead:
         self._get_site(site_id)
         batches = list(
             self.db.scalars(
@@ -1621,18 +1626,22 @@ class MeasurementService:
             )
             previous_boundary = boundary
 
-        tickets = list(
-            self.db.scalars(
-                select(ExtraWorkTicket)
-                .options(selectinload(ExtraWorkTicket.entries))
-                .where(
-                    ExtraWorkTicket.site_id == site_id,
-                    ExtraWorkTicket.deleted_at.is_(None),
-                )
-                .where(ExtraWorkTicket.status != "draft")
-                .order_by(ExtraWorkTicket.sequence_number, ExtraWorkTicket.id)
-            ).all()
+        ticket_statement = (
+            select(ExtraWorkTicket)
+            .options(selectinload(ExtraWorkTicket.entries))
+            .where(
+                ExtraWorkTicket.site_id == site_id,
+                ExtraWorkTicket.deleted_at.is_(None),
+            )
+            .where(ExtraWorkTicket.status != "draft")
+            .order_by(ExtraWorkTicket.sequence_number, ExtraWorkTicket.id)
         )
+        if invoiced_extra_work_only:
+            ticket_statement = ticket_statement.where(
+                ExtraWorkTicket.is_invoiced.is_(True),
+                ExtraWorkTicket.invoiced_at.is_not(None),
+            )
+        tickets = list(self.db.scalars(ticket_statement).all())
         for ticket in tickets:
             ticket_minutes = self._extra_work_ticket_planned_minutes(ticket)
             ticket_read = MeasurementTimeAnalysisExtraWorkTicketRead(
@@ -1640,7 +1649,11 @@ class MeasurementService:
                 display_number=ticket.display_number,
                 title=ticket.title,
                 status=ticket.status,
-                relevant_at=self._extra_work_ticket_timestamp(ticket),
+                relevant_at=(
+                    ticket.invoiced_at
+                    if invoiced_extra_work_only
+                    else self._extra_work_ticket_timestamp(ticket)
+                ),
                 planned_minutes=ticket_minutes,
             )
             row_index = self._find_analysis_row_index(row_payloads, ticket_read.relevant_at)
