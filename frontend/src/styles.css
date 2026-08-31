@@ -17446,7 +17446,7 @@ body.mobile-modal-scroll-locked {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: clamp(24px, 3vw, 48px);
+  gap: 24px;
 }
 
 .time-evaluation-year-navigation {
@@ -17459,20 +17459,20 @@ body.mobile-modal-scroll-locked {
 
 .time-evaluation-year-navigation > span {
   display: inline-grid;
-  min-width: clamp(84px, 8.5vw, 150px);
-  min-height: clamp(42px, 4vw, 64px);
+  min-width: 64px;
+  min-height: 34px;
   place-items: center;
   border-right: 1px solid var(--time-border);
   border-left: 1px solid var(--time-border);
   color: #203652;
-  font-size: clamp(0.9rem, 1.15vw, 1.18rem);
+  font-size: 0.82rem;
   font-weight: 850;
   text-align: center;
 }
 
 .time-evaluation-year-navigation .time-week-scroll-button {
-  width: clamp(42px, 4vw, 64px);
-  height: clamp(42px, 4vw, 64px);
+  width: 34px;
+  height: 34px;
   border: 0;
   background: #ffffff;
 }
@@ -17485,9 +17485,9 @@ body.mobile-modal-scroll-locked {
 
 .time-evaluation-month-strip-shell {
   display: grid;
-  grid-template-columns: clamp(42px, 4vw, 64px) minmax(0, 1fr) clamp(42px, 4vw, 64px);
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
   align-items: center;
-  gap: clamp(8px, 1vw, 16px);
+  gap: 8px;
 }
 
 .time-evaluation-month-strip {
@@ -17508,14 +17508,14 @@ body.mobile-modal-scroll-locked {
 .time-evaluation-month-strip button {
   flex: 0 0 20%;
   min-width: 84px;
-  min-height: clamp(42px, 4vw, 64px);
+  min-height: 34px;
   border: 1px solid #d7e1ee;
   border-left-width: 0;
   border-radius: 0;
   background: #ffffff;
   color: #203652;
   font: inherit;
-  font-size: clamp(0.86rem, 1.15vw, 1.15rem);
+  font-size: 0.78rem;
   font-weight: 850;
   scroll-snap-align: start;
   scroll-snap-stop: always;
@@ -17548,7 +17548,7 @@ body.mobile-modal-scroll-locked {
 .time-evaluation-subtabs {
   display: grid;
   box-sizing: border-box;
-  grid-template-columns: repeat(2, minmax(132px, 1fr));
+  grid-template-columns: repeat(2, minmax(96px, 1fr));
   flex: 0 0 auto;
   min-height: 0;
   align-items: center;
@@ -17563,14 +17563,14 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-evaluation-subtabs button {
-  min-height: clamp(42px, 3.5vw, 56px);
+  min-height: 34px;
   border: 1px solid var(--time-border);
   border-radius: 0;
   background: #ffffff;
   color: #243b5a;
-  font-size: clamp(0.88rem, 1.15vw, 1.14rem);
+  font-size: 0.78rem;
   font-weight: 800;
-  padding: 10px 22px;
+  padding: 6px 14px;
 }
 
 .time-evaluation-subtabs button + button {
@@ -19222,7 +19222,7 @@ body.mobile-modal-scroll-locked {
 .time-entries-page.is-figma-times-workspace .page-header h1 {
   margin: 0 0 3px;
   color: var(--time-text);
-  font-size: clamp(1.45rem, 1.9vw, 2rem);
+  font-size: 1.18rem;
   line-height: 1.2;
   font-weight: 900;
   letter-spacing: 0;
@@ -19239,7 +19239,7 @@ body.mobile-modal-scroll-locked {
   max-width: 680px;
   margin: 0;
   color: var(--time-muted);
-  font-size: clamp(0.95rem, 1.35vw, 1.4rem);
+  font-size: 0.86rem;
   line-height: 1.35;
 }
 
@@ -19247,13 +19247,13 @@ body.mobile-modal-scroll-locked {
   display: flex;
   box-sizing: border-box;
   width: 100%;
-  min-height: clamp(64px, 5.5vw, 92px);
+  min-height: 48px;
   align-items: center;
   justify-content: space-between;
-  gap: clamp(20px, 4vw, 64px);
+  gap: 24px;
   border-bottom: 1px solid #d1d9e6;
   background: #ffffff;
-  padding: 0 clamp(20px, 3vw, 44px);
+  padding: 0 24px;
 }
 
 .time-entries-page.is-figma-times-workspace .time-main-subtabs {
@@ -19287,9 +19287,9 @@ body.mobile-modal-scroll-locked {
   border-radius: 0;
   border-bottom: 2px solid transparent;
   color: #475569;
-  font-size: clamp(0.92rem, 1.15vw, 1.14rem);
+  font-size: 0.84rem;
   font-weight: 850;
-  padding: 0 clamp(14px, 1.5vw, 24px);
+  padding: 0 15px;
 }
 
 .time-entries-page.is-figma-times-workspace .time-main-subtabs button:hover,
@@ -19671,18 +19671,18 @@ body.mobile-modal-scroll-locked {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: clamp(26px, 2.6vw, 42px) clamp(24px, 3vw, 44px) clamp(22px, 2vw, 30px);
+  padding: 13px 24px 11px;
 }
 
 .time-entries-page.is-figma-times-workspace .time-evaluation-month-nav {
   margin-top: 0;
-  padding: clamp(22px, 2.2vw, 32px) clamp(20px, 3vw, 44px);
+  padding: 8px 24px;
 }
 
 .time-entries-page.is-figma-times-workspace .time-evaluation-month-strip-shell > .time-week-scroll-button {
-  width: clamp(42px, 4vw, 64px);
-  height: clamp(42px, 4vw, 64px);
-  min-height: clamp(42px, 4vw, 64px);
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
   background: #ffffff;
 }
 
@@ -20531,6 +20531,7 @@ body.mobile-modal-scroll-locked {
 
   .time-evaluation-period-controls {
     grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
   }
 
   .time-evaluation-year-navigation {
@@ -20543,7 +20544,7 @@ body.mobile-modal-scroll-locked {
   }
 
   .time-evaluation-subtabs {
-    grid-template-columns: repeat(2, minmax(110px, 1fr));
+    grid-template-columns: repeat(2, minmax(94px, 1fr));
   }
 
   .time-entries-page.is-figma-times-workspace .page-header {
@@ -20601,7 +20602,7 @@ body.mobile-modal-scroll-locked {
 
   .time-entries-page.is-figma-times-workspace .time-main-subtabs {
     flex: 1 1 100%;
-    min-height: 54px;
+    min-height: 42px;
   }
 
   .time-evaluation-subtabs {
