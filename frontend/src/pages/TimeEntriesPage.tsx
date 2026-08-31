@@ -1974,19 +1974,40 @@ export function TimeEntriesPage() {
 
       {error && <p className="form-error">{error}</p>}
 
-      <div className="project-record-subtabs time-main-subtabs" role="tablist" aria-label="Zeiten Bereiche">
-        {visibleTimeSubtabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            aria-selected={activeTimeSubtab === tab.key}
-            className={activeTimeSubtab === tab.key ? "is-active" : ""}
-            onClick={() => setActiveTimeSubtab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="time-payroll-navigation-row">
+        <div className="project-record-subtabs time-main-subtabs" role="tablist" aria-label="Zeiten Bereiche">
+          {visibleTimeSubtabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={activeTimeSubtab === tab.key}
+              className={activeTimeSubtab === tab.key ? "is-active" : ""}
+              onClick={() => setActiveTimeSubtab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {activeTimeSubtab === "evaluation" && (
+          <div className="project-record-subtabs time-evaluation-subtabs" role="tablist" aria-label="Monatsauswertung Bereiche">
+            {([
+              ["workers", "Monteure"],
+              ["sites", "Baustellen"],
+            ] as const).map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeEvaluationSubtab === tab}
+                className={activeEvaluationSubtab === tab ? "is-active" : ""}
+                onClick={() => setActiveEvaluationSubtab(tab)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {activeTimeSubtab === "review" && (
@@ -2601,23 +2622,6 @@ export function TimeEntriesPage() {
                 </button>
               </div>
             </div>
-          </div>
-          <div className="project-record-subtabs time-evaluation-subtabs" role="tablist" aria-label="Monatsauswertung Bereiche">
-            {([
-              ["workers", "Monteure"],
-              ["sites", "Baustellen"],
-            ] as const).map(([tab, label]) => (
-              <button
-                key={tab}
-                type="button"
-                role="tab"
-                aria-selected={activeEvaluationSubtab === tab}
-                className={activeEvaluationSubtab === tab ? "is-active" : ""}
-                onClick={() => setActiveEvaluationSubtab(tab)}
-              >
-                {label}
-              </button>
-            ))}
           </div>
           {activeEvaluationSubtab === "workers" ? (
             <>

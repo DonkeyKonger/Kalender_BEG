@@ -65,16 +65,18 @@ test("Monatsnavigation zeigt fünf Monate und eine schlichte Jahressteuerung rec
   assert.match(pageSource, /function evaluationMonthVisibleButtonCount[\s\S]*?Math\.floor\(\(container\.clientWidth - firstButton\.offsetWidth\) \/ step\) \+ 1/s);
   assert.match(pageSource, /function scrollEvaluationMonths[\s\S]*?targetIndex[\s\S]*?container\.scrollTo\(\{ left: buttons\[targetIndex\]\?\.offsetLeft/s);
   assert.match(pageSource, /alignEvaluationMonthsToSelection\(container, selectedEvaluationMonth\.month\)/);
-  assert.match(styles, /\.time-evaluation-month-strip\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/s);
+  assert.match(styles, /\.time-evaluation-month-strip\s*\{[^}]*display:\s*flex;[^}]*position:\s*relative;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/s);
   assert.match(pageSource, /time-evaluation-period-controls[\s\S]*?time-evaluation-month-strip-shell[\s\S]*?time-evaluation-year-navigation/s);
   assert.match(pageSource, /className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr"[\s\S]*?Vorheriges Jahr auswählen[\s\S]*?\{selectedEvaluationMonth\.year\}[\s\S]*?Nächstes Jahr auswählen/s);
   assert.doesNotMatch(pageSource, /time-evaluation-year-select|time-evaluation-month-controls/);
-  assert.match(styles, /\.time-evaluation-period-controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*gap:\s*12px;/s);
-  assert.match(styles, /\.time-evaluation-month-strip button\s*\{[^}]*flex:\s*0 0 calc\(\(100% - 24px\) \/ 5\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s);
-  assert.match(styles, /\.time-evaluation-year-navigation \.time-week-scroll-button\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;/s);
-  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*flex-basis:\s*calc\(\(100% - 12px\) \/ 3\);/s);
+  assert.match(styles, /\.time-evaluation-period-controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*gap:\s*clamp\(24px, 3vw, 48px\);/s);
+  assert.match(styles, /\.time-evaluation-month-strip button\s*\{[^}]*flex:\s*0 0 20%;[^}]*min-height:\s*clamp\(42px, 4vw, 64px\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s);
+  assert.match(styles, /\.time-evaluation-year-navigation\s*\{[^}]*border:\s*1px solid var\(--time-border\);[^}]*background:\s*#ffffff;/s);
+  assert.match(styles, /\.time-evaluation-year-navigation \.time-week-scroll-button\s*\{[^}]*width:\s*clamp\(42px, 4vw, 64px\);[^}]*border:\s*0;[^}]*background:\s*#ffffff;/s);
+  assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*flex-basis:\s*calc\(100% \/ 3\);/s);
   assert.match(styles, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.time-evaluation-period-controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?\.time-evaluation-year-navigation\s*\{[^}]*justify-self:\s*end;/s);
-  assert.match(styles, /\.time-evaluation-month-strip button\.is-active\s*\{[^}]*background:\s*var\(--time-week-active-blue\);/s);
+  assert.match(styles, /@media \(max-width: 420px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*min-width:\s*0;[^}]*font-size:\s*0\.78rem;/s);
+  assert.match(styles, /\.time-evaluation-month-strip button\.is-active\s*\{[^}]*border-color:\s*#1459e7;[^}]*background:\s*#1459e7;/s);
   assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
 });
 
@@ -105,13 +107,20 @@ test("Baustellen-Untertab verwendet das eigenständige aggregierte Forecast-Cock
   assert.match(pageSource, /activeEvaluationSubtab === "workers" \? \([\s\S]*?<MonthlyPayrollWorkerWorkspace/s);
 });
 
-test("Auswertungs-Untertabs liegen in einer eigenen Workspace-Zeile", () => {
-  assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/s);
-  assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*46px;[^}]*width:\s*100%;[^}]*border-right:\s*0;[^}]*border-left:\s*0;[^}]*border-radius:\s*0;[^}]*padding:\s*8px 24px;/s);
+test("Auswertungs-Untertabs teilen die kompakte Headerzeile mit der Hauptnavigation", () => {
+  const navigationStart = pageSource.indexOf('className="time-payroll-navigation-row"');
+  const evaluationMainStart = pageSource.indexOf('className="time-entries-main time-review-main time-evaluation-main"');
+
+  assert.ok(navigationStart >= 0);
+  assert.ok(evaluationMainStart > navigationStart);
+  assert.match(pageSource.slice(navigationStart, evaluationMainStart), /time-main-subtabs[\s\S]*?activeTimeSubtab === "evaluation"[\s\S]*?time-evaluation-subtabs/s);
+  assert.match(styles, /\.time-payroll-navigation-row\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*space-between;[^}]*border-bottom:\s*1px solid #d1d9e6;/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/s);
+  assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2, minmax\(132px, 1fr\)\);[^}]*margin:\s*0 0 0 auto;[^}]*border:\s*0;[^}]*border-radius:\s*0;/s);
   assert.match(styles, /\.time-evaluation-subtabs button:focus-visible\s*\{[^}]*box-shadow:/s);
-  assert.match(styles, /\.time-evaluation-subtabs button\s*\{[^}]*min-height:\s*28px;[^}]*border-radius:\s*0;[^}]*background:\s*#f1f5f9;[^}]*color:\s*#475569;/s);
+  assert.match(styles, /\.time-evaluation-subtabs button\s*\{[^}]*border:\s*1px solid var\(--time-border\);[^}]*border-radius:\s*0;[^}]*background:\s*#ffffff;[^}]*color:\s*#243b5a;/s);
   assert.match(styles, /\.time-evaluation-subtabs button\.is-active\s*\{[^}]*background:\s*var\(--time-week-active-blue\);[^}]*color:\s*#ffffff;[^}]*box-shadow:\s*none;/s);
-  assert.match(styles, /\.time-evaluation-subtabs button:hover,[\s\S]*?\.time-evaluation-subtabs button:focus-visible\s*\{[^}]*background:\s*#e2e8f0;[^}]*color:\s*#334155;/s);
+  assert.match(styles, /@media \(max-width: 580px\)\s*\{[\s\S]*?\.time-payroll-navigation-row\s*\{[^}]*flex-wrap:\s*wrap;[\s\S]*?\.time-evaluation-subtabs\s*\{[^}]*width:\s*100%;/s);
 });
 
 test("Monats- und Wochenprüfung teilen responsive Tabellenüberschriften", () => {

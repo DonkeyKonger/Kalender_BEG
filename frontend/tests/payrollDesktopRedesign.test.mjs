@@ -266,8 +266,8 @@ test("payroll review is viewport-bound while only queue and table scroll indepen
   assert.doesNotMatch(styles, /is-payroll-review-workspace\s*\{[^}]*height:\s*calc\(100dvh - 96px\)/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-queue-panel\s*\{[^}]*grid-template-rows:\s*auto auto auto auto minmax\(0, 1fr\) auto;[^}]*min-height:\s*0;/s);
-  assert.match(styles, /is-payroll-review-workspace > \.page-header,[\s\S]*?is-payroll-review-workspace > \.time-main-subtabs\s*\{[^}]*flex:\s*0 0 auto;/s);
-  assert.match(styles, /is-payroll-review-workspace > \.time-main-subtabs\s*\{[^}]*overflow:\s*visible;/s);
+  assert.match(styles, /is-payroll-review-workspace > \.page-header,[\s\S]*?is-payroll-review-workspace > \.time-payroll-navigation-row\s*\{[^}]*flex:\s*0 0 auto;/s);
+  assert.match(styles, /is-payroll-review-workspace > \.time-payroll-navigation-row \.time-main-subtabs\s*\{[^}]*overflow:\s*visible;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-workspace-layout\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);[^}]*height:\s*auto;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-detail-shell\s*\{[^}]*overflow:\s*hidden;[^}]*container-name:\s*time-review-detail;[^}]*container-type:\s*inline-size;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-review-worker-detail\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
