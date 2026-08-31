@@ -1,21 +1,22 @@
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy import Integer, case, cast, extract, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.enums import AbsenceStatus, PersonType
 from app.models.person import Person
 from app.models.site import Site
-from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch, SiteMeasurementItem
+from app.models.extra_work_ticket import ExtraWorkTicket
+from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch, SiteMeasurementEntry, SiteMeasurementItem
 from app.models.work_time_entry import WorkTimeEntry
-from app.services.measurement_service import MeasurementService
+from app.services.time_entry_service import TimeEntryService
 from app.schemas.payroll_site_cockpit import (
     PayrollSiteCockpitActionItemRead,
     PayrollSiteCockpitHistoryPointRead,
@@ -72,20 +73,16 @@ class PayrollSiteCockpitService:
                 "date_from und date_to müssen im selben Kalendermonat liegen.",
             )
 
-        batches = list(
-            self.db.scalars(
-                select(SiteMeasurementBatch)
-                .where(SiteMeasurementBatch.deleted_at.is_(None))
-                .where(SiteMeasurementBatch.status != "draft")
-            )
-        )
+        batches = list(self.db.scalars(
+            select(SiteMeasurementBatch)
+            .options(selectinload(SiteMeasurementBatch.entries).selectinload(SiteMeasurementEntry.measurement_item))
+            .where(SiteMeasurementBatch.deleted_at.is_(None), SiteMeasurementBatch.first_submitted_at.is_not(None))
+            .order_by(SiteMeasurementBatch.first_submitted_at, SiteMeasurementBatch.id)
+        ))
+        event_batches = [batch for batch in batches if batch.first_submitted_at and batch.first_submitted_at.date() <= date_to]
         selected_site_ids = {
-            batch.site_id
-            for batch in batches
-            if (
-                (analysis_at := MeasurementService._analysis_timestamp(batch)) is not None
-                and date_from <= analysis_at.date() <= date_to
-            )
+            batch.site_id for batch in event_batches
+            if date_from <= batch.first_submitted_at.date() <= date_to
         }
         if not selected_site_ids:
             return PayrollSiteCockpitRead(
@@ -94,22 +91,77 @@ class PayrollSiteCockpitService:
                 totals=PayrollSiteCockpitTotalsRead(actual_minutes=0, forecast_reason=FORECAST_UNAVAILABLE_REASON, site_count=0, budget_site_count=0, forecast_site_count=0),
                 sites=[], action_items=[],
             )
-        totals_by_site: dict[int, dict[str, float]] = defaultdict(
-            lambda: defaultdict(float)
-        )
-        measurement_service = MeasurementService(self.db)
-        for site_id in selected_site_ids:
-            analysis = measurement_service.get_site_measurement_time_analysis(
-                site_id,
-                invoiced_extra_work_only=True,
+        work_entries = list(
+            self.db.scalars(
+                select(WorkTimeEntry)
+                .options(selectinload(WorkTimeEntry.person))
+                .where(
+                    WorkTimeEntry.site_id.in_(selected_site_ids),
+                    WorkTimeEntry.work_date <= date_to,
+                )
+                .order_by(
+                    WorkTimeEntry.site_id,
+                    WorkTimeEntry.work_date,
+                    WorkTimeEntry.id,
+                )
             )
-            values = totals_by_site[site_id]
-            for row in analysis.rows:
-                if row.analysis_at is None or not date_from <= row.analysis_at.date() <= date_to:
-                    continue
-                values["measurement"] += float(row.measurement_minutes)
-                values["supplementary"] += float(row.extra_work_minutes)
-                values["actual"] += float(row.actual_minutes)
+        )
+        relevant_work_entries = [
+            entry
+            for entry in work_entries
+            if TimeEntryService.is_project_mounting_time_relevant(entry)
+        ]
+        project_mounting_contexts = TimeEntryService(
+            self.db
+        ).project_mounting_contexts(relevant_work_entries)
+        actual_by_site: dict[int, list[tuple[date, float]]] = defaultdict(list)
+        for entry in relevant_work_entries:
+            context = project_mounting_contexts.get(entry.id)
+            minutes = (
+                context["work_minutes"]
+                if context is not None
+                else TimeEntryService.project_mounting_work_minutes(entry)
+            )
+            actual_by_site[entry.site_id].append((entry.work_date, float(minutes)))
+        period_end = datetime.combine(date_to, time.max, tzinfo=UTC)
+        tickets = list(self.db.scalars(select(ExtraWorkTicket).options(selectinload(ExtraWorkTicket.entries)).where(
+            ExtraWorkTicket.site_id.in_(selected_site_ids), ExtraWorkTicket.deleted_at.is_(None),
+            ExtraWorkTicket.is_invoiced.is_(True), ExtraWorkTicket.invoiced_at.is_not(None), ExtraWorkTicket.invoiced_at <= period_end,
+        )).all())
+        totals_by_site: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        batches_by_site: dict[int, list[SiteMeasurementBatch]] = defaultdict(list)
+        for batch in event_batches:
+            if batch.site_id in selected_site_ids:
+                batches_by_site[batch.site_id].append(batch)
+        tickets_by_site: dict[int, list[ExtraWorkTicket]] = defaultdict(list)
+        for ticket in tickets:
+            tickets_by_site[ticket.site_id].append(ticket)
+        for site_id, events in batches_by_site.items():
+            actual_index = 0
+            site_actuals = actual_by_site.get(site_id, [])
+            previous_event_at = None
+            for batch in events:
+                event_at = batch.first_submitted_at
+                realized_actual = 0.0
+                while actual_index < len(site_actuals) and site_actuals[actual_index][0] <= event_at.date():
+                    realized_actual += site_actuals[actual_index][1]
+                    actual_index += 1
+                supplementary = sum(
+                    float((entry.estimated_hours or Decimal("0")) * Decimal("60"))
+                    for ticket in tickets_by_site.get(site_id, [])
+                    if ticket.invoiced_at and (previous_event_at is None or ticket.invoiced_at > previous_event_at) and ticket.invoiced_at <= event_at
+                    for entry in ticket.entries
+                )
+                measurement = sum(
+                    float(entry.quantity * (entry.measurement_item.minutes_per_unit or Decimal("0")))
+                    for entry in batch.entries if entry.measurement_item is not None
+                )
+                if date_from <= event_at.date() <= date_to:
+                    values = totals_by_site[site_id]
+                    values["measurement"] += measurement
+                    values["supplementary"] += supplementary
+                    values["actual"] += realized_actual
+                previous_event_at = event_at
         sites = [
             _SiteIdentity(id=row.id, site_number=row.site_number, name=row.name)
             for row in self.db.execute(
