@@ -5,7 +5,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.models import Base
-from app.models.enums import PersonType, SiteStatus
+from app.models.assignment import Assignment
+from app.models.enums import AssignmentType, PersonType, SiteStatus
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry
 from app.models.person import Person
 from app.models.site import Site
@@ -39,11 +40,13 @@ def test_realization_partitions_hours_and_billed_supplements_into_measurement_ev
     ])
     ticket = ExtraWorkTicket(site_id=site.id, sequence_number=1, display_number="ZA-1", title="Nachtrag", is_invoiced=True, invoiced_at=datetime(2026, 8, 8, tzinfo=UTC))
     pending_until_next_event = ExtraWorkTicket(site_id=site.id, sequence_number=2, display_number="ZA-2", title="Später Nachtrag", is_invoiced=True, invoiced_at=datetime(2026, 8, 20, tzinfo=UTC))
-    db.add_all([ticket, pending_until_next_event])
+    unbilled = ExtraWorkTicket(site_id=site.id, sequence_number=3, display_number="ZA-3", title="Offener Nachtrag", is_invoiced=False, invoiced_at=datetime(2026, 8, 5, tzinfo=UTC))
+    db.add_all([ticket, pending_until_next_event, unbilled])
     db.flush()
     db.add_all([
         ExtraWorkTicketEntry(ticket_id=ticket.id, site_id=site.id, component="x", floor="x", estimated_hours=Decimal("2"), worker_rows=[]),
         ExtraWorkTicketEntry(ticket_id=pending_until_next_event.id, site_id=site.id, component="x", floor="x", estimated_hours=Decimal("3"), worker_rows=[]),
+        ExtraWorkTicketEntry(ticket_id=unbilled.id, site_id=site.id, component="x", floor="x", estimated_hours=Decimal("7"), worker_rows=[]),
     ])
     db.commit()
     service = PayrollSiteCockpitService(db)
@@ -62,3 +65,105 @@ def test_realization_partitions_hours_and_billed_supplements_into_measurement_ev
     assert september.supplementary_minutes == 180
     assert september.realized_actual_minutes == 0
     assert september.result_minutes == 180
+
+
+def test_realization_counts_external_monteurs_once_in_their_submission_interval() -> None:
+    db = Session(create_engine("sqlite+pysqlite:///:memory:"))
+    Base.metadata.create_all(db.get_bind())
+    internal = Person(
+        first_name="Intern",
+        last_name="Monteur",
+        display_name="Intern Monteur",
+        short_code="IM",
+        person_type=PersonType.INTERNAL,
+    )
+    external = Person(
+        first_name="Extern",
+        last_name="Monteur",
+        display_name="Extern Monteur",
+        short_code="EM",
+        person_type=PersonType.EXTERNAL,
+    )
+    site = Site(site_number="8021", name="Ostwache Kiel", status=SiteStatus.ACTIVE)
+    item = SiteMeasurementItem(
+        site=site,
+        position="1",
+        description="Leistung",
+        minutes_per_unit=Decimal("1"),
+        sort_order=1,
+    )
+    first_event = SiteMeasurementBatch(
+        site=site,
+        number=1,
+        title="August",
+        status="submitted",
+        first_submitted_at=datetime(2026, 8, 15, 9, tzinfo=UTC),
+    )
+    second_event = SiteMeasurementBatch(
+        site=site,
+        number=2,
+        title="September",
+        status="submitted",
+        first_submitted_at=datetime(2026, 9, 1, 9, tzinfo=UTC),
+    )
+    db.add_all([internal, external, site, item, first_event, second_event])
+    db.flush()
+    db.add_all(
+        [
+            SiteMeasurementEntry(
+                measurement_batch_id=first_event.id,
+                measurement_item_id=item.id,
+                site_id=site.id,
+                quantity=Decimal("2410"),
+                area_or_comment="",
+            ),
+            SiteMeasurementEntry(
+                measurement_batch_id=second_event.id,
+                measurement_item_id=item.id,
+                site_id=site.id,
+                quantity=Decimal("0"),
+                area_or_comment="",
+            ),
+            WorkTimeEntry(
+                person_id=internal.id,
+                site_id=site.id,
+                work_date=date(2026, 8, 10),
+                work_minutes=1830,
+                break_minutes=0,
+                travel_minutes=0,
+            ),
+            WorkTimeEntry(
+                person_id=internal.id,
+                site_id=site.id,
+                work_date=date(2026, 8, 20),
+                work_minutes=60,
+                break_minutes=0,
+                travel_minutes=0,
+            ),
+            Assignment(
+                site_id=site.id,
+                person_id=external.id,
+                start_date=date(2026, 8, 10),
+                end_date=date(2026, 8, 20),
+                assignment_type=AssignmentType.REGULAR,
+            ),
+        ]
+    )
+    db.commit()
+
+    service = PayrollSiteCockpitService(db)
+    august = service.get_cockpit(
+        date_from=date(2026, 8, 1),
+        date_to=date(2026, 8, 31),
+    ).sites[0]
+    september = service.get_cockpit(
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 30),
+    ).sites[0]
+
+    assert august.measurement_minutes == 2410
+    assert august.realized_actual_minutes == 3660
+    assert august.result_minutes == -1250
+    assert august.result_tone == "negative"
+    assert september.realized_actual_minutes == 120
+    assert september.result_minutes == -120

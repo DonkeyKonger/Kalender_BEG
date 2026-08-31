@@ -16,6 +16,7 @@ from app.models.site import Site
 from app.models.extra_work_ticket import ExtraWorkTicket
 from app.models.site_measurement_item import SiteMeasurementBase, SiteMeasurementBatch, SiteMeasurementEntry, SiteMeasurementItem
 from app.models.work_time_entry import WorkTimeEntry
+from app.services.time_entry_service import TimeEntryService
 from app.schemas.payroll_site_cockpit import (
     PayrollSiteCockpitActionItemRead,
     PayrollSiteCockpitHistoryPointRead,
@@ -90,13 +91,38 @@ class PayrollSiteCockpitService:
                 totals=PayrollSiteCockpitTotalsRead(actual_minutes=0, forecast_reason=FORECAST_UNAVAILABLE_REASON, site_count=0, budget_site_count=0, forecast_site_count=0),
                 sites=[], action_items=[],
             )
-        effective_minutes = self._effective_work_minutes_expression()
-        actual_rows = self.db.execute(select(WorkTimeEntry.site_id, WorkTimeEntry.work_date, effective_minutes.label("minutes"))
-            .where(WorkTimeEntry.site_id.in_(selected_site_ids), WorkTimeEntry.work_date <= date_to, WorkTimeEntry.source != "gps_suggestion", effective_minutes > 0)
-            .order_by(WorkTimeEntry.site_id, WorkTimeEntry.work_date, WorkTimeEntry.id)).all()
+        work_entries = list(
+            self.db.scalars(
+                select(WorkTimeEntry)
+                .options(selectinload(WorkTimeEntry.person))
+                .where(
+                    WorkTimeEntry.site_id.in_(selected_site_ids),
+                    WorkTimeEntry.work_date <= date_to,
+                )
+                .order_by(
+                    WorkTimeEntry.site_id,
+                    WorkTimeEntry.work_date,
+                    WorkTimeEntry.id,
+                )
+            )
+        )
+        relevant_work_entries = [
+            entry
+            for entry in work_entries
+            if TimeEntryService.is_project_mounting_time_relevant(entry)
+        ]
+        project_mounting_contexts = TimeEntryService(
+            self.db
+        ).project_mounting_contexts(relevant_work_entries)
         actual_by_site: dict[int, list[tuple[date, float]]] = defaultdict(list)
-        for row in actual_rows:
-            actual_by_site[row.site_id].append((row.work_date, float(row.minutes)))
+        for entry in relevant_work_entries:
+            context = project_mounting_contexts.get(entry.id)
+            minutes = (
+                context["work_minutes"]
+                if context is not None
+                else TimeEntryService.project_mounting_work_minutes(entry)
+            )
+            actual_by_site[entry.site_id].append((entry.work_date, float(minutes)))
         period_end = datetime.combine(date_to, time.max, tzinfo=UTC)
         tickets = list(self.db.scalars(select(ExtraWorkTicket).options(selectinload(ExtraWorkTicket.entries)).where(
             ExtraWorkTicket.site_id.in_(selected_site_ids), ExtraWorkTicket.deleted_at.is_(None),
