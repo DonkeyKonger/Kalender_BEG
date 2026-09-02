@@ -108,6 +108,25 @@ def test_legacy_manual_site_note_fills_place_without_a_site_link():
     assert day.site_place == "Achim"
 
 
+def test_linked_site_takes_priority_over_longer_manual_site_note():
+    linked_site = make_site(1, "4719", "Combi Apen", city="Apen")
+    linked_entry = make_entry(
+        1,
+        date(2026, 6, 8),
+        "06:00",
+        "07:00",
+        linked_site,
+    )
+    manual_entry = make_entry(2, date(2026, 6, 8), "07:00", "15:00", None)
+    manual_entry.note = "Manuelle Baustelle: Firma Material laden / Fototermin"
+
+    day = only_day([linked_entry, manual_entry])
+
+    assert day.commission_number == "4719"
+    assert day.site_name == "Combi Apen"
+    assert day.site_place == "Apen"
+
+
 def test_equal_cost_center_durations_use_the_chronologically_last_entry():
     first = make_site(1, "1000", "Früh", address="Frühweg 1")
     last = make_site(2, "2000", "Spät", address="Spätweg 2")

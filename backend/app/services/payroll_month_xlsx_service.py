@@ -460,6 +460,7 @@ def _dominant_site(entries: Sequence[WorkTimeEntry]) -> _DominantSiteCandidate:
     return max(
         candidates.values(),
         key=lambda candidate: (
+            candidate.site is not None,
             candidate.duration_minutes,
             candidate.latest_entry_order,
         ),
