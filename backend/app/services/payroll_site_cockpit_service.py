@@ -159,10 +159,9 @@ class PayrollSiteCockpitService:
                     realized_actual += site_actuals[actual_index][1]
                     actual_index += 1
                 supplementary = sum(
-                    float((entry.estimated_hours or Decimal("0")) * Decimal("60"))
+                    self._extra_work_ticket_minutes(ticket)
                     for ticket, invoiced_at in tickets_by_site.get(site_id, [])
                     if (previous_event_at is None or invoiced_at > previous_event_at) and invoiced_at <= event_at
-                    for entry in ticket.entries
                 )
                 measurement = sum(
                     float(entry.quantity * (entry.measurement_item.minutes_per_unit or Decimal("0")))
@@ -256,6 +255,13 @@ class PayrollSiteCockpitService:
             ):
                 timestamps[ticket_id] = created_at
         return timestamps
+
+    @staticmethod
+    def _extra_work_ticket_minutes(ticket: ExtraWorkTicket) -> float:
+        documented_hours = ticket.total_hours or Decimal("0")
+        if documented_hours <= 0 and ticket.estimated_hours is not None:
+            documented_hours = ticket.estimated_hours
+        return float(documented_hours * Decimal("60"))
 
     @staticmethod
     def _comparison_datetime(value: datetime) -> datetime:

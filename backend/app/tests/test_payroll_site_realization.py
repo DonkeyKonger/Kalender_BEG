@@ -68,6 +68,69 @@ def test_realization_partitions_hours_and_billed_supplements_into_measurement_ev
     assert september.result_minutes == 180
 
 
+def test_realization_uses_documented_worker_hours_for_billed_supplements() -> None:
+    db = Session(create_engine("sqlite+pysqlite:///:memory:"))
+    Base.metadata.create_all(db.get_bind())
+    site = Site(site_number="8007", name="Schüchtermann Klinik", status=SiteStatus.ACTIVE)
+    item = SiteMeasurementItem(
+        site=site,
+        position="1",
+        description="Leistung",
+        minutes_per_unit=Decimal("1"),
+        sort_order=1,
+    )
+    batch = SiteMeasurementBatch(
+        site=site,
+        number=1,
+        title="August",
+        status="submitted",
+        first_submitted_at=datetime(2026, 8, 15, 9, tzinfo=UTC),
+    )
+    ticket = ExtraWorkTicket(
+        site=site,
+        sequence_number=1,
+        display_number="8007.SZ01",
+        title="Nachtrag",
+        status="billed",
+        is_invoiced=True,
+        invoiced_at=datetime(2026, 8, 10, 9, tzinfo=UTC),
+        entries=[
+            ExtraWorkTicketEntry(
+                site=site,
+                component="A",
+                floor="EG",
+                estimated_hours=None,
+                worker_rows=[
+                    {
+                        "monday_hours": "45.5",
+                        "tuesday_hours": "6",
+                    }
+                ],
+            )
+        ],
+    )
+    db.add_all([site, item, batch, ticket])
+    db.flush()
+    db.add(
+        SiteMeasurementEntry(
+            measurement_batch_id=batch.id,
+            measurement_item_id=item.id,
+            site_id=site.id,
+            quantity=Decimal("0"),
+            area_or_comment="",
+        )
+    )
+    db.commit()
+
+    august = PayrollSiteCockpitService(db).get_cockpit(
+        date_from=date(2026, 8, 1),
+        date_to=date(2026, 8, 31),
+    ).sites[0]
+
+    assert august.supplementary_minutes == 3090
+    assert august.performance_minutes == 3090
+
+
 def test_realization_includes_only_audit_proven_legacy_invoiced_markers() -> None:
     db = Session(create_engine("sqlite+pysqlite:///:memory:"))
     Base.metadata.create_all(db.get_bind())
