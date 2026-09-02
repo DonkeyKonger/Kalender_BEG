@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import calendar
-import logging
 import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -22,8 +21,6 @@ from app.services.payroll_xlsx_template import load_payroll_monthly_template
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 
 
-logger = logging.getLogger(__name__)
-
 SPREADSHEET_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 SHEET_NAMESPACES = {
     "": SPREADSHEET_NS,
@@ -37,10 +34,9 @@ SHEET_NAMESPACES = {
 for prefix, uri in SHEET_NAMESPACES.items():
     ET.register_namespace(prefix, uri)
 
-FOUR_DAY_MINIMUM_NET_MINUTES = 10 * 60
-DISTRIBUTED_DAILY_NET_MINUTES = 8 * 60
+FOUR_DAY_MINIMUM_WEEK_MINUTES = 36 * 60
+DISTRIBUTED_WORK_DAYS = 5
 DISTRIBUTED_DAILY_BREAK_MINUTES = 45
-DISTRIBUTED_DAILY_SPAN_MINUTES = DISTRIBUTED_DAILY_NET_MINUTES + DISTRIBUTED_DAILY_BREAK_MINUTES
 GERMAN_MONTH_NAMES = (
     "",
     "Januar",
@@ -312,38 +308,50 @@ def build_payroll_month_plan(
     }
     absence_dates = _active_absence_dates(person, absences)
     blocked_dates = absence_dates.union(non_working_dates)
-    overtime_remainders: list[PayrollWeekOvertimeRemainder] = []
-
     for week_start in _month_week_starts(year, month):
         weekdays = [week_start + timedelta(days=offset) for offset in range(5)]
         actual_days = [
             days_by_date[work_date] for work_date in weekdays if work_date in days_by_date
         ]
         missing_dates = [work_date for work_date in weekdays if work_date not in days_by_date]
+        actual_week_minutes = sum(day.net_work_minutes for day in actual_days)
         if (
             len(actual_days) != 4
             or len(missing_dates) != 1
-            or any(day.net_work_minutes < FOUR_DAY_MINIMUM_NET_MINUTES for day in actual_days)
+            or actual_week_minutes < FOUR_DAY_MINIMUM_WEEK_MINUTES
             or missing_dates[0] in blocked_dates
         ):
             continue
 
         actual_days.sort(key=lambda day: day.work_date)
-        actual_week_minutes = sum(day.net_work_minutes for day in actual_days)
+        base_daily_minutes, remainder_minutes = divmod(
+            actual_week_minutes,
+            DISTRIBUTED_WORK_DAYS,
+        )
+        distributed_minutes = {
+            work_date: base_daily_minutes + (index < remainder_minutes)
+            for index, work_date in enumerate(weekdays)
+        }
         for day in actual_days:
-            days_by_date[day.work_date] = _distributed_actual_day(day)
+            days_by_date[day.work_date] = _distributed_actual_day(
+                day,
+                net_work_minutes=distributed_minutes[day.work_date],
+            )
 
         last_actual_day = actual_days[-1]
         missing_date = missing_dates[0]
         derived_start = last_actual_day.start_time
+        derived_net_work_minutes = distributed_minutes[missing_date]
         days_by_date[missing_date] = PayrollMonthDay(
             work_date=missing_date,
             start_time=derived_start,
             end_time=_clock_from_minutes(
-                _clock_minutes(derived_start) + DISTRIBUTED_DAILY_SPAN_MINUTES
+                _clock_minutes(derived_start)
+                + derived_net_work_minutes
+                + DISTRIBUTED_DAILY_BREAK_MINUTES
             ),
             break_minutes=DISTRIBUTED_DAILY_BREAK_MINUTES,
-            net_work_minutes=DISTRIBUTED_DAILY_NET_MINUTES,
+            net_work_minutes=derived_net_work_minutes,
             commission_number=last_actual_day.commission_number,
             cost_center=last_actual_day.cost_center,
             site_name=last_actual_day.site_name,
@@ -353,22 +361,6 @@ def build_payroll_month_plan(
             is_derived=True,
             source_entry_ids=(),
         )
-        overtime_minutes = max(0, actual_week_minutes - 5 * DISTRIBUTED_DAILY_NET_MINUTES)
-        if overtime_minutes > 0:
-            iso_year, iso_week, _ = week_start.isocalendar()
-            overtime_remainders.append(
-                PayrollWeekOvertimeRemainder(
-                    iso_year=iso_year,
-                    iso_week=iso_week,
-                    minutes=overtime_minutes,
-                )
-            )
-            logger.info(
-                "Monatsabrechnung hält %s Mehrarbeitsminuten für KW %s/%s zurück.",
-                overtime_minutes,
-                iso_week,
-                iso_year,
-            )
 
     month_days = tuple(
         day
@@ -377,7 +369,7 @@ def build_payroll_month_plan(
     )
     return PayrollMonthPlan(
         days=month_days,
-        overtime_remainders=tuple(overtime_remainders),
+        overtime_remainders=(),
     )
 
 
@@ -548,13 +540,19 @@ def _month_week_starts(year: int, month: int) -> list[date]:
     return result
 
 
-def _distributed_actual_day(day: PayrollMonthDay) -> PayrollMonthDay:
+def _distributed_actual_day(
+    day: PayrollMonthDay,
+    *,
+    net_work_minutes: int,
+) -> PayrollMonthDay:
     start_minutes = _clock_minutes(day.start_time)
     return replace(
         day,
-        end_time=_clock_from_minutes(start_minutes + DISTRIBUTED_DAILY_SPAN_MINUTES),
+        end_time=_clock_from_minutes(
+            start_minutes + net_work_minutes + DISTRIBUTED_DAILY_BREAK_MINUTES
+        ),
         break_minutes=DISTRIBUTED_DAILY_BREAK_MINUTES,
-        net_work_minutes=DISTRIBUTED_DAILY_NET_MINUTES,
+        net_work_minutes=net_work_minutes,
     )
 
 

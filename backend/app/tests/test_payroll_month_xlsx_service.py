@@ -209,15 +209,49 @@ def test_four_nonconsecutive_long_weekdays_add_the_actual_missing_weekday():
     assert len([day for day in days.values() if day.is_derived]) == 1
 
 
-def test_four_day_distribution_is_not_applied_when_one_day_is_below_ten_hours():
-    entries = long_week_entries([1, 2, 3, 4])
-    entries[-1].end_time = time(16, 30)
+def test_four_day_distribution_uses_week_total_even_when_one_day_is_shorter():
+    entries = [
+        make_entry(1, date(2026, 6, 1), "06:00", "16:15", make_site(1, "1001", "A")),
+        make_entry(2, date(2026, 6, 2), "06:00", "17:00", make_site(2, "1002", "B")),
+        make_entry(3, date(2026, 6, 3), "06:00", "17:45", make_site(3, "1003", "C")),
+        make_entry(4, date(2026, 6, 4), "06:15", "13:15", make_site(4, "1004", "D")),
+    ]
+
+    plan = month_plan(entries)
+
+    assert len(plan.days) == 5
+    assert sum(day.net_work_minutes for day in plan.days) == 40 * 60
+    assert next(day for day in plan.days if day.work_date == date(2026, 6, 5)).is_derived
+
+
+def test_four_day_distribution_starts_at_exactly_36_weekly_hours():
+    entries = long_week_entries([1, 2, 3, 4], end="16:00")
+
+    plan = month_plan(entries)
+
+    assert len(plan.days) == 5
+    assert all(day.net_work_minutes == 7 * 60 + 12 for day in plan.days)
+    assert sum(day.net_work_minutes for day in plan.days) == 36 * 60
+
+
+def test_four_day_distribution_preserves_a_weekly_remainder_minute():
+    entries = long_week_entries([1, 2, 3, 4], end="16:00")
+    entries[-1].break_minutes = 59
+
+    plan = month_plan(entries)
+
+    assert [day.net_work_minutes for day in plan.days] == [433, 432, 432, 432, 432]
+    assert sum(day.net_work_minutes for day in plan.days) == 36 * 60 + 1
+
+
+def test_four_day_distribution_is_not_applied_below_36_weekly_hours():
+    entries = long_week_entries([1, 2, 3, 4], end="16:00")
+    entries[-1].end_time = time(15, 45)
 
     plan = month_plan(entries)
 
     assert len(plan.days) == 4
     assert not any(day.is_derived for day in plan.days)
-    assert plan.days[-1].net_work_minutes == 570
 
 
 @pytest.mark.parametrize(
@@ -255,15 +289,14 @@ def test_non_working_date_such_as_public_holiday_prevents_distribution():
     assert not any(day.is_derived for day in plan.days)
 
 
-def test_work_above_40_hours_is_retained_as_weekly_overtime_remainder():
+def test_work_above_40_hours_is_evenly_distributed_without_changing_the_total():
     entries = long_week_entries([1, 2, 3, 4], end="18:00")
 
     plan = month_plan(entries)
 
-    assert sum(day.net_work_minutes for day in plan.days) == 5 * 480
-    assert len(plan.overtime_remainders) == 1
-    assert plan.overtime_remainders[0].iso_week == 23
-    assert plan.overtime_remainders[0].minutes == 240
+    assert sum(day.net_work_minutes for day in plan.days) == 44 * 60
+    assert all(day.net_work_minutes == 8 * 60 + 48 for day in plan.days)
+    assert plan.overtime_remainders == ()
 
 
 def test_building_the_month_does_not_mutate_source_time_entries():
