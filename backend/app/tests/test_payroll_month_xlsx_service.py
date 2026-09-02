@@ -313,7 +313,7 @@ def test_building_the_month_does_not_mutate_source_time_entries():
     assert [entry_snapshot(entry) for entry in entries] == before
 
 
-def test_generated_workbook_opens_and_only_changes_the_template_worksheet():
+def test_generated_workbook_opens_and_only_changes_the_template_worksheet_and_styles():
     site = make_site(
         1,
         "4711",
@@ -344,10 +344,14 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet():
         assert generated.testzip() is None
         assert set(generated.namelist()) == set(master.namelist())
         for name in master.namelist():
-            if name != PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path:
+            if name not in {
+                PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path,
+                PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path,
+            }:
                 assert generated.read(name) == master.read(name)
         sheet_xml = generated.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path)
         sheet = ET.fromstring(sheet_xml)
+        styles = ET.fromstring(generated.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path))
 
     assert cell_text(sheet, "A17") == "8"
     assert cell_text(sheet, "C2") == "Erika Monteurin"
@@ -359,6 +363,11 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet():
     assert cell_text(sheet, "F17") == "MA"
     assert cell_text(sheet, "G17") == "4711"
     assert cell_text(sheet, "H17") == "Achim"
+    assert all(
+        cell_shrinks_to_fit(sheet, styles, ref)
+        for ref in ("H10", "H11", "H12", "H17", "H40")
+    )
+    assert not cell_shrinks_to_fit(sheet, styles, "I17")
     assert sheet.findall(".//main:f", NS) == []
     assert (
         b'xmlns:xr2="http://schemas.microsoft.com/office/spreadsheetml/2015/revision2"' in sheet_xml
@@ -540,3 +549,14 @@ def cell_text(sheet: ET.Element, ref: str) -> str:
         return inline.text or ""
     value = cell.find("main:v", NS)
     return "" if value is None else value.text or ""
+
+
+def cell_shrinks_to_fit(sheet: ET.Element, styles: ET.Element, ref: str) -> bool:
+    cell = sheet.find(f'.//main:c[@r="{ref}"]', NS)
+    assert cell is not None
+    style_id = int(cell.attrib.get("s", "0"))
+    cell_xfs = styles.find("main:cellXfs", NS)
+    assert cell_xfs is not None
+    style = list(cell_xfs)[style_id]
+    alignment = style.find("main:alignment", NS)
+    return alignment is not None and alignment.attrib.get("shrinkToFit") == "1"

@@ -5,6 +5,7 @@ import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from collections.abc import Collection, Iterable, Sequence
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import date, time, timedelta
 from io import BytesIO
@@ -27,6 +28,7 @@ SHEET_NAMESPACES = {
     "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
     "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
     "x14ac": "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac",
+    "x16r2": "http://schemas.microsoft.com/office/spreadsheetml/2015/02/main",
     "xr": "http://schemas.microsoft.com/office/spreadsheetml/2014/revision",
     "xr2": "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2",
     "xr3": "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3",
@@ -59,6 +61,7 @@ POSTAL_CITY_PATTERN = re.compile(r"\b\d{5}\s+([^,;]+)")
 @dataclass(frozen=True)
 class PayrollMonthTemplateLayout:
     worksheet_path: str = "xl/worksheets/sheet1.xml"
+    styles_path: str = "xl/styles.xml"
     person_name_cell: str = "C2"
     month_label_cell: str = "C4"
     first_day_row: int = 10
@@ -151,6 +154,12 @@ def build_payroll_month_xlsx(
     output = BytesIO()
     with ZipFile(template, "r") as source, ZipFile(output, "w", ZIP_DEFLATED) as archive:
         sheet_root = ET.fromstring(source.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path))
+        styles_root = ET.fromstring(source.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path))
+        address_style_mapping = _append_shrink_to_fit_styles(
+            styles_root,
+            _address_cell_style_ids(sheet_root),
+        )
+        _apply_address_cell_styles(sheet_root, address_style_mapping)
         plan = fill_payroll_month_sheet(
             sheet_root,
             person=person,
@@ -166,12 +175,16 @@ def build_payroll_month_xlsx(
             xml_declaration=True,
         )
         filled_sheet = _preserve_sheet_namespaces(filled_sheet)
+        filled_styles = _preserve_sheet_namespaces(
+            ET.tostring(styles_root, encoding="UTF-8", xml_declaration=True)
+        )
         for item in source.infolist():
-            content = (
-                filled_sheet
-                if item.filename == PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path
-                else source.read(item.filename)
-            )
+            if item.filename == PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path:
+                content = filled_sheet
+            elif item.filename == PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path:
+                content = filled_styles
+            else:
+                content = source.read(item.filename)
             archive.writestr(item, content)
     return PayrollMonthWorkbook(content=output.getvalue(), plan=plan)
 
@@ -186,6 +199,11 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
     plans: list[PayrollMonthPlan] = []
     with ZipFile(template, "r") as source, ZipFile(output, "w", ZIP_DEFLATED) as archive:
         template_sheet = source.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path)
+        styles_root = ET.fromstring(source.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path))
+        address_style_mapping = _append_shrink_to_fit_styles(
+            styles_root,
+            _address_cell_style_ids(ET.fromstring(template_sheet)),
+        )
         template_sheet_relationships = source.read("xl/worksheets/_rels/sheet1.xml.rels")
         template_drawing = source.read("xl/drawings/drawing1.xml")
         template_drawing_relationships = source.read("xl/drawings/_rels/drawing1.xml.rels")
@@ -195,6 +213,7 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
             "xl/workbook.xml",
             "xl/_rels/workbook.xml.rels",
             "xl/worksheets/sheet1.xml",
+            PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path,
             "xl/worksheets/_rels/sheet1.xml.rels",
             "xl/drawings/drawing1.xml",
             "xl/drawings/_rels/drawing1.xml.rels",
@@ -222,9 +241,16 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
                 source.read("xl/_rels/workbook.xml.rels"), len(sheets)
             ),
         )
+        archive.writestr(
+            PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path,
+            _preserve_sheet_namespaces(
+                ET.tostring(styles_root, encoding="UTF-8", xml_declaration=True)
+            ),
+        )
 
         for index, sheet in enumerate(sheets, start=1):
             sheet_root = ET.fromstring(template_sheet)
+            _apply_address_cell_styles(sheet_root, address_style_mapping)
             plans.append(
                 fill_payroll_month_sheet(
                     sheet_root,
@@ -619,6 +645,55 @@ def _write_month_day(sheet: ET.Element, day: PayrollMonthDay) -> None:
         f"{layout.address_column}{row_number}",
         day.site_place or "",
     )
+
+
+def _address_cell_style_ids(sheet: ET.Element) -> set[int]:
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    style_ids: set[int] = set()
+    for row_number in range(layout.first_day_row, layout.last_day_row + 1):
+        cell = _find_cell(sheet, f"{layout.address_column}{row_number}")
+        if cell is not None:
+            style_ids.add(int(cell.attrib.get("s", "0")))
+    return style_ids
+
+
+def _append_shrink_to_fit_styles(
+    styles: ET.Element,
+    source_style_ids: Collection[int],
+) -> dict[int, int]:
+    cell_xfs = styles.find(_qname("cellXfs"))
+    if cell_xfs is None:
+        raise ValueError("Monatsvorlage enthält keine Zellformatvorlagen.")
+    source_styles = list(cell_xfs)
+    mapping: dict[int, int] = {}
+    for source_style_id in sorted(source_style_ids):
+        if source_style_id >= len(source_styles):
+            raise ValueError("Monatsvorlage enthält einen ungültigen Zellstil.")
+        cloned_style = deepcopy(source_styles[source_style_id])
+        alignment = cloned_style.find(_qname("alignment"))
+        if alignment is None:
+            alignment = ET.SubElement(cloned_style, _qname("alignment"))
+        alignment.attrib["shrinkToFit"] = "1"
+        cloned_style.attrib["applyAlignment"] = "1"
+        mapping[source_style_id] = len(cell_xfs)
+        cell_xfs.append(cloned_style)
+    cell_xfs.attrib["count"] = str(len(cell_xfs))
+    return mapping
+
+
+def _apply_address_cell_styles(
+    sheet: ET.Element,
+    style_mapping: dict[int, int],
+) -> None:
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    for row_number in range(layout.first_day_row, layout.last_day_row + 1):
+        cell = _find_cell(sheet, f"{layout.address_column}{row_number}")
+        if cell is None:
+            continue
+        source_style_id = int(cell.attrib.get("s", "0"))
+        target_style_id = style_mapping.get(source_style_id)
+        if target_style_id is not None:
+            cell.attrib["s"] = str(target_style_id)
 
 
 def _site_address(site: Site | None) -> str | None:
