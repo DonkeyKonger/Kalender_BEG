@@ -19620,6 +19620,10 @@ body.mobile-modal-scroll-locked {
   font-size: 0.76rem;
 }
 
+.time-entries-page.is-figma-times-workspace .time-review-diagnostic-cancel {
+  border-radius: 0;
+}
+
 .time-entries-page.is-figma-times-workspace .time-table-action {
   border-color: var(--time-border);
   background: #ffffff;

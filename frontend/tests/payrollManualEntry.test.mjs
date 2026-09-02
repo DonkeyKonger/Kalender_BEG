@@ -184,6 +184,7 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   assert.match(styles, /\.time-review-diagnostic-save,[\s\S]*?\.time-review-diagnostic-cancel \{[^}]*box-sizing: border-box;[^}]*height: 34px;[^}]*min-height: 34px;[^}]*border-radius: 0;[^}]*padding: 6px 12px;/s);
   assert.match(styles, /\.time-review-diagnostic-save \{[^}]*background: #1763c5;/s);
   assert.match(styles, /\.time-review-diagnostic-cancel \{[^}]*border: 1px solid #cbd7e6;[^}]*background: #ffffff;[^}]*color: #243348;/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-review-diagnostic-cancel \{[^}]*border-radius: 0;/s);
   assert.match(styles, /@media \(max-width: 480px\) \{[\s\S]*?\.time-review-manual-time-grid \{[^}]*grid-template-columns: 1fr;/s);
   assert.ok(createStart >= 0);
   assert.ok(editStart > createStart);
