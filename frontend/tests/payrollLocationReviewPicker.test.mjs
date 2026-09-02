@@ -31,13 +31,14 @@ test("location review picker exposes combobox and listbox state to assistive tec
   assert.match(styles, /\.time-review-location-option\.is-active\s*\{[^}]*box-shadow:\s*inset 3px 0 #1763c5;/s);
 });
 
-test("location review title and primary save action match the time review hierarchy", async () => {
+test("location review title and actions match the manual time dialog hierarchy", async () => {
   const source = await readFile(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
   const locationDialogStart = source.indexOf("{locationReviewDiagnosticEntry && (");
   const locationDialog = source.slice(locationDialogStart);
 
-  assert.match(locationDialog, /<h4>Ort-Prüfung \| \{formatTimeEntryRange\(locationReviewDiagnosticEntry\)\}<\/h4>/);
-  assert.doesNotMatch(locationDialog, /<span>Diagnose<\/span>/);
+  assert.match(locationDialog, /<span>Lohnprüfung<\/span>\s*<h4>Ort manuell korrigieren – \{formatTimeEntryRange\(locationReviewDiagnosticEntry\)\}<\/h4>/);
+  assert.match(source, /return `\$\{formatTimeEntryClock\(entry\.start_time\)\}–\$\{formatTimeEntryClock\(entry\.end_time\)\}`;/);
+  assert.match(locationDialog, /className="icon-button secondary time-review-diagnostic-cancel"[\s\S]*?disabled=\{isSavingLocationReview\}[\s\S]*?onClick=\{closeLocationReviewDiagnostic\}[\s\S]*?>\s*Abbrechen\s*<\/button>[\s\S]*?className="icon-button time-review-diagnostic-save"/);
   assert.match(locationDialog, /className="icon-button time-review-diagnostic-save"/);
   assert.doesNotMatch(locationDialog, /className="icon-button secondary time-review-diagnostic-save"/);
 });

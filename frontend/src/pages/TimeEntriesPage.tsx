@@ -2941,7 +2941,8 @@ export function TimeEntriesPage() {
           >
             <div className="time-review-diagnostic-head">
               <div>
-                <h4>Ort-Prüfung | {formatTimeEntryRange(locationReviewDiagnosticEntry)}</h4>
+                <span>Lohnprüfung</span>
+                <h4>Ort manuell korrigieren – {formatTimeEntryRange(locationReviewDiagnosticEntry)}</h4>
               </div>
               <button
                 className="time-review-diagnostic-close"
@@ -3076,6 +3077,14 @@ export function TimeEntriesPage() {
             </div>
             <div className="time-review-diagnostic-actions">
               {locationReviewError && <p className="time-review-diagnostic-error">{locationReviewError}</p>}
+              <button
+                className="icon-button secondary time-review-diagnostic-cancel"
+                type="button"
+                disabled={isSavingLocationReview}
+                onClick={closeLocationReviewDiagnostic}
+              >
+                Abbrechen
+              </button>
               <button
                 className="icon-button time-review-diagnostic-save"
                 type="button"
@@ -4479,7 +4488,7 @@ function formatTimeEntryRange(entry: TimeEntry): string {
   if (!entry.start_time && !entry.end_time) {
     return "-";
   }
-  return `${formatTimeEntryClock(entry.start_time)} - ${formatTimeEntryClock(entry.end_time)}`;
+  return `${formatTimeEntryClock(entry.start_time)}–${formatTimeEntryClock(entry.end_time)}`;
 }
 
 function formatTimeEntryMinutes(value: number | null | undefined, mode: "hours" | "minutes"): string {
