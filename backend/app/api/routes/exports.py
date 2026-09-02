@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import require_business_page
 from app.core.database import get_db
 from app.services.pdf_export_service import PdfExportService
+from app.services.payroll_month_export_service import PayrollMonthExportService
 from app.services.time_entry_weekly_pdf_service import TimeEntryWeeklyPdfService
 from app.services.time_entry_xlsx_export_service import TimeEntryXlsxExportService
 
@@ -52,6 +53,40 @@ def monthly_time_entries_xlsx(
         current_user=current_user,
     )
     filename = f"zeiten_export_{year}_{month:02d}.xlsx"
+    return xlsx_response(content, filename)
+
+
+@router.get("/time-entries/payroll-monthly-worker-xlsx")
+def payroll_monthly_worker_xlsx(
+    person_id: int = Query(gt=0),
+    year: int = Query(ge=2000, le=2100),
+    month: int = Query(ge=1, le=12),
+    current_user=Depends(CAN_PAYROLL_EXPORT),
+    db: Session = Depends(get_db),
+) -> Response:
+    content = PayrollMonthExportService(db).worker_export(
+        person_id=person_id,
+        year=year,
+        month=month,
+        current_user=current_user,
+    )
+    filename = f"lohnabrechnung_{year}_{month:02d}_person_{person_id}.xlsx"
+    return xlsx_response(content, filename)
+
+
+@router.get("/time-entries/payroll-monthly-workers-xlsx")
+def payroll_monthly_workers_xlsx(
+    year: int = Query(ge=2000, le=2100),
+    month: int = Query(ge=1, le=12),
+    current_user=Depends(CAN_PAYROLL_EXPORT),
+    db: Session = Depends(get_db),
+) -> Response:
+    content = PayrollMonthExportService(db).all_workers_export(
+        year=year,
+        month=month,
+        current_user=current_user,
+    )
+    filename = f"lohnabrechnung_{year}_{month:02d}_alle_monteure.xlsx"
     return xlsx_response(content, filename)
 
 

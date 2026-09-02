@@ -80,14 +80,16 @@ test("Monatsnavigation zeigt fünf Monate und eine schlichte Jahressteuerung rec
   assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
 });
 
-test("Monatsabrechnungen für alle und den ausgewählten Monteur sind als Platzhalter vorbereitet", () => {
-  assert.match(pageSource, /className="time-evaluation-period-actions"[\s\S]*?className="time-evaluation-year-navigation"[\s\S]*?className="time-evaluation-monthly-download-button"[\s\S]*?disabled[\s\S]*?Monatsabrechnung \(alle\)/s);
-  assert.match(pageSource, /aria-describedby="time-evaluation-monthly-download-status"[\s\S]*?Noch keine Excel-Vorlage für die Monatsabrechnung hinterlegt/);
-  assert.match(pageSource, /id="time-evaluation-monthly-download-status"[\s\S]*?sobald eine Excel-Vorlage hinterlegt ist/);
+test("Monatsabrechnungen für alle und den ausgewählten Monteur sind freigeschaltet", () => {
+  assert.match(pageSource, /api\.payrollMonthlyWorkersXlsx\(selectedEvaluationMonth\)/);
+  assert.match(pageSource, /api\.payrollMonthlyWorkerXlsx\(\{[\s\S]*?personId: selectedEvaluationWorker\.personId,[\s\S]*?\.\.\.selectedEvaluationMonth/s);
+  assert.match(pageSource, /className="time-evaluation-period-actions"[\s\S]*?className="time-evaluation-year-navigation"[\s\S]*?className="time-evaluation-monthly-download-button"[\s\S]*?onClick=\{\(\) => void downloadAllPayrollMonthXlsx\(\)\}[\s\S]*?Monatsabrechnung \(alle\)/s);
+  assert.match(pageSource, /id="time-evaluation-monthly-download-status"[\s\S]*?Excel-Monatsabrechnungen sind zum Download verfügbar/);
   const monthlyStart = pageSource.indexOf("function MonthlyPayrollWorkerWorkspace");
   const monthlySource = pageSource.slice(monthlyStart);
   assert.ok(monthlyStart >= 0);
-  assert.match(monthlySource, /className="time-review-worker-detail-actions"[\s\S]*?className="time-evaluation-monthly-download-button"[\s\S]*?disabled[\s\S]*?Monatsabrechnung/s);
+  assert.match(monthlySource, /className="time-review-worker-detail-actions"[\s\S]*?className="time-evaluation-monthly-download-button"[\s\S]*?onClick=\{onDownloadPayrollMonth\}[\s\S]*?Monatsabrechnung/s);
+  assert.doesNotMatch(pageSource, /Noch keine Excel-Vorlage für die Monatsabrechnung hinterlegt/);
   assert.match(styles, /\.time-evaluation-period-actions\s*\{[^}]*display:\s*inline-flex;[^}]*justify-self:\s*end;[^}]*gap:\s*8px;/s);
   assert.match(styles, /\.time-evaluation-monthly-download-button\s*\{[^}]*min-height:\s*36px;[^}]*border-radius:\s*0;[^}]*font-size:\s*0\.78rem;[^}]*white-space:\s*nowrap;/s);
   assert.match(styles, /\.time-evaluation-monthly-download-button:disabled\s*\{[^}]*background:\s*#eef2f7;[^}]*cursor:\s*not-allowed;[^}]*opacity:\s*1;/s);

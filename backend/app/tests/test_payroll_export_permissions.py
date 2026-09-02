@@ -13,6 +13,8 @@ from app.models.enums import UserRole
 PAYROLL_XLSX_PATHS = (
     "/api/exports/time-entries/weekly-worker-xlsx?person_id=17&week_start=2026-07-27",
     "/api/exports/time-entries/weekly-workers-xlsx?week_start=2026-07-27",
+    "/api/exports/time-entries/payroll-monthly-worker-xlsx?person_id=17&year=2026&month=8",
+    "/api/exports/time-entries/payroll-monthly-workers-xlsx?year=2026&month=8",
 )
 
 
@@ -38,12 +40,24 @@ class FakeTimeEntryXlsxExportService:
         return b"weekly-workers-xlsx"
 
 
+class FakePayrollMonthExportService:
+    def __init__(self, _db) -> None:
+        pass
+
+    def worker_export(self, **_kwargs) -> bytes:
+        return b"payroll-monthly-worker-xlsx"
+
+    def all_workers_export(self, **_kwargs) -> bytes:
+        return b"payroll-monthly-workers-xlsx"
+
+
 def payroll_export_client(monkeypatch, current_user) -> TestClient:
     app = FastAPI()
     app.include_router(exports.router, prefix="/api")
     app.dependency_overrides[get_current_user] = lambda: current_user
     app.dependency_overrides[get_db] = lambda: object()
     monkeypatch.setattr(exports, "TimeEntryXlsxExportService", FakeTimeEntryXlsxExportService)
+    monkeypatch.setattr(exports, "PayrollMonthExportService", FakePayrollMonthExportService)
     return TestClient(app)
 
 

@@ -5,11 +5,12 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, time, timedelta
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
+from xml.sax.saxutils import escape, quoteattr
 
 from app.models.absence import Absence
 from app.models.enums import AbsenceStatus, OvernightStatus
@@ -94,6 +95,23 @@ class PayrollMonthWorkbook:
     plan: PayrollMonthPlan
 
 
+@dataclass(frozen=True)
+class PayrollMonthSheet:
+    person: Person
+    sheet_name: str
+    year: int
+    month: int
+    entries: Sequence[WorkTimeEntry]
+    absences: Sequence[Absence] = ()
+    non_working_dates: Collection[date] = ()
+
+
+@dataclass(frozen=True)
+class PayrollMonthsWorkbook:
+    content: bytes
+    plans: tuple[PayrollMonthPlan, ...]
+
+
 @dataclass
 class _DominantSiteCandidate:
     site: Site | None
@@ -138,6 +156,83 @@ def build_payroll_month_xlsx(
             )
             archive.writestr(item, content)
     return PayrollMonthWorkbook(content=output.getvalue(), plan=plan)
+
+
+def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMonthsWorkbook:
+    """Erstellt eine Datei mit einer frischen Kopie der Mastervorlage je Monteur."""
+    if not sheets:
+        raise ValueError("Mindestens ein Monatsblatt ist erforderlich.")
+
+    template = load_payroll_monthly_template()
+    output = BytesIO()
+    plans: list[PayrollMonthPlan] = []
+    with ZipFile(template, "r") as source, ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        template_sheet = source.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path)
+        template_sheet_relationships = source.read("xl/worksheets/_rels/sheet1.xml.rels")
+        template_drawing = source.read("xl/drawings/drawing1.xml")
+        template_drawing_relationships = source.read("xl/drawings/_rels/drawing1.xml.rels")
+        generated_parts = {
+            "[Content_Types].xml",
+            "docProps/app.xml",
+            "xl/workbook.xml",
+            "xl/_rels/workbook.xml.rels",
+            "xl/worksheets/sheet1.xml",
+            "xl/worksheets/_rels/sheet1.xml.rels",
+            "xl/drawings/drawing1.xml",
+            "xl/drawings/_rels/drawing1.xml.rels",
+        }
+        for item in source.infolist():
+            if item.filename not in generated_parts:
+                archive.writestr(item, source.read(item.filename))
+
+        sheet_names = unique_payroll_month_sheet_names(sheet.sheet_name for sheet in sheets)
+        archive.writestr(
+            "[Content_Types].xml",
+            _payroll_month_content_types(source.read("[Content_Types].xml"), len(sheets)),
+        )
+        archive.writestr(
+            "docProps/app.xml",
+            _payroll_month_app_properties(source.read("docProps/app.xml"), sheet_names),
+        )
+        archive.writestr(
+            "xl/workbook.xml",
+            _payroll_month_workbook_xml(source.read("xl/workbook.xml"), sheet_names),
+        )
+        archive.writestr(
+            "xl/_rels/workbook.xml.rels",
+            _payroll_month_workbook_relationships(
+                source.read("xl/_rels/workbook.xml.rels"), len(sheets)
+            ),
+        )
+
+        for index, sheet in enumerate(sheets, start=1):
+            sheet_root = ET.fromstring(template_sheet)
+            plans.append(
+                fill_payroll_month_sheet(
+                    sheet_root,
+                    person=sheet.person,
+                    year=sheet.year,
+                    month=sheet.month,
+                    entries=sheet.entries,
+                    absences=sheet.absences,
+                    non_working_dates=sheet.non_working_dates,
+                )
+            )
+            filled_sheet = _preserve_sheet_namespaces(
+                ET.tostring(sheet_root, encoding="UTF-8", xml_declaration=True)
+            )
+            archive.writestr(f"xl/worksheets/sheet{index}.xml", filled_sheet)
+            archive.writestr(
+                f"xl/worksheets/_rels/sheet{index}.xml.rels",
+                _payroll_month_sheet_relationships(template_sheet_relationships, index),
+            )
+            archive.writestr(f"xl/drawings/drawing{index}.xml", template_drawing)
+            archive.writestr(
+                f"xl/drawings/_rels/drawing{index}.xml.rels",
+                template_drawing_relationships,
+            )
+
+    return PayrollMonthsWorkbook(content=output.getvalue(), plans=tuple(plans))
 
 
 def fill_payroll_month_sheet(
@@ -563,3 +658,122 @@ def _preserve_sheet_namespaces(sheet_xml: bytes) -> bytes:
         declaration = f' xmlns:{prefix}="{namespace_uri}"'
         text = re.sub(r"(<worksheet\b[^>]*)(>)", rf"\1{declaration}\2", text, count=1)
     return text.encode("utf-8")
+
+
+def unique_payroll_month_sheet_names(person_names: Iterable[str]) -> list[str]:
+    used_names: set[str] = set()
+    result: list[str] = []
+    for person_name in person_names:
+        base_name = _payroll_month_sheet_base_name(person_name)
+        candidate = _clamp_excel_sheet_name(base_name)
+        suffix = 2
+        while candidate.casefold() in used_names:
+            suffix_text = f" {suffix}"
+            candidate = _clamp_excel_sheet_name(base_name, suffix=suffix_text)
+            suffix += 1
+        used_names.add(candidate.casefold())
+        result.append(candidate)
+    return result
+
+
+def _payroll_month_sheet_base_name(person_name: str) -> str:
+    cleaned = re.sub(r"\s+", " ", person_name).strip()
+    if not cleaned:
+        return "Monteur"
+    return cleaned.split(" ")[-1] or cleaned
+
+
+def _clamp_excel_sheet_name(base_name: str, *, suffix: str = "") -> str:
+    cleaned = re.sub(r"[\[\]:*?/\\]", " ", base_name)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip("' ").strip() or "Monteur"
+    max_base_length = max(1, 31 - len(suffix))
+    return f"{cleaned[:max_base_length].rstrip()}{suffix}"
+
+
+def _payroll_month_content_types(content_types_xml: bytes, sheet_count: int) -> bytes:
+    text = content_types_xml.decode("utf-8")
+    text = re.sub(r'<Override PartName="/xl/worksheets/sheet\d+\.xml"[^>]*/>', "", text)
+    text = re.sub(r'<Override PartName="/xl/drawings/drawing\d+\.xml"[^>]*/>', "", text)
+    overrides = "".join(
+        '<Override '
+        f'PartName="/xl/worksheets/sheet{index}.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '<Override '
+        f'PartName="/xl/drawings/drawing{index}.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>'
+        for index in range(1, sheet_count + 1)
+    )
+    return text.replace("</Types>", f"{overrides}</Types>", 1).encode("utf-8")
+
+
+def _payroll_month_app_properties(app_xml: bytes, sheet_names: Sequence[str]) -> bytes:
+    text = app_xml.decode("utf-8")
+    titles = "".join(f"<vt:lpstr>{escape(sheet_name)}</vt:lpstr>" for sheet_name in sheet_names)
+    text = re.sub(
+        r"(<HeadingPairs>.*?<vt:lpstr>Arbeitsblätter</vt:lpstr>.*?<vt:i4>)\d+(</vt:i4>.*?</HeadingPairs>)",
+        rf"\g<1>{len(sheet_names)}\g<2>",
+        text,
+        count=1,
+        flags=re.DOTALL,
+    )
+    titles_xml = (
+        f'<TitlesOfParts><vt:vector size="{len(sheet_names)}" baseType="lpstr">'
+        f"{titles}</vt:vector></TitlesOfParts>"
+    )
+    text = re.sub(
+        r"<TitlesOfParts>.*?</TitlesOfParts>",
+        titles_xml,
+        text,
+        count=1,
+        flags=re.DOTALL,
+    )
+    return text.encode("utf-8")
+
+
+def _payroll_month_workbook_xml(workbook_xml: bytes, sheet_names: Sequence[str]) -> bytes:
+    text = workbook_xml.decode("utf-8")
+    sheets_xml = "<sheets>" + "".join(
+        f"<sheet name={quoteattr(sheet_name)} sheetId=\"{index}\" "
+        f"r:id=\"rIdSheet{index}\"/>"
+        for index, sheet_name in enumerate(sheet_names, start=1)
+    ) + "</sheets>"
+    return re.sub(r"<sheets>.*?</sheets>", sheets_xml, text, count=1, flags=re.DOTALL).encode(
+        "utf-8"
+    )
+
+
+def _payroll_month_workbook_relationships(
+    relationships_xml: bytes,
+    sheet_count: int,
+) -> bytes:
+    text = relationships_xml.decode("utf-8")
+    relationship_tags = re.findall(r"<Relationship\b[^>]*/>", text)
+    preserved_relationships = [
+        tag
+        for tag in relationship_tags
+        if "officeDocument/2006/relationships/worksheet" not in tag
+    ]
+    sheet_relationships = [
+        '<Relationship '
+        f'Id="rIdSheet{index}" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+        f'Target="worksheets/sheet{index}.xml"/>'
+        for index in range(1, sheet_count + 1)
+    ]
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        f"{''.join([*sheet_relationships, *preserved_relationships])}</Relationships>"
+    ).encode("utf-8")
+
+
+def _payroll_month_sheet_relationships(
+    sheet_relationships_xml: bytes,
+    sheet_index: int,
+) -> bytes:
+    text = sheet_relationships_xml.decode("utf-8")
+    return re.sub(
+        r'Target="../drawings/drawing\d+\.xml"',
+        f'Target="../drawings/drawing{sheet_index}.xml"',
+        text,
+    ).encode("utf-8")

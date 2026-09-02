@@ -258,6 +258,9 @@ export function TimeEntriesPage() {
   const [isSavingPayrollCorrection, setIsSavingPayrollCorrection] = useState(false);
   const [isDownloadingAllReviewWeekXlsx, setIsDownloadingAllReviewWeekXlsx] = useState(false);
   const [isDownloadingReviewWeekXlsx, setIsDownloadingReviewWeekXlsx] = useState(false);
+  const [isDownloadingAllPayrollMonthXlsx, setIsDownloadingAllPayrollMonthXlsx] = useState(false);
+  const [isDownloadingPayrollMonthXlsx, setIsDownloadingPayrollMonthXlsx] = useState(false);
+  const [payrollMonthDownloadError, setPayrollMonthDownloadError] = useState<string | null>(null);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [isReviewWeekActionsMenuOpen, setIsReviewWeekActionsMenuOpen] = useState(false);
   const [reviewWeekActionsMenuPosition, setReviewWeekActionsMenuPosition] = useState<PayrollReviewStatusMenuState | null>(null);
@@ -1846,6 +1849,47 @@ export function TimeEntriesPage() {
     }
   }
 
+  async function downloadAllPayrollMonthXlsx(): Promise<void> {
+    if (isDownloadingAllPayrollMonthXlsx) {
+      return;
+    }
+    setIsDownloadingAllPayrollMonthXlsx(true);
+    setPayrollMonthDownloadError(null);
+    try {
+      const blob = await api.payrollMonthlyWorkersXlsx(selectedEvaluationMonth);
+      downloadBlobFile(
+        blob,
+        `Lohnabrechnung_${selectedEvaluationMonth.year}_${String(selectedEvaluationMonth.month).padStart(2, "0")}_Alle_Monteure.xlsx`,
+      );
+    } catch (requestError) {
+      setPayrollMonthDownloadError(readApiError(requestError, "Monatsabrechnungen konnten nicht erstellt werden."));
+    } finally {
+      setIsDownloadingAllPayrollMonthXlsx(false);
+    }
+  }
+
+  async function downloadSelectedPayrollMonthXlsx(): Promise<void> {
+    if (!selectedEvaluationWorker || isDownloadingPayrollMonthXlsx) {
+      return;
+    }
+    setIsDownloadingPayrollMonthXlsx(true);
+    setPayrollMonthDownloadError(null);
+    try {
+      const blob = await api.payrollMonthlyWorkerXlsx({
+        personId: selectedEvaluationWorker.personId,
+        ...selectedEvaluationMonth,
+      });
+      downloadBlobFile(
+        blob,
+        `Lohnabrechnung_${selectedEvaluationMonth.year}_${String(selectedEvaluationMonth.month).padStart(2, "0")}_${sanitizeFilenamePart(selectedEvaluationWorker.personName)}.xlsx`,
+      );
+    } catch (requestError) {
+      setPayrollMonthDownloadError(readApiError(requestError, "Monatsabrechnung konnte nicht erstellt werden."));
+    } finally {
+      setIsDownloadingPayrollMonthXlsx(false);
+    }
+  }
+
   async function markSelectedReviewWeekReviewed(): Promise<void> {
     if (!canManageTimeEntries || !selectedReviewWorker || markingReviewWeekPersonId !== null || selectedReviewWorker.isReviewed) {
       return;
@@ -2556,15 +2600,18 @@ export function TimeEntriesPage() {
                 <button
                   aria-describedby="time-evaluation-monthly-download-status"
                   className="time-evaluation-monthly-download-button"
-                  disabled
-                  title="Noch keine Excel-Vorlage für die Monatsabrechnung hinterlegt."
+                  disabled={isDownloadingAllPayrollMonthXlsx}
+                  title="Monatsabrechnungen aller Monteure als Excel herunterladen"
                   type="button"
+                  onClick={() => void downloadAllPayrollMonthXlsx()}
                 >
                   <Download aria-hidden="true" size={14} />
-                  <span>Monatsabrechnung (alle)</span>
+                  <span>{isDownloadingAllPayrollMonthXlsx ? "Wird erstellt..." : "Monatsabrechnung (alle)"}</span>
                 </button>
-                <span className="sr-only" id="time-evaluation-monthly-download-status">
-                  Der Download wird verfügbar, sobald eine Excel-Vorlage hinterlegt ist.
+                <span aria-live="polite" className="sr-only" id="time-evaluation-monthly-download-status">
+                  {isDownloadingAllPayrollMonthXlsx || isDownloadingPayrollMonthXlsx
+                    ? "Die Excel-Monatsabrechnung wird erstellt."
+                    : "Excel-Monatsabrechnungen sind zum Download verfügbar."}
                 </span>
               </div>
             </div>
@@ -2579,12 +2626,14 @@ export function TimeEntriesPage() {
               filterCounts={evaluationWorkerFilterCounts}
               isLoading={isLoadingPeople || isLoadingReviewAllEntries || !isEvaluationDataReady}
               isReady={isEvaluationDataReady}
+              isDownloadingPayrollMonthXlsx={isDownloadingPayrollMonthXlsx}
               canManageTimeEntries={canManageTimeEntries}
               onChangeFilter={setEvaluationWorkerFilter}
               onChangeSearch={setEvaluationWorkerSearch}
               onOpenLocationDiagnostic={openLocationReviewDiagnostic}
               onOpenEntryActions={togglePayrollDatePicker}
               onOpenTimeDiagnostic={openTimeReviewDiagnostic}
+              onDownloadPayrollMonth={() => void downloadSelectedPayrollMonthXlsx()}
               onUpdateOvernight={(personId, workDate, status) => updatePayrollOvernightStatus(personId, workDate, status)}
               onSelectWorker={setSelectedEvaluationPersonId}
               onToggleDay={toggleEvaluationDay}
@@ -2592,6 +2641,7 @@ export function TimeEntriesPage() {
               search={evaluationWorkerSearch}
               selectedWorker={selectedEvaluationWorker}
               />
+              {payrollMonthDownloadError && <p className="time-table-note">{payrollMonthDownloadError}</p>}
               {payrollDatePicker && activePayrollDatePickerEntry && typeof document !== "undefined" && createPortal(
                 <div
                   className={`time-review-day-move-popover${payrollDatePicker.position ? ` is-open-${payrollDatePicker.position.placement}` : ""}`}
@@ -3281,11 +3331,13 @@ function MonthlyPayrollWorkerWorkspace({
   filterCounts,
   isLoading,
   isReady,
+  isDownloadingPayrollMonthXlsx,
   onChangeFilter,
   onChangeSearch,
   onOpenEntryActions,
   onOpenLocationDiagnostic,
   onOpenTimeDiagnostic,
+  onDownloadPayrollMonth,
   onUpdateOvernight,
   onSelectWorker,
   onToggleDay,
@@ -3301,11 +3353,13 @@ function MonthlyPayrollWorkerWorkspace({
   filterCounts: Record<TimeReviewWorkerFilter, number>;
   isLoading: boolean;
   isReady: boolean;
+  isDownloadingPayrollMonthXlsx: boolean;
   onChangeFilter: (filter: TimeReviewWorkerFilter) => void;
   onChangeSearch: (value: string) => void;
   onOpenEntryActions: (entry: TimeEntry, button: HTMLButtonElement) => void;
   onOpenLocationDiagnostic: (entry: TimeEntry) => void;
   onOpenTimeDiagnostic: (entry: TimeEntry) => void;
+  onDownloadPayrollMonth: () => void;
   onUpdateOvernight: (personId: number, workDate: string, status: OvernightStatus) => Promise<void>;
   onSelectWorker: (personId: number) => void;
   onToggleDay: (date: string) => void;
@@ -3367,12 +3421,13 @@ function MonthlyPayrollWorkerWorkspace({
                 <button
                   aria-describedby="time-evaluation-monthly-download-status"
                   className="time-evaluation-monthly-download-button"
-                  disabled
-                  title="Noch keine Excel-Vorlage für die Monatsabrechnung hinterlegt."
+                  disabled={isDownloadingPayrollMonthXlsx}
+                  title={`Monatsabrechnung für ${selectedWorker.personName} als Excel herunterladen`}
                   type="button"
+                  onClick={onDownloadPayrollMonth}
                 >
                   <Download aria-hidden="true" size={14} />
-                  <span>Monatsabrechnung</span>
+                  <span>{isDownloadingPayrollMonthXlsx ? "Wird erstellt..." : "Monatsabrechnung"}</span>
                 </button>
               </div>
             </div>

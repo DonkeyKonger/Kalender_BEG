@@ -36,5 +36,7 @@ test("payroll page and week downloads use payroll access without a phone GPS ver
   assert.match(pageSource, /canManageTimeEntries = canEditMainPage\(user, "payroll"\)/);
   assert.match(pageSource, /api\.weeklyAllWorkersTimeEntriesXlsx/);
   assert.match(pageSource, /api\.weeklyWorkerTimeEntriesXlsx/);
+  assert.match(pageSource, /api\.payrollMonthlyWorkersXlsx/);
+  assert.match(pageSource, /api\.payrollMonthlyWorkerXlsx/);
   assert.doesNotMatch(pageSource, /gpsVerification|GPS-Prüfung|recentGpsLocationPoints/);
 });

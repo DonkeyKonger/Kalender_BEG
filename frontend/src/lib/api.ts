@@ -1657,6 +1657,23 @@ export const api = {
     return requestBlob(`/exports/time-entries/monthly-xlsx?${search.toString()}`);
   },
 
+  async payrollMonthlyWorkersXlsx(params: { year: number; month: number }): Promise<Blob> {
+    const search = new URLSearchParams({
+      year: String(params.year),
+      month: String(params.month),
+    });
+    return requestBlob(`/exports/time-entries/payroll-monthly-workers-xlsx?${search.toString()}`);
+  },
+
+  async payrollMonthlyWorkerXlsx(params: { personId: number; year: number; month: number }): Promise<Blob> {
+    const search = new URLSearchParams({
+      person_id: String(params.personId),
+      year: String(params.year),
+      month: String(params.month),
+    });
+    return requestBlob(`/exports/time-entries/payroll-monthly-worker-xlsx?${search.toString()}`);
+  },
+
   async weeklyWorkerHoursPdf(params: { weekStart: string }): Promise<Blob> {
     const search = new URLSearchParams({ week_start: params.weekStart });
     return requestBlob(`/exports/time-entries/weekly-worker-hours.pdf?${search.toString()}`);

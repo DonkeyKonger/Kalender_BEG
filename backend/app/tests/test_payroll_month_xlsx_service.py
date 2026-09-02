@@ -15,7 +15,9 @@ from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.payroll_month_xlsx_service import (
     PAYROLL_MONTH_TEMPLATE_LAYOUT,
+    PayrollMonthSheet,
     build_payroll_month_plan,
+    build_payroll_months_xlsx,
     build_payroll_month_xlsx,
 )
 from app.services.payroll_xlsx_template import load_payroll_monthly_template
@@ -279,6 +281,56 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet():
     assert (
         b'xmlns:xr3="http://schemas.microsoft.com/office/spreadsheetml/2016/revision3"' in sheet_xml
     )
+
+
+def test_all_workers_workbook_clones_the_master_sheet_for_every_worker():
+    second_person = Person(
+        id=2,
+        first_name="Max",
+        last_name="Monteur",
+        display_name="Max Monteur",
+        short_code="MM",
+    )
+    first_entry = make_entry(
+        1,
+        date(2026, 6, 8),
+        "06:00",
+        "15:00",
+        make_site(1, "4711", "Rathaus", address="Markt 1"),
+        break_minutes=30,
+    )
+    second_entry = make_entry(
+        2,
+        date(2026, 6, 9),
+        "07:00",
+        "16:00",
+        make_site(2, "5822", "Schule", address="Schulweg 2"),
+        break_minutes=45,
+    )
+    second_entry.person_id = second_person.id
+
+    result = build_payroll_months_xlsx(
+        [
+            PayrollMonthSheet(PERSON, PERSON.display_name, 2026, 6, [first_entry]),
+            PayrollMonthSheet(second_person, second_person.display_name, 2026, 6, [second_entry]),
+        ]
+    )
+    with ZipFile(BytesIO(result.content)) as workbook:
+        assert workbook.testzip() is None
+        names = set(workbook.namelist())
+        workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
+        relationships = workbook.read("xl/_rels/workbook.xml.rels").decode("utf-8")
+        first_sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
+        second_sheet = ET.fromstring(workbook.read("xl/worksheets/sheet2.xml"))
+
+    assert "xl/worksheets/sheet2.xml" in names
+    assert "xl/drawings/drawing2.xml" in names
+    assert 'name="Monteurin" sheetId="1" r:id="rIdSheet1"' in workbook_xml
+    assert 'name="Monteur" sheetId="2" r:id="rIdSheet2"' in workbook_xml
+    assert 'Target="worksheets/sheet2.xml"' in relationships
+    assert cell_text(first_sheet, "G17") == "4711"
+    assert cell_text(second_sheet, "G18") == "5822"
+    assert len(result.plans) == 2
 
 
 def only_day(entries: list[WorkTimeEntry]):
