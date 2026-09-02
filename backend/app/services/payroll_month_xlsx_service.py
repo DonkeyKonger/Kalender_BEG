@@ -174,8 +174,8 @@ def build_payroll_month_xlsx(
             encoding="UTF-8",
             xml_declaration=True,
         )
-        filled_sheet = _preserve_sheet_namespaces(filled_sheet)
-        filled_styles = _preserve_sheet_namespaces(
+        filled_sheet = _preserve_ignorable_namespaces(filled_sheet)
+        filled_styles = _preserve_ignorable_namespaces(
             ET.tostring(styles_root, encoding="UTF-8", xml_declaration=True)
         )
         for item in source.infolist():
@@ -243,7 +243,7 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
         )
         archive.writestr(
             PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path,
-            _preserve_sheet_namespaces(
+            _preserve_ignorable_namespaces(
                 ET.tostring(styles_root, encoding="UTF-8", xml_declaration=True)
             ),
         )
@@ -262,7 +262,7 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
                     non_working_dates=sheet.non_working_dates,
                 )
             )
-            filled_sheet = _preserve_sheet_namespaces(
+            filled_sheet = _preserve_ignorable_namespaces(
                 ET.tostring(sheet_root, encoding="UTF-8", xml_declaration=True)
             )
             archive.writestr(f"xl/worksheets/sheet{index}.xml", filled_sheet)
@@ -813,17 +813,27 @@ def _clear_cell_element(cell: ET.Element) -> None:
             cell.remove(child)
 
 
-def _preserve_sheet_namespaces(sheet_xml: bytes) -> bytes:
-    text = sheet_xml.decode("utf-8")
+def _preserve_ignorable_namespaces(document_xml: bytes) -> bytes:
+    text = document_xml.decode("utf-8")
     ignorable_match = re.search(r'\bmc:Ignorable="([^"]+)"', text)
     if ignorable_match is None:
-        return sheet_xml
+        return document_xml
+    root_tag_match = re.search(
+        r"<(?![!?])(?:[A-Za-z_][\w.-]*:)?[A-Za-z_][\w.-]*\b",
+        text,
+    )
+    if root_tag_match is None:
+        return document_xml
+    root_tag_end = text.find(">", root_tag_match.end())
+    if root_tag_end == -1:
+        return document_xml
     for prefix in ignorable_match.group(1).split():
         namespace_uri = SHEET_NAMESPACES.get(prefix)
         if namespace_uri is None or f"xmlns:{prefix}=" in text:
             continue
         declaration = f' xmlns:{prefix}="{namespace_uri}"'
-        text = re.sub(r"(<worksheet\b[^>]*)(>)", rf"\1{declaration}\2", text, count=1)
+        text = f"{text[:root_tag_end]}{declaration}{text[root_tag_end:]}"
+        root_tag_end += len(declaration)
     return text.encode("utf-8")
 
 

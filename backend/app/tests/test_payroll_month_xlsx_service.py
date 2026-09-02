@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 from datetime import date, time
 from io import BytesIO
@@ -370,7 +371,8 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet_and_st
                 assert generated.read(name) == master.read(name)
         sheet_xml = generated.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path)
         sheet = ET.fromstring(sheet_xml)
-        styles = ET.fromstring(generated.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path))
+        styles_xml = generated.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path)
+        styles = ET.fromstring(styles_xml)
 
     assert cell_text(sheet, "A17") == "8"
     assert cell_text(sheet, "C2") == "Erika Monteurin"
@@ -394,6 +396,8 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet_and_st
     assert (
         b'xmlns:xr3="http://schemas.microsoft.com/office/spreadsheetml/2016/revision3"' in sheet_xml
     )
+    assert_ignorable_namespaces_are_declared(sheet_xml)
+    assert_ignorable_namespaces_are_declared(styles_xml)
 
 
 def test_all_workers_workbook_clones_the_master_sheet_for_every_worker():
@@ -433,8 +437,11 @@ def test_all_workers_workbook_clones_the_master_sheet_for_every_worker():
         names = set(workbook.namelist())
         workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
         relationships = workbook.read("xl/_rels/workbook.xml.rels").decode("utf-8")
-        first_sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
-        second_sheet = ET.fromstring(workbook.read("xl/worksheets/sheet2.xml"))
+        styles_xml = workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path)
+        first_sheet_xml = workbook.read("xl/worksheets/sheet1.xml")
+        second_sheet_xml = workbook.read("xl/worksheets/sheet2.xml")
+        first_sheet = ET.fromstring(first_sheet_xml)
+        second_sheet = ET.fromstring(second_sheet_xml)
 
     assert "xl/worksheets/sheet2.xml" in names
     assert "xl/drawings/drawing2.xml" in names
@@ -444,6 +451,9 @@ def test_all_workers_workbook_clones_the_master_sheet_for_every_worker():
     assert cell_text(first_sheet, "G17") == "4711"
     assert cell_text(second_sheet, "G18") == "5822"
     assert len(result.plans) == 2
+    assert_ignorable_namespaces_are_declared(styles_xml)
+    assert_ignorable_namespaces_are_declared(first_sheet_xml)
+    assert_ignorable_namespaces_are_declared(second_sheet_xml)
 
 
 def only_day(entries: list[WorkTimeEntry]):
@@ -579,3 +589,12 @@ def cell_shrinks_to_fit(sheet: ET.Element, styles: ET.Element, ref: str) -> bool
     style = list(cell_xfs)[style_id]
     alignment = style.find("main:alignment", NS)
     return alignment is not None and alignment.attrib.get("shrinkToFit") == "1"
+
+
+def assert_ignorable_namespaces_are_declared(document_xml: bytes) -> None:
+    text = document_xml.decode("utf-8")
+    ignorable_match = re.search(r'\bmc:Ignorable="([^"]+)"', text)
+    assert ignorable_match is not None
+    declared_prefixes = set(re.findall(r'\bxmlns:([A-Za-z_][\w.-]*)=', text))
+    missing_prefixes = set(ignorable_match.group(1).split()) - declared_prefixes
+    assert missing_prefixes == set()
