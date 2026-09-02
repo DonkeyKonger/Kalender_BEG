@@ -26,8 +26,8 @@ test("desktop diagnostics retain manual and vehicle GPS sources without phone GP
   const page = await source("src/pages/TimeEntriesPage.tsx");
 
   assert.doesNotMatch(page, /gpsVerification|GPS-Prüfung|Handy[ -]?GPS|mobile Standortsendungen/i);
-  assert.match(page, /source: "Eingetragene Monteursstunden"/);
-  assert.match(page, /source: "Erkannte Fahrzeug GPS Stunden"[\s\S]*?start: formatTimeEntryClock\(entry\.gps_first_seen_at\)[\s\S]*?total: formatTimeEntryMinutes\(entry\.gps_work_minutes, "hours"\)/);
+  assert.match(page, /source: "Mobile Erfassung"[\s\S]*?start: hasSubmittedTime \? formatTimeEntryClock\(entry\.start_time\) : "-"/);
+  assert.match(page, /source: "GPS-Erfassung"[\s\S]*?start: formatTimeEntryClock\(entry\.gps_first_seen_at\)[\s\S]*?total: formatTimeEntryMinutes\(entry\.gps_work_minutes, "hours"\)/);
   assert.match(page, /source: "Mobile Erfassung"/);
   assert.match(page, /source: "GPS-Erfassung"[\s\S]*?siteName: hasGpsSiteMatch\(entry\)/);
   assert.match(page, /source: "Büroerfassung"/);

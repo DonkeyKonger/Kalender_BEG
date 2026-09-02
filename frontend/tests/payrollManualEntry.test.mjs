@@ -160,7 +160,7 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
     source,
     /timeReviewDialogMode === "create" \|\| timeReviewDiagnosticEntry\.id < 0/,
   );
-  assert.match(source, /"Zeit manuell eintragen" : "Arbeitszeit-Prüfung"/);
+  assert.match(source, /"Zeit manuell eintragen" : "Arbeitszeit manuell anpassen"/);
   assert.match(source, /id="payroll-manual-site-label">Baustelle \*<\/span>/);
   assert.match(source, /searchPlaceholder="Nummer, Name oder Ort suchen…"/);
   assert.match(source, /className="icon-button secondary time-review-diagnostic-cancel"[\s\S]*?onClick=\{closeTimeReviewDiagnostic\}[\s\S]*?>[\s\S]*?Abbrechen/);
@@ -188,7 +188,7 @@ test("manual create and existing-entry diagnostics use explicit dialog modes", a
   assert.match(styles, /@media \(max-width: 480px\) \{[\s\S]*?\.time-review-manual-time-grid \{[^}]*grid-template-columns: 1fr;/s);
   assert.ok(createStart >= 0);
   assert.ok(editStart > createStart);
-  assert.doesNotMatch(source.slice(createStart, editStart), /Eingetragene Monteurstunden|Erkannte Fahrzeug GPS Stunden/);
+  assert.doesNotMatch(source.slice(createStart, editStart), /Mobile Erfassung|GPS-Erfassung|Büroerfassung/);
   assert.doesNotMatch(source.slice(createStart, editStart), /Fahrtzeit \(Min\.\)|payrollManualTravelMinutes/);
   assert.match(source, /site_id: payrollManualSiteId,[\s\S]*?travel_minutes: "0",[\s\S]*?work_date: payrollManualWorkDate,/);
   assert.doesNotMatch(source, /setPayrollManualTravelMinutes|payrollManualTravelMinutes/);

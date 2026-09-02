@@ -2646,8 +2646,8 @@ export function TimeEntriesPage() {
           >
             <div className="time-review-diagnostic-head">
               <div>
-                <span>{timeReviewDialogMode === "create" ? "Lohnprüfung" : "Diagnose"}</span>
-                <h4 id="time-review-diagnostic-title">{timeReviewDialogMode === "create" ? "Zeit manuell eintragen" : "Arbeitszeit-Prüfung"}</h4>
+                <span>Lohnprüfung</span>
+                <h4 id="time-review-diagnostic-title">{timeReviewDialogMode === "create" ? "Zeit manuell eintragen" : "Arbeitszeit manuell anpassen"}</h4>
               </div>
               <button
                 className="time-review-diagnostic-close"
@@ -4344,18 +4344,25 @@ function timeReviewDiagnosticRows(entry: TimeEntry): TimeReviewDiagnosticRow[] {
   const hasSubmittedTime = !isOfficeOnlyTimeEntry(entry);
   return [
     {
-      source: "Eingetragene Monteursstunden",
+      source: "Mobile Erfassung",
       start: hasSubmittedTime ? formatTimeEntryClock(entry.start_time) : "-",
       end: hasSubmittedTime ? formatTimeEntryClock(entry.end_time) : "-",
       break: hasSubmittedTime ? formatTimeEntryMinutes(entry.break_minutes, "minutes") : "-",
       total: hasSubmittedTime ? formatTimeEntryMinutes(entry.work_minutes, "hours") : "-",
     },
     {
-      source: "Erkannte Fahrzeug GPS Stunden",
+      source: "GPS-Erfassung",
       start: formatTimeEntryClock(entry.gps_first_seen_at),
       end: formatTimeEntryClock(entry.gps_last_seen_at),
       break: "-",
       total: formatTimeEntryMinutes(entry.gps_work_minutes, "hours"),
+    },
+    {
+      source: "Büroerfassung",
+      start: formatTimeEntryClock(entry.payroll_corrected_start_time),
+      end: formatTimeEntryClock(entry.payroll_corrected_end_time),
+      break: formatTimeEntryMinutes(entry.payroll_corrected_break_minutes, "minutes"),
+      total: formatTimeEntryMinutes(effectivePayrollCorrectedWorkMinutes(entry), "hours"),
     },
   ];
 }
