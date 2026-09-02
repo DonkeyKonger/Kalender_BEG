@@ -63,6 +63,7 @@ class TimeEntryService:
                 selectinload(WorkTimeEntry.person),
                 selectinload(WorkTimeEntry.site),
                 selectinload(WorkTimeEntry.original_site),
+                selectinload(WorkTimeEntry.assignment).selectinload(Assignment.site),
                 selectinload(WorkTimeEntry.work_day),
             )
             .order_by(WorkTimeEntry.work_date.desc(), WorkTimeEntry.id.desc())

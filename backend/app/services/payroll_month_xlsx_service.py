@@ -17,6 +17,7 @@ from app.models.enums import AbsenceStatus, OvernightStatus
 from app.models.person import Person
 from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
+from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE
 from app.services.payroll_xlsx_template import load_payroll_monthly_template
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 
@@ -40,11 +41,30 @@ FOUR_DAY_MINIMUM_NET_MINUTES = 10 * 60
 DISTRIBUTED_DAILY_NET_MINUTES = 8 * 60
 DISTRIBUTED_DAILY_BREAK_MINUTES = 45
 DISTRIBUTED_DAILY_SPAN_MINUTES = DISTRIBUTED_DAILY_NET_MINUTES + DISTRIBUTED_DAILY_BREAK_MINUTES
+GERMAN_MONTH_NAMES = (
+    "",
+    "Januar",
+    "Februar",
+    "März",
+    "April",
+    "Mai",
+    "Juni",
+    "Juli",
+    "August",
+    "September",
+    "Oktober",
+    "November",
+    "Dezember",
+)
+MANUAL_SITE_NOTE_PREFIX = re.compile(r"^Manuelle Baustelle:\s*", re.IGNORECASE)
+POSTAL_CITY_PATTERN = re.compile(r"\b\d{5}\s+([^,;]+)")
 
 
 @dataclass(frozen=True)
 class PayrollMonthTemplateLayout:
     worksheet_path: str = "xl/worksheets/sheet1.xml"
+    person_name_cell: str = "C2"
+    month_label_cell: str = "C4"
     first_day_row: int = 10
     last_day_row: int = 40
     day_column: str = "A"
@@ -71,6 +91,7 @@ class PayrollMonthDay:
     cost_center: str | None
     site_name: str | None
     site_address: str | None
+    site_place: str | None
     overnight_status: OvernightStatus | None
     is_derived: bool
     source_entry_ids: tuple[int, ...]
@@ -115,6 +136,7 @@ class PayrollMonthsWorkbook:
 @dataclass
 class _DominantSiteCandidate:
     site: Site | None
+    manual_place: str | None = None
     duration_minutes: int = 0
     latest_entry_order: tuple[int, int, int] = (-1, -1, -1)
 
@@ -254,6 +276,7 @@ def fill_payroll_month_sheet(
         absences=absences,
         non_working_dates=non_working_dates,
     )
+    _write_month_header(sheet, person=person, year=year, month=month)
     _clear_month_day_values(sheet, year=year, month=month)
     for day in plan.days:
         _write_month_day(sheet, day)
@@ -325,6 +348,7 @@ def build_payroll_month_plan(
             cost_center=last_actual_day.cost_center,
             site_name=last_actual_day.site_name,
             site_address=last_actual_day.site_address,
+            site_place=last_actual_day.site_place,
             overnight_status=None,
             is_derived=True,
             source_entry_ids=(),
@@ -384,6 +408,7 @@ def _build_actual_payroll_day(
         cost_center=None,
         site_name=_clean_text(getattr(site, "name", None)),
         site_address=_site_address(site),
+        site_place=_site_place(site) or dominant_site.manual_place,
         overnight_status=_day_overnight_status(timed_entries),
         is_derived=False,
         source_entry_ids=tuple(sorted(entry.id for entry in timed_entries if entry.id is not None)),
@@ -401,14 +426,19 @@ def _dominant_site(entries: Sequence[WorkTimeEntry]) -> _DominantSiteCandidate:
             0,
             end_minutes - start_minutes - _entry_break_minutes(entry),
         )
-        site = entry.site
-        key = _site_group_key(entry, site)
-        candidate = candidates.setdefault(key, _DominantSiteCandidate(site=site))
+        site = _entry_site(entry)
+        manual_place = _manual_site_place(entry) if site is None else None
+        key = _site_group_key(entry, site, manual_place)
+        candidate = candidates.setdefault(
+            key,
+            _DominantSiteCandidate(site=site, manual_place=manual_place),
+        )
         candidate.duration_minutes += duration_minutes
         entry_order = (start_minutes, end_minutes, entry.id or -1)
         if entry_order > candidate.latest_entry_order:
             candidate.latest_entry_order = entry_order
             candidate.site = site
+            candidate.manual_place = manual_place
     return max(
         candidates.values(),
         key=lambda candidate: (
@@ -418,9 +448,15 @@ def _dominant_site(entries: Sequence[WorkTimeEntry]) -> _DominantSiteCandidate:
     )
 
 
-def _site_group_key(entry: WorkTimeEntry, site: Site | None) -> tuple[object, ...]:
+def _site_group_key(
+    entry: WorkTimeEntry,
+    site: Site | None,
+    manual_place: str | None,
+) -> tuple[object, ...]:
     if site is None:
-        return ("missing", entry.site_id)
+        if manual_place:
+            return ("manual", manual_place.casefold())
+        return ("missing", entry.site_id, entry.original_site_id, entry.assignment_id)
     if site.id is not None:
         return ("site-id", site.id)
     return (
@@ -429,6 +465,27 @@ def _site_group_key(entry: WorkTimeEntry, site: Site | None) -> tuple[object, ..
         _clean_text(site.name),
         _site_address(site),
     )
+
+
+def _entry_site(entry: WorkTimeEntry) -> Site | None:
+    direct_site = getattr(entry, "site", None)
+    if direct_site is not None:
+        return direct_site
+    original_site = getattr(entry, "original_site", None)
+    if original_site is not None:
+        return original_site
+    assignment = getattr(entry, "assignment", None)
+    return getattr(assignment, "site", None)
+
+
+def _manual_site_place(entry: WorkTimeEntry) -> str | None:
+    note = _clean_text(entry.note)
+    if note is None or note == OFFICE_ONLY_TIME_ENTRY_NOTE:
+        return None
+    if MANUAL_SITE_NOTE_PREFIX.match(note) is None:
+        return None
+    manual_value = _clean_text(MANUAL_SITE_NOTE_PREFIX.sub("", note, count=1))
+    return _place_from_text(manual_value, allow_unstructured=True)
 
 
 def _is_valid_time_entry(entry: WorkTimeEntry) -> bool:
@@ -522,6 +579,18 @@ def _clear_month_day_values(sheet: ET.Element, *, year: int, month: int) -> None
             _clear_cell(sheet, f"{column}{row_number}")
 
 
+def _write_month_header(
+    sheet: ET.Element,
+    *,
+    person: Person,
+    year: int,
+    month: int,
+) -> None:
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    _set_cell_string(sheet, layout.person_name_cell, person.display_name)
+    _set_cell_string(sheet, layout.month_label_cell, f"{GERMAN_MONTH_NAMES[month]} {year % 100:02d}")
+
+
 def _write_month_day(sheet: ET.Element, day: PayrollMonthDay) -> None:
     layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
     row_number = layout.first_day_row + day.work_date.day - 1
@@ -550,7 +619,7 @@ def _write_month_day(sheet: ET.Element, day: PayrollMonthDay) -> None:
     _set_cell_string(
         sheet,
         f"{layout.address_column}{row_number}",
-        day.site_address or "",
+        day.site_place or "",
     )
 
 
@@ -567,6 +636,30 @@ def _site_address(site: Site | None) -> str | None:
         value for value in (street, city, _clean_text(site.address_extra)) if value
     )
     return structured or _clean_text(site.address) or _clean_text(site.location)
+
+
+def _site_place(site: Site | None) -> str | None:
+    if site is None:
+        return None
+    return (
+        _clean_text(site.city)
+        or _place_from_text(site.location, allow_unstructured=True)
+        or _place_from_text(site.address, allow_unstructured=False)
+    )
+
+
+def _place_from_text(value: str | None, *, allow_unstructured: bool) -> str | None:
+    text = _clean_text(value)
+    if text is None:
+        return None
+    postal_city = POSTAL_CITY_PATTERN.search(text)
+    if postal_city is not None:
+        return _clean_text(postal_city.group(1))
+    parts = [_clean_text(part) for part in text.split(",")]
+    parts = [part for part in parts if part]
+    if len(parts) > 1 and not any(character.isdigit() for character in parts[-1]):
+        return parts[-1]
+    return text if allow_unstructured else None
 
 
 def _overnight_label(status_value: OvernightStatus | None) -> str:

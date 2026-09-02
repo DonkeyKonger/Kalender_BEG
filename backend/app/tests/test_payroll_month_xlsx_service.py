@@ -8,6 +8,7 @@ from zipfile import ZipFile
 import pytest
 
 from app.models.absence import Absence
+from app.models.assignment import Assignment
 from app.models.enums import AbsenceStatus, AbsenceType, OvernightStatus
 from app.models.person import Person
 from app.models.person_work_day import PersonWorkDay
@@ -46,12 +47,13 @@ def test_normal_workday_uses_its_single_cost_center():
     assert day.commission_number == "4711"
     assert day.site_name == "Rathaus"
     assert day.site_address == "Markt 1, Achim"
+    assert day.site_place == "Achim"
     assert day.is_derived is False
 
 
 def test_multiple_cost_centers_use_the_one_with_most_recorded_duration():
-    shorter = make_site(1, "1000", "Kurz", address="Kurze Straße 1")
-    longer = make_site(2, "2000", "Lang", address="Lange Straße 2")
+    shorter = make_site(1, "1000", "Kurz", address="Kurze Straße 1", city="Bremen")
+    longer = make_site(2, "2000", "Lang", address="Lange Straße 2", city="Hamburg")
     entries = [
         make_entry(1, date(2026, 6, 8), "06:00", "10:00", shorter),
         make_entry(2, date(2026, 6, 8), "10:00", "15:00", longer),
@@ -61,7 +63,49 @@ def test_multiple_cost_centers_use_the_one_with_most_recorded_duration():
 
     assert day.commission_number == "2000"
     assert day.site_name == "Lang"
-    assert day.site_address == "Lange Straße 2"
+    assert day.site_address == "Hamburg"
+    assert day.site_place == "Hamburg"
+
+
+def test_original_site_fills_place_when_current_site_is_missing():
+    original_site = make_site(1, "4711", "Altbestand", city="Jheringsfehn")
+    entry = make_entry(1, date(2026, 6, 8), "06:00", "15:00", None)
+    entry.original_site_id = original_site.id
+    entry.original_site = original_site
+
+    day = only_day([entry])
+
+    assert day.commission_number == "4711"
+    assert day.site_place == "Jheringsfehn"
+
+
+def test_assignment_site_fills_place_when_entry_has_no_direct_site():
+    assignment_site = make_site(2, "5822", "Auftrag", city="Bad Zwischenahn")
+    entry = make_entry(1, date(2026, 6, 8), "06:00", "15:00", None)
+    entry.assignment_id = 7
+    entry.assignment = Assignment(
+        id=7,
+        site_id=assignment_site.id,
+        person_id=PERSON.id,
+        start_date=date(2026, 6, 8),
+        end_date=date(2026, 6, 8),
+        site=assignment_site,
+    )
+
+    day = only_day([entry])
+
+    assert day.commission_number == "5822"
+    assert day.site_place == "Bad Zwischenahn"
+
+
+def test_legacy_manual_site_note_fills_place_without_a_site_link():
+    entry = make_entry(1, date(2026, 6, 8), "06:00", "15:00", None)
+    entry.note = "Manuelle Baustelle: Markt 1, 28832 Achim"
+
+    day = only_day([entry])
+
+    assert day.commission_number is None
+    assert day.site_place == "Achim"
 
 
 def test_equal_cost_center_durations_use_the_chronologically_last_entry():
@@ -237,7 +281,13 @@ def test_building_the_month_does_not_mutate_source_time_entries():
 
 
 def test_generated_workbook_opens_and_only_changes_the_template_worksheet():
-    site = make_site(1, "4711", "Rathaus", address="Markt 1, 28832 Achim")
+    site = make_site(
+        1,
+        "4711",
+        "Rathaus",
+        address="Markt 1, 28832 Achim",
+        city="Achim",
+    )
     entry = make_entry(
         1,
         date(2026, 6, 8),
@@ -267,13 +317,15 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet():
         sheet = ET.fromstring(sheet_xml)
 
     assert cell_text(sheet, "A17") == "8"
+    assert cell_text(sheet, "C2") == "Erika Monteurin"
+    assert cell_text(sheet, "C4") == "Juni 26"
     assert cell_text(sheet, "B17") == "05:00"
     assert cell_text(sheet, "C17") == "15:15"
     assert cell_text(sheet, "D17") == "0:45"
     assert cell_text(sheet, "E17") == "9:30"
     assert cell_text(sheet, "F17") == "MA"
     assert cell_text(sheet, "G17") == "4711"
-    assert cell_text(sheet, "H17") == "Markt 1, 28832 Achim"
+    assert cell_text(sheet, "H17") == "Achim"
     assert sheet.findall(".//main:f", NS) == []
     assert (
         b'xmlns:xr2="http://schemas.microsoft.com/office/spreadsheetml/2015/revision2"' in sheet_xml
@@ -401,7 +453,7 @@ def make_entry(
     work_date: date,
     start: str,
     end: str,
-    site: Site,
+    site: Site | None,
     *,
     break_minutes: int = 0,
     source: str = "manual",
@@ -410,7 +462,7 @@ def make_entry(
     entry = WorkTimeEntry(
         id=entry_id,
         person_id=PERSON.id,
-        site_id=site.id,
+        site_id=site.id if site is not None else None,
         work_date=work_date,
         start_time=time.fromisoformat(start),
         end_time=time.fromisoformat(end),
@@ -420,7 +472,8 @@ def make_entry(
         source=source,
         status="submitted",
     )
-    entry.site = site
+    if site is not None:
+        entry.site = site
     if overnight_status is not None:
         entry.__dict__["work_day"] = PersonWorkDay(
             person_id=PERSON.id,
