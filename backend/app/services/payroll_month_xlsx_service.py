@@ -18,7 +18,11 @@ from app.models.enums import AbsenceStatus, OvernightStatus
 from app.models.person import Person
 from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
-from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE
+from app.services.person_hours_account_service import (
+    OFFICE_ONLY_TIME_ENTRY_NOTE,
+    effective_corrected_work_minutes,
+    effective_weekly_work_minutes,
+)
 from app.services.payroll_xlsx_template import load_payroll_monthly_template
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 
@@ -86,8 +90,8 @@ PAYROLL_MONTH_TEMPLATE_LAYOUT = PayrollMonthTemplateLayout()
 @dataclass(frozen=True)
 class PayrollMonthDay:
     work_date: date
-    start_time: time
-    end_time: time
+    start_time: time | None
+    end_time: time | None
     break_minutes: int
     net_work_minutes: int
     commission_number: str | None
@@ -354,6 +358,10 @@ def build_payroll_month_plan(
     blocked_dates = absence_dates.union(non_working_dates)
     for week_start in _month_week_starts(year, month):
         weekdays = [week_start + timedelta(days=offset) for offset in range(5)]
+        # Eine Verteilung über Monatsgrenzen würde Stunden aus dem gewählten
+        # Abrechnungsmonat heraus- oder hineinverschieben.
+        if any(day.year != year or day.month != month for day in weekdays):
+            continue
         actual_days = [
             days_by_date[work_date] for work_date in weekdays if work_date in days_by_date
         ]
@@ -393,7 +401,7 @@ def build_payroll_month_plan(
                 _clock_minutes(derived_start)
                 + derived_net_work_minutes
                 + DISTRIBUTED_DAILY_BREAK_MINUTES
-            ),
+            ) if derived_start is not None else None,
             break_minutes=DISTRIBUTED_DAILY_BREAK_MINUTES,
             net_work_minutes=derived_net_work_minutes,
             commission_number=last_actual_day.commission_number,
@@ -411,6 +419,13 @@ def build_payroll_month_plan(
         for work_date, day in sorted(days_by_date.items())
         if work_date.year == year and work_date.month == month
     )
+    source_month_minutes = sum(
+        _entry_work_minutes(entry)
+        for entry in person_entries
+        if entry.work_date.year == year and entry.work_date.month == month
+    )
+    if sum(day.net_work_minutes for day in month_days) != source_month_minutes:
+        raise ValueError("Die Excel-Stundensumme weicht von den erfassten Monatsstunden ab.")
     return PayrollMonthPlan(
         days=month_days,
         overtime_remainders=(),
@@ -421,23 +436,26 @@ def _build_actual_payroll_day(
     work_date: date,
     entries: Sequence[WorkTimeEntry],
 ) -> PayrollMonthDay | None:
-    timed_entries = [entry for entry in entries if _entry_interval(entry) is not None]
-    if not timed_entries:
+    net_work_minutes = sum(_entry_work_minutes(entry) for entry in entries)
+    if net_work_minutes <= 0:
         return None
-    intervals = [_entry_interval(entry) for entry in timed_entries]
+    intervals = [_entry_interval(entry) for entry in entries]
     valid_intervals = [interval for interval in intervals if interval is not None]
-    first_start = min(interval[0] for interval in valid_intervals)
-    last_end = max(interval[1] for interval in valid_intervals)
-    rounded_start = round_minutes_to_quarter_hour(first_start)
-    rounded_end = round_minutes_to_quarter_hour(last_end)
-    break_minutes = sum(_entry_break_minutes(entry) for entry in timed_entries)
-    net_work_minutes = max(0, rounded_end - rounded_start - break_minutes)
-    dominant_site = _dominant_site(timed_entries)
+    # Uhrzeiten beschreiben den Tagesrahmen. Die abzurechnenden Minuten kommen
+    # wie in der Lohnprüfung aus den einzelnen Buchungen, nicht aus diesem Rahmen.
+    rounded_start = round_minutes_to_quarter_hour(
+        min(interval[0] for interval in valid_intervals)
+    ) if valid_intervals else None
+    rounded_end = round_minutes_to_quarter_hour(
+        max(interval[1] for interval in valid_intervals)
+    ) if valid_intervals else None
+    break_minutes = sum(_entry_break_minutes(entry) for entry in entries)
+    dominant_site = _dominant_site(entries)
     site = dominant_site.site
     return PayrollMonthDay(
         work_date=work_date,
-        start_time=_clock_from_minutes(rounded_start),
-        end_time=_clock_from_minutes(rounded_end),
+        start_time=_clock_from_minutes(rounded_start) if rounded_start is not None else None,
+        end_time=_clock_from_minutes(rounded_end) if rounded_end is not None else None,
         break_minutes=break_minutes,
         net_work_minutes=net_work_minutes,
         commission_number=_clean_text(getattr(site, "site_number", None)),
@@ -445,9 +463,9 @@ def _build_actual_payroll_day(
         site_name=_clean_text(getattr(site, "name", None)),
         site_address=_site_address(site),
         site_place=_site_place(site) or dominant_site.manual_place,
-        overnight_status=_day_overnight_status(timed_entries),
+        overnight_status=_day_overnight_status(entries),
         is_derived=False,
-        source_entry_ids=tuple(sorted(entry.id for entry in timed_entries if entry.id is not None)),
+        source_entry_ids=tuple(sorted(entry.id for entry in entries if entry.id is not None)),
     )
 
 
@@ -455,13 +473,11 @@ def _dominant_site(entries: Sequence[WorkTimeEntry]) -> _DominantSiteCandidate:
     candidates: dict[tuple[object, ...], _DominantSiteCandidate] = {}
     for entry in entries:
         interval = _entry_interval(entry)
-        if interval is None:
-            continue
-        start_minutes, end_minutes = interval
+        start_minutes, end_minutes = interval or (-1, -1)
         duration_minutes = max(
             0,
             end_minutes - start_minutes - _entry_break_minutes(entry),
-        )
+        ) if interval is not None else _entry_work_minutes(entry)
         site = _entry_site(entry)
         manual_place = _manual_site_place(entry) if site is None else None
         key = _site_group_key(entry, site, manual_place)
@@ -526,7 +542,23 @@ def _manual_site_place(entry: WorkTimeEntry) -> str | None:
 
 
 def _is_valid_time_entry(entry: WorkTimeEntry) -> bool:
-    return entry.source != "gps_suggestion" and _entry_interval(entry) is not None
+    return entry.source != "gps_suggestion" and _entry_work_minutes(entry) > 0
+
+
+def _entry_work_minutes(entry: WorkTimeEntry) -> int:
+    # Gemeinsame Lohnlogik: Korrektur vor Meldung, Fahrtzeit hinzurechnen und
+    # je Buchung runden. Niemals den Tagesrahmen erneut als Arbeitszeit werten.
+    # Bei alten Korrekturen ohne gespeicherte Minutensumme behandelt die UI
+    # einen vollständig durch Pause belegten Zeitraum als null, nicht als Fallback.
+    if (
+        entry.payroll_corrected_work_minutes is None
+        and entry.payroll_corrected_start_time is not None
+        and entry.payroll_corrected_end_time is not None
+        and entry.payroll_corrected_start_time != entry.payroll_corrected_end_time
+        and effective_corrected_work_minutes(entry) is None
+    ):
+        return round_minutes_to_quarter_hour(entry.travel_minutes or 0)
+    return effective_weekly_work_minutes(entry)
 
 
 def _entry_interval(entry: WorkTimeEntry) -> tuple[int, int] | None:
@@ -590,12 +622,12 @@ def _distributed_actual_day(
     *,
     net_work_minutes: int,
 ) -> PayrollMonthDay:
-    start_minutes = _clock_minutes(day.start_time)
+    start_minutes = _clock_minutes(day.start_time) if day.start_time is not None else None
     return replace(
         day,
         end_time=_clock_from_minutes(
             start_minutes + net_work_minutes + DISTRIBUTED_DAILY_BREAK_MINUTES
-        ),
+        ) if start_minutes is not None else None,
         break_minutes=DISTRIBUTED_DAILY_BREAK_MINUTES,
         net_work_minutes=net_work_minutes,
     )
@@ -891,8 +923,8 @@ def _overnight_label(status_value: OvernightStatus | None) -> str:
     return "–"
 
 
-def _format_clock(value: time) -> str:
-    return value.strftime("%H:%M")
+def _format_clock(value: time | None) -> str:
+    return value.strftime("%H:%M") if value is not None else ""
 
 
 def _format_duration(minutes: int) -> str:

@@ -162,7 +162,7 @@ def test_day_boundaries_are_rounded_mathematically_to_quarter_hours():
     assert day.end_time == time(15, 15)
 
 
-def test_explicit_breaks_are_added_without_treating_gaps_as_breaks():
+def test_explicit_breaks_are_preserved_but_unrecorded_gaps_are_not_work():
     site = make_site(1, "1000", "Baustelle")
     entries = [
         make_entry(1, date(2026, 6, 8), "06:00", "10:00", site, break_minutes=15),
@@ -172,7 +172,7 @@ def test_explicit_breaks_are_added_without_treating_gaps_as_breaks():
     day = only_day(entries)
 
     assert day.break_minutes == 45
-    assert day.net_work_minutes == 495
+    assert day.net_work_minutes == 435
 
 
 def test_existing_overnight_status_is_transferred_once_per_day():
@@ -254,19 +254,21 @@ def test_four_day_distribution_starts_at_exactly_36_weekly_hours():
     assert sum(day.net_work_minutes for day in plan.days) == 36 * 60
 
 
-def test_four_day_distribution_preserves_a_weekly_remainder_minute():
+def test_four_day_distribution_matches_the_review_rounding_before_distribution():
     entries = long_week_entries([1, 2, 3, 4], end="16:00")
     entries[-1].break_minutes = 59
+    entries[-1].work_minutes += 1
 
     plan = month_plan(entries)
 
-    assert [day.net_work_minutes for day in plan.days] == [433, 432, 432, 432, 432]
-    assert sum(day.net_work_minutes for day in plan.days) == 36 * 60 + 1
+    assert [day.net_work_minutes for day in plan.days] == [432] * 5
+    assert sum(day.net_work_minutes for day in plan.days) == 36 * 60
 
 
 def test_four_day_distribution_is_not_applied_below_36_weekly_hours():
     entries = long_week_entries([1, 2, 3, 4], end="16:00")
     entries[-1].end_time = time(15, 45)
+    entries[-1].work_minutes -= 15
 
     plan = month_plan(entries)
 
@@ -380,8 +382,8 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet_and_st
     assert cell_text(sheet, "B17") == "05:00"
     assert cell_text(sheet, "C17") == "15:15"
     assert cell_text(sheet, "D17") == "0:45"
-    assert float(cell_text(sheet, "E17")) == pytest.approx(570 / 1440)
-    assert float(cell_text(sheet, "E41")) == pytest.approx(570 / 1440)
+    assert float(cell_text(sheet, "E17")) == pytest.approx(555 / 1440)
+    assert float(cell_text(sheet, "E41")) == pytest.approx(555 / 1440)
     assert cell_text(sheet, "F17") == "MA"
     assert cell_text(sheet, "G17") == "4711"
     assert cell_text(sheet, "H17") == "Achim"
@@ -645,16 +647,21 @@ def make_entry(
     source: str = "manual",
     overnight_status: OvernightStatus | None = None,
 ) -> WorkTimeEntry:
+    start_time = time.fromisoformat(start)
+    end_time = time.fromisoformat(end)
+    duration = (
+        end_time.hour * 60 + end_time.minute - start_time.hour * 60 - start_time.minute
+    ) % 1440
     entry = WorkTimeEntry(
         id=entry_id,
         person_id=PERSON.id,
         site_id=site.id if site is not None else None,
         work_date=work_date,
-        start_time=time.fromisoformat(start),
-        end_time=time.fromisoformat(end),
+        start_time=start_time,
+        end_time=end_time,
         break_minutes=break_minutes,
-        travel_minutes=0,
-        work_minutes=0,
+        travel_minutes=duration if source == "travel" else 0,
+        work_minutes=max(0, duration - break_minutes) if source != "travel" else 0,
         source=source,
         status="submitted",
     )
