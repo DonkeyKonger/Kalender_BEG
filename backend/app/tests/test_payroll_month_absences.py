@@ -160,8 +160,10 @@ def test_month_totals_add_vacation_credit_without_changing_recorded_minutes():
         with ZipFile(BytesIO(content)) as workbook:
             sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
         assert float(cell_text(sheet, "E41")) * 24 == pytest.approx(24.25)
-        assert float(cell_text(sheet, "D46")) * 24 == pytest.approx(168)
-        assert cell_text(sheet, "D47") == "-143:45"
+        assert float(cell_text(sheet, "D46")) * 24 == pytest.approx(160)
+        assert cell_text(sheet, "D47") == "-135:45"
+        assert cell_text(sheet, "D48") == "1"
+        assert float(cell_text(sheet, "G48")) * 24 == pytest.approx(8)
         assert sheet.find('.//main:c[@r="E41"]/main:f', NS).text == "SUM(E10:E40)"
         assert cell_text(sheet, "H13") == "Urlaub"
         assert cell_text(sheet, "H14") == "Urlaub"

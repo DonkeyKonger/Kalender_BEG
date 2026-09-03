@@ -123,6 +123,7 @@ def test_downloads_load_calendar_absences_even_without_time_entries(all_workers)
     db = database()
     anna = person(1, "Anna", "Bau")
     bernd = person(2, "Bernd", "Strom")
+    anna.weekly_hours = bernd.weekly_hours = 40
     db.add_all([anna, bernd])
     db.flush()
     db.add_all([
@@ -162,6 +163,9 @@ def test_downloads_load_calendar_absences_even_without_time_entries(all_workers)
         assert sheet.find('.//m:c[@r="H16"]/m:is/m:t', ns).text == "Urlaub"
         assert sheet.find('.//m:c[@r="H17"]/m:is/m:t', ns).text == "Krankheit"
         assert float(sheet.find('.//m:c[@r="E17"]/m:v', ns).text) == 0
+        assert sheet.find('.//m:c[@r="D48"]/m:v', ns).text == "1"
+        assert float(sheet.find('.//m:c[@r="G48"]/m:v', ns).text) * 24 == pytest.approx(8)
+        assert float(sheet.find('.//m:c[@r="D46"]/m:v', ns).text) * 24 == pytest.approx(152)
         for row in (12, 13, 14, 15, 18):  # Feiertage, Wochenende, stornierter Urlaub.
             assert len(sheet.find(f'.//m:c[@r="E{row}"]', ns)) == 0
             assert len(sheet.find(f'.//m:c[@r="H{row}"]', ns)) == 0
@@ -169,6 +173,9 @@ def test_downloads_load_calendar_absences_even_without_time_entries(all_workers)
             second = ET.fromstring(workbook.read("xl/worksheets/sheet2.xml"))
             assert float(second.find('.//m:c[@r="E41"]/m:v', ns).text) * 24 == pytest.approx(8)
             assert second.find('.//m:c[@r="H18"]/m:is/m:t', ns).text == "Urlaub"
+            assert second.find('.//m:c[@r="D48"]/m:v', ns).text == "0"
+            assert float(second.find('.//m:c[@r="G48"]/m:v', ns).text) == 0
+            assert float(second.find('.//m:c[@r="D46"]/m:v', ns).text) * 24 == pytest.approx(160)
         else:
             assert "xl/worksheets/sheet2.xml" not in workbook.namelist()
 

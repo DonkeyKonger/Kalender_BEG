@@ -46,6 +46,7 @@ FOUR_DAY_MINIMUM_WEEK_MINUTES = 36 * 60
 DISTRIBUTED_WORK_DAYS = 5
 DISTRIBUTED_DAILY_BREAK_MINUTES = 45
 VACATION_DAY_MINUTES = 8 * 60
+SICK_DAY_HOURS = 8
 GERMAN_MONTH_NAMES = (
     "",
     "Januar",
@@ -74,6 +75,8 @@ class PayrollMonthTemplateLayout:
     total_hours_cell: str = "E41"
     normal_hours_cell: str = "D46"
     overtime_hours_cell: str = "D47"
+    sick_days_cell: str = "D48"
+    sick_hours_cell: str = "G48"
     first_day_row: int = 10
     last_day_row: int = 40
     day_column: str = "A"
@@ -794,6 +797,15 @@ def _write_month_totals(
         f"{layout.net_work_column}{layout.last_day_row})",
         total_minutes / 1440,
     )
+    sick_day_count = sum(day.absence_type == AbsenceType.SICK for day in plan.days)
+    sick_minutes = sick_day_count * SICK_DAY_HOURS * 60
+    _set_cell_number(sheet, layout.sick_days_cell, sick_day_count)
+    _set_cell_formula(
+        sheet,
+        layout.sick_hours_cell,
+        f"{layout.sick_days_cell}*{SICK_DAY_HOURS}/24",
+        sick_minutes / 1440,
+    )
     weekly_hours = person.weekly_hours
     if weekly_hours is None:
         # Fehlende Stammdaten sind kein Soll von null Stunden.
@@ -811,12 +823,12 @@ def _write_month_totals(
         (weekly_hours_decimal / 5 * workday_count * 60).quantize(
             Decimal("1"), rounding=ROUND_HALF_UP
         )
-    )
-    # Die Formel zeigt den Stammdatenwert und die feiertagsbereinigten Arbeitstage.
+    ) - sick_minutes
+    # Krankenstunden mindern nur das Soll, nicht die tatsächlich erfassten Stunden.
     _set_cell_formula(
         sheet,
         layout.normal_hours_cell,
-        f"ROUND({weekly_hours_decimal}/5*{workday_count}*60,0)/1440",
+        f"ROUND({weekly_hours_decimal}/5*{workday_count}*60,0)/1440-{layout.sick_hours_cell}",
         normal_minutes / 1440,
     )
     overtime_minutes = total_minutes - normal_minutes
@@ -846,6 +858,7 @@ def _duration_cell_refs() -> list[str]:
         layout.total_hours_cell,
         layout.normal_hours_cell,
         layout.overtime_hours_cell,
+        layout.sick_hours_cell,
     ]
 
 
