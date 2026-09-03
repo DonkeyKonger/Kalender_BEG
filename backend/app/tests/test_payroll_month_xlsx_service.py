@@ -297,7 +297,15 @@ def test_active_absence_on_missing_day_prevents_distribution(absence_type):
 
     plan = month_plan(long_week_entries([1, 2, 3, 4]), absences=[absence])
 
-    assert len(plan.days) == 4
+    work_days = [day for day in plan.days if day.absence_type is None]
+    assert len(work_days) == 4
+    assert all(day.net_work_minutes == 600 for day in work_days)
+    if absence_type in (AbsenceType.VACATION, AbsenceType.SICK):
+        assert len(plan.days) == 5
+        assert plan.days[-1].absence_type == absence_type
+        assert plan.days[-1].net_work_minutes == (480 if absence_type == AbsenceType.VACATION else 0)
+    else:
+        assert len(plan.days) == 4
     assert not any(day.is_derived for day in plan.days)
 
 

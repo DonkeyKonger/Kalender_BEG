@@ -10,7 +10,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.models import Base
-from app.models.enums import PersonType, UserRole
+from app.models.absence import Absence
+from app.models.enums import AbsenceStatus, AbsenceType, PersonType, UserRole
 from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
@@ -115,6 +116,61 @@ def test_single_worker_export_excludes_configured_public_holidays_from_normal_ho
         sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
     ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     assert float(sheet.find('.//m:c[@r="D46"]/m:v', ns).text) == pytest.approx(160 / 24)
+
+
+@pytest.mark.parametrize("all_workers", [False, True])
+def test_downloads_load_calendar_absences_even_without_time_entries(all_workers):
+    db = database()
+    anna = person(1, "Anna", "Bau")
+    bernd = person(2, "Bernd", "Strom")
+    db.add_all([anna, bernd])
+    db.flush()
+    db.add_all([
+        Absence(
+            person_id=anna.id, absence_type=AbsenceType.VACATION,
+            start_date=date(2026, 4, 2), end_date=date(2026, 4, 7),
+            status=AbsenceStatus.ACTIVE,
+        ),
+        Absence(
+            person_id=anna.id, absence_type=AbsenceType.SICK,
+            start_date=date(2026, 4, 8), end_date=date(2026, 4, 8),
+            status=AbsenceStatus.ACTIVE,
+        ),
+        Absence(
+            person_id=anna.id, absence_type=AbsenceType.VACATION,
+            start_date=date(2026, 4, 9), end_date=date(2026, 4, 9),
+            status=AbsenceStatus.CANCELLED,
+        ),
+        Absence(
+            person_id=bernd.id, absence_type=AbsenceType.VACATION,
+            start_date=date(2026, 4, 9), end_date=date(2026, 4, 9),
+            status=AbsenceStatus.ACTIVE,
+        ),
+    ])
+    db.commit()
+    service = PayrollMonthExportService(db)
+    args = dict(year=2026, month=4, current_user=SimpleNamespace(role=UserRole.ADMIN))
+    content = (
+        service.all_workers_export(**args) if all_workers
+        else service.worker_export(person_id=anna.id, **args)
+    )
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    with ZipFile(BytesIO(content)) as workbook:
+        sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
+        assert float(sheet.find('.//m:c[@r="E41"]/m:v', ns).text) * 24 == pytest.approx(16)
+        assert sheet.find('.//m:c[@r="H11"]/m:is/m:t', ns).text == "Urlaub"
+        assert sheet.find('.//m:c[@r="H16"]/m:is/m:t', ns).text == "Urlaub"
+        assert sheet.find('.//m:c[@r="H17"]/m:is/m:t', ns).text == "Krankheit"
+        assert float(sheet.find('.//m:c[@r="E17"]/m:v', ns).text) == 0
+        for row in (12, 13, 14, 15, 18):  # Feiertage, Wochenende, stornierter Urlaub.
+            assert len(sheet.find(f'.//m:c[@r="E{row}"]', ns)) == 0
+            assert len(sheet.find(f'.//m:c[@r="H{row}"]', ns)) == 0
+        if all_workers:
+            second = ET.fromstring(workbook.read("xl/worksheets/sheet2.xml"))
+            assert float(second.find('.//m:c[@r="E41"]/m:v', ns).text) * 24 == pytest.approx(8)
+            assert second.find('.//m:c[@r="H18"]/m:is/m:t', ns).text == "Urlaub"
+        else:
+            assert "xl/worksheets/sheet2.xml" not in workbook.namelist()
 
 
 def database() -> Session:

@@ -14,10 +14,11 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from xml.sax.saxutils import escape, quoteattr
 
 from app.models.absence import Absence
-from app.models.enums import AbsenceStatus, OvernightStatus
+from app.models.enums import AbsenceStatus, AbsenceType, OvernightStatus
 from app.models.person import Person
 from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
+from app.services.absence_service import absence_weekdays
 from app.services.person_hours_account_service import (
     OFFICE_ONLY_TIME_ENTRY_NOTE,
     effective_corrected_work_minutes,
@@ -44,6 +45,7 @@ for prefix, uri in SHEET_NAMESPACES.items():
 FOUR_DAY_MINIMUM_WEEK_MINUTES = 36 * 60
 DISTRIBUTED_WORK_DAYS = 5
 DISTRIBUTED_DAILY_BREAK_MINUTES = 45
+VACATION_DAY_MINUTES = 8 * 60
 GERMAN_MONTH_NAMES = (
     "",
     "Januar",
@@ -102,6 +104,7 @@ class PayrollMonthDay:
     overnight_status: OvernightStatus | None
     is_derived: bool
     source_entry_ids: tuple[int, ...]
+    absence_type: AbsenceType | None = None
 
 
 @dataclass(frozen=True)
@@ -414,6 +417,18 @@ def build_payroll_month_plan(
             source_entry_ids=(),
         )
 
+    # Abwesenheitsgutschriften sind keine geleisteten Stunden und dürfen nicht
+    # in die Vier-auf-fünf-Tage-Verteilung einfließen.
+    credited_absence_minutes = 0
+    for work_date, absence_type in _payroll_absences_by_date(
+        person, absences, year=year, month=month, non_working_dates=non_working_dates
+    ).items():
+        if work_date in days_by_date:
+            continue
+        absence_day = _build_absence_payroll_day(work_date, absence_type)
+        days_by_date[work_date] = absence_day
+        credited_absence_minutes += absence_day.net_work_minutes
+
     month_days = tuple(
         day
         for work_date, day in sorted(days_by_date.items())
@@ -424,8 +439,13 @@ def build_payroll_month_plan(
         for entry in person_entries
         if entry.work_date.year == year and entry.work_date.month == month
     )
-    if sum(day.net_work_minutes for day in month_days) != source_month_minutes:
-        raise ValueError("Die Excel-Stundensumme weicht von den erfassten Monatsstunden ab.")
+    if sum(day.net_work_minutes for day in month_days) != (
+        source_month_minutes + credited_absence_minutes
+    ):
+        raise ValueError(
+            "Die Excel-Stundensumme weicht von den erfassten Monatsstunden "
+            "zuzüglich Abwesenheitsgutschriften ab."
+        )
     return PayrollMonthPlan(
         days=month_days,
         overtime_remainders=(),
@@ -605,6 +625,54 @@ def _active_absence_dates(
     return result
 
 
+def _payroll_absences_by_date(
+    person: Person,
+    absences: Sequence[Absence],
+    *,
+    year: int,
+    month: int,
+    non_working_dates: Collection[date],
+) -> dict[date, AbsenceType]:
+    first = date(year, month, 1)
+    last = date(year, month, calendar.monthrange(year, month)[1])
+    result: dict[date, AbsenceType] = {}
+    for absence in absences:
+        if (
+            absence.person_id != person.id
+            or absence.status != AbsenceStatus.ACTIVE
+            or absence.absence_type not in (AbsenceType.VACATION, AbsenceType.SICK)
+        ):
+            continue
+        for work_date in absence_weekdays(
+            max(first, absence.start_date), min(last, absence.end_date), year
+        ):
+            if work_date in non_working_dates:
+                continue
+            result[work_date] = absence.absence_type
+    return result
+
+
+def _build_absence_payroll_day(
+    work_date: date, absence_type: AbsenceType
+) -> PayrollMonthDay:
+    return PayrollMonthDay(
+        work_date=work_date,
+        start_time=None,
+        end_time=None,
+        break_minutes=0,
+        net_work_minutes=VACATION_DAY_MINUTES if absence_type == AbsenceType.VACATION else 0,
+        commission_number=None,
+        cost_center=None,
+        site_name=None,
+        site_address=None,
+        site_place=None,
+        overnight_status=None,
+        is_derived=False,
+        source_entry_ids=(),
+        absence_type=absence_type,
+    )
+
+
 def _month_week_starts(year: int, month: int) -> list[date]:
     first = date(year, month, 1)
     last = date(year, month, calendar.monthrange(year, month)[1])
@@ -669,6 +737,16 @@ def _write_month_header(
 def _write_month_day(sheet: ET.Element, day: PayrollMonthDay) -> None:
     layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
     row_number = layout.first_day_row + day.work_date.day - 1
+    if day.absence_type is not None:
+        _set_cell_number(
+            sheet, f"{layout.net_work_column}{row_number}", day.net_work_minutes / 1440
+        )
+        _set_cell_string(
+            sheet,
+            f"{layout.address_column}{row_number}",
+            "Urlaub" if day.absence_type == AbsenceType.VACATION else "Krankheit",
+        )
+        return
     _set_cell_string(sheet, f"{layout.start_column}{row_number}", _format_clock(day.start_time))
     _set_cell_string(sheet, f"{layout.end_column}{row_number}", _format_clock(day.end_time))
     _set_cell_string(
