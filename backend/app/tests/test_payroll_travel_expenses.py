@@ -81,6 +81,13 @@ def test_continuing_hotel_and_departure_belong_to_their_respective_months():
     first_day_departure = calculate([SELF, HOME], start=date(2026, 8, 31), month=9)
     assert first_day_departure.markings[date(2026, 9, 1)] == HOME_MARK
 
+    first_day_without_record = build_payroll_travel_plan(
+        person_id=1, year=2026, month=9,
+        days={date(2026, 8, 31): PayrollTravelDay(BEG, True)},
+    )
+    assert first_day_without_record.markings[date(2026, 9, 1)] == HOME_MARK
+    assert not first_day_without_record.warnings
+
 
 def test_hotel_continuation_also_works_across_year_boundary():
     plan = calculate([SELF, BEG, HOME], start=date(2026, 12, 31), year=2027, month=1)
@@ -98,6 +105,16 @@ def test_missing_status_is_not_home_and_cannot_establish_a_new_hotel_arrival():
     ]
 
 
+def test_missing_status_after_last_hotel_night_is_the_departure_day():
+    plan = build_payroll_travel_plan(person_id=1, year=2026, month=8, days={
+        date(2026, 8, 27): PayrollTravelDay(BEG, True),
+        date(2026, 8, 28): PayrollTravelDay(None, True),
+    })
+    assert plan.markings[date(2026, 8, 27)] == ARRIVAL
+    assert plan.markings[date(2026, 8, 28)] == HOME_MARK
+    assert not plan.warnings
+
+
 def test_aggregation_deduplicates_dates_and_surfaces_conflicting_types():
     days = aggregate_payroll_travel_days(
         person_id=1, activity_dates={date(2026, 8, 3), date(2026, 8, 4)},
@@ -111,13 +128,13 @@ def test_aggregation_deduplicates_dates_and_surfaces_conflicting_types():
     plan = build_payroll_travel_plan(person_id=1, year=2026, month=8, days=days)
     assert plan.markings[date(2026, 8, 3)] == EMPTY
     assert plan.markings[date(2026, 8, 4)] == EMPTY
-    assert plan.markings[date(2026, 8, 5)] == EMPTY
+    assert plan.markings[date(2026, 8, 5)] == HOME_MARK
     assert [w.code for w in plan.warnings] == [
         "conflicting_overnight_status", "unclear_hotel_block_start",
     ]
 
 
-def test_no_invented_trip_on_empty_dates_or_home_records_without_activity():
+def test_departure_follows_hotel_but_other_empty_dates_do_not_invent_trips():
     plan = build_payroll_travel_plan(person_id=1, year=2026, month=8, days={
         date(2026, 8, 3): PayrollTravelDay(BEG, False),
         date(2026, 8, 5): PayrollTravelDay(HOME, False),
@@ -125,7 +142,7 @@ def test_no_invented_trip_on_empty_dates_or_home_records_without_activity():
         date(2026, 8, 7): PayrollTravelDay(HOME, False),
     })
     assert plan.markings[date(2026, 8, 3)] == ARRIVAL
-    assert plan.markings[date(2026, 8, 4)] == EMPTY
+    assert plan.markings[date(2026, 8, 4)] == HOME_MARK
     assert plan.markings[date(2026, 8, 5)] == EMPTY
     assert plan.markings[date(2026, 8, 6)] == ARRIVAL
     assert plan.markings[date(2026, 8, 7)] == HOME_MARK
@@ -201,6 +218,23 @@ def test_multiple_time_entries_use_one_daily_selection_and_ignore_other_workers(
         assert cell_text(sheet, "I13") == "x"
         assert cell_text(sheet, "L13") == ""
         assert cell_text(sheet, "J14") == "x"
+    assert result.plan.travel_expenses.warnings == ()
+
+
+def test_export_marks_friday_after_last_hotel_night_without_own_status():
+    result = xlsx.build_payroll_month_xlsx(
+        person=worker(), year=2026, month=8,
+        entries=[entry(27, BEG), entry(28, None)],
+    )
+    with ZipFile(BytesIO(result.content)) as archive:
+        assert archive.testzip() is None
+        sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        assert tuple(cell_text(sheet, f"{col}36") for col in "IJKL") == (
+            "", "x", "", "x",
+        )
+        assert tuple(cell_text(sheet, f"{col}37") for col in "IJKL") == (
+            "", "x", "", "",
+        )
     assert result.plan.travel_expenses.warnings == ()
 
 

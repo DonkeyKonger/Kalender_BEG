@@ -78,8 +78,10 @@ def build_payroll_travel_plan(
 
     Benachbarte Hotelnächte gehören unabhängig vom Kostenträger zusammen.
     Der Vortag des Monats ist deshalb zwingender Bestandteil der Quelldaten,
-    sofern dort eine Tagesangabe existiert. Eine unklare Tagesangabe wird nie
-    als 'zu Hause' oder als sicherer Anfang eines neuen Hotelblocks gewertet.
+    sofern dort eine Tagesangabe existiert. Der erste Tag ohne Hotelangabe nach
+    einer bekannten Hotelnacht ist stets der Abreisetag. Eine sonstige unklare
+    Tagesangabe wird nie als 'zu Hause' oder als sicherer Anfang eines neuen
+    Hotelblocks gewertet.
     """
     markings: dict[date, PayrollTravelMarkings] = {}
     warnings: list[PayrollTravelWarning] = []
@@ -87,22 +89,32 @@ def build_payroll_travel_plan(
         work_date = date(year, month, day_number)
         markings[work_date] = PayrollTravelMarkings()
         day = days.get(work_date)
-        if day is None:
-            # Keine Buchung und keine Tagesangabe: keine Reise erfinden.
-            continue
-        if day.has_conflict or day.overnight_status is None:
-            warnings.append(PayrollTravelWarning(
-                person_id, work_date,
-                "conflicting_overnight_status" if day.has_conflict else "missing_overnight_status",
-            ))
-            continue
-
         previous = days.get(work_date - timedelta(days=1))
         previous_is_hotel = (
             previous is not None
             and not previous.has_conflict
             and previous.overnight_status in HOTEL_STATUSES
         )
+        if day is None:
+            # Nach der letzten Hotelnacht ist auch ein ansonsten leerer Tag der
+            # dokumentierte Abreisetag. Ohne Hotel-Vortag wird nichts erfunden.
+            if previous_is_hotel:
+                markings[work_date] = PayrollTravelMarkings(travel_14=True)
+            continue
+        if day.has_conflict:
+            warnings.append(PayrollTravelWarning(
+                person_id, work_date, "conflicting_overnight_status",
+            ))
+            continue
+        if day.overnight_status is None:
+            if previous_is_hotel:
+                markings[work_date] = PayrollTravelMarkings(travel_14=True)
+            else:
+                warnings.append(PayrollTravelWarning(
+                    person_id, work_date, "missing_overnight_status",
+                ))
+            continue
+
         if day.overnight_status == OvernightStatus.NONE:
             # Explizit zu Hause: Arbeitstag oder dokumentierter Abreisetag.
             if day.has_activity or previous_is_hotel:
