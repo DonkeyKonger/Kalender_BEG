@@ -200,10 +200,10 @@ def test_expense_totals_use_independent_countif_formulas_and_integer_caches():
     xlsx.write_payroll_travel_expense_totals(sheet, plan=plan)
 
     expected = {
-        "E49": ('COUNTIF(I10:I40,"x")', "3"),
-        "E50": ('COUNTIF(J10:J40,"x")', "5"),
-        "E51": ('COUNTIF(K10:K40,"x")', "2"),
-        "E52": ('COUNTIF(L10:L40,"x")', "4"),
+        "E49": ('COUNTIF(I10:I40,"x")', "3"), "G49": ("E49*$I$9", "30.0"),
+        "E50": ('COUNTIF(J10:J40,"x")', "5"), "G50": ("E50*$J$9", "70.0"),
+        "E51": ('COUNTIF(K10:K40,"x")', "2"), "G51": ("E51*$K$9", "56.0"),
+        "E52": ('COUNTIF(L10:L40,"x")', "4"), "G52": ("E52*$L$9", "80.0"),
     }
     for ref, (formula, value) in expected.items():
         cell = sheet.find(f'.//m:c[@r="{ref}"]', NS)
@@ -214,6 +214,30 @@ def test_expense_totals_use_independent_countif_formulas_and_integer_caches():
     once = ET.tostring(sheet)
     xlsx.write_payroll_travel_expense_totals(sheet, plan=plan)
     assert ET.tostring(sheet) == once
+
+
+def test_each_expense_type_with_one_day_uses_its_template_rate():
+    sheet = template_sheet()
+    plan = PayrollTravelPlan(
+        markings={
+            date(2026, 8, 3): PayrollTravelMarkings(
+                travel_10=True,
+                travel_14=True,
+                travel_28=True,
+                overnight_20=True,
+            ),
+        },
+        warnings=(),
+    )
+    xlsx.write_payroll_travel_expenses(sheet, year=2026, month=8, plan=plan)
+    xlsx.write_payroll_travel_expense_totals(sheet, plan=plan)
+
+    for row, rate_column in zip(range(49, 53), "IJKL", strict=True):
+        count = float(sheet.find(f'.//m:c[@r="E{row}"]/m:v', NS).text)
+        rate = float(sheet.find(f'.//m:c[@r="{rate_column}9"]/m:v', NS).text)
+        amount = float(sheet.find(f'.//m:c[@r="G{row}"]/m:v', NS).text)
+        assert count == 1
+        assert amount == count * rate
 
 
 @pytest.mark.parametrize("year, month", [(2026, 2), (2028, 2), (2026, 4), (2026, 8)])
@@ -231,6 +255,17 @@ def test_exported_expense_totals_are_zero_with_fixed_ranges_and_integer_format(y
         assert cell.find("m:f", NS).text == f'COUNTIF({source_column}10:{source_column}40,"x")'
         assert cell.find("m:v", NS).text == "0"
         assert cell_xfs[int(cell.attrib["s"])].attrib["numFmtId"] == "1"
+        amount_ref = f"G{ref[1:]}"
+        amount_cell = sheet.find(f'.//m:c[@r="{amount_ref}"]', NS)
+        assert amount_cell.find("m:f", NS).text == f"{ref}*${source_column}$9"
+        assert amount_cell.find("m:v", NS).text == "0.0"
+        amount_style = cell_xfs[int(amount_cell.attrib["s"])]
+        amount_format = styles.find(
+            f'm:numFmts/m:numFmt[@numFmtId="{amount_style.attrib["numFmtId"]}"]', NS
+        )
+        assert amount_format.attrib["formatCode"] == '#,##0.00 "€"'
+        alignment = amount_style.find("m:alignment", NS)
+        assert alignment.attrib == {"vertical": "center", "shrinkToFit": "1"}
 
 
 def test_multi_sheet_expense_totals_only_count_each_worker_markings():
@@ -252,6 +287,13 @@ def test_multi_sheet_expense_totals_only_count_each_worker_markings():
     assert tuple(second.find(f'.//m:c[@r="{ref}"]/m:v', NS).text for ref in refs) == (
         "1", "2", "1", "2",
     )
+    amount_refs = ("G49", "G50", "G51", "G52")
+    assert tuple(
+        first.find(f'.//m:c[@r="{ref}"]/m:v', NS).text for ref in amount_refs
+    ) == ("10.0", "28.0", "28.0", "20.0")
+    assert tuple(
+        second.find(f'.//m:c[@r="{ref}"]/m:v', NS).text for ref in amount_refs
+    ) == ("10.0", "28.0", "28.0", "40.0")
 
 
 @pytest.mark.parametrize("year, month, length", [(2026, 2, 28), (2028, 2, 29),
