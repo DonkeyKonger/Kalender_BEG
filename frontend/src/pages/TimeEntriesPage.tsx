@@ -2548,34 +2548,34 @@ export function TimeEntriesPage() {
         <div className="time-entries-main time-review-main time-evaluation-main">
           <div className="time-week-nav-panel time-evaluation-month-nav" aria-label="Monat für die Auswertung auswählen">
             <div className="time-evaluation-period-controls">
-              <div className="time-evaluation-month-strip-shell" role="group" aria-label={"Monat im Jahr " + selectedEvaluationMonth.year + " auswählen"}>
-                <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollLeft} type="button" aria-label="Monate nach links scrollen" onClick={() => scrollEvaluationMonths(-1)}>
-                  <ChevronLeft aria-hidden="true" size={16} />
-                </button>
-                <div className="time-evaluation-month-strip" ref={evaluationMonthStripRef}>
-                {evaluationMonthOptions.map((option) => (
-                  <button
-                    className={[
-                      option.month === selectedEvaluationMonth.month ? "is-active" : "",
-                      option.isCurrent ? "is-current" : "",
-                    ].filter(Boolean).join(" ")}
-                    data-month={option.month}
-                    key={option.month}
-                    title={`${option.label} ${option.year} · ${formatRangeLabel(calendarMonthRange(option).start, calendarMonthRange(option).end)}`}
-                    type="button"
-                    aria-current={option.isCurrent ? "date" : undefined}
-                    aria-pressed={option.month === selectedEvaluationMonth.month}
-                    onClick={() => selectEvaluationMonth(option)}
-                  >
-                    {option.label}
+              <div className="time-evaluation-period-selection">
+                <div className="time-evaluation-month-strip-shell" role="group" aria-label={"Monat im Jahr " + selectedEvaluationMonth.year + " auswählen"}>
+                  <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollLeft} type="button" aria-label="Monate nach links scrollen" onClick={() => scrollEvaluationMonths(-1)}>
+                    <ChevronLeft aria-hidden="true" size={16} />
                   </button>
-                ))}
+                  <div className="time-evaluation-month-strip" ref={evaluationMonthStripRef}>
+                    {evaluationMonthOptions.map((option) => (
+                      <button
+                        className={[
+                          option.month === selectedEvaluationMonth.month ? "is-active" : "",
+                          option.isCurrent ? "is-current" : "",
+                        ].filter(Boolean).join(" ")}
+                        data-month={option.month}
+                        key={option.month}
+                        title={`${option.label} ${option.year} · ${formatRangeLabel(calendarMonthRange(option).start, calendarMonthRange(option).end)}`}
+                        type="button"
+                        aria-current={option.isCurrent ? "date" : undefined}
+                        aria-pressed={option.month === selectedEvaluationMonth.month}
+                        onClick={() => selectEvaluationMonth(option)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollRight} type="button" aria-label="Monate nach rechts scrollen" onClick={() => scrollEvaluationMonths(1)}>
+                    <ChevronRight aria-hidden="true" size={16} />
+                  </button>
                 </div>
-                <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollRight} type="button" aria-label="Monate nach rechts scrollen" onClick={() => scrollEvaluationMonths(1)}>
-                  <ChevronRight aria-hidden="true" size={16} />
-                </button>
-              </div>
-              <div className="time-evaluation-period-actions">
                 <div className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr">
                   <button
                     className="time-week-scroll-button"
@@ -2597,17 +2597,35 @@ export function TimeEntriesPage() {
                     <ChevronRight aria-hidden="true" size={16} />
                   </button>
                 </div>
-                <button
-                  aria-describedby="time-evaluation-monthly-download-status"
-                  className="time-evaluation-monthly-download-button"
-                  disabled={isDownloadingAllPayrollMonthXlsx}
-                  title="Monatsabrechnungen aller Monteure als Excel herunterladen"
-                  type="button"
-                  onClick={() => void downloadAllPayrollMonthXlsx()}
-                >
-                  <Download aria-hidden="true" size={14} />
-                  <span>{isDownloadingAllPayrollMonthXlsx ? "Wird erstellt..." : "Monatsabrechnung (alle)"}</span>
-                </button>
+              </div>
+              <div className="time-evaluation-period-actions" role="group" aria-labelledby="time-evaluation-export-heading">
+                <h3 id="time-evaluation-export-heading">Monatsabrechnung</h3>
+                <div className="time-evaluation-export-buttons">
+                  <button
+                    aria-describedby="time-evaluation-monthly-download-status"
+                    className="time-evaluation-monthly-download-button"
+                    disabled={isDownloadingAllPayrollMonthXlsx}
+                    title="Monatsabrechnungen aller Monteure als Excel herunterladen"
+                    type="button"
+                    onClick={() => void downloadAllPayrollMonthXlsx()}
+                  >
+                    <Download aria-hidden="true" size={14} />
+                    <span>{isDownloadingAllPayrollMonthXlsx ? "Wird erstellt..." : "Alle Monteure"}</span>
+                  </button>
+                  <button
+                    aria-describedby="time-evaluation-monthly-download-status"
+                    className="time-evaluation-monthly-download-button"
+                    disabled={!selectedEvaluationWorker || !isEvaluationDataReady || isDownloadingPayrollMonthXlsx}
+                    title={selectedEvaluationWorker
+                      ? `Monatsabrechnung für ${selectedEvaluationWorker.personName} als Excel herunterladen`
+                      : "Monteur auswählen, um die Monatsabrechnung herunterzuladen"}
+                    type="button"
+                    onClick={() => void downloadSelectedPayrollMonthXlsx()}
+                  >
+                    <Download aria-hidden="true" size={14} />
+                    <span>{isDownloadingPayrollMonthXlsx ? "Wird erstellt..." : "Ausgewählter Monteur"}</span>
+                  </button>
+                </div>
                 <span aria-live="polite" className="sr-only" id="time-evaluation-monthly-download-status">
                   {isDownloadingAllPayrollMonthXlsx || isDownloadingPayrollMonthXlsx
                     ? "Die Excel-Monatsabrechnung wird erstellt."
@@ -2626,14 +2644,12 @@ export function TimeEntriesPage() {
               filterCounts={evaluationWorkerFilterCounts}
               isLoading={isLoadingPeople || isLoadingReviewAllEntries || !isEvaluationDataReady}
               isReady={isEvaluationDataReady}
-              isDownloadingPayrollMonthXlsx={isDownloadingPayrollMonthXlsx}
               canManageTimeEntries={canManageTimeEntries}
               onChangeFilter={setEvaluationWorkerFilter}
               onChangeSearch={setEvaluationWorkerSearch}
               onOpenLocationDiagnostic={openLocationReviewDiagnostic}
               onOpenEntryActions={togglePayrollDatePicker}
               onOpenTimeDiagnostic={openTimeReviewDiagnostic}
-              onDownloadPayrollMonth={() => void downloadSelectedPayrollMonthXlsx()}
               onUpdateOvernight={(personId, workDate, status) => updatePayrollOvernightStatus(personId, workDate, status)}
               onSelectWorker={setSelectedEvaluationPersonId}
               onToggleDay={toggleEvaluationDay}
@@ -3331,13 +3347,11 @@ function MonthlyPayrollWorkerWorkspace({
   filterCounts,
   isLoading,
   isReady,
-  isDownloadingPayrollMonthXlsx,
   onChangeFilter,
   onChangeSearch,
   onOpenEntryActions,
   onOpenLocationDiagnostic,
   onOpenTimeDiagnostic,
-  onDownloadPayrollMonth,
   onUpdateOvernight,
   onSelectWorker,
   onToggleDay,
@@ -3353,13 +3367,11 @@ function MonthlyPayrollWorkerWorkspace({
   filterCounts: Record<TimeReviewWorkerFilter, number>;
   isLoading: boolean;
   isReady: boolean;
-  isDownloadingPayrollMonthXlsx: boolean;
   onChangeFilter: (filter: TimeReviewWorkerFilter) => void;
   onChangeSearch: (value: string) => void;
   onOpenEntryActions: (entry: TimeEntry, button: HTMLButtonElement) => void;
   onOpenLocationDiagnostic: (entry: TimeEntry) => void;
   onOpenTimeDiagnostic: (entry: TimeEntry) => void;
-  onDownloadPayrollMonth: () => void;
   onUpdateOvernight: (personId: number, workDate: string, status: OvernightStatus) => Promise<void>;
   onSelectWorker: (personId: number) => void;
   onToggleDay: (date: string) => void;
@@ -3415,22 +3427,6 @@ function MonthlyPayrollWorkerWorkspace({
       <div className="time-review-detail-shell">
         {selectedWorker ? (
           <div className="time-review-worker-detail">
-            <div className="time-review-worker-detail-head">
-              <div className="time-review-worker-identity"><h3>{selectedWorker.personName}</h3><span className="time-review-worker-hours"><strong>{formatSubmittedHours(selectedWorker.submittedMinutes)} Std.</strong></span></div>
-              <div className="time-review-worker-detail-actions">
-                <button
-                  aria-describedby="time-evaluation-monthly-download-status"
-                  className="time-evaluation-monthly-download-button"
-                  disabled={isDownloadingPayrollMonthXlsx}
-                  title={`Monatsabrechnung für ${selectedWorker.personName} als Excel herunterladen`}
-                  type="button"
-                  onClick={onDownloadPayrollMonth}
-                >
-                  <Download aria-hidden="true" size={14} />
-                  <span>{isDownloadingPayrollMonthXlsx ? "Wird erstellt..." : "Monatsabrechnung"}</span>
-                </button>
-              </div>
-            </div>
             <div className="time-review-week-check-table" role="table" aria-label={"Monatsprüfung " + selectedWorker.personName}>
               <PayrollReviewTableHeaders />
               {weekGroups.map((weekGroup) => (
@@ -3599,7 +3595,7 @@ function alignEvaluationMonthsToSelection(
   }
   const visibleCount = evaluationMonthVisibleButtonCount(container, buttons);
   const maxStartIndex = Math.max(0, buttons.length - visibleCount);
-  const targetIndex = Math.min(maxStartIndex, Math.floor(selectedIndex / visibleCount) * visibleCount);
+  const targetIndex = Math.min(maxStartIndex, selectedIndex);
   container.scrollTo({ left: buttons[targetIndex]?.offsetLeft ?? 0, behavior });
 }
 
