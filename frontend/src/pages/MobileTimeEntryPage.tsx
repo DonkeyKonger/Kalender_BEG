@@ -292,14 +292,6 @@ export function MobileTimeEntryPage() {
     setActiveView("month");
   }
 
-  function showToday() {
-    setVisibleMonth(currentMonth);
-    setSelectedDate(today);
-    setEditingEntryId(null);
-    closeTimeEntrySheet();
-    setActiveView("month");
-  }
-
   function openDay(date: string) {
     setSelectedDate(date);
     const dateMonth = startOfMonth(parseDateInput(date));
@@ -619,14 +611,27 @@ export function MobileTimeEntryPage() {
       : form.siteId ? formatSiteLabel(Number(form.siteId), siteById) : "Baustelle";
 
   return (
-    <section className={classNames("mobile-page", "mobile-time-page", activeView === "day" && "is-day-view")}>
+    <section className={classNames("mobile-page", "mobile-time-page", activeView === "day" ? "is-day-view" : "is-month-view")}>
       {activeView === "month" ? (
-        <header className="mobile-calendar-nav">
-          <button className="mobile-calendar-back" type="button" onClick={() => navigate("/me/assignments")}>
-            <ArrowLeft aria-hidden="true" size={18} />
-            <span>Zurück</span>
-          </button>
-          <button className="mobile-calendar-today" type="button" onClick={showToday}>Heute</button>
+        <header className="mobile-time-month-header">
+          <div className="mobile-time-month-context">
+            <button className="mobile-calendar-back" type="button" onClick={() => navigate("/me/assignments")}>
+              <ArrowLeft aria-hidden="true" size={18} />
+              <span>Zurück</span>
+            </button>
+            <span className="mobile-time-month-label">Lohnzeit erfassen</span>
+          </div>
+          {!isLoading ? (
+            <nav className="mobile-time-month-navigation" aria-label="Monatsnavigation">
+              <button type="button" aria-label="Vorheriger Monat" onClick={() => showMonth(addMonths(visibleMonth, -1))}>
+                <ChevronLeft aria-hidden="true" size={21} />
+              </button>
+              <h1>{formatMonth(visibleMonth)}</h1>
+              <button type="button" aria-label="Nächster Monat" onClick={() => showMonth(addMonths(visibleMonth, 1))}>
+                <ChevronRight aria-hidden="true" size={21} />
+              </button>
+            </nav>
+          ) : null}
         </header>
       ) : (
         <header className="mobile-calendar-nav">
@@ -648,19 +653,6 @@ export function MobileTimeEntryPage() {
 
       {!isLoading && activeView === "month" ? (
         <>
-          <section className="mobile-time-month-hero" aria-label="Monatsnavigation">
-            <button type="button" aria-label="Vorheriger Monat" onClick={() => showMonth(addMonths(visibleMonth, -1))}>
-              <ChevronLeft aria-hidden="true" size={21} />
-            </button>
-            <div>
-              <span>Lohnzeit erfassen</span>
-              <h1>{formatMonth(visibleMonth)}</h1>
-            </div>
-            <button type="button" aria-label="Nächster Monat" onClick={() => showMonth(addMonths(visibleMonth, 1))}>
-              <ChevronRight aria-hidden="true" size={21} />
-            </button>
-          </section>
-
           <section className="mobile-time-calendar-panel" aria-label="Monatskalender">
             <div className="mobile-calendar-weekdays" aria-hidden="true">
               {WEEKDAY_LABELS.map((weekday) => <span key={weekday}>{weekday}</span>)}

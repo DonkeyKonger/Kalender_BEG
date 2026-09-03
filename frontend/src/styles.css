@@ -8280,14 +8280,17 @@ body.mobile-modal-scroll-locked {
   max-width: 820px;
 }
 
+.mobile-time-page.is-month-view {
+  gap: 8px;
+}
+
 .mobile-time-page.is-day-view {
   max-width: 448px;
   gap: 0;
   background: #f5f8fc;
 }
 
-.mobile-calendar-nav,
-.mobile-time-month-hero {
+.mobile-calendar-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -8307,9 +8310,7 @@ body.mobile-modal-scroll-locked {
   font-weight: 800;
 }
 
-.mobile-calendar-back,
-.mobile-calendar-today,
-.mobile-time-month-hero button {
+.mobile-calendar-back {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -8339,26 +8340,80 @@ body.mobile-modal-scroll-locked {
   font: inherit;
 }
 
-.mobile-calendar-today {
-  background: #f4f5f7;
-  padding: 7px 13px;
-}
-
-.mobile-time-month-hero {
-  padding: 4px 2px 8px;
-}
-
-.mobile-time-month-hero button {
-  width: 38px;
-  height: 38px;
-  background: #f5f6f8;
-}
-
-.mobile-time-month-hero div {
+.mobile-time-month-header {
   min-width: 0;
+  border-bottom: 1px solid #dbe3ed;
+  background: #ffffff;
 }
 
-.mobile-time-month-hero span,
+.mobile-time-month-context {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(4px, env(safe-area-inset-top, 0px)) 12px 4px;
+}
+
+.mobile-time-month-header .mobile-calendar-back {
+  flex-shrink: 0;
+  gap: 8px;
+  border-radius: 0;
+  font-size: 0.875rem;
+}
+
+.mobile-time-month-label {
+  color: #65738a;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  text-align: right;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mobile-time-month-navigation {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid #dbe3ed;
+  padding: 6px 12px;
+}
+
+.mobile-time-month-navigation h1 {
+  min-width: 0;
+  margin: 0;
+  color: #123563;
+  font-size: clamp(1rem, 4.8vw, 1.125rem);
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.mobile-time-month-navigation button {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d3dfef;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #123b6d;
+  padding: 0;
+}
+
+.mobile-time-month-navigation button:hover {
+  background: #f5f8fc;
+}
+
+.mobile-time-month-header button:focus-visible {
+  outline: 2px solid #315f91;
+  outline-offset: 2px;
+}
+
 .mobile-time-entry-heading span,
 .mobile-time-field span,
 .mobile-time-summary span {
@@ -8368,18 +8423,10 @@ body.mobile-modal-scroll-locked {
   text-transform: uppercase;
 }
 
-.mobile-time-month-hero h1,
 .mobile-time-entry-heading h1,
 .mobile-time-summary strong {
   color: #111827;
   letter-spacing: 0;
-}
-
-.mobile-time-month-hero h1 {
-  margin: 1px 0 0;
-  font-size: clamp(2rem, 10vw, 3.2rem);
-  line-height: 0.98;
-  text-transform: capitalize;
 }
 
 .mobile-time-calendar-panel,
