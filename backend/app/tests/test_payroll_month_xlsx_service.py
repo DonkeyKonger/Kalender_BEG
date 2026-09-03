@@ -401,7 +401,9 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet_and_st
     )
     assert not cell_shrinks_to_fit(sheet, styles, "I17")
     assert [formula.text for formula in sheet.findall(".//main:f", NS)] == [
-        "SUM(E10:E40)", "D48*8/24",
+        "SUM(E10:E40)", "D48*8/24", 'COUNTIF(I10:I40,"x")',
+        'COUNTIF(J10:J40,"x")', 'COUNTIF(K10:K40,"x")',
+        'COUNTIF(L10:L40,"x")',
     ]
     for ref in ("E10", "E17", "E40", "E41", "D46", "D47", "G48"):
         assert cell_number_format(sheet, styles, ref) == "[h]:mm"

@@ -99,6 +99,10 @@ class PayrollMonthTemplateLayout:
     travel_14_column: str = "J"
     travel_28_column: str = "K"
     overnight_20_column: str = "L"
+    travel_10_days_cell: str = "E49"
+    travel_14_days_cell: str = "E50"
+    travel_28_days_cell: str = "E51"
+    overnight_20_days_cell: str = "E52"
 
 
 PAYROLL_MONTH_TEMPLATE_LAYOUT = PayrollMonthTemplateLayout()
@@ -191,6 +195,8 @@ def build_payroll_month_xlsx(
         _apply_address_cell_styles(sheet_root, address_style_mapping)
         duration_style_mapping = _append_duration_styles(styles_root, sheet_root)
         _apply_duration_cell_styles(sheet_root, duration_style_mapping)
+        travel_count_style_mapping = _append_travel_count_styles(styles_root, sheet_root)
+        _apply_travel_count_cell_styles(sheet_root, travel_count_style_mapping)
         plan = fill_payroll_month_sheet(
             sheet_root,
             person=person,
@@ -237,6 +243,9 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
             _address_cell_style_ids(ET.fromstring(template_sheet)),
         )
         duration_style_mapping = _append_duration_styles(
+            styles_root, ET.fromstring(template_sheet)
+        )
+        travel_count_style_mapping = _append_travel_count_styles(
             styles_root, ET.fromstring(template_sheet)
         )
         template_sheet_relationships = source.read("xl/worksheets/_rels/sheet1.xml.rels")
@@ -287,6 +296,7 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
             sheet_root = ET.fromstring(template_sheet)
             _apply_address_cell_styles(sheet_root, address_style_mapping)
             _apply_duration_cell_styles(sheet_root, duration_style_mapping)
+            _apply_travel_count_cell_styles(sheet_root, travel_count_style_mapping)
             plans.append(
                 fill_payroll_month_sheet(
                     sheet_root,
@@ -342,6 +352,7 @@ def fill_payroll_month_sheet(
     for day in plan.days:
         _write_month_day(sheet, day)
     write_payroll_travel_expenses(sheet, year=year, month=month, plan=plan.travel_expenses)
+    write_payroll_travel_expense_totals(sheet, plan=plan.travel_expenses)
     for warning in plan.travel_expenses.warnings:
         logger.warning(
             "Reisekosten nicht markiert: person_id=%s, Datum=%s, Grund=%s",
@@ -791,6 +802,31 @@ def write_payroll_travel_expenses(
             _set_cell_string(sheet, ref, "x" if getattr(markings, attribute, False) else "")
 
 
+def write_payroll_travel_expense_totals(
+    sheet: ET.Element, *, plan: PayrollTravelPlan
+) -> None:
+    """Tagesmarkierungen je Spalte über nachvollziehbare Excel-Formeln zählen."""
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    count_fields = (
+        (layout.travel_10_days_cell, layout.travel_10_column, "travel_10"),
+        (layout.travel_14_days_cell, layout.travel_14_column, "travel_14"),
+        (layout.travel_28_days_cell, layout.travel_28_column, "travel_28"),
+        (layout.overnight_20_days_cell, layout.overnight_20_column, "overnight_20"),
+    )
+    for target_ref, source_column, attribute in count_fields:
+        cached_count = sum(
+            bool(getattr(markings, attribute, False))
+            for markings in plan.markings.values()
+        )
+        _set_cell_formula(
+            sheet,
+            target_ref,
+            f'COUNTIF({source_column}{layout.first_day_row}:'
+            f'{source_column}{layout.last_day_row},"x")',
+            cached_count,
+        )
+
+
 def _write_month_header(
     sheet: ET.Element,
     *,
@@ -979,6 +1015,47 @@ def _append_duration_styles(styles: ET.Element, sheet: ET.Element) -> dict[int, 
 
 def _apply_duration_cell_styles(sheet: ET.Element, style_mapping: dict[int, int]) -> None:
     for ref in _duration_cell_refs():
+        cell = _find_cell(sheet, ref)
+        if cell is not None:
+            cell.attrib["s"] = str(style_mapping[int(cell.attrib.get("s", "0"))])
+
+
+def _travel_count_cell_refs() -> tuple[str, str, str, str]:
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    return (
+        layout.travel_10_days_cell,
+        layout.travel_14_days_cell,
+        layout.travel_28_days_cell,
+        layout.overnight_20_days_cell,
+    )
+
+
+def _append_travel_count_styles(styles: ET.Element, sheet: ET.Element) -> dict[int, int]:
+    """Vorlagenstil kopieren und ausschließlich das Zahlenformat auf `0` setzen."""
+    cell_xfs = styles.find(_qname("cellXfs"))
+    if cell_xfs is None:
+        raise ValueError("Monatsvorlage enthält keine Zellformatvorlagen.")
+    mapping: dict[int, int] = {}
+    for ref in _travel_count_cell_refs():
+        cell = _find_cell(sheet, ref)
+        if cell is None:
+            raise ValueError(f"Monatsvorlage enthält die erwartete Zelle {ref} nicht.")
+        source_id = int(cell.attrib.get("s", "0"))
+        if source_id in mapping:
+            continue
+        cloned_style = deepcopy(cell_xfs[source_id])
+        # Built-in number format id 1 is the Excel format code `0`.
+        cloned_style.attrib.update(numFmtId="1", applyNumberFormat="1")
+        mapping[source_id] = len(cell_xfs)
+        cell_xfs.append(cloned_style)
+    cell_xfs.attrib["count"] = str(len(cell_xfs))
+    return mapping
+
+
+def _apply_travel_count_cell_styles(
+    sheet: ET.Element, style_mapping: dict[int, int]
+) -> None:
+    for ref in _travel_count_cell_refs():
         cell = _find_cell(sheet, ref)
         if cell is not None:
             cell.attrib["s"] = str(style_mapping[int(cell.attrib.get("s", "0"))])

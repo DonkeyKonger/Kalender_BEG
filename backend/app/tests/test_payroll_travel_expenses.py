@@ -15,6 +15,7 @@ from app.services import payroll_month_xlsx_service as xlsx
 from app.services.payroll_travel_expense_service import (
     PayrollTravelDay,
     PayrollTravelMarkings,
+    PayrollTravelPlan,
     aggregate_payroll_travel_days,
     build_payroll_travel_plan,
 )
@@ -178,6 +179,79 @@ def test_excel_columns_and_dates_match_the_template_and_are_idempotent():
     )
     assert all(cell_text(sheet, f"{col}{row}") == ""
                for row in range(10, 41) for col in "IJKL")
+
+
+def test_expense_totals_use_independent_countif_formulas_and_integer_caches():
+    sheet = template_sheet()
+    plan = PayrollTravelPlan(markings={
+        date(2026, 8, 1): PayrollTravelMarkings(
+            travel_10=True, travel_14=True, overnight_20=True,
+        ),
+        date(2026, 8, 2): PayrollTravelMarkings(
+            travel_10=True, travel_14=True, travel_28=True, overnight_20=True,
+        ),
+        date(2026, 8, 3): PayrollTravelMarkings(
+            travel_10=True, travel_14=True, travel_28=True, overnight_20=True,
+        ),
+        date(2026, 8, 4): PayrollTravelMarkings(travel_14=True, overnight_20=True),
+        date(2026, 8, 5): PayrollTravelMarkings(travel_14=True),
+    }, warnings=())
+    xlsx.write_payroll_travel_expenses(sheet, year=2026, month=8, plan=plan)
+    xlsx.write_payroll_travel_expense_totals(sheet, plan=plan)
+
+    expected = {
+        "E49": ('COUNTIF(I10:I40,"x")', "3"),
+        "E50": ('COUNTIF(J10:J40,"x")', "5"),
+        "E51": ('COUNTIF(K10:K40,"x")', "2"),
+        "E52": ('COUNTIF(L10:L40,"x")', "4"),
+    }
+    for ref, (formula, value) in expected.items():
+        cell = sheet.find(f'.//m:c[@r="{ref}"]', NS)
+        assert cell.find("m:f", NS).text == formula
+        assert cell.find("m:v", NS).text == value
+        assert cell.attrib.get("t") is None
+
+    once = ET.tostring(sheet)
+    xlsx.write_payroll_travel_expense_totals(sheet, plan=plan)
+    assert ET.tostring(sheet) == once
+
+
+@pytest.mark.parametrize("year, month", [(2026, 2), (2028, 2), (2026, 4), (2026, 8)])
+def test_exported_expense_totals_are_zero_with_fixed_ranges_and_integer_format(year, month):
+    result = xlsx.build_payroll_month_xlsx(
+        person=worker(), year=year, month=month, entries=[],
+    )
+    with ZipFile(BytesIO(result.content)) as archive:
+        sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        styles = ET.fromstring(archive.read("xl/styles.xml"))
+    expected_columns = dict(zip(("E49", "E50", "E51", "E52"), "IJKL", strict=True))
+    cell_xfs = styles.find("m:cellXfs", NS)
+    for ref, source_column in expected_columns.items():
+        cell = sheet.find(f'.//m:c[@r="{ref}"]', NS)
+        assert cell.find("m:f", NS).text == f'COUNTIF({source_column}10:{source_column}40,"x")'
+        assert cell.find("m:v", NS).text == "0"
+        assert cell_xfs[int(cell.attrib["s"])].attrib["numFmtId"] == "1"
+
+
+def test_multi_sheet_expense_totals_only_count_each_worker_markings():
+    first_entries = [entry(3, BEG, person_id=1), entry(4, BEG, person_id=1),
+                     entry(5, HOME, person_id=1)]
+    second_entries = [entry(3, SELF, person_id=2), entry(4, SELF, person_id=2),
+                      entry(5, HOME, person_id=2)]
+    result = xlsx.build_payroll_months_xlsx([
+        xlsx.PayrollMonthSheet(worker(1), "Erste Person", 2026, 8, first_entries),
+        xlsx.PayrollMonthSheet(worker(2), "Zweite Person", 2026, 8, second_entries),
+    ])
+    with ZipFile(BytesIO(result.content)) as archive:
+        first = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        second = ET.fromstring(archive.read("xl/worksheets/sheet2.xml"))
+    refs = ("E49", "E50", "E51", "E52")
+    assert tuple(first.find(f'.//m:c[@r="{ref}"]/m:v', NS).text for ref in refs) == (
+        "1", "2", "1", "1",
+    )
+    assert tuple(second.find(f'.//m:c[@r="{ref}"]/m:v', NS).text for ref in refs) == (
+        "1", "2", "1", "2",
+    )
 
 
 @pytest.mark.parametrize("year, month, length", [(2026, 2, 28), (2028, 2, 29),
