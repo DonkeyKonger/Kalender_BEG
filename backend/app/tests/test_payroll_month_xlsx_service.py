@@ -380,7 +380,8 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet_and_st
     assert cell_text(sheet, "B17") == "05:00"
     assert cell_text(sheet, "C17") == "15:15"
     assert cell_text(sheet, "D17") == "0:45"
-    assert cell_text(sheet, "E17") == "9:30"
+    assert float(cell_text(sheet, "E17")) == pytest.approx(570 / 1440)
+    assert float(cell_text(sheet, "E41")) == pytest.approx(570 / 1440)
     assert cell_text(sheet, "F17") == "MA"
     assert cell_text(sheet, "G17") == "4711"
     assert cell_text(sheet, "H17") == "Achim"
@@ -389,7 +390,9 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet_and_st
         for ref in ("H10", "H11", "H12", "H17", "H40")
     )
     assert not cell_shrinks_to_fit(sheet, styles, "I17")
-    assert sheet.findall(".//main:f", NS) == []
+    assert [formula.text for formula in sheet.findall(".//main:f", NS)] == ["SUM(E10:E40)"]
+    for ref in ("E10", "E17", "E40", "E41", "D46", "D47"):
+        assert cell_number_format(sheet, styles, ref) == "[h]:mm"
     assert (
         b'xmlns:xr2="http://schemas.microsoft.com/office/spreadsheetml/2015/revision2"' in sheet_xml
     )
@@ -454,6 +457,118 @@ def test_all_workers_workbook_clones_the_master_sheet_for_every_worker():
     assert_ignorable_namespaces_are_declared(styles_xml)
     assert_ignorable_namespaces_are_declared(first_sheet_xml)
     assert_ignorable_namespaces_are_declared(second_sheet_xml)
+
+
+@pytest.mark.parametrize(
+    ("year", "month", "weekly_hours", "holidays", "normal_hours"),
+    [
+        (2026, 8, 40, set(), 168),
+        (2026, 4, 40, {date(2026, 4, 3), date(2026, 4, 6)}, 160),
+        # Feiertage am Wochenende werden nicht nochmals abgezogen.
+        (2026, 10, 40, {date(2026, 10, 3), date(2026, 10, 31)}, 176),
+        (2028, 2, 40, set(), 168),
+        (2026, 2, 40, set(), 160),
+        (2026, 8, 37.5, set(), 157.5),
+        (2026, 8, 0, set(), 0),
+        (2026, 8, 40, {date(2026, 7, 31), date(2026, 9, 1)}, 168),
+    ],
+)
+def test_normal_hours_use_person_weekly_hours_and_month_weekdays_without_holidays(
+    monkeypatch, year, month, weekly_hours, holidays, normal_hours
+):
+    monkeypatch.setattr(PERSON, "weekly_hours", weekly_hours)
+    result = build_payroll_month_xlsx(
+        person=PERSON, year=year, month=month, entries=[], non_working_dates=holidays,
+    )
+    with ZipFile(BytesIO(result.content)) as workbook:
+        sheet = ET.fromstring(workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path))
+    assert float(cell_text(sheet, "E41")) == 0
+    assert float(cell_text(sheet, "D46")) == pytest.approx(normal_hours / 24)
+    if normal_hours:
+        hours, minutes = divmod(round(normal_hours * 60), 60)
+        assert cell_text(sheet, "D47") == f"-{hours}:{minutes:02d}"
+        assert sheet.find('.//main:c[@r="D47"]', NS).attrib["t"] == "str"
+    else:
+        assert float(cell_text(sheet, "D47")) == 0
+
+
+def test_totals_sum_distributed_days_and_keep_positive_overtime(monkeypatch):
+    monkeypatch.setattr(PERSON, "weekly_hours", 5)
+    result = build_payroll_month_xlsx(
+        person=PERSON, year=2026, month=6,
+        entries=long_week_entries([1, 2, 3, 4]),
+    )
+    assert len(result.plan.days) == 5
+    with ZipFile(BytesIO(result.content)) as workbook:
+        sheet = ET.fromstring(workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path))
+    daily_values = [
+        float(cell_text(sheet, f"E{row}") or 0) for row in range(10, 41)
+    ]
+    assert sum(daily_values) == pytest.approx(40 / 24)
+    assert float(cell_text(sheet, "E41")) == pytest.approx(sum(daily_values))
+    assert float(cell_text(sheet, "D46")) == pytest.approx(22 / 24)
+    assert float(cell_text(sheet, "D47")) == pytest.approx(18 / 24)
+    assert sheet.find('.//main:c[@r="E41"]/main:f', NS).text == "SUM(E10:E40)"
+    assert "E41-D46" in sheet.find('.//main:c[@r="D47"]/main:f', NS).text
+
+
+def test_month_total_excludes_entries_outside_month(monkeypatch):
+    monkeypatch.setattr(PERSON, "weekly_hours", 40)
+    entries = [
+        make_entry(index, work_date, "06:00", "14:30", None, break_minutes=30)
+        for index, work_date in enumerate(
+            (date(2026, 7, 31), date(2026, 8, 3), date(2026, 9, 1)), start=1
+        )
+    ]
+    result = build_payroll_month_xlsx(
+        person=PERSON, year=2026, month=8, entries=entries,
+    )
+    with ZipFile(BytesIO(result.content)) as workbook:
+        sheet = ET.fromstring(workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path))
+    assert float(cell_text(sheet, "E41")) == pytest.approx(8 / 24)
+    assert cell_text(sheet, "D47") == "-160:00"
+
+
+def test_missing_weekly_hours_does_not_invent_a_target_or_overtime():
+    result = build_payroll_month_xlsx(
+        person=PERSON, year=2026, month=8,
+        entries=[make_entry(1, date(2026, 8, 3), "06:00", "14:30", None)],
+    )
+    with ZipFile(BytesIO(result.content)) as workbook:
+        sheet = ET.fromstring(workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path))
+    assert float(cell_text(sheet, "E41")) == pytest.approx(8.5 / 24)
+    assert cell_text(sheet, "D46") == "–"
+    assert cell_text(sheet, "D47") == "–"
+
+
+@pytest.mark.parametrize(("last_day_end", "total_minutes", "overtime"), [
+    ("10:30", 9870, "-3:30"),
+    ("14:00", 10080, 0),
+    ("14:30", 10110, 30 / 1440),
+])
+def test_month_totals_preserve_minutes_and_zero_balance(
+    monkeypatch, last_day_end, total_minutes, overtime
+):
+    monkeypatch.setattr(PERSON, "weekly_hours", 40)
+    weekdays = [date(2026, 8, day) for day in range(1, 32)
+                if date(2026, 8, day).weekday() < 5]
+    entries = [
+        make_entry(index, work_date, "06:00", "14:00", None)
+        for index, work_date in enumerate(weekdays[:-1], start=1)
+    ]
+    entries.append(make_entry(21, weekdays[-1], "06:00", last_day_end, None))
+    result = build_payroll_month_xlsx(
+        person=PERSON, year=2026, month=8, entries=entries,
+    )
+    with ZipFile(BytesIO(result.content)) as workbook:
+        sheet = ET.fromstring(workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path))
+    assert sum(day.net_work_minutes for day in result.plan.days) == total_minutes
+    assert float(cell_text(sheet, "E41")) == pytest.approx(total_minutes / 1440)
+    assert float(cell_text(sheet, "D46")) == 7
+    if isinstance(overtime, str):
+        assert cell_text(sheet, "D47") == overtime
+    else:
+        assert float(cell_text(sheet, "D47")) == pytest.approx(overtime)
 
 
 def only_day(entries: list[WorkTimeEntry]):
@@ -598,3 +713,12 @@ def assert_ignorable_namespaces_are_declared(document_xml: bytes) -> None:
     declared_prefixes = set(re.findall(r'\bxmlns:([A-Za-z_][\w.-]*)=', text))
     missing_prefixes = set(ignorable_match.group(1).split()) - declared_prefixes
     assert missing_prefixes == set()
+
+
+def cell_number_format(sheet: ET.Element, styles: ET.Element, ref: str) -> str:
+    cell = sheet.find(f'.//main:c[@r="{ref}"]', NS)
+    style = styles.find("main:cellXfs", NS)[int(cell.attrib["s"])]
+    format_id = style.attrib["numFmtId"]
+    return styles.find(f'main:numFmts/main:numFmt[@numFmtId="{format_id}"]', NS).attrib[
+        "formatCode"
+    ]

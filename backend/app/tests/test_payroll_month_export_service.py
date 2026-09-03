@@ -1,7 +1,10 @@
+import xml.etree.ElementTree as ET
 from datetime import date, time
 from io import BytesIO
 from types import SimpleNamespace
 from zipfile import ZipFile
+
+import pytest
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -23,6 +26,8 @@ def test_all_workers_export_uses_active_payroll_workers_and_one_master_sheet_eac
     db = database()
     anna = person(1, "Anna", "Bau")
     bernd = person(2, "Bernd", "Strom")
+    anna.weekly_hours = 40
+    bernd.weekly_hours = 30
     office = person(3, "Olivia", "Büro")
     db.add_all(
         [
@@ -58,6 +63,12 @@ def test_all_workers_export_uses_active_payroll_workers_and_one_master_sheet_eac
         assert 'name="Bau"' in workbook_xml
         assert 'name="Strom"' in workbook_xml
         assert "Büro" not in workbook_xml
+        ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        for index, normal_hours in ((1, 168), (2, 126)):
+            sheet = ET.fromstring(workbook.read(f"xl/worksheets/sheet{index}.xml"))
+            assert float(sheet.find('.//m:c[@r="D46"]/m:v', ns).text) == pytest.approx(
+                normal_hours / 24
+            )
 
 
 def test_single_worker_export_uses_boundary_week_entries_and_dynamic_sheet_name():
@@ -88,6 +99,22 @@ def test_month_source_range_and_lower_saxony_holidays_cover_boundary_weeks():
     assert lower_saxony_public_holiday_dates(
         date(2026, 4, 1), date(2026, 4, 30)
     ) == {date(2026, 4, 3), date(2026, 4, 6)}
+
+
+def test_single_worker_export_excludes_configured_public_holidays_from_normal_hours():
+    db = database()
+    worker = person(1, "Anna", "Bau")
+    worker.weekly_hours = 40
+    db.add(worker)
+    db.commit()
+    content = PayrollMonthExportService(db).worker_export(
+        person_id=worker.id, year=2026, month=4,
+        current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+    )
+    with ZipFile(BytesIO(content)) as workbook:
+        sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    assert float(sheet.find('.//m:c[@r="D46"]/m:v', ns).text) == pytest.approx(160 / 24)
 
 
 def database() -> Session:

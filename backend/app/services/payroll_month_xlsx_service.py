@@ -8,6 +8,7 @@ from collections.abc import Collection, Iterable, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import date, time, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 from xml.sax.saxutils import escape, quoteattr
@@ -64,6 +65,9 @@ class PayrollMonthTemplateLayout:
     styles_path: str = "xl/styles.xml"
     person_name_cell: str = "C2"
     month_label_cell: str = "C4"
+    total_hours_cell: str = "E41"
+    normal_hours_cell: str = "D46"
+    overtime_hours_cell: str = "D47"
     first_day_row: int = 10
     last_day_row: int = 40
     day_column: str = "A"
@@ -160,6 +164,8 @@ def build_payroll_month_xlsx(
             _address_cell_style_ids(sheet_root),
         )
         _apply_address_cell_styles(sheet_root, address_style_mapping)
+        duration_style_mapping = _append_duration_styles(styles_root, sheet_root)
+        _apply_duration_cell_styles(sheet_root, duration_style_mapping)
         plan = fill_payroll_month_sheet(
             sheet_root,
             person=person,
@@ -203,6 +209,9 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
         address_style_mapping = _append_shrink_to_fit_styles(
             styles_root,
             _address_cell_style_ids(ET.fromstring(template_sheet)),
+        )
+        duration_style_mapping = _append_duration_styles(
+            styles_root, ET.fromstring(template_sheet)
         )
         template_sheet_relationships = source.read("xl/worksheets/_rels/sheet1.xml.rels")
         template_drawing = source.read("xl/drawings/drawing1.xml")
@@ -251,6 +260,7 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
         for index, sheet in enumerate(sheets, start=1):
             sheet_root = ET.fromstring(template_sheet)
             _apply_address_cell_styles(sheet_root, address_style_mapping)
+            _apply_duration_cell_styles(sheet_root, duration_style_mapping)
             plans.append(
                 fill_payroll_month_sheet(
                     sheet_root,
@@ -302,6 +312,14 @@ def fill_payroll_month_sheet(
     _clear_month_day_values(sheet, year=year, month=month)
     for day in plan.days:
         _write_month_day(sheet, day)
+    _write_month_totals(
+        sheet,
+        person=person,
+        plan=plan,
+        year=year,
+        month=month,
+        non_working_dates=non_working_dates,
+    )
     return plan
 
 
@@ -626,10 +644,10 @@ def _write_month_day(sheet: ET.Element, day: PayrollMonthDay) -> None:
         f"{layout.break_column}{row_number}",
         _format_duration(day.break_minutes),
     )
-    _set_cell_string(
+    _set_cell_number(
         sheet,
         f"{layout.net_work_column}{row_number}",
-        _format_duration(day.net_work_minutes),
+        day.net_work_minutes / 1440,
     )
     _set_cell_string(
         sheet,
@@ -646,6 +664,135 @@ def _write_month_day(sheet: ET.Element, day: PayrollMonthDay) -> None:
         f"{layout.address_column}{row_number}",
         day.site_place or "",
     )
+
+
+def _write_month_totals(
+    sheet: ET.Element,
+    *,
+    person: Person,
+    plan: PayrollMonthPlan,
+    year: int,
+    month: int,
+    non_working_dates: Collection[date],
+) -> None:
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    total_minutes = sum(day.net_work_minutes for day in plan.days)
+    _set_cell_formula(
+        sheet,
+        layout.total_hours_cell,
+        f"SUM({layout.net_work_column}{layout.first_day_row}:"
+        f"{layout.net_work_column}{layout.last_day_row})",
+        total_minutes / 1440,
+    )
+    weekly_hours = person.weekly_hours
+    if weekly_hours is None:
+        # Fehlende Stammdaten sind kein Soll von null Stunden.
+        _set_cell_string(sheet, layout.normal_hours_cell, "–")
+        _set_cell_string(sheet, layout.overtime_hours_cell, "–")
+        return
+
+    workday_count = sum(
+        work_date.weekday() < 5 and work_date not in non_working_dates
+        for day_number in range(1, calendar.monthrange(year, month)[1] + 1)
+        for work_date in (date(year, month, day_number),)
+    )
+    weekly_hours_decimal = Decimal(str(weekly_hours))
+    normal_minutes = int(
+        (weekly_hours_decimal / 5 * workday_count * 60).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+    )
+    # Die Formel zeigt den Stammdatenwert und die feiertagsbereinigten Arbeitstage.
+    _set_cell_formula(
+        sheet,
+        layout.normal_hours_cell,
+        f"ROUND({weekly_hours_decimal}/5*{workday_count}*60,0)/1440",
+        normal_minutes / 1440,
+    )
+    overtime_minutes = total_minutes - normal_minutes
+    delta = f"ROUND(({layout.total_hours_cell}-{layout.normal_hours_cell})*1440,0)"
+    # Excel im 1900-Datumssystem kann negative Zeitwerte nicht anzeigen.
+    # Nur der negative Fall wird deshalb als formatierter Text ausgegeben.
+    _set_cell_formula(
+        sheet,
+        layout.overtime_hours_cell,
+        f'IF(ISNUMBER({layout.normal_hours_cell}),'
+        f'IF({delta}<0,"-"&TEXT(ABS({delta})/1440,"[h]:mm"),{delta}/1440),"–")',
+        (
+            f"-{_format_duration(-overtime_minutes)}"
+            if overtime_minutes < 0
+            else overtime_minutes / 1440
+        ),
+    )
+
+
+def _duration_cell_refs() -> list[str]:
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    return [
+        *(
+            f"{layout.net_work_column}{row}"
+            for row in range(layout.first_day_row, layout.last_day_row + 1)
+        ),
+        layout.total_hours_cell,
+        layout.normal_hours_cell,
+        layout.overtime_hours_cell,
+    ]
+
+
+def _append_duration_styles(styles: ET.Element, sheet: ET.Element) -> dict[int, int]:
+    num_fmts = styles.find(_qname("numFmts"))
+    if num_fmts is None:
+        num_fmts = ET.Element(_qname("numFmts"))
+        styles.insert(0, num_fmts)
+    duration_format = next(
+        (item for item in num_fmts if item.attrib.get("formatCode") == "[h]:mm"),
+        None,
+    )
+    if duration_format is None:
+        format_id = max([163, *(int(item.attrib["numFmtId"]) for item in num_fmts)]) + 1
+        duration_format = ET.SubElement(
+            num_fmts, _qname("numFmt"),
+            {"numFmtId": str(format_id), "formatCode": "[h]:mm"},
+        )
+    num_fmts.attrib["count"] = str(len(num_fmts))
+    cell_xfs = styles.find(_qname("cellXfs"))
+    if cell_xfs is None:
+        raise ValueError("Monatsvorlage enthält keine Zellformatvorlagen.")
+    mapping: dict[int, int] = {}
+    for ref in _duration_cell_refs():
+        cell = _find_cell(sheet, ref)
+        if cell is None:
+            raise ValueError(f"Monatsvorlage enthält die erwartete Zelle {ref} nicht.")
+        source_id = int(cell.attrib.get("s", "0"))
+        if source_id in mapping:
+            continue
+        cloned_style = deepcopy(cell_xfs[source_id])
+        if ref == PAYROLL_MONTH_TEMPLATE_LAYOUT.total_hours_cell:
+            # Die schmale Summenzelle nutzt die vorhandene Schrift der Tagesstunden.
+            daily_cell = _find_cell(sheet, _duration_cell_refs()[0])
+            daily_style = cell_xfs[int(daily_cell.attrib.get("s", "0"))]
+            cloned_style.attrib.update(fontId=daily_style.attrib["fontId"], applyFont="1")
+        cloned_style.attrib.update(
+            numFmtId=duration_format.attrib["numFmtId"], applyNumberFormat="1",
+            applyAlignment="1",
+        )
+        alignment = cloned_style.find(_qname("alignment"))
+        if alignment is None:
+            alignment = ET.Element(_qname("alignment"))
+            cloned_style.insert(0, alignment)
+        alignment.attrib.setdefault("horizontal", "left")
+        alignment.attrib["shrinkToFit"] = "1"
+        mapping[source_id] = len(cell_xfs)
+        cell_xfs.append(cloned_style)
+    cell_xfs.attrib["count"] = str(len(cell_xfs))
+    return mapping
+
+
+def _apply_duration_cell_styles(sheet: ET.Element, style_mapping: dict[int, int]) -> None:
+    for ref in _duration_cell_refs():
+        cell = _find_cell(sheet, ref)
+        if cell is not None:
+            cell.attrib["s"] = str(style_mapping[int(cell.attrib.get("s", "0"))])
 
 
 def _address_cell_style_ids(sheet: ET.Element) -> set[int]:
@@ -797,13 +944,26 @@ def _set_cell_string(root: ET.Element, ref: str, value: str) -> None:
     text_element.text = value
 
 
-def _set_cell_number(root: ET.Element, ref: str, value: int) -> None:
+def _set_cell_number(root: ET.Element, ref: str, value: int | float) -> None:
     cell = _find_cell(root, ref)
     if cell is None:
         raise ValueError(f"Monatsvorlage enthält die erwartete Zelle {ref} nicht.")
     _clear_cell_element(cell)
     value_element = ET.SubElement(cell, _qname("v"))
     value_element.text = str(value)
+
+
+def _set_cell_formula(
+    root: ET.Element, ref: str, formula: str, cached_value: float | str
+) -> None:
+    cell = _find_cell(root, ref)
+    if cell is None:
+        raise ValueError(f"Monatsvorlage enthält die erwartete Zelle {ref} nicht.")
+    _clear_cell_element(cell)
+    if isinstance(cached_value, str):
+        cell.attrib["t"] = "str"
+    ET.SubElement(cell, _qname("f")).text = formula
+    ET.SubElement(cell, _qname("v")).text = str(cached_value)
 
 
 def _clear_cell_element(cell: ET.Element) -> None:
