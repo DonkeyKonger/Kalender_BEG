@@ -93,6 +93,102 @@ def test_tool_import_pending_warns_while_core_release_stays_healthy(
     assert "::warning::Tool import is not ready yet" in capsys.readouterr().out
 
 
+@pytest.fixture
+def release_probes(monkeypatch):
+    calls = {"health": 0, "tool": 0, "sleep": []}
+    healthy = HttpResult(200, b'{"status":"ok","revision":"newnew2"}')
+
+    def health(_target):
+        calls["health"] += 1
+        return healthy
+
+    def tool_request(url):
+        assert url.endswith("/api/health/tool-import")
+        calls["tool"] += 1
+        return HttpResult(
+            200,
+            b'{"status":"ok","source_sha256":"tool-sha",'
+            b'"imported_rows":10,"expected_rows":10}',
+        )
+
+    monkeypatch.setattr(azure_deploy_guard, "_health", health)
+    monkeypatch.setattr(
+        azure_deploy_guard, "_login_probe", lambda _target: HttpResult(401, b"{}")
+    )
+    monkeypatch.setattr(azure_deploy_guard, "_request", tool_request)
+    monkeypatch.setattr(azure_deploy_guard.time, "sleep", calls["sleep"].append)
+    return calls, healthy
+
+
+@pytest.mark.parametrize("failed_check", [2, 3, 8])
+def test_verify_retries_502_before_tool_import_and_during_stability(
+    monkeypatch, capsys, release_probes, failed_check
+) -> None:
+    calls, healthy = release_probes
+
+    def health(_target):
+        calls["health"] += 1
+        if calls["health"] == failed_check:
+            return HttpResult(502, b"Bad Gateway")
+        return healthy
+
+    monkeypatch.setattr(azure_deploy_guard, "_health", health)
+
+    azure_deploy_guard.verify_release(
+        parse_publish_profile(PUBLISH_PROFILE),
+        expected_revision="newnew2",
+        expected_tool_source_sha256="tool-sha",
+    )
+
+    assert calls["health"] == 9  # Initial + tool readiness + six stability checks + retry.
+    assert calls["tool"] == 1
+    assert calls["sleep"] == [5] * 7
+    output = capsys.readouterr().out
+    assert "health HTTP 502" in output
+    assert "retrying in 5s" in output
+    assert "Release passed all health checks" in output
+
+
+@pytest.mark.parametrize("failed_check", [2, 3])
+@pytest.mark.parametrize("failure", ["502", "wrong_revision", "bad_login", "invalid_json"])
+def test_verify_fails_after_bounded_retries_without_accepting_unhealthy_release(
+    monkeypatch, capsys, release_probes, failed_check, failure
+) -> None:
+    calls, healthy = release_probes
+
+    def health(_target):
+        calls["health"] += 1
+        if calls["health"] >= failed_check:
+            if failure == "502":
+                return HttpResult(502, b"Bad Gateway")
+            if failure == "wrong_revision":
+                return HttpResult(200, b'{"status":"ok","revision":"oldold1"}')
+            if failure == "invalid_json":
+                return HttpResult(200, b"not JSON")
+        return healthy
+
+    def login(_target):
+        status = 500 if failure == "bad_login" and calls["health"] >= failed_check else 401
+        return HttpResult(status, b"{}")
+
+    monkeypatch.setattr(azure_deploy_guard, "_health", health)
+    monkeypatch.setattr(azure_deploy_guard, "_login_probe", login)
+
+    with pytest.raises(RuntimeError, match="Release verification failed"):
+        azure_deploy_guard.verify_release(
+            parse_publish_profile(PUBLISH_PROFILE),
+            expected_revision="newnew2",
+            expected_tool_source_sha256="tool-sha",
+        )
+
+    assert calls["health"] == failed_check - 1 + 6
+    assert calls["tool"] == failed_check - 2
+    assert calls["sleep"] == [5] * (5 + failed_check - 2)
+    output = capsys.readouterr().out
+    assert "Release passed all health checks" not in output
+    assert "retrying in 5s" in output
+
+
 def test_restore_deploys_previous_package_and_waits_for_its_revision(
     monkeypatch,
     tmp_path: Path,

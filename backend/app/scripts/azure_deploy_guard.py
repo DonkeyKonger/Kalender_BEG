@@ -15,6 +15,10 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 
+# Azure can briefly return 502 even after the first successful readiness check.
+FOLLOW_UP_HEALTH_ATTEMPTS = 6
+
+
 @dataclass(frozen=True)
 class AzurePublishTarget:
     username: str
@@ -162,6 +166,11 @@ def _wait_for_release(
             f"login HTTP {login_result.status if login_result else 'not checked'}"
         )
         if attempt < attempts:
+            print(
+                f"Release check {attempt}/{attempts} not ready: {last_detail}; "
+                f"retrying in {delay_seconds}s.",
+                flush=True,
+            )
             time.sleep(delay_seconds)
     raise RuntimeError(f"Release verification failed: {last_detail}")
 
@@ -187,7 +196,7 @@ def verify_release(
         _wait_for_release(
             target,
             expected_revision=expected_revision,
-            attempts=1,
+            attempts=FOLLOW_UP_HEALTH_ATTEMPTS,
             delay_seconds=delay_seconds,
         )
         tool_result = _request(tool_url)
@@ -215,10 +224,10 @@ def verify_release(
         _wait_for_release(
             target,
             expected_revision=expected_revision,
-            attempts=1,
+            attempts=FOLLOW_UP_HEALTH_ATTEMPTS,
             delay_seconds=delay_seconds,
         )
-    print("Release remained healthy throughout the stability window.")
+    print("Release passed all health checks in the stability window.")
 
 
 def restore_release(
