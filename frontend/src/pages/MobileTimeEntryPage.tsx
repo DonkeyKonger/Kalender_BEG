@@ -874,31 +874,33 @@ export function MobileTimeEntryPage() {
                 <div className="mobile-time-picker-heading">
                   <span>Baustellen der letzten 6 Monate</span>
                 </div>
-                {recentSiteOptions.length ? (
-                  <div className="mobile-time-recent-strip">
-                    {recentSiteOptions.map((site) => (
-                      <button
-                        className="mobile-time-site-card is-recent"
-                        disabled={isSelectedWeekLocked}
-                        key={site.id}
-                        title={isSelectedWeekLocked ? "Diese Woche wurde vom Büro geprüft." : undefined}
-                        type="button"
-                        onClick={() => openSiteEntry(site.id)}
-                      >
-                        <span className="mobile-time-recent-head">
-                          <span className="mobile-time-recent-icon" aria-hidden="true"><MapPin size={22} /></span>
-                          <span className="mobile-time-recent-copy">
-                            <strong>{site.site_number || site.name}</strong>
-                            <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
-                            <small>zuletzt {formatShortDate(site.lastPlannedDate)}</small>
-                          </span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mobile-time-picker-empty">Keine vergangenen Baustellen gefunden.</p>
-                )}
+                <div className="mobile-time-recent-list">
+                  {recentSiteOptions.length ? (
+                    <ul>
+                      {recentSiteOptions.map((site) => (
+                        <li key={site.id}>
+                          <button
+                            className="mobile-time-recent-row"
+                            disabled={isSelectedWeekLocked}
+                            title={isSelectedWeekLocked ? "Diese Woche wurde vom Büro geprüft." : undefined}
+                            type="button"
+                            onClick={() => openSiteEntry(site.id)}
+                          >
+                            <span className="mobile-time-recent-icon" aria-hidden="true"><MapPin size={22} /></span>
+                            <span className="mobile-time-recent-copy">
+                              <strong>{site.site_number || site.name}</strong>
+                              <span>{site.site_number ? site.name : formatSiteMeta(site) || "Baustelle"}</span>
+                              <small>zuletzt {formatShortDate(site.lastPlannedDate)}</small>
+                            </span>
+                            <ChevronRight className="mobile-time-recent-chevron" aria-hidden="true" size={18} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mobile-time-recent-empty">Keine vergangenen Baustellen gefunden.</p>
+                  )}
+                </div>
               </section>
             </div>
           </section>
@@ -1301,8 +1303,7 @@ function buildRecentPlannedSiteOptions({
     }
   }
   return Array.from(latestBySite.values())
-    .sort((first, second) => second.lastPlannedDate.localeCompare(first.lastPlannedDate) || compareSites(first, second))
-    .slice(0, 3);
+    .sort((first, second) => second.lastPlannedDate.localeCompare(first.lastPlannedDate) || compareSites(first, second));
 }
 
 function buildDayWorkSummaries(entries: TimeEntry[], siteById: Map<number, MobileTimeSiteOption>): DayWorkSummary[] {
