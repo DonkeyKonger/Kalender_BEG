@@ -59,6 +59,16 @@ class Person(TimestampMixin, Base):
         back_populates="person",
         cascade="all, delete-orphan",
     )
+    weekly_schedules = relationship(
+        "PersonWeeklySchedule",
+        back_populates="person",
+        order_by="PersonWeeklySchedule.valid_from",
+    )
+    hours_opening_balance = relationship(
+        "PersonHoursOpeningBalance",
+        back_populates="person",
+        uselist=False,
+    )
     vacation_carryovers = relationship(
         "PersonVacationCarryover",
         back_populates="person",

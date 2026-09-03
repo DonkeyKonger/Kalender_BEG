@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -27,6 +27,16 @@ class PersonHoursAccountEntryRead(BaseModel):
     created_by_user_id: int | None = None
     created_by_name: str | None = None
     created_at: datetime
+    ledger_system: str = "legacy"
+    effective_date: date | None = None
+    source_type: str | None = None
+    source_reference_id: str | None = None
+    is_active: bool = True
+    daily_target_minutes: int | None = None
+    daily_work_minutes: int | None = None
+    daily_credit_minutes: int | None = None
+    daily_actual_minutes: int | None = None
+    daily_absence_type: str | None = None
 
     @field_validator("weekly_absence_breakdown", mode="before")
     @classmethod
@@ -34,14 +44,26 @@ class PersonHoursAccountEntryRead(BaseModel):
         return value or []
 
 
+class PersonHoursAccountOpeningRead(BaseModel):
+    id: int
+    effective_date: date
+    minutes: int
+    entry_type: str = "legacy_opening_balance"
+    confirmed_by_name: str | None = None
+    confirmed_at: datetime
+    note: str | None = None
+
+
 class PersonHoursAccountRead(BaseModel):
     person_id: int
     current_balance_minutes: int
+    opening_balance: PersonHoursAccountOpeningRead | None = None
     entries: list[PersonHoursAccountEntryRead]
 
 
 class PersonHoursManualAdjustmentCreate(BaseModel):
     hours_delta: float = Field(ge=-500, le=500)
+    effective_date: date
     note: str = Field(min_length=1, max_length=500)
 
     @field_validator("note")
@@ -55,6 +77,7 @@ class PersonHoursManualAdjustmentCreate(BaseModel):
 
 class PersonHoursPayoutCreate(BaseModel):
     hours: float = Field(gt=0, le=500)
+    effective_date: date
     note: str | None = Field(default=None, max_length=500)
 
     @field_validator("note")

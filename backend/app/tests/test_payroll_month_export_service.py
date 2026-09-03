@@ -51,10 +51,11 @@ def test_all_workers_export_uses_active_payroll_workers_and_one_master_sheet_eac
     )
     db.commit()
 
-    content = PayrollMonthExportService(db).all_workers_export(
+    content = PayrollMonthExportService(db).build_all_workers_export_from_live_data(
         year=2026,
         month=8,
         current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+        balances_by_person={anna.id: (None, None), bernd.id: (None, None)},
     )
 
     with ZipFile(BytesIO(content)) as workbook:
@@ -80,17 +81,54 @@ def test_single_worker_export_uses_boundary_week_entries_and_dynamic_sheet_name(
     db.add_all([worker, site, entry(1, worker.id, site.id, date(2026, 8, 3))])
     db.commit()
 
-    content = PayrollMonthExportService(db).worker_export(
+    content = PayrollMonthExportService(db).build_worker_export_from_live_data(
         person_id=worker.id,
         year=2026,
         month=8,
         current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+        opening_balance_minutes=None,
+        closing_balance_minutes=None,
     )
 
     with ZipFile(BytesIO(content)) as workbook:
         assert workbook.testzip() is None
         assert 'name="Bau"' in workbook.read("xl/workbook.xml").decode("utf-8")
         assert b"4711" in workbook.read("xl/worksheets/sheet1.xml")
+
+
+def test_single_and_combined_snapshot_exports_share_identical_worker_values():
+    db = database()
+    worker = person(1, "Anna", "Bau")
+    worker.weekly_hours = 40
+    site = Site(id=1, site_number="4711", name="Rathaus", address="Markt 1")
+    db.add_all([worker, site, entry(1, worker.id, site.id, date(2026, 8, 3))])
+    db.commit()
+    service = PayrollMonthExportService(db)
+    source = service.load_live_source(
+        year=2026,
+        month=8,
+        current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+    )
+
+    single = service.build_worker_export_from_source(
+        source=source,
+        person_id=worker.id,
+        opening_balance_minutes=30 * 60,
+        closing_balance_minutes=-90,
+    )
+    combined = service.build_all_workers_export_from_source(
+        source=source,
+        balances_by_person={worker.id: (30 * 60, -90)},
+    )
+
+    with ZipFile(BytesIO(single)) as single_book, ZipFile(BytesIO(combined)) as combined_book:
+        single_sheet = single_book.read("xl/worksheets/sheet1.xml")
+        combined_sheet = combined_book.read("xl/worksheets/sheet1.xml")
+        assert single_sheet == combined_sheet
+        sheet = ET.fromstring(single_sheet)
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    assert float(sheet.find('.//m:c[@r="K50"]/m:v', ns).text) == pytest.approx(30 / 24)
+    assert sheet.find('.//m:c[@r="K51"]/m:is/m:t', ns).text == "-1:30"
 
 
 def test_month_source_range_and_lower_saxony_holidays_cover_boundary_weeks():

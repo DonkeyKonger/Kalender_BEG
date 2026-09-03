@@ -14,6 +14,7 @@ from app.repositories.absence_repository import AbsenceRepository
 from app.repositories.person_repository import PersonRepository
 from app.schemas.absence import AbsenceCreate, AbsenceUpdate
 from app.services.audit_service import AuditService
+from app.services.payroll_period_guard import PayrollPeriodGuard
 
 
 class AbsenceService:
@@ -120,6 +121,7 @@ class AbsenceService:
 
     def create_absence(self, payload: AbsenceCreate, user_id: int) -> Absence:
         values = clean_absence_values(payload.model_dump())
+        PayrollPeriodGuard(self.db).assert_range_mutable(values["start_date"], values["end_date"])
         self._ensure_person_exists(values["person_id"])
         absence = Absence(
             **values,
@@ -152,6 +154,9 @@ class AbsenceService:
         end_date = values.get("end_date", absence.end_date)
         if end_date < start_date:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
+        guard = PayrollPeriodGuard(self.db)
+        guard.assert_range_mutable(absence.start_date, absence.end_date)
+        guard.assert_range_mutable(start_date, end_date)
 
         for field, value in values.items():
             setattr(absence, field, value)
@@ -172,6 +177,7 @@ class AbsenceService:
         absence = self.absences.get(absence_id)
         if absence is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Abwesenheit nicht gefunden.")
+        PayrollPeriodGuard(self.db).assert_range_mutable(absence.start_date, absence.end_date)
         old_value = absence_snapshot(absence)
         self.absences.delete(absence)
         self.audit.record(

@@ -27,6 +27,7 @@ import { StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { canAccessMainPage, canEditMainPage } from "../auth/permissions";
 import { ApiError, api } from "../lib/api";
+import { PAYROLL_CUTOVER_DATE, payrollBusinessDateIso } from "../lib/payrollMonth";
 import {
   formatPersonToolMaterialDate,
   getPersonToolMaterialViewState,
@@ -1480,6 +1481,7 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
   const [message, setMessage] = useState<string | null>(null);
   const [activeForm, setActiveForm] = useState<"manual" | "payout" | null>(null);
   const [hoursInput, setHoursInput] = useState("");
+  const [effectiveDateInput, setEffectiveDateInput] = useState(() => payrollBusinessDateIso());
   const [noteInput, setNoteInput] = useState("");
 
   useEffect(() => {
@@ -1513,6 +1515,7 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
   function openForm(mode: "manual" | "payout") {
     setActiveForm(mode);
     setHoursInput("");
+    setEffectiveDateInput(payrollBusinessDateIso());
     setNoteInput(mode === "payout" ? defaultPayoutNote() : "");
     setError(null);
     setMessage(null);
@@ -1521,6 +1524,7 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
   function closeForm() {
     setActiveForm(null);
     setHoursInput("");
+    setEffectiveDateInput(payrollBusinessDateIso());
     setNoteInput("");
   }
 
@@ -1535,6 +1539,15 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
       return;
     }
     const note = noteInput.trim();
+    const effectiveDate = effectiveDateInput.trim();
+    if (!parseIsoDateStrict(effectiveDate)) {
+      setError("Bitte ein gültiges fachliches Wirksamkeitsdatum auswählen.");
+      return;
+    }
+    if (effectiveDate < PAYROLL_CUTOVER_DATE) {
+      setError("Das fachliche Wirksamkeitsdatum darf nicht vor dem 01.08.2026 liegen.");
+      return;
+    }
     if (activeForm === "manual" && !note) {
       setError("Grund / Notiz ist Pflicht.");
       return;
@@ -1552,13 +1565,21 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
     setMessage(null);
     try {
       const updatedAccount = activeForm === "manual"
-        ? await api.createPersonHoursManualAdjustment(person.id, { hours_delta: parsedHours.value, note })
-        : await api.createPersonHoursPayout(person.id, { hours: parsedHours.value, note: note || null });
+        ? await api.createPersonHoursManualAdjustment(person.id, {
+            hours_delta: parsedHours.value,
+            effective_date: effectiveDate,
+            note,
+          })
+        : await api.createPersonHoursPayout(person.id, {
+            hours: parsedHours.value,
+            effective_date: effectiveDate,
+            note: note || null,
+          });
       setAccount(updatedAccount);
       setMessage(activeForm === "manual" ? "Manuelle Korrektur gebucht." : "Auszahlung gebucht.");
       closeForm();
     } catch (requestError) {
-      setError(readApiError(requestError, "Buchung konnte nicht gespeichert werden."));
+      setError(readHoursAccountMutationError(requestError));
     } finally {
       setIsSaving(false);
     }
@@ -1602,8 +1623,19 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
         <form className="person-hours-account-form" onSubmit={(event) => void submitHoursAccountForm(event)}>
           <div className="person-hours-account-form-heading">
             <strong>{activeForm === "manual" ? "Manuelle Korrektur" : "Auszahlung buchen"}</strong>
-            <span>{activeForm === "manual" ? "Manuelle Korrektur nur für Büro-Notfälle verwenden." : "Auszahlungen werden als eigene Buchung im Log gespeichert."}</span>
+            <span>Die Buchung wird ausschließlich dem gewählten fachlichen Wirksamkeitsdatum zugeordnet.</span>
           </div>
+          <label>
+            <span>Fachliches Wirksamkeitsdatum *</span>
+            <input
+              disabled={isSaving}
+              min={PAYROLL_CUTOVER_DATE}
+              required
+              type="date"
+              value={effectiveDateInput}
+              onChange={(event) => setEffectiveDateInput(event.target.value)}
+            />
+          </label>
           <label>
             <span>{activeForm === "manual" ? "Stundenänderung" : "Stunden"}</span>
             <input
@@ -1647,9 +1679,11 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
               return (
                 <article className="person-hours-log-entry" key={entry.id}>
                   <div className="person-hours-log-entry-main">
-                    <span>{formatHoursAccountDate(entry.created_at)}</span>
+                    <span>{hoursAccountEntryPrimaryDate(entry)}</span>
                     <strong>{hoursAccountEntryTitle(entry)}</strong>
                     {descriptionLines.map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}
+                    <small>{hoursAccountEntrySourceLabel(entry)}</small>
+                    {entry.effective_date ? <small>Erfasst am {formatHoursAccountDate(entry.created_at)}</small> : null}
                     {entry.created_by_name ? <small>Gebucht von {entry.created_by_name}</small> : null}
                   </div>
                   <div className="person-hours-log-entry-values">
@@ -2271,6 +2305,31 @@ function formatHoursAccountDate(value: string): string {
   }).format(date);
 }
 
+function hoursAccountEntryPrimaryDate(entry: PersonHoursAccountEntry): string {
+  return entry.effective_date
+    ? `Wirksam am ${formatIsoDate(entry.effective_date)}`
+    : `Gebucht am ${formatHoursAccountDate(entry.created_at)}`;
+}
+
+function hoursAccountEntrySourceLabel(entry: PersonHoursAccountEntry): string {
+  if (entry.ledger_system !== "daily") {
+    return "Quelle: Legacy-Buchung";
+  }
+  if (entry.source_type === "payroll_month_close") {
+    return "Quelle: Monatsabschluss";
+  }
+  if (entry.source_type === "WEEK_APPROVAL") {
+    return "Quelle: Wochenabschluss";
+  }
+  if (entry.source_type === "manual_adjustment") {
+    return "Quelle: Manuelle Korrektur";
+  }
+  if (entry.source_type === "payout") {
+    return "Quelle: Auszahlung";
+  }
+  return "Quelle: Tageskonto";
+}
+
 function hoursAccountEntryTitle(entry: PersonHoursAccountEntry): string {
   if (entry.entry_type === "weekly_balance") {
     return entry.iso_year && entry.iso_week
@@ -2285,6 +2344,9 @@ function hoursAccountEntryTitle(entry: PersonHoursAccountEntry): string {
   }
   if (entry.entry_type === "overtime_absence") {
     return "Überstunden abgebaut";
+  }
+  if (entry.entry_type === "daily_balance") {
+    return "Tagesabschluss";
   }
   return "Buchung";
 }
@@ -2788,4 +2850,11 @@ function readApiError(error: unknown, fallback: string): string {
     return error.detail;
   }
   return error.message;
+}
+
+function readHoursAccountMutationError(error: unknown): string {
+  if (error instanceof ApiError && error.status === 409) {
+    return error.message || "Der gewählte Abrechnungsmonat ist abgeschlossen und kann nicht verändert werden.";
+  }
+  return readApiError(error, "Buchung konnte nicht gespeichert werden.");
 }

@@ -14,7 +14,10 @@ test("manual payroll entry action opens the explicit create mode", () => {
   assert.ok(manualButton > 0);
   assert.ok(reviewButton > manualButton);
   assert.match(source, /\{canManageTimeEntries && \(/);
-  assert.match(source, /disabled=\{selectedReviewWorker\.isReviewed \|\| markingReviewWeekPersonId/);
+  assert.match(
+    source,
+    /disabled=\{selectedReviewWorker\.isReviewed\s*\|\| payrollManualDateOptions\.length === 0\s*\|\| markingReviewWeekPersonId/,
+  );
   assert.match(source, /onClick=\{openManualTimeEntryDialog\}/);
   assert.match(source, /setTimeReviewDialogMode\("create"\)/);
   assert.match(source, /setTimeReviewDiagnosticEntry\(buildMissingTimeReviewEntry\(activeReviewWorker, workDate\)\)/);

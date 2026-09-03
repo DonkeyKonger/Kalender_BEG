@@ -2,7 +2,7 @@ import { navigationItems } from "../config/navigation";
 import { canAccessMainPage, canShowNavItem } from "./pageAccess";
 import type { CurrentUser, OfficePagePermission } from "../types/auth";
 
-export { canAccessMainPage, canShowNavItem } from "./pageAccess";
+export { canAccessMainPage, canManagePayrollMonthClose, canShowNavItem } from "./pageAccess";
 
 export function canEditMainPage(user: CurrentUser | null, pageKey: OfficePagePermission): boolean {
   if (!user || !["admin", "project_manager", "office"].includes(user.role)) {

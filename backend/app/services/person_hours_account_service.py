@@ -2,20 +2,25 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
-
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.absence import Absence
 from app.models.enums import AbsenceStatus, AbsenceType
+from app.models.payroll_daily_ledger import PersonHoursOpeningBalance
 from app.models.person import Person
 from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
-from app.schemas.person_hours_account import PersonHoursAccountEntryRead, PersonHoursAccountRead
+from app.schemas.person_hours_account import (
+    PersonHoursAccountEntryRead,
+    PersonHoursAccountOpeningRead,
+    PersonHoursAccountRead,
+)
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
+from app.services.payroll_period_guard import PayrollPeriodGuard
 
 
 HOURS_ACCOUNT_WEEKLY = "weekly_balance"
@@ -64,9 +69,34 @@ class PersonHoursAccountService:
 
     def get_account(self, *, person_id: int) -> PersonHoursAccountRead:
         self._get_person(person_id)
+        opening = self.db.scalar(
+            select(PersonHoursOpeningBalance)
+            .options(selectinload(PersonHoursOpeningBalance.confirmed_by))
+            .where(
+                PersonHoursOpeningBalance.person_id == person_id,
+                PersonHoursOpeningBalance.is_confirmed.is_(True),
+            )
+        )
         return PersonHoursAccountRead(
             person_id=person_id,
             current_balance_minutes=self._current_balance_minutes(person_id),
+            opening_balance=(
+                PersonHoursAccountOpeningRead(
+                    id=opening.id,
+                    effective_date=opening.as_of_date,
+                    minutes=opening.balance_minutes,
+                    entry_type=opening.entry_type,
+                    confirmed_by_name=(
+                        opening.confirmed_by.display_name
+                        if opening.confirmed_by is not None
+                        else None
+                    ),
+                    confirmed_at=opening.confirmed_at,
+                    note=opening.note,
+                )
+                if opening is not None and opening.confirmed_at is not None
+                else None
+            ),
             entries=[self._entry_read(entry) for entry in self._list_entries(person_id)],
         )
 
@@ -75,10 +105,13 @@ class PersonHoursAccountService:
         *,
         person_id: int,
         hours_delta: float,
+        effective_date: date,
         note: str,
         current_user: User,
     ) -> PersonHoursAccountRead:
         self._get_person(person_id)
+        ensure_new_ledger_effective_date(effective_date)
+        PayrollPeriodGuard(self.db).assert_date_mutable(effective_date)
         minutes_delta = hours_to_minutes(hours_delta)
         if minutes_delta == 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Die Korrektur muss größer oder kleiner als 0 sein.")
@@ -89,6 +122,9 @@ class PersonHoursAccountService:
             minutes_delta=minutes_delta,
             note=cleaned_note,
             current_user=current_user,
+            ledger_system="daily",
+            effective_date=effective_date,
+            source_type=HOURS_ACCOUNT_MANUAL,
         )
         self.db.commit()
         return self.get_account(person_id=person_id)
@@ -98,10 +134,13 @@ class PersonHoursAccountService:
         *,
         person_id: int,
         hours: float,
+        effective_date: date,
         note: str | None,
         current_user: User,
     ) -> PersonHoursAccountRead:
         self._get_person(person_id)
+        ensure_new_ledger_effective_date(effective_date)
+        PayrollPeriodGuard(self.db).assert_date_mutable(effective_date)
         minutes = hours_to_minutes(hours)
         if minutes <= 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Auszahlung muss größer als 0 Stunden sein.")
@@ -112,6 +151,9 @@ class PersonHoursAccountService:
             minutes_delta=-minutes,
             note=payout_note,
             current_user=current_user,
+            ledger_system="daily",
+            effective_date=effective_date,
+            source_type=HOURS_ACCOUNT_PAYOUT,
         )
         self.db.commit()
         return self.get_account(person_id=person_id)
@@ -248,6 +290,10 @@ class PersonHoursAccountService:
         weekly_required_minutes: int | None = None,
         weekly_overtime_absence_minutes: int | None = None,
         weekly_absence_breakdown: list[dict[str, int | str]] | None = None,
+        ledger_system: str = "legacy",
+        effective_date: date | None = None,
+        source_type: str | None = None,
+        source_reference_id: str | None = None,
     ) -> PersonHoursAccountEntry:
         balance_after = self._current_balance_minutes(person_id) + minutes_delta
         entry = PersonHoursAccountEntry(
@@ -265,17 +311,26 @@ class PersonHoursAccountService:
             weekly_overtime_absence_minutes=weekly_overtime_absence_minutes,
             weekly_absence_breakdown=weekly_absence_breakdown,
             created_by_user_id=current_user.id,
+            ledger_system=ledger_system,
+            effective_date=effective_date,
+            source_type=source_type or entry_type,
+            source_reference_id=source_reference_id,
+            is_active=True,
         )
         self.db.add(entry)
         self.db.flush()
+        if ledger_system == "daily":
+            from app.services.payroll_daily_ledger_service import PayrollDailyLedgerService
+
+            PayrollDailyLedgerService(self.db).recalculate_balance_history(person_id)
         return entry
 
     def _current_balance_minutes(self, person_id: int) -> int:
-        value = self.db.scalar(
-            select(func.coalesce(func.sum(PersonHoursAccountEntry.minutes_delta), 0))
-            .where(PersonHoursAccountEntry.person_id == person_id)
-        )
-        return int(value or 0)
+        # Import lazily because the daily service intentionally reuses the
+        # established effective-work-minute helper from this module.
+        from app.services.payroll_daily_ledger_service import PayrollDailyLedgerService
+
+        return PayrollDailyLedgerService(self.db).current_balance_minutes(person_id)
 
     def _weekly_balance_note(
         self,
@@ -573,3 +628,13 @@ def clean_required_text(value: str, message: str) -> str:
 def clean_optional_text(value: str | None) -> str | None:
     cleaned = value.strip() if isinstance(value, str) else None
     return cleaned or None
+
+
+def ensure_new_ledger_effective_date(effective_date: date) -> None:
+    from app.models.payroll_daily_ledger import PAYROLL_LEDGER_CUTOVER_DATE
+
+    if effective_date < PAYROLL_LEDGER_CUTOVER_DATE:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Neue Stundenkontobuchungen dürfen nicht vor dem 01.08.2026 liegen.",
+        )

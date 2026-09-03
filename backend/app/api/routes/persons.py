@@ -120,6 +120,7 @@ def create_person_hours_manual_adjustment(
     return PersonHoursAccountService(db).create_manual_adjustment(
         person_id=person_id,
         hours_delta=payload.hours_delta,
+        effective_date=payload.effective_date,
         note=payload.note,
         current_user=current_user,
     )
@@ -135,6 +136,7 @@ def create_person_hours_payout(
     return PersonHoursAccountService(db).create_payout(
         person_id=person_id,
         hours=payload.hours,
+        effective_date=payload.effective_date,
         note=payload.note,
         current_user=current_user,
     )

@@ -182,6 +182,7 @@ class TimeEntryWeeklyReviewRead(BaseModel):
     status: str = "reviewed"
     reviewed_by_user_id: int | None = None
     reviewed_at: datetime
+    daily_ledger_reference_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

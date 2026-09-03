@@ -27,6 +27,7 @@ class TimeEntryWeeklyReview(TimestampMixin, Base):
         index=True,
     )
     reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    daily_ledger_reference_id: Mapped[str | None] = mapped_column(String(120))
 
     person = relationship("Person")
     reviewed_by = relationship("User")

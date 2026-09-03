@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { canAccessMainPage } from "../src/auth/pageAccess.ts";
+import { canAccessMainPage, canManagePayrollMonthClose } from "../src/auth/pageAccess.ts";
 
 function currentUser(role, permissions = []) {
   return {
@@ -25,6 +25,15 @@ test("payroll opt-in grants office users normal payroll page actions", () => {
   assert.equal(canAccessMainPage(officeWithoutOptIn, "payroll"), false);
 });
 
+test("month close and setup are reserved for admins and payroll-enabled office users", () => {
+  assert.equal(canManagePayrollMonthClose(currentUser("admin")), true);
+  assert.equal(canManagePayrollMonthClose(currentUser("office", ["payroll"])), true);
+  assert.equal(canManagePayrollMonthClose(currentUser("office", ["export"])), false);
+  assert.equal(canManagePayrollMonthClose(currentUser("project_manager")), false);
+  assert.equal(canManagePayrollMonthClose(currentUser("monteur")), false);
+  assert.equal(canManagePayrollMonthClose(null), false);
+});
+
 test("payroll page and week downloads use payroll access without a phone GPS verification tab", async () => {
   const appSource = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
   const permissionSource = await readFile(new URL("../src/auth/permissions.ts", import.meta.url), "utf8");
@@ -34,6 +43,8 @@ test("payroll page and week downloads use payroll access without a phone GPS ver
   assert.match(appSource, /officePermission="payroll"[\s\S]*?path="time-entries"/);
   assert.match(permissionSource, /return canAccessMainPage\(user, pageKey\)/);
   assert.match(pageSource, /canManageTimeEntries = canEditMainPage\(user, "payroll"\)/);
+  assert.match(pageSource, /canManagePayrollClose = canManagePayrollMonthClose\(user\)/);
+  assert.match(pageSource, /disabled=\{!canManagePayrollClose \|\| isUpdatingPayrollMonth\}/);
   assert.match(pageSource, /api\.weeklyAllWorkersTimeEntriesXlsx/);
   assert.match(pageSource, /api\.weeklyWorkerTimeEntriesXlsx/);
   assert.match(pageSource, /api\.payrollMonthlyWorkersXlsx/);

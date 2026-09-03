@@ -417,6 +417,41 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet_and_st
     assert_ignorable_namespaces_are_declared(styles_xml)
 
 
+@pytest.mark.parametrize(
+    ("opening_minutes", "closing_minutes", "opening_expected", "closing_expected"),
+    [
+        (1110, -90, 1110 / 1440, "-1:30"),
+        (30 * 60, 0, 30 * 60 / 1440, 0),
+    ],
+)
+def test_snapshot_balances_fill_k50_and_k51_without_negative_excel_times(
+    opening_minutes,
+    closing_minutes,
+    opening_expected,
+    closing_expected,
+):
+    result = build_payroll_month_xlsx(
+        person=PERSON,
+        year=2026,
+        month=8,
+        entries=[],
+        opening_balance_minutes=opening_minutes,
+        closing_balance_minutes=closing_minutes,
+    )
+    with ZipFile(BytesIO(result.content)) as workbook:
+        sheet = ET.fromstring(workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path))
+        styles = ET.fromstring(workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path))
+
+    assert float(cell_text(sheet, "K50")) == pytest.approx(opening_expected)
+    assert cell_number_format(sheet, styles, "K50") == "[h]:mm"
+    if isinstance(closing_expected, str):
+        assert cell_text(sheet, "K51") == closing_expected
+        assert sheet.find('.//main:c[@r="K51"]', NS).attrib["t"] == "inlineStr"
+    else:
+        assert float(cell_text(sheet, "K51")) == pytest.approx(closing_expected)
+        assert cell_number_format(sheet, styles, "K51") == "[h]:mm"
+
+
 def test_all_workers_workbook_clones_the_master_sheet_for_every_worker():
     second_person = Person(
         id=2,

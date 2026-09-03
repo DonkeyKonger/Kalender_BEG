@@ -81,12 +81,12 @@ test("Monatsnavigation zeigt zwei Monate und die Jahressteuerung vor der Exportg
   assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
 });
 
-test("Monatsabrechnungen für alle und den ausgewählten Monteur sind freigeschaltet", () => {
-  assert.match(pageSource, /api\.payrollMonthlyWorkersXlsx\(selectedEvaluationMonth\)/);
-  assert.match(pageSource, /api\.payrollMonthlyWorkerXlsx\(\{[\s\S]*?personId: selectedEvaluationWorker\.personId,[\s\S]*?\.\.\.selectedEvaluationMonth/s);
+test("Monatsabrechnungen für alle und den ausgewählten Monteur sind nur aus einem gesperrten Snapshot verfügbar", () => {
+  assert.match(pageSource, /api\.payrollMonthlyWorkersXlsx\(\{[\s\S]*?\.\.\.selectedEvaluationMonth,[\s\S]*?version: payrollMonthVersion/s);
+  assert.match(pageSource, /api\.payrollMonthlyWorkerXlsx\(\{[\s\S]*?personId: selectedEvaluationWorker\.personId,[\s\S]*?version: payrollMonthVersion,[\s\S]*?\.\.\.selectedEvaluationMonth/s);
   assert.match(pageSource, /className="time-evaluation-period-actions"[\s\S]*?time-evaluation-export-heading[\s\S]*?Monatsabrechnung[\s\S]*?time-evaluation-export-buttons[\s\S]*?onClick=\{\(\) => void downloadAllPayrollMonthXlsx\(\)\}[\s\S]*?Alle Monteure[\s\S]*?onClick=\{\(\) => void downloadSelectedPayrollMonthXlsx\(\)\}[\s\S]*?Ausgewählter Monteur/s);
-  assert.match(pageSource, /disabled=\{!selectedEvaluationWorker \|\| !isEvaluationDataReady \|\| isDownloadingPayrollMonthXlsx\}/);
-  assert.match(pageSource, /id="time-evaluation-monthly-download-status"[\s\S]*?Excel-Monatsabrechnungen sind zum Download verfügbar/);
+  assert.match(pageSource, /disabled=\{!arePayrollMonthExportsAvailable \|\| !selectedEvaluationWorker \|\| !isEvaluationDataReady \|\| isDownloadingPayrollMonthXlsx\}/);
+  assert.match(pageSource, /id="time-evaluation-monthly-download-status"[\s\S]*?Excel-Monatsabrechnungen sind erst nach dem Monatsabschluss verfügbar/);
   const monthlyStart = pageSource.indexOf("function MonthlyPayrollWorkerWorkspace");
   const monthlySource = pageSource.slice(monthlyStart, pageSource.indexOf("function currentIsoWeek", monthlyStart));
   assert.ok(monthlyStart >= 0);

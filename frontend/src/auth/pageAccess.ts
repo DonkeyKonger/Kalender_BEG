@@ -22,6 +22,16 @@ export function canAccessMainPage(user: CurrentUser, pageKey: OfficePagePermissi
   return false;
 }
 
+export function canManagePayrollMonthClose(user: CurrentUser | null): boolean {
+  if (!user) {
+    return false;
+  }
+  if (user.role === "admin") {
+    return true;
+  }
+  return user.role === "office" && user.office_page_permissions.includes("payroll");
+}
+
 export function canShowNavItem(user: CurrentUser, item: NavigationItem): boolean {
   if (!item.roles.includes(user.role)) {
     return false;

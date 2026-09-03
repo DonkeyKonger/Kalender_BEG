@@ -80,7 +80,7 @@ test("the day header shows one overnight editor and time rows contain no overnig
   );
   assert.doesNotMatch(tableSource, /aria-label="Übernachtung" title="Übernachtung"/);
   assert.match(tableSource, /<PayrollOvernightStatusControl/);
-  assert.match(tableSource, /editable=\{canManageTimeEntries && !selectedReviewWorker\.isReviewed\}/);
+  assert.match(tableSource, /editable=\{canManageTimeEntries && !selectedReviewWorker\.isReviewed && !isReadOnlyPayrollDay\}/);
   assert.match(tableSource, /hasConflict=\{day\.hasOvernightStatusConflict\}/);
   assert.match(tableSource, /status=\{day\.overnightStatus\}/);
   assert.match(tableSource, /className="time-review-day-group-summary"/);

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import calendar
+import hashlib
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, timedelta
 
 from fastapi import HTTPException, status
@@ -12,6 +14,13 @@ from app.models.absence import Absence
 from app.models.enums import PersonType, UserRole
 from app.models.person import Person
 from app.models.person_work_day import PersonWorkDay
+from app.models.payroll_daily_ledger import PAYROLL_LEDGER_CUTOVER_DATE
+from app.models.payroll_month import (
+    PAYROLL_MONTH_LOCKED,
+    PayrollMonthArtifact,
+    PayrollMonthPeriod,
+    PayrollMonthSnapshot,
+)
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.payroll_month_xlsx_service import (
@@ -32,40 +41,265 @@ class PayrollMonthExportService:
         year: int,
         month: int,
         current_user: User,
+        version: int | None = None,
     ) -> bytes:
-        person = self.db.scalar(
-            select(Person)
-            .options(selectinload(Person.users))
-            .where(Person.id == person_id, Person.deleted_at.is_(None))
+        if _is_legacy_month(year, month):
+            return self.build_worker_export_from_live_data(
+                person_id=person_id,
+                year=year,
+                month=month,
+                current_user=current_user,
+                opening_balance_minutes=None,
+                closing_balance_minutes=None,
+            )
+        return self._locked_artifact(
+            year=year,
+            month=month,
+            artifact_key=f"worker:{person_id}",
+            version=version,
+        ).content
+
+    def build_worker_export_from_live_data(
+        self,
+        *,
+        person_id: int,
+        year: int,
+        month: int,
+        current_user: User,
+        opening_balance_minutes: int | None,
+        closing_balance_minutes: int | None,
+    ) -> bytes:
+        """Build close-time bytes; never expose this as a download endpoint."""
+        source = self.load_live_source(year=year, month=month, current_user=current_user)
+        return self.build_worker_export_from_source(
+            source=source,
+            person_id=person_id,
+            opening_balance_minutes=opening_balance_minutes,
+            closing_balance_minutes=closing_balance_minutes,
         )
+
+    def build_worker_export_from_source(
+        self,
+        *,
+        source: "PayrollMonthSourceBundle",
+        person_id: int,
+        opening_balance_minutes: int | None,
+        closing_balance_minutes: int | None,
+    ) -> bytes:
+        person = next((item for item in source.people if item.id == person_id), None)
         if person is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Person nicht gefunden.")
-
-        period_start, period_end = payroll_month_source_range(year, month)
-        entries = TimeEntryService(self.db).list_entries(
-            current_user=current_user,
-            person_id=person_id,
-            date_from=period_start,
-            date_to=period_end,
-        )
-        absences = self._absences(period_start, period_end, person_id=person_id)
-        work_days = self._work_days(period_start, period_end, person_ids={person_id})
         return build_payroll_months_xlsx(
             [
                 PayrollMonthSheet(
                     person=person,
                     sheet_name=person.display_name,
-                    year=year,
-                    month=month,
-                    entries=entries,
-                    absences=absences,
-                    work_days=work_days,
-                    non_working_dates=lower_saxony_public_holiday_dates(period_start, period_end),
+                    year=source.year,
+                    month=source.month,
+                    entries=[entry for entry in source.entries if entry.person_id == person_id],
+                    absences=[absence for absence in source.absences if absence.person_id == person_id],
+                    work_days=[day for day in source.work_days if day.person_id == person_id],
+                    non_working_dates=source.holidays,
+                    opening_balance_minutes=opening_balance_minutes,
+                    closing_balance_minutes=closing_balance_minutes,
                 )
             ]
         ).content
 
-    def all_workers_export(self, *, year: int, month: int, current_user: User) -> bytes:
+    def all_workers_export(
+        self,
+        *,
+        year: int,
+        month: int,
+        current_user: User,
+        version: int | None = None,
+    ) -> bytes:
+        if _is_legacy_month(year, month):
+            source = self.load_live_source(
+                year=year,
+                month=month,
+                current_user=current_user,
+            )
+            return self.build_all_workers_export_from_source(
+                source=source,
+                balances_by_person={person.id: (None, None) for person in source.people},
+            )
+        return self._locked_artifact(
+            year=year,
+            month=month,
+            artifact_key="all_workers",
+            version=version,
+        ).content
+
+    def build_all_workers_export_from_live_data(
+        self,
+        *,
+        year: int,
+        month: int,
+        current_user: User,
+        balances_by_person: dict[int, tuple[int | None, int | None]],
+    ) -> bytes:
+        """Build the immutable combined artifact inside the close transaction."""
+        source = self.load_live_source(year=year, month=month, current_user=current_user)
+        return self.build_all_workers_export_from_source(
+            source=source,
+            balances_by_person=balances_by_person,
+        )
+
+    def build_all_workers_export_from_source(
+        self,
+        *,
+        source: "PayrollMonthSourceBundle",
+        balances_by_person: dict[int, tuple[int | None, int | None]],
+    ) -> bytes:
+        if not source.people:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Keine aktiven Monteure gefunden.")
+        person_ids = {person.id for person in source.people}
+        entries_by_person: dict[int, list[WorkTimeEntry]] = defaultdict(list)
+        for entry in source.entries:
+            if entry.person_id in person_ids:
+                entries_by_person[entry.person_id].append(entry)
+
+        absences_by_person: dict[int, list[Absence]] = defaultdict(list)
+        for absence in source.absences:
+            absences_by_person[absence.person_id].append(absence)
+        work_days_by_person: dict[int, list[PersonWorkDay]] = defaultdict(list)
+        for work_day in source.work_days:
+            work_days_by_person[work_day.person_id].append(work_day)
+
+        return build_payroll_months_xlsx(
+            [
+                PayrollMonthSheet(
+                    person=person,
+                    sheet_name=person.display_name,
+                    year=source.year,
+                    month=source.month,
+                    entries=entries_by_person[person.id],
+                    absences=absences_by_person[person.id],
+                    work_days=work_days_by_person[person.id],
+                    non_working_dates=source.holidays,
+                    opening_balance_minutes=balances_by_person[person.id][0],
+                    closing_balance_minutes=balances_by_person[person.id][1],
+                )
+                for person in source.people
+            ]
+        ).content
+
+    def load_live_source(
+        self,
+        *,
+        year: int,
+        month: int,
+        current_user: User,
+    ) -> "PayrollMonthSourceBundle":
+        people = self.payroll_people()
+        if not people:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Keine aktiven Monteure gefunden.")
+        period_start, period_end = payroll_month_source_range(year, month)
+        entries = TimeEntryService(self.db).list_entries(
+            current_user=current_user,
+            date_from=period_start,
+            date_to=period_end,
+        )
+        person_ids = {person.id for person in people}
+        return PayrollMonthSourceBundle(
+            year=year,
+            month=month,
+            period_start=period_start,
+            period_end=period_end,
+            people=tuple(people),
+            entries=tuple(entry for entry in entries if entry.person_id in person_ids),
+            absences=tuple(self._absences(period_start, period_end, person_ids=person_ids)),
+            work_days=tuple(self._work_days(period_start, period_end, person_ids=person_ids)),
+            holidays=frozenset(lower_saxony_public_holiday_dates(period_start, period_end)),
+        )
+
+    @staticmethod
+    def source_manifest(source: "PayrollMonthSourceBundle") -> dict[str, object]:
+        """Serializable copy of every live input used by the retained workbook."""
+        return {
+            "source_start": source.period_start.isoformat(),
+            "source_end": source.period_end.isoformat(),
+            "holidays": sorted(item.isoformat() for item in source.holidays),
+            "people": [
+                {
+                    "id": person.id,
+                    "display_name": person.display_name,
+                    "weekly_hours": person.weekly_hours,
+                }
+                for person in source.people
+            ],
+            "entries": [
+                {
+                    "id": entry.id,
+                    "person_id": entry.person_id,
+                    "work_date": entry.work_date.isoformat(),
+                    "original_work_date": (
+                        entry.original_work_date.isoformat()
+                        if entry.original_work_date else None
+                    ),
+                    "start_time": entry.start_time.isoformat() if entry.start_time else None,
+                    "end_time": entry.end_time.isoformat() if entry.end_time else None,
+                    "break_minutes": entry.break_minutes,
+                    "travel_minutes": entry.travel_minutes,
+                    "work_minutes": entry.work_minutes,
+                    "original_work_minutes": entry.original_work_minutes,
+                    "corrected_work_minutes": entry.corrected_work_minutes,
+                    "payroll_corrected_start_time": (
+                        entry.payroll_corrected_start_time.isoformat()
+                        if entry.payroll_corrected_start_time else None
+                    ),
+                    "payroll_corrected_end_time": (
+                        entry.payroll_corrected_end_time.isoformat()
+                        if entry.payroll_corrected_end_time else None
+                    ),
+                    "payroll_corrected_break_minutes": entry.payroll_corrected_break_minutes,
+                    "payroll_corrected_work_minutes": entry.payroll_corrected_work_minutes,
+                    "site_id": entry.site_id,
+                    "site": _site_manifest(entry.site),
+                    "original_site_id": entry.original_site_id,
+                    "original_site": _site_manifest(entry.original_site),
+                    "assignment_id": entry.assignment_id,
+                    "assignment": _assignment_manifest(entry.assignment),
+                    "note": entry.note,
+                    "source": entry.source,
+                    "status": entry.status,
+                    "time_review_status": entry.time_review_status,
+                    "time_review_method": entry.time_review_method,
+                    "reviewed_by_user_id": entry.reviewed_by_user_id,
+                    "reviewed_at": entry.reviewed_at.isoformat() if entry.reviewed_at else None,
+                    "payroll_reviewed_by_user_id": entry.payroll_reviewed_by_user_id,
+                    "payroll_reviewed_at": (
+                        entry.payroll_reviewed_at.isoformat()
+                        if entry.payroll_reviewed_at else None
+                    ),
+                    "work_day": _work_day_manifest(entry.work_day),
+                }
+                for entry in sorted(source.entries, key=lambda item: item.id)
+            ],
+            "absences": [
+                {
+                    "id": absence.id,
+                    "person_id": absence.person_id,
+                    "absence_type": absence.absence_type.value,
+                    "status": absence.status.value,
+                    "start_date": absence.start_date.isoformat(),
+                    "end_date": absence.end_date.isoformat(),
+                }
+                for absence in sorted(source.absences, key=lambda item: item.id)
+            ],
+            "work_days": [
+                {
+                    "id": work_day.id,
+                    "person_id": work_day.person_id,
+                    "work_date": work_day.work_date.isoformat(),
+                    "overnight_status": work_day.overnight_status,
+                }
+                for work_day in sorted(source.work_days, key=lambda item: item.id)
+            ],
+        }
+
+    def payroll_people(self) -> list[Person]:
         people = list(
             self.db.scalars(
                 select(Person)
@@ -78,45 +312,79 @@ class PayrollMonthExportService:
                 .order_by(Person.display_name.asc(), Person.id.asc())
             )
         )
-        people = [person for person in people if is_payroll_review_person(person)]
-        if not people:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Keine aktiven Monteure gefunden.")
+        return [person for person in people if is_payroll_review_person(person)]
 
-        period_start, period_end = payroll_month_source_range(year, month)
-        entries = TimeEntryService(self.db).list_entries(
-            current_user=current_user,
-            date_from=period_start,
-            date_to=period_end,
+    def _locked_artifact(
+        self,
+        *,
+        year: int,
+        month: int,
+        artifact_key: str,
+        version: int | None = None,
+    ) -> PayrollMonthArtifact:
+        period = self.db.scalar(
+            select(PayrollMonthPeriod).where(
+                PayrollMonthPeriod.year == year,
+                PayrollMonthPeriod.month == month,
+            )
         )
-        person_ids = {person.id for person in people}
-        entries_by_person: dict[int, list[WorkTimeEntry]] = defaultdict(list)
-        for entry in entries:
-            if entry.person_id in person_ids:
-                entries_by_person[entry.person_id].append(entry)
-
-        absences_by_person: dict[int, list[Absence]] = defaultdict(list)
-        for absence in self._absences(period_start, period_end, person_ids=person_ids):
-            absences_by_person[absence.person_id].append(absence)
-        holidays = lower_saxony_public_holiday_dates(period_start, period_end)
-        work_days_by_person: dict[int, list[PersonWorkDay]] = defaultdict(list)
-        for work_day in self._work_days(period_start, period_end, person_ids=person_ids):
-            work_days_by_person[work_day.person_id].append(work_day)
-
-        return build_payroll_months_xlsx(
-            [
-                PayrollMonthSheet(
-                    person=person,
-                    sheet_name=person.display_name,
-                    year=year,
-                    month=month,
-                    entries=entries_by_person[person.id],
-                    absences=absences_by_person[person.id],
-                    work_days=work_days_by_person[person.id],
-                    non_working_dates=holidays,
-                )
-                for person in people
-            ]
-        ).content
+        if period is None or period.status != PAYROLL_MONTH_LOCKED:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "payroll_month_not_locked",
+                    "year": year,
+                    "month": month,
+                    "message": "Die Monatsabrechnung steht erst nach einem erfolgreichen Monatsabschluss bereit.",
+                },
+            )
+        if version is not None and version != period.last_snapshot_version:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "payroll_snapshot_version_stale",
+                    "requested_version": version,
+                    "current_version": period.last_snapshot_version,
+                    "message": "Der Monatsabschluss wurde inzwischen neu versioniert. Laden Sie den aktuellen Status erneut.",
+                },
+            )
+        snapshot = self.db.scalar(
+            select(PayrollMonthSnapshot).where(
+                PayrollMonthSnapshot.period_id == period.id,
+                PayrollMonthSnapshot.version == period.last_snapshot_version,
+            )
+        )
+        if snapshot is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {"code": "payroll_snapshot_missing", "message": "Der gesperrte Monat besitzt keinen gültigen Snapshot."},
+            )
+        artifact = self.db.scalar(
+            select(PayrollMonthArtifact).where(
+                PayrollMonthArtifact.snapshot_id == snapshot.id,
+                PayrollMonthArtifact.artifact_key == artifact_key,
+            )
+        )
+        if artifact is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                {"code": "payroll_artifact_missing", "message": "Für diesen Snapshot ist keine Abrechnung vorhanden."},
+            )
+        if (
+            artifact.byte_size != len(artifact.content)
+            or artifact.content_sha256 != hashlib.sha256(artifact.content).hexdigest()
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "payroll_artifact_corrupt",
+                    "snapshot_id": snapshot.id,
+                    "snapshot_version": snapshot.version,
+                    "artifact_key": artifact_key,
+                    "message": "Das gespeicherte Export-Artefakt ist beschädigt und wird nicht ausgeliefert.",
+                },
+            )
+        return artifact
 
     def _work_days(
         self, period_start: date, period_end: date, *, person_ids: set[int]
@@ -150,6 +418,65 @@ class PayrollMonthExportService:
 def is_payroll_review_person(person: Person) -> bool:
     active_roles = {user.role for user in person.users if user.is_active}
     return not active_roles or active_roles == {UserRole.MONTEUR}
+
+
+def _is_legacy_month(year: int, month: int) -> bool:
+    """Legacy months stay downloadable; no post-cutover live fallback exists."""
+    return date(year, month, 1) < PAYROLL_LEDGER_CUTOVER_DATE
+
+
+def _site_manifest(site) -> dict[str, object] | None:
+    if site is None:
+        return None
+    return {
+        "id": site.id,
+        "site_number": site.site_number,
+        "name": site.name,
+        "location": site.location,
+        "address": site.address,
+        "postal_code": site.postal_code,
+        "city": site.city,
+        "street": site.street,
+        "house_number": site.house_number,
+        "address_extra": site.address_extra,
+    }
+
+
+def _assignment_manifest(assignment) -> dict[str, object] | None:
+    if assignment is None:
+        return None
+    return {
+        "id": assignment.id,
+        "person_id": assignment.person_id,
+        "site_id": assignment.site_id,
+        "start_date": assignment.start_date.isoformat(),
+        "end_date": assignment.end_date.isoformat(),
+        "site": _site_manifest(assignment.site),
+    }
+
+
+def _work_day_manifest(work_day) -> dict[str, object] | None:
+    if work_day is None:
+        return None
+    return {
+        "id": work_day.id,
+        "person_id": work_day.person_id,
+        "work_date": work_day.work_date.isoformat(),
+        "overnight_status": work_day.overnight_status,
+    }
+
+
+@dataclass(frozen=True)
+class PayrollMonthSourceBundle:
+    year: int
+    month: int
+    period_start: date
+    period_end: date
+    people: tuple[Person, ...]
+    entries: tuple[WorkTimeEntry, ...]
+    absences: tuple[Absence, ...]
+    work_days: tuple[PersonWorkDay, ...]
+    holidays: frozenset[date]
 
 
 def payroll_month_source_range(year: int, month: int) -> tuple[date, date]:

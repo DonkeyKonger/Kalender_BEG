@@ -285,7 +285,7 @@ test("the scroll table keeps five days and multiple entries at natural row heigh
   assert.doesNotMatch(styles, /\.time-review-day-group\s*\{[^}]*overflow:\s*hidden;/s);
   assert.match(styles, /\.time-review-day-group-entries\s*\{[^}]*align-content:\s*start;[^}]*grid-auto-rows:\s*max-content;/s);
   assert.match(styles, /\.time-review-week-check-row\s*\{[^}]*min-height:\s*46px;/s);
-  assert.match(pageSource, /selectedReviewWeekDays\.map\(\(day\) => \([\s\S]*?day\.entries\.length > 0 \? day\.entries\.map\(\(check\) => \(/s);
+  assert.match(pageSource, /selectedReviewWeekDays\.map\(\(day\) => \{[\s\S]*?day\.entries\.length > 0 \? day\.entries\.map\(\(check\) => \(/s);
   assert.match(pageSource, /return numberRange\(0, 6\)[\s\S]*?filter\(\(day, index\) => index < 5 \|\| day\.entries\.length > 0 \|\| day\.absenceType !== null\)/s);
 });
 
@@ -353,8 +353,8 @@ test("payroll grouping preserves row actions, diagnostics, and the emphasized to
   const tableSource = pageSource.slice(tableStart, tableEnd);
 
   assert.match(tableSource, /onClick=\{\(event\) => togglePayrollDatePicker\(check\.entry, event\.currentTarget\)\}/);
-  assert.match(tableSource, /onClick: \(\) => openLocationReviewDiagnostic\(check\.entry\)/);
-  assert.match(tableSource, /onClick: \(\) => openTimeReviewDiagnostic\(check\.entry\)/);
+  assert.match(tableSource, /onClick: isReadOnlyPayrollDay \? undefined : \(\) => openLocationReviewDiagnostic\(check\.entry\)/);
+  assert.match(tableSource, /onClick: isReadOnlyPayrollDay \? undefined : \(\) => openTimeReviewDiagnostic\(check\.entry\)/);
   assert.match(tableSource, /onToggle: \(\) => void togglePayrollRowReview\(check\.entry\)/);
   assert.match(tableSource, /className="time-review-week-time time-review-week-total" role="cell">\{renderPayrollWorkMinutes\(check\.entry\)\}/);
   assert.match(styles, /\.time-review-week-total\s*\{[^}]*font-weight:\s*900;/s);

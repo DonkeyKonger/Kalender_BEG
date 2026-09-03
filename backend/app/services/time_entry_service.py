@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from uuid import uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -11,12 +12,14 @@ from app.models.assignment import Assignment
 from app.models.enums import AbsenceStatus, OvernightStatus, PersonType, SiteStatus, UserRole
 from app.models.person import Person
 from app.models.person_work_day import PersonWorkDay
+from app.models.payroll_daily_ledger import PAYROLL_LEDGER_CUTOVER_DATE
 from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
 from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE, PersonHoursAccountService
+from app.services.payroll_period_guard import PayrollPeriodGuard
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 
 GPS_TIME_REVIEW_TOLERANCE_MINUTES = 15
@@ -30,6 +33,7 @@ TERMINAL_TIME_REVIEW_STATUSES = {
 }
 WEEKLY_REVIEW_STATUS_REVIEWED = "reviewed"
 WEEKLY_REVIEW_STATUS_RESET = "reset"
+WEEK_APPROVAL_LEDGER_SOURCE = "WEEK_APPROVAL"
 
 
 @dataclass(frozen=True)
@@ -79,6 +83,7 @@ class TimeEntryService:
         return list(self.db.scalars(statement))
 
     def create_entry(self, payload: TimeEntryCreate, current_user: User) -> WorkTimeEntry:
+        PayrollPeriodGuard(self.db).assert_date_mutable(payload.work_date)
         self._ensure_can_write_person(current_user, payload.person_id)
         self._ensure_person_exists(payload.person_id)
         if payload.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
@@ -141,6 +146,9 @@ class TimeEntryService:
             self._ensure_assignment_matches(values.get("assignment_id", entry.assignment_id), next_person_id, next_site_id)
 
         next_work_date = values.get("work_date", entry.work_date)
+        PayrollPeriodGuard(self.db).assert_dates_mutable(
+            getattr(entry, "work_date", None), next_work_date
+        )
         next_start_time = values.get("start_time", entry.start_time)
         next_end_time = values.get("end_time", entry.end_time)
         self._ensure_no_time_overlap(
@@ -191,6 +199,7 @@ class TimeEntryService:
 
     def delete_entry(self, entry_id: int, current_user: User) -> None:
         entry = self._get_entry(entry_id)
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
         self._ensure_can_write_person(current_user, entry.person_id)
         self._ensure_entry_can_be_deleted(entry)
         self.db.delete(entry)
@@ -199,6 +208,7 @@ class TimeEntryService:
     def delete_payroll_entry(self, entry_id: int, current_user: User) -> PayrollTimeEntryDeletion:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
         self._ensure_can_write_person(current_user, entry.person_id)
         iso_year, iso_week, _ = entry.work_date.isocalendar()
         review = self._get_weekly_review(
@@ -223,6 +233,7 @@ class TimeEntryService:
     def approve_time_review(self, entry_id: int, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
         self._mark_time_review(
             entry,
             status_value="manually_approved",
@@ -236,6 +247,7 @@ class TimeEntryService:
     def set_payroll_row_review(self, entry_id: int, *, reviewed: bool, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
         self._ensure_can_write_person(current_user, entry.person_id)
         if reviewed:
             entry.payroll_reviewed_by_user_id = current_user.id
@@ -259,6 +271,7 @@ class TimeEntryService:
     ) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
         self._ensure_can_write_person(current_user, entry.person_id)
         if break_minutes is not None and break_minutes < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Büro-geprüfte Pause darf nicht negativ sein.")
@@ -302,6 +315,9 @@ class TimeEntryService:
         self._ensure_can_write_person(current_user, entry.person_id)
         if entry.work_date == work_date:
             return entry
+        PayrollPeriodGuard(self.db).assert_dates_mutable(
+            getattr(entry, "work_date", None), work_date
+        )
         if entry.work_date.isocalendar()[:2] != work_date.isocalendar()[:2]:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Der Eintrag kann nur innerhalb derselben Kalenderwoche verschoben werden.")
 
@@ -322,6 +338,7 @@ class TimeEntryService:
     def correct_time_review(self, entry_id: int, corrected_work_minutes: int, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
         self._ensure_can_write_person(current_user, entry.person_id)
         if corrected_work_minutes < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Korrigierte Arbeitszeit darf nicht negativ sein.")
@@ -350,6 +367,7 @@ class TimeEntryService:
     ) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
         self._ensure_can_write_person(current_user, entry.person_id)
 
         if reviewed_site_id is not None:
@@ -422,6 +440,8 @@ class TimeEntryService:
         for entry in entries:
             if entry.work_date >= current_month_start:
                 continue
+            if PayrollPeriodGuard(self.db).is_date_locked(entry.work_date):
+                continue
             if not self.is_open_time_review_case(entry, gps_minutes_by_entry_id.get(entry.id)):
                 continue
             entry.time_review_status = "auto_closed_by_deadline"
@@ -474,6 +494,8 @@ class TimeEntryService:
         self._ensure_can_review_time(current_user)
         self._ensure_person_exists(person_id)
         self._ensure_valid_iso_week(iso_year, iso_week)
+        week_start = date.fromisocalendar(iso_year, iso_week, 1)
+        week_end = date.fromisocalendar(iso_year, iso_week, 7)
         statement = (
             select(TimeEntryWeeklyReview)
             .where(TimeEntryWeeklyReview.person_id == person_id)
@@ -481,6 +503,13 @@ class TimeEntryService:
             .where(TimeEntryWeeklyReview.iso_week == iso_week)
         )
         review = self.db.scalar(statement)
+        if (
+            review is not None
+            and review.status == WEEKLY_REVIEW_STATUS_REVIEWED
+            and week_end >= PAYROLL_LEDGER_CUTOVER_DATE
+            and review.daily_ledger_reference_id is not None
+        ):
+            return review
         now = datetime.now().astimezone()
         if review is None:
             review = TimeEntryWeeklyReview(
@@ -498,10 +527,43 @@ class TimeEntryService:
             review.reviewed_at = now
         if hasattr(self.db, "flush"):
             self.db.flush()
-        PersonHoursAccountService(self.db).book_weekly_review_balance(
-            review=review,
-            current_user=current_user,
-        )
+        if week_end < PAYROLL_LEDGER_CUTOVER_DATE:
+            PersonHoursAccountService(self.db).book_weekly_review_balance(
+                review=review,
+                current_user=current_user,
+            )
+        elif self._daily_payroll_is_active():
+            from app.services.payroll_daily_ledger_service import PayrollDailyLedgerService
+
+            segments = self._mutable_week_segments(
+                max(week_start, PAYROLL_LEDGER_CUTOVER_DATE),
+                week_end,
+            )
+            if not segments:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "Die Kalenderwoche liegt vollständig in abgeschlossenen Monaten.",
+                )
+            reference_id = f"weekly-review:{review.id}:{uuid4().hex}"
+            review.daily_ledger_reference_id = reference_id
+            ledger = PayrollDailyLedgerService(self.db)
+            for segment_start, segment_end in segments:
+                ledger.finalize_person_days(
+                    person_id=person_id,
+                    period_start=segment_start,
+                    period_end=segment_end,
+                    source=WEEK_APPROVAL_LEDGER_SOURCE,
+                    reference_id=reference_id,
+                    created_by_user_id=current_user.id,
+                )
+        else:
+            # Controlled transition: until every active worker has confirmed
+            # setup, the established weekly history remains available.  Once
+            # activated it is excluded from the authoritative daily balance.
+            PersonHoursAccountService(self.db).book_weekly_review_balance(
+                review=review,
+                current_user=current_user,
+            )
         self.db.commit()
         self.db.refresh(review)
         return review
@@ -542,11 +604,73 @@ class TimeEntryService:
         )
 
     def _reset_weekly_review_state(self, review: TimeEntryWeeklyReview, *, current_user: User) -> None:
-        review.status = WEEKLY_REVIEW_STATUS_RESET
-        PersonHoursAccountService(self.db).reverse_weekly_review_balance(
-            review=review,
-            current_user=current_user,
-        )
+        week_start = date.fromisocalendar(review.iso_year, review.iso_week, 1)
+        week_end = date.fromisocalendar(review.iso_year, review.iso_week, 7)
+        if week_end < PAYROLL_LEDGER_CUTOVER_DATE:
+            PersonHoursAccountService(self.db).reverse_weekly_review_balance(
+                review=review,
+                current_user=current_user,
+            )
+            review.status = WEEKLY_REVIEW_STATUS_RESET
+        else:
+            from app.services.payroll_daily_ledger_service import PayrollDailyLedgerService
+
+            segments = self._mutable_week_segments(
+                max(week_start, PAYROLL_LEDGER_CUTOVER_DATE),
+                week_end,
+            )
+            if not segments:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "Die Kalenderwoche liegt vollständig in abgeschlossenen Monaten.",
+                )
+            if review.daily_ledger_reference_id:
+                ledger = PayrollDailyLedgerService(self.db)
+                for segment_start, segment_end in segments:
+                    ledger.unfinalize_person_days(
+                        person_id=review.person_id,
+                        period_start=segment_start,
+                        period_end=segment_end,
+                        source=WEEK_APPROVAL_LEDGER_SOURCE,
+                        reference_id=review.daily_ledger_reference_id,
+                    )
+            else:
+                # Transitional reviews created before the daily ledger became
+                # active have no per-day reference. Their legacy accounting
+                # entry stays outside the new balance but retains its existing
+                # compensating event-log semantics while open days are reset.
+                PersonHoursAccountService(self.db).reverse_weekly_review_balance(
+                    review=review,
+                    current_user=current_user,
+                )
+            review.status = WEEKLY_REVIEW_STATUS_RESET
+            review.daily_ledger_reference_id = None
+
+    def _daily_payroll_is_active(self) -> bool:
+        from app.services.payroll_daily_ledger_service import PayrollDailyLedgerService
+
+        return PayrollDailyLedgerService(self.db).is_process_active()
+
+    def _mutable_week_segments(
+        self,
+        week_start: date,
+        week_end: date,
+    ) -> list[tuple[date, date]]:
+        guard = PayrollPeriodGuard(self.db)
+        segments: list[tuple[date, date]] = []
+        segment_start: date | None = None
+        cursor = week_start
+        while cursor <= week_end:
+            if guard.is_date_locked(cursor):
+                if segment_start is not None:
+                    segments.append((segment_start, cursor - timedelta(days=1)))
+                    segment_start = None
+            elif segment_start is None:
+                segment_start = cursor
+            cursor += timedelta(days=1)
+        if segment_start is not None:
+            segments.append((segment_start, week_end))
+        return segments
 
     @staticmethod
     def is_open_time_review_case(entry: WorkTimeEntry, gps_minutes: int | None) -> bool:
@@ -760,6 +884,7 @@ class TimeEntryService:
         overnight_status: OvernightStatus,
     ) -> OvernightStatus:
         self._ensure_can_review_time(current_user)
+        PayrollPeriodGuard(self.db).assert_date_mutable(work_date)
         self._ensure_person_exists(person_id)
         self._ensure_week_is_open(person_id, work_date)
         self._set_overnight_status(

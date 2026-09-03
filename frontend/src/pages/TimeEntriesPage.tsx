@@ -1,14 +1,23 @@
-import { ArrowRight, CalendarPlus, CarFront, ChevronLeft, ChevronRight, ChevronsUpDown, Download, MoreHorizontal, Search, Trash2, Wrench } from "lucide-react";
+import { ArrowRight, CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, LockKeyhole, MoreHorizontal, Search, Settings2, Trash2, UnlockKeyhole, Wrench } from "lucide-react";
 import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { canEditMainPage } from "../auth/permissions";
+import { canEditMainPage, canManagePayrollMonthClose } from "../auth/permissions";
 import { DashboardNotePicker } from "../components/DashboardNotePickers";
+import { PayrollSetupDialog } from "../components/PayrollSetupDialog";
 import { PayrollSiteCockpit } from "../components/PayrollSiteCockpit";
 import { PayrollOvernightStatusControl } from "../components/PayrollOvernightStatusControl";
 import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import {
+  formatPayrollMonthWorkDateContext,
+  payrollMonthKey,
+  payrollMonthKeyForDate,
+  payrollMonthFilename,
+  payrollMonthSelectionsForDateRange,
+  payrollSnapshotVersion,
+} from "../lib/payrollMonth";
 import {
   buildCalendarMonthOptions,
   calendarMonthRange,
@@ -51,6 +60,7 @@ import {
 import type { Absence } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
 import type { Person } from "../types/person";
+import type { PayrollMonthBlocker, PayrollMonthPeriod } from "../types/payrollMonth";
 import type { SiteSummary } from "../types/site";
 import type { OvernightStatus, PayrollSiteCockpit as PayrollSiteCockpitData, TimeEntry, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview } from "../types/timeEntry";
 
@@ -178,6 +188,7 @@ type TimeReviewPerfState = {
   startedAt: number;
   to: CalendarWeekSelection;
 };
+type PayrollMonthDialog = "lock" | "reopen" | null;
 const GPS_TIME_TOLERANCE_MINUTES = 15;
 const GPS_NOT_CHECKABLE_NOTICE = "GPS nicht eindeutig prüfbar";
 const TIME_REVIEW_PERF_STORAGE_KEY = "beg_time_review_perf";
@@ -261,6 +272,18 @@ export function TimeEntriesPage() {
   const [isDownloadingAllPayrollMonthXlsx, setIsDownloadingAllPayrollMonthXlsx] = useState(false);
   const [isDownloadingPayrollMonthXlsx, setIsDownloadingPayrollMonthXlsx] = useState(false);
   const [payrollMonthDownloadError, setPayrollMonthDownloadError] = useState<string | null>(null);
+  const [payrollMonthPeriod, setPayrollMonthPeriod] = useState<PayrollMonthPeriod | null>(null);
+  const [isLoadingPayrollMonthPeriod, setIsLoadingPayrollMonthPeriod] = useState(false);
+  const [payrollMonthPeriodError, setPayrollMonthPeriodError] = useState<string | null>(null);
+  const [payrollMonthDialog, setPayrollMonthDialog] = useState<PayrollMonthDialog>(null);
+  const [payrollMonthReopenReason, setPayrollMonthReopenReason] = useState("");
+  const [isUpdatingPayrollMonth, setIsUpdatingPayrollMonth] = useState(false);
+  const [reviewWeekPayrollMonthStatuses, setReviewWeekPayrollMonthStatuses] = useState<Record<string, PayrollMonthPeriod["status"]>>({});
+  const [reviewWeekPayrollMonthStatusRangeKey, setReviewWeekPayrollMonthStatusRangeKey] = useState<string | null>(null);
+  const [isLoadingReviewWeekPayrollMonthStatuses, setIsLoadingReviewWeekPayrollMonthStatuses] = useState(false);
+  const [reviewWeekPayrollMonthStatusError, setReviewWeekPayrollMonthStatusError] = useState<string | null>(null);
+  const [isPayrollSetupOpen, setIsPayrollSetupOpen] = useState(false);
+  const [payrollMonthPeriodRefreshKey, setPayrollMonthPeriodRefreshKey] = useState(0);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [isReviewWeekActionsMenuOpen, setIsReviewWeekActionsMenuOpen] = useState(false);
   const [reviewWeekActionsMenuPosition, setReviewWeekActionsMenuPosition] = useState<PayrollReviewStatusMenuState | null>(null);
@@ -274,6 +297,7 @@ export function TimeEntriesPage() {
   const [reviewWeekScrollState, setReviewWeekScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const [evaluationMonthScrollState, setEvaluationMonthScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const canManageTimeEntries = canEditMainPage(user, "payroll");
+  const canManagePayrollClose = canManagePayrollMonthClose(user);
   const visibleTimeSubtabs = timeSubtabs;
   const reviewWeekStripRef = useRef<HTMLDivElement | null>(null);
   const evaluationMonthStripRef = useRef<HTMLDivElement | null>(null);
@@ -456,6 +480,7 @@ export function TimeEntriesPage() {
     () => isoWeekRange(selectedReviewWeek.year, selectedReviewWeek.week),
     [selectedReviewWeek.week, selectedReviewWeek.year],
   );
+  const reviewWeekRangeKey = reviewDataRangeKey(reviewWeekRange);
   const evaluationMonthRange = useMemo(
     () => calendarMonthRange(selectedEvaluationMonth),
     [selectedEvaluationMonth],
@@ -474,6 +499,10 @@ export function TimeEntriesPage() {
   );
   const payrollReviewWorkerIds = useMemo(
     () => people.filter(isPayrollReviewWorker).map((person) => person.id),
+    [people],
+  );
+  const payrollMonthPersonNames = useMemo(
+    () => new Map(people.map((person) => [person.id, person.display_name])),
     [people],
   );
   const completedReviewWeekKeys = useMemo(
@@ -571,13 +600,25 @@ export function TimeEntriesPage() {
     () => buildReviewWeekDayOptions(reviewWeekRange.start),
     [reviewWeekRange.start],
   );
+  const areReviewWeekPayrollMonthStatusesReady = reviewWeekPayrollMonthStatusRangeKey === reviewWeekRangeKey
+    && !isLoadingReviewWeekPayrollMonthStatuses
+    && reviewWeekPayrollMonthStatusError === null;
+  const writableReviewWeekDayOptions = useMemo(
+    () => areReviewWeekPayrollMonthStatusesReady
+      ? selectedReviewWeekDayOptions.filter((option) => {
+          const monthKey = payrollMonthKeyForDate(option.date);
+          return monthKey !== null && reviewWeekPayrollMonthStatuses[monthKey] === "OPEN";
+        })
+      : [],
+    [areReviewWeekPayrollMonthStatusesReady, reviewWeekPayrollMonthStatuses, selectedReviewWeekDayOptions],
+  );
   const payrollManualDateOptions = useMemo(
-    () => selectedReviewWeekDayOptions.map((option) => ({
+    () => writableReviewWeekDayOptions.map((option) => ({
       value: option.date,
       label: formatPayrollManualEntryDate(option.date),
       searchText: `${option.date} ${option.label} ${formatPayrollManualEntryDate(option.date)}`,
     })),
-    [selectedReviewWeekDayOptions],
+    [writableReviewWeekDayOptions],
   );
   const payrollDatePickerEntry = useMemo(
     () => payrollDatePicker ? findEntryInReviewWeekDays(selectedReviewWeekDays, payrollDatePicker.entryId) : null,
@@ -639,6 +680,11 @@ export function TimeEntriesPage() {
     () => payrollDatePicker ? findEntryInReviewWeekDays(activeReviewDays, payrollDatePicker.entryId) : null,
     [activeReviewDays, payrollDatePicker],
   );
+  const isPayrollMonthLocked = payrollMonthPeriod?.status === "LOCKED";
+  const payrollMonthVersion = payrollSnapshotVersion(payrollMonthPeriod);
+  const arePayrollMonthExportsAvailable = isPayrollMonthLocked
+    && payrollMonthVersion !== null
+    && payrollMonthPeriod.artifacts_ready;
   useEffect(() => {
     let ignore = false;
     setIsLoadingSites(true);
@@ -685,6 +731,12 @@ export function TimeEntriesPage() {
   useEffect(() => {
     setExpandedEvaluationDayKeys(new Set());
   }, [selectedEvaluationMonth.month, selectedEvaluationMonth.year, selectedEvaluationPersonId]);
+
+  useEffect(() => {
+    setPayrollMonthDialog(null);
+    setPayrollMonthReopenReason("");
+    setPayrollMonthDownloadError(null);
+  }, [selectedEvaluationMonth.month, selectedEvaluationMonth.year]);
 
   useEffect(() => {
     setTimeReviewDiagnosticEntry(null);
@@ -1254,6 +1306,75 @@ export function TimeEntriesPage() {
   }, [activeEvaluationSubtab, activeTimeSubtab, reviewDataRange]);
 
   useEffect(() => {
+    if (activeTimeSubtab !== "review") {
+      return;
+    }
+
+    let ignore = false;
+    const monthSelections = payrollMonthSelectionsForDateRange(reviewWeekRange.start, reviewWeekRange.end);
+    setIsLoadingReviewWeekPayrollMonthStatuses(true);
+    setReviewWeekPayrollMonthStatuses({});
+    setReviewWeekPayrollMonthStatusRangeKey(null);
+    setReviewWeekPayrollMonthStatusError(null);
+    Promise.all(monthSelections.map((selection) => api.payrollMonthPeriod(selection)))
+      .then((periods) => {
+        if (!ignore) {
+          setReviewWeekPayrollMonthStatuses(Object.fromEntries(
+            periods.map((period) => [payrollMonthKey(period), period.status]),
+          ));
+          setReviewWeekPayrollMonthStatusRangeKey(reviewWeekRangeKey);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setReviewWeekPayrollMonthStatusError(
+            "Monatssperren konnten nicht geladen werden. Die Tagesbearbeitung bleibt vorsorglich gesperrt.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoadingReviewWeekPayrollMonthStatuses(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTimeSubtab, reviewWeekRange.end, reviewWeekRange.start, reviewWeekRangeKey]);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "evaluation") {
+      return;
+    }
+
+    let ignore = false;
+    setIsLoadingPayrollMonthPeriod(true);
+    setPayrollMonthPeriod(null);
+    setPayrollMonthPeriodError(null);
+    api.payrollMonthPeriod(selectedEvaluationMonth)
+      .then((period) => {
+        if (!ignore) {
+          setPayrollMonthPeriod(period);
+        }
+      })
+      .catch((requestError) => {
+        if (!ignore) {
+          setPayrollMonthPeriodError(readApiError(requestError, "Monatsstatus konnte nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoadingPayrollMonthPeriod(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTimeSubtab, payrollMonthPeriodRefreshKey, selectedEvaluationMonth]);
+
+  useEffect(() => {
     if (activeTimeSubtab !== "evaluation" || activeEvaluationSubtab !== "sites") {
       return;
     }
@@ -1397,8 +1518,32 @@ export function TimeEntriesPage() {
     });
   }
 
+  function isReviewWeekWorkDateLocked(workDate: string): boolean {
+    if (activeTimeSubtab !== "review" || reviewWeekPayrollMonthStatusRangeKey !== reviewWeekRangeKey) {
+      return false;
+    }
+    const monthKey = payrollMonthKeyForDate(workDate);
+    return monthKey !== null && reviewWeekPayrollMonthStatuses[monthKey] === "LOCKED";
+  }
+
+  function isReviewWeekWorkDateReadOnly(workDate: string): boolean {
+    if (activeTimeSubtab !== "review") {
+      return false;
+    }
+    if (!areReviewWeekPayrollMonthStatusesReady) {
+      return true;
+    }
+    const monthKey = payrollMonthKeyForDate(workDate);
+    return monthKey === null || reviewWeekPayrollMonthStatuses[monthKey] !== "OPEN";
+  }
+
   async function togglePayrollRowReview(entry: TimeEntry): Promise<void> {
-    if (!canManageTimeEntries || payrollReviewActionEntryId !== null || entry.id < 0) {
+    if (
+      !canManageTimeEntries
+      || isReviewWeekWorkDateReadOnly(entry.work_date)
+      || payrollReviewActionEntryId !== null
+      || entry.id < 0
+    ) {
       return;
     }
     setPayrollReviewActionEntryId(entry.id);
@@ -1419,6 +1564,9 @@ export function TimeEntriesPage() {
   }
 
   function openTimeReviewDiagnostic(entry: TimeEntry): void {
+    if (isReviewWeekWorkDateReadOnly(entry.work_date)) {
+      return;
+    }
     setTimeReviewPopupTop(payrollPanelTop());
     // Missing-day and GPS suggestion rows use negative client-only IDs and must first create a real entry.
     setTimeReviewDialogMode(entry.id < 0 ? "create" : "edit");
@@ -1429,8 +1577,14 @@ export function TimeEntriesPage() {
     if (!canManageTimeEntries || !activeReviewWorker || (!isEvaluationWorkerReview && activeReviewWorker.isReviewed)) {
       return;
     }
-    const initialDay = activeReviewDays.find((day) => day.entries.length === 0 && day.absenceType === null)
-      ?? activeReviewDays[0];
+    const writableDays = isEvaluationWorkerReview
+      ? activeReviewDays
+      : activeReviewDays.filter((day) => !isReviewWeekWorkDateReadOnly(day.date));
+    const initialDay = writableDays.find((day) => day.entries.length === 0 && day.absenceType === null)
+      ?? writableDays[0];
+    if (!initialDay) {
+      return;
+    }
     const workDate = initialDay?.date ?? (isEvaluationWorkerReview ? evaluationMonthRange.start : reviewWeekRange.start);
     setTimeReviewPopupTop(payrollPanelTop());
     setTimeReviewDialogMode("create");
@@ -1444,6 +1598,9 @@ export function TimeEntriesPage() {
   }
 
   function openLocationReviewDiagnostic(entry: TimeEntry): void {
+    if (isReviewWeekWorkDateReadOnly(entry.work_date)) {
+      return;
+    }
     setLocationReviewPopupTop(payrollPanelTop());
     setLocationReviewDiagnosticEntry(entry);
   }
@@ -1536,7 +1693,12 @@ export function TimeEntriesPage() {
   }
 
   function togglePayrollDatePicker(entry: TimeEntry, button: HTMLButtonElement): void {
-    if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0) {
+    if (
+      !canManageTimeEntries
+      || isReviewWeekWorkDateReadOnly(entry.work_date)
+      || payrollDateActionEntryId !== null
+      || entry.id < 0
+    ) {
       return;
     }
     setPayrollDatePicker((current) => {
@@ -1559,7 +1721,12 @@ export function TimeEntriesPage() {
   }
 
   function openPayrollDeleteDialog(entry: TimeEntry): void {
-    if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0) {
+    if (
+      !canManageTimeEntries
+      || isReviewWeekWorkDateReadOnly(entry.work_date)
+      || payrollDateActionEntryId !== null
+      || entry.id < 0
+    ) {
       return;
     }
     closePayrollDatePicker();
@@ -1579,7 +1746,12 @@ export function TimeEntriesPage() {
   }
 
   async function confirmPayrollEntryDeletion(): Promise<void> {
-    if (!canManageTimeEntries || !payrollDeleteDialog || isDeletingPayrollEntry) {
+    if (
+      !canManageTimeEntries
+      || !payrollDeleteDialog
+      || isReviewWeekWorkDateReadOnly(payrollDeleteDialog.entry.work_date)
+      || isDeletingPayrollEntry
+    ) {
       return;
     }
     setIsDeletingPayrollEntry(true);
@@ -1604,7 +1776,13 @@ export function TimeEntriesPage() {
   }
 
   async function movePayrollEntryDate(entry: TimeEntry, targetWorkDate: string): Promise<void> {
-    if (!canManageTimeEntries || payrollDateActionEntryId !== null || entry.id < 0) {
+    if (
+      !canManageTimeEntries
+      || isReviewWeekWorkDateReadOnly(entry.work_date)
+      || isReviewWeekWorkDateReadOnly(targetWorkDate)
+      || payrollDateActionEntryId !== null
+      || entry.id < 0
+    ) {
       return;
     }
     if (entry.work_date === targetWorkDate) {
@@ -1634,6 +1812,7 @@ export function TimeEntriesPage() {
       !canManageTimeEntries
       || activeReviewWorker?.personId !== personId
       || (!isEvaluationWorkerReview && activeReviewWorker.isReviewed)
+      || isReviewWeekWorkDateReadOnly(workDate)
       || payrollOvernightSavingKey !== null
     ) {
       return;
@@ -1670,7 +1849,12 @@ export function TimeEntriesPage() {
   }
 
   async function savePayrollTimeCorrection(): Promise<void> {
-    if (!canManageTimeEntries || !timeReviewDiagnosticEntry || isSavingPayrollCorrection) {
+    if (
+      !canManageTimeEntries
+      || !timeReviewDiagnosticEntry
+      || isReviewWeekWorkDateReadOnly(timeReviewDiagnosticEntry.work_date)
+      || isSavingPayrollCorrection
+    ) {
       return;
     }
     if (timeReviewDialogMode === "create" || timeReviewDiagnosticEntry.id < 0) {
@@ -1717,7 +1901,8 @@ export function TimeEntriesPage() {
         travel_minutes: "0",
         work_date: payrollManualWorkDate,
       },
-      allowedWorkDates: selectedReviewWeekDayOptions.map((option) => option.date),
+      allowedWorkDates: (isEvaluationWorkerReview ? activeReviewDayOptions : writableReviewWeekDayOptions)
+        .map((option) => option.date),
       allowedSiteIds: payrollManualSiteOptions.map((option) => Number(option.value)),
     });
     if (!result.ok) {
@@ -1760,7 +1945,12 @@ export function TimeEntriesPage() {
   }
 
   async function saveLocationReviewSite(): Promise<void> {
-    if (!canManageTimeEntries || !locationReviewDiagnosticEntry || isSavingLocationReview) {
+    if (
+      !canManageTimeEntries
+      || !locationReviewDiagnosticEntry
+      || isReviewWeekWorkDateReadOnly(locationReviewDiagnosticEntry.work_date)
+      || isSavingLocationReview
+    ) {
       return;
     }
 
@@ -1850,16 +2040,22 @@ export function TimeEntriesPage() {
   }
 
   async function downloadAllPayrollMonthXlsx(): Promise<void> {
-    if (isDownloadingAllPayrollMonthXlsx) {
+    if (!payrollMonthPeriod || !arePayrollMonthExportsAvailable || payrollMonthVersion === null || isDownloadingAllPayrollMonthXlsx) {
       return;
     }
     setIsDownloadingAllPayrollMonthXlsx(true);
     setPayrollMonthDownloadError(null);
     try {
-      const blob = await api.payrollMonthlyWorkersXlsx(selectedEvaluationMonth);
+      const blob = await api.payrollMonthlyWorkersXlsx({
+        ...selectedEvaluationMonth,
+        version: payrollMonthVersion,
+      });
       downloadBlobFile(
         blob,
-        `Lohnabrechnung_${selectedEvaluationMonth.year}_${String(selectedEvaluationMonth.month).padStart(2, "0")}_Alle_Monteure.xlsx`,
+        payrollMonthFilename(
+          `Lohnabrechnung_${selectedEvaluationMonth.year}_${String(selectedEvaluationMonth.month).padStart(2, "0")}_Alle_Monteure`,
+          payrollMonthPeriod,
+        ),
       );
     } catch (requestError) {
       setPayrollMonthDownloadError(readApiError(requestError, "Monatsabrechnungen konnten nicht erstellt werden."));
@@ -1869,7 +2065,7 @@ export function TimeEntriesPage() {
   }
 
   async function downloadSelectedPayrollMonthXlsx(): Promise<void> {
-    if (!selectedEvaluationWorker || isDownloadingPayrollMonthXlsx) {
+    if (!payrollMonthPeriod || !arePayrollMonthExportsAvailable || payrollMonthVersion === null || !selectedEvaluationWorker || isDownloadingPayrollMonthXlsx) {
       return;
     }
     setIsDownloadingPayrollMonthXlsx(true);
@@ -1877,16 +2073,59 @@ export function TimeEntriesPage() {
     try {
       const blob = await api.payrollMonthlyWorkerXlsx({
         personId: selectedEvaluationWorker.personId,
+        version: payrollMonthVersion,
         ...selectedEvaluationMonth,
       });
       downloadBlobFile(
         blob,
-        `Lohnabrechnung_${selectedEvaluationMonth.year}_${String(selectedEvaluationMonth.month).padStart(2, "0")}_${sanitizeFilenamePart(selectedEvaluationWorker.personName)}.xlsx`,
+        payrollMonthFilename(
+          `Lohnabrechnung_${selectedEvaluationMonth.year}_${String(selectedEvaluationMonth.month).padStart(2, "0")}_${sanitizeFilenamePart(selectedEvaluationWorker.personName)}`,
+          payrollMonthPeriod,
+        ),
       );
     } catch (requestError) {
       setPayrollMonthDownloadError(readApiError(requestError, "Monatsabrechnung konnte nicht erstellt werden."));
     } finally {
       setIsDownloadingPayrollMonthXlsx(false);
+    }
+  }
+
+  async function confirmPayrollMonthLock(): Promise<void> {
+    if (!canManagePayrollClose || !payrollMonthPeriod || payrollMonthPeriod.status !== "OPEN" || !payrollMonthPeriod.can_lock || isUpdatingPayrollMonth) {
+      return;
+    }
+    setIsUpdatingPayrollMonth(true);
+    setPayrollMonthPeriodError(null);
+    try {
+      const updatedPeriod = await api.lockPayrollMonth(selectedEvaluationMonth);
+      setPayrollMonthPeriod(updatedPeriod);
+      setPayrollMonthDialog(null);
+    } catch (requestError) {
+      setPayrollMonthPeriodError(readApiError(requestError, "Monat konnte nicht abgeschlossen werden."));
+    } finally {
+      setIsUpdatingPayrollMonth(false);
+    }
+  }
+
+  async function confirmPayrollMonthReopen(): Promise<void> {
+    const reason = payrollMonthReopenReason.trim();
+    if (!canManagePayrollClose || !payrollMonthPeriod || payrollMonthPeriod.status !== "LOCKED" || !payrollMonthPeriod.can_reopen || !reason || isUpdatingPayrollMonth) {
+      return;
+    }
+    setIsUpdatingPayrollMonth(true);
+    setPayrollMonthPeriodError(null);
+    try {
+      const updatedPeriod = await api.reopenPayrollMonth({
+        ...selectedEvaluationMonth,
+        reason,
+      });
+      setPayrollMonthPeriod(updatedPeriod);
+      setPayrollMonthDialog(null);
+      setPayrollMonthReopenReason("");
+    } catch (requestError) {
+      setPayrollMonthPeriodError(readApiError(requestError, "Monat konnte nicht wieder geöffnet werden."));
+    } finally {
+      setIsUpdatingPayrollMonth(false);
     }
   }
 
@@ -2126,6 +2365,12 @@ export function TimeEntriesPage() {
               {reviewActionError && <p className="time-table-note">{reviewActionError}</p>}
               {reviewHoursDownloadError && <p className="time-table-note">{reviewHoursDownloadError}</p>}
               {reviewPayrollWeekError && <p className="time-table-note">{reviewPayrollWeekError}</p>}
+              {isLoadingReviewWeekPayrollMonthStatuses && (
+                <p className="time-table-note" role="status">Monatssperren werden geprüft...</p>
+              )}
+              {reviewWeekPayrollMonthStatusError && (
+                <p className="time-table-note" role="alert">{reviewWeekPayrollMonthStatusError}</p>
+              )}
 
             {selectedReviewWorker ? (
               <div className={`time-review-worker-detail${selectedReviewWorker.isReviewed ? " is-reviewed" : ""}`}>
@@ -2147,8 +2392,14 @@ export function TimeEntriesPage() {
                           className="icon-button secondary time-review-manual-create-button"
                           type="button"
                           aria-haspopup="dialog"
-                          title={selectedReviewWorker.isReviewed ? "Geprüfte Woche zuerst zurücksetzen." : "Zeit für diese Monteurwoche manuell erfassen"}
-                          disabled={selectedReviewWorker.isReviewed || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                          title={selectedReviewWorker.isReviewed
+                            ? "Geprüfte Woche zuerst zurücksetzen."
+                            : payrollManualDateOptions.length === 0
+                              ? "In dieser Woche ist aktuell kein bearbeitbarer Tag verfügbar."
+                              : "Zeit für diese Monteurwoche manuell erfassen"}
+                          disabled={selectedReviewWorker.isReviewed
+                            || payrollManualDateOptions.length === 0
+                            || markingReviewWeekPersonId === selectedReviewWorker.personId}
                           onClick={openManualTimeEntryDialog}
                         >
                           <CalendarPlus aria-hidden="true" size={15} />
@@ -2342,8 +2593,16 @@ export function TimeEntriesPage() {
                 {payrollDateError && <p className="time-review-week-error">{payrollDateError}</p>}
                 <div className="time-review-week-check-table" role="table" aria-label={`Lohnprüfung ${selectedReviewWorker.personName} KW ${selectedReviewWeek.week}`}>
                   <PayrollReviewTableHeaders />
-                  {selectedReviewWeekDays.map((day) => (
-                    <section className="time-review-day-group" key={day.date} role="rowgroup" aria-label={`${day.weekdayLabel}, ${formatDate(day.date)}`}>
+                  {selectedReviewWeekDays.map((day) => {
+                    const isLockedPayrollDay = isReviewWeekWorkDateLocked(day.date);
+                    const isReadOnlyPayrollDay = isReviewWeekWorkDateReadOnly(day.date);
+                    return (
+                    <section
+                      aria-label={`${day.weekdayLabel}, ${formatDate(day.date)}${isLockedPayrollDay ? ", Monat abgeschlossen" : ""}`}
+                      className={`time-review-day-group${isLockedPayrollDay ? " is-payroll-month-locked" : ""}`}
+                      key={day.date}
+                      role="rowgroup"
+                    >
                       <div className="time-review-day-group-head" role="row">
                         <span
                           className="time-review-day-group-label"
@@ -2354,7 +2613,7 @@ export function TimeEntriesPage() {
                             <strong className="time-review-day-group-weekday">{day.weekdayLabel}</strong>
                             {day.entries.length > 0 && (
                               <PayrollOvernightStatusControl
-                                editable={canManageTimeEntries && !selectedReviewWorker.isReviewed}
+                                editable={canManageTimeEntries && !selectedReviewWorker.isReviewed && !isReadOnlyPayrollDay}
                                 hasConflict={day.hasOvernightStatusConflict}
                                 saving={payrollOvernightSavingKey === `${selectedReviewWorker.personId}:${day.date}`}
                                 status={day.overnightStatus}
@@ -2366,6 +2625,12 @@ export function TimeEntriesPage() {
                               />
                             )}
                           </span>
+                          {isLockedPayrollDay && (
+                            <span className="time-review-day-month-lock-badge">
+                              <LockKeyhole aria-hidden="true" size={12} />
+                              Monat abgeschlossen
+                            </span>
+                          )}
                         </span>
                         <span
                           className="time-review-day-group-total time-review-work-time-cell"
@@ -2389,7 +2654,7 @@ export function TimeEntriesPage() {
                             aria-label="Aktionen für Zeiteintrag öffnen"
                             aria-haspopup="menu"
                             aria-expanded={payrollDatePicker?.entryId === check.entry.id}
-                            disabled={!canManageTimeEntries || payrollDateActionEntryId !== null || check.entry.id < 0}
+                            disabled={!canManageTimeEntries || isReadOnlyPayrollDay || payrollDateActionEntryId !== null || check.entry.id < 0}
                             onClick={(event) => togglePayrollDatePicker(check.entry, event.currentTarget)}
                           >
                             <ChevronsUpDown aria-hidden="true" size={14} />
@@ -2432,19 +2697,19 @@ export function TimeEntriesPage() {
                         <div className="time-review-week-time time-review-week-total" role="cell">{renderPayrollWorkMinutes(check.entry)}</div>
                         <div role="cell">
                           {renderTimeReviewCheckMark(check.locationCheck, {
-                            onClick: () => openLocationReviewDiagnostic(check.entry),
+                            onClick: isReadOnlyPayrollDay ? undefined : () => openLocationReviewDiagnostic(check.entry),
                             label: "Ort-Diagnose öffnen",
                           })}
                         </div>
                         <div className="time-review-work-time-cell" role="cell">
                           {renderTimeReviewCheckMark(check.timeCheck, {
-                            onClick: () => openTimeReviewDiagnostic(check.entry),
+                            onClick: isReadOnlyPayrollDay ? undefined : () => openTimeReviewDiagnostic(check.entry),
                             label: "Arbeitszeit-Diagnose öffnen",
                           })}
                         </div>
                         <div role="cell">
                           {renderPayrollReviewMark(check.entry, {
-                            disabled: !canManageTimeEntries || payrollReviewActionEntryId !== null || check.entry.id < 0,
+                            disabled: !canManageTimeEntries || isReadOnlyPayrollDay || payrollReviewActionEntryId !== null || check.entry.id < 0,
                             isBusy: payrollReviewActionEntryId === check.entry.id,
                             onToggle: () => void togglePayrollRowReview(check.entry),
                           })}
@@ -2473,7 +2738,7 @@ export function TimeEntriesPage() {
                           <div className="time-review-week-time" role="cell">-</div>
                           <div role="cell">
                             {hasVacationCredit ? "-" : renderTimeReviewCheckMark("unknown", {
-                              onClick: () => openLocationReviewDiagnostic(missingEntry),
+                              onClick: isReadOnlyPayrollDay ? undefined : () => openLocationReviewDiagnostic(missingEntry),
                               label: "Ort-Diagnose öffnen",
                             })}
                           </div>
@@ -2485,7 +2750,7 @@ export function TimeEntriesPage() {
                             {hasVacationCredit
                               ? null
                               : renderTimeReviewCheckMark("unknown", {
-                                onClick: () => openTimeReviewDiagnostic(missingEntry),
+                                onClick: isReadOnlyPayrollDay ? undefined : () => openTimeReviewDiagnostic(missingEntry),
                                 label: "Arbeitszeit-Diagnose öffnen",
                               })}
                           </div>
@@ -2495,7 +2760,8 @@ export function TimeEntriesPage() {
                     })()}
                       </div>
                     </section>
-                  ))}
+                    );
+                  })}
                 </div>
                 {payrollDatePicker && payrollDatePickerEntry && typeof document !== "undefined" && createPortal(
                   <div
@@ -2514,10 +2780,12 @@ export function TimeEntriesPage() {
                     {selectedReviewWeekDayOptions.map((option) => (
                       <button
                         className={option.date === payrollDatePickerEntry.work_date ? "is-selected" : ""}
+                        disabled={isReviewWeekWorkDateReadOnly(option.date)}
                         key={option.date}
                         type="button"
                         role="menuitemradio"
                         aria-checked={option.date === payrollDatePickerEntry.work_date}
+                        title={isReviewWeekWorkDateLocked(option.date) ? "Monat abgeschlossen" : undefined}
                         onClick={() => void movePayrollEntryDate(payrollDatePickerEntry, option.date)}
                       >
                         {option.label}
@@ -2599,13 +2867,82 @@ export function TimeEntriesPage() {
                 </div>
               </div>
               <div className="time-evaluation-period-actions" role="group" aria-labelledby="time-evaluation-export-heading">
+                <div className="payroll-month-close-controls">
+                  <label
+                    className={`payroll-month-lock-toggle${isPayrollMonthLocked ? " is-locked" : ""}`}
+                    title={payrollMonthPeriod?.status === "OPEN" && !payrollMonthPeriod.can_lock
+                      ? "Der Monat kann erst nach Behebung aller Prüfpunkte abgeschlossen werden."
+                      : undefined}
+                  >
+                    <input
+                      aria-describedby="payroll-month-status-hint"
+                      checked={isPayrollMonthLocked}
+                      disabled={isLoadingPayrollMonthPeriod
+                        || isUpdatingPayrollMonth
+                        || !canManagePayrollClose
+                        || !payrollMonthPeriod
+                        || (payrollMonthPeriod.status === "OPEN" && !payrollMonthPeriod.can_lock)
+                        || (payrollMonthPeriod.status === "LOCKED" && !payrollMonthPeriod.can_reopen)}
+                      type="checkbox"
+                      onChange={() => setPayrollMonthDialog(isPayrollMonthLocked ? "reopen" : "lock")}
+                    />
+                    <span className="payroll-month-lock-box" aria-hidden="true">
+                      {isPayrollMonthLocked ? <Check size={13} strokeWidth={3} /> : null}
+                    </span>
+                    <span>Monat geprüft und gesperrt</span>
+                  </label>
+                  <button
+                    className="payroll-month-setup-button"
+                    disabled={!canManagePayrollClose || isUpdatingPayrollMonth}
+                    type="button"
+                    onClick={() => setIsPayrollSetupOpen(true)}
+                  >
+                    <Settings2 aria-hidden="true" size={14} />
+                    Einrichtung
+                  </button>
+                </div>
+                <div
+                  className={`payroll-month-status-hint${isPayrollMonthLocked ? " is-locked" : " is-open"}`}
+                  id="payroll-month-status-hint"
+                  role="status"
+                >
+                  {isLoadingPayrollMonthPeriod ? (
+                    <span>Monatsstatus wird geladen...</span>
+                  ) : payrollMonthPeriod ? (
+                    <>
+                      {isPayrollMonthLocked ? <LockKeyhole aria-hidden="true" size={14} /> : <UnlockKeyhole aria-hidden="true" size={14} />}
+                      <span>{payrollMonthStatusText(payrollMonthPeriod)}</span>
+                    </>
+                  ) : (
+                    <span>Monatsstatus nicht verfügbar.</span>
+                  )}
+                </div>
+                {payrollMonthPeriod?.blockers.length ? (
+                  <details className="payroll-month-blockers">
+                    <summary>{payrollMonthPeriod.blockers.length} Prüfpunkte verhindern den Monatsabschluss</summary>
+                    <ul>
+                        {payrollMonthPeriod.blockers.map((blocker, index) => (
+                          <li key={`${blocker.code}-${blocker.person_id ?? "all"}-${blocker.work_date ?? "month"}-${index}`}>
+                            <strong>{payrollMonthBlockerPersonLabel(blocker, payrollMonthPersonNames)}</strong>
+                            {" · "}
+                            <span>{formatPayrollMonthWorkDateContext(blocker.work_date)}</span>
+                            {" · "}
+                            <span>{blocker.message}</span>
+                          </li>
+                        ))}
+                    </ul>
+                  </details>
+                ) : null}
+                {payrollMonthPeriodError && <p className="payroll-month-status-error" role="alert">{payrollMonthPeriodError}</p>}
                 <h3 id="time-evaluation-export-heading">Monatsabrechnung</h3>
                 <div className="time-evaluation-export-buttons">
                   <button
                     aria-describedby="time-evaluation-monthly-download-status"
                     className="time-evaluation-monthly-download-button"
-                    disabled={isDownloadingAllPayrollMonthXlsx}
-                    title="Monatsabrechnungen aller Monteure als Excel herunterladen"
+                    disabled={!arePayrollMonthExportsAvailable || isDownloadingAllPayrollMonthXlsx}
+                    title={arePayrollMonthExportsAvailable
+                      ? `Abgeschlossene Monatsabrechnungen aller Monteure (v${payrollMonthVersion}) herunterladen`
+                      : "Der Download ist nach einem erfolgreichen Monatsabschluss verfügbar."}
                     type="button"
                     onClick={() => void downloadAllPayrollMonthXlsx()}
                   >
@@ -2615,9 +2952,9 @@ export function TimeEntriesPage() {
                   <button
                     aria-describedby="time-evaluation-monthly-download-status"
                     className="time-evaluation-monthly-download-button"
-                    disabled={!selectedEvaluationWorker || !isEvaluationDataReady || isDownloadingPayrollMonthXlsx}
-                    title={selectedEvaluationWorker
-                      ? `Monatsabrechnung für ${selectedEvaluationWorker.personName} als Excel herunterladen`
+                    disabled={!arePayrollMonthExportsAvailable || !selectedEvaluationWorker || !isEvaluationDataReady || isDownloadingPayrollMonthXlsx}
+                    title={arePayrollMonthExportsAvailable && selectedEvaluationWorker
+                      ? `Abgeschlossene Monatsabrechnung für ${selectedEvaluationWorker.personName} (v${payrollMonthVersion}) herunterladen`
                       : "Monteur auswählen, um die Monatsabrechnung herunterzuladen"}
                     type="button"
                     onClick={() => void downloadSelectedPayrollMonthXlsx()}
@@ -2629,7 +2966,9 @@ export function TimeEntriesPage() {
                 <span aria-live="polite" className="sr-only" id="time-evaluation-monthly-download-status">
                   {isDownloadingAllPayrollMonthXlsx || isDownloadingPayrollMonthXlsx
                     ? "Die Excel-Monatsabrechnung wird erstellt."
-                    : "Excel-Monatsabrechnungen sind zum Download verfügbar."}
+                    : arePayrollMonthExportsAvailable
+                      ? `Excel-Monatsabrechnungen aus Snapshot v${payrollMonthVersion} sind zum Download verfügbar.`
+                      : "Excel-Monatsabrechnungen sind erst nach dem Monatsabschluss verfügbar."}
                 </span>
               </div>
             </div>
@@ -2644,7 +2983,7 @@ export function TimeEntriesPage() {
               filterCounts={evaluationWorkerFilterCounts}
               isLoading={isLoadingPeople || isLoadingReviewAllEntries || !isEvaluationDataReady}
               isReady={isEvaluationDataReady}
-              canManageTimeEntries={canManageTimeEntries}
+              canManageTimeEntries={canManageTimeEntries && !isPayrollMonthLocked}
               onChangeFilter={setEvaluationWorkerFilter}
               onChangeSearch={setEvaluationWorkerSearch}
               onOpenLocationDiagnostic={openLocationReviewDiagnostic}
@@ -2988,6 +3327,85 @@ export function TimeEntriesPage() {
         </div>
       )}
 
+      {payrollMonthDialog && payrollMonthPeriod && (
+        <div
+          className="payroll-month-dialog-backdrop"
+          role="presentation"
+          onClick={isUpdatingPayrollMonth ? undefined : () => setPayrollMonthDialog(null)}
+        >
+          <div
+            aria-describedby="payroll-month-dialog-description"
+            aria-labelledby="payroll-month-dialog-title"
+            aria-modal="true"
+            className="payroll-month-dialog"
+            role="alertdialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header>
+              <span>Lohnprüfung</span>
+              <h2 id="payroll-month-dialog-title">
+                {payrollMonthDialog === "lock"
+                  ? `Monat ${formatPayrollMonthLabel(selectedEvaluationMonth)} abschließen?`
+                  : `Monat ${formatPayrollMonthLabel(selectedEvaluationMonth)} wieder öffnen?`}
+              </h2>
+            </header>
+            <div className="payroll-month-dialog-content" id="payroll-month-dialog-description">
+              {payrollMonthDialog === "lock" ? (
+                <>
+                  <p>Alle abrechnungsrelevanten Daten dieses Monats werden anschließend in sämtlichen Ansichten gesperrt.</p>
+                  <p>Die Excel-Dateien werden unveränderlich aus dem abgeschlossenen Snapshot erzeugt.</p>
+                </>
+              ) : (
+                <>
+                  <p>Die bestehende Abrechnungsversion bleibt im Protokoll erhalten, ist danach aber nicht mehr die aktuelle freigegebene Version. Nach den Änderungen muss der Monat erneut geprüft und gesperrt werden.</p>
+                  <label>
+                    <span>Begründung *</span>
+                    <textarea
+                      autoFocus
+                      disabled={isUpdatingPayrollMonth}
+                      maxLength={1000}
+                      placeholder="Warum muss der Monat wieder geöffnet werden?"
+                      rows={4}
+                      value={payrollMonthReopenReason}
+                      onChange={(event) => setPayrollMonthReopenReason(event.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+            {payrollMonthPeriodError && <p className="payroll-month-dialog-error" role="alert">{payrollMonthPeriodError}</p>}
+            <footer>
+              <button
+                className="secondary"
+                disabled={isUpdatingPayrollMonth}
+                type="button"
+                onClick={() => setPayrollMonthDialog(null)}
+              >
+                Abbrechen
+              </button>
+              <button
+                className={payrollMonthDialog === "reopen" ? "is-warning" : ""}
+                disabled={isUpdatingPayrollMonth || (payrollMonthDialog === "reopen" && !payrollMonthReopenReason.trim())}
+                type="button"
+                onClick={() => void (payrollMonthDialog === "lock" ? confirmPayrollMonthLock() : confirmPayrollMonthReopen())}
+              >
+                {isUpdatingPayrollMonth
+                  ? "Wird verarbeitet..."
+                  : payrollMonthDialog === "lock"
+                    ? "Monat verbindlich abschließen"
+                    : "Monat wieder öffnen"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      <PayrollSetupDialog
+        open={isPayrollSetupOpen && canManagePayrollClose}
+        onClose={() => setIsPayrollSetupOpen(false)}
+        onSetupChanged={() => setPayrollMonthPeriodRefreshKey((current) => current + 1)}
+      />
+
       {locationReviewDiagnosticEntry && (
         <div
           className="time-review-diagnostic-backdrop is-location"
@@ -3176,6 +3594,38 @@ function isTimeReviewPerfEnabled(): boolean {
   } catch {
     return false;
   }
+}
+
+function formatPayrollMonthLabel(selection: CalendarMonthSelection): string {
+  return new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(
+    new Date(selection.year, selection.month - 1, 1),
+  );
+}
+
+function payrollMonthBlockerPersonLabel(
+  blocker: PayrollMonthBlocker,
+  personNames: ReadonlyMap<number, string>,
+): string {
+  if (blocker.person_id === null || blocker.person_id === undefined) {
+    return "Alle Monteure";
+  }
+  return personNames.get(blocker.person_id) ?? `Monteur #${blocker.person_id}`;
+}
+
+function payrollMonthStatusText(period: PayrollMonthPeriod): string {
+  if (period.status === "OPEN") {
+    if (period.blockers.length > 0) {
+      return `Der Monat kann noch bearbeitet werden. ${period.blockers.length} Prüfpunkte sind noch zu bearbeiten.`;
+    }
+    return "Der Monat kann noch bearbeitet werden. Alle Voraussetzungen für den Abschluss sind erfüllt.";
+  }
+  const version = period.snapshot_version ? `Snapshot v${period.snapshot_version}` : "Snapshot erstellt";
+  const actor = period.locked_by_name ? ` von ${period.locked_by_name}` : "";
+  const timestamp = period.locked_at
+    ? ` am ${new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(period.locked_at))}`
+    : "";
+  const artifactStatus = period.artifacts_ready ? "Exporte verfügbar" : "Exporte werden vorbereitet";
+  return `Monat abgeschlossen – Änderungen gesperrt · ${version}${actor}${timestamp} · ${artifactStatus}`;
 }
 
 function timeReviewPerfNow(): number | null {

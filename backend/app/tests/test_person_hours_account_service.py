@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -31,12 +33,14 @@ def test_manual_adjustment_and_payout_update_hours_account_balance():
     adjusted = service.create_manual_adjustment(
         person_id=person.id,
         hours_delta=5.5,
+        effective_date=date(2026, 8, 3),
         note="Startwert Altbestand übernommen",
         current_user=user,
     )
     paid = service.create_payout(
         person_id=person.id,
         hours=2,
+        effective_date=date(2026, 8, 4),
         note="Auszahlung Juli 2026",
         current_user=user,
     )

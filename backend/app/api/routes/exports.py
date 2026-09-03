@@ -61,6 +61,7 @@ def payroll_monthly_worker_xlsx(
     person_id: int = Query(gt=0),
     year: int = Query(ge=2000, le=2100),
     month: int = Query(ge=1, le=12),
+    version: int | None = Query(default=None, ge=1),
     current_user=Depends(CAN_PAYROLL_EXPORT),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -69,6 +70,7 @@ def payroll_monthly_worker_xlsx(
         year=year,
         month=month,
         current_user=current_user,
+        version=version,
     )
     filename = f"lohnabrechnung_{year}_{month:02d}_person_{person_id}.xlsx"
     return xlsx_response(content, filename)
@@ -78,6 +80,7 @@ def payroll_monthly_worker_xlsx(
 def payroll_monthly_workers_xlsx(
     year: int = Query(ge=2000, le=2100),
     month: int = Query(ge=1, le=12),
+    version: int | None = Query(default=None, ge=1),
     current_user=Depends(CAN_PAYROLL_EXPORT),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -85,6 +88,7 @@ def payroll_monthly_workers_xlsx(
         year=year,
         month=month,
         current_user=current_user,
+        version=version,
     )
     filename = f"lohnabrechnung_{year}_{month:02d}_alle_monteure.xlsx"
     return xlsx_response(content, filename)

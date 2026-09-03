@@ -189,6 +189,16 @@ export type PersonHoursAccountEntry = {
   created_by_user_id: number | null;
   created_by_name: string | null;
   created_at: string;
+  ledger_system: string;
+  effective_date: string | null;
+  source_type: string | null;
+  source_reference_id: string | null;
+  is_active: boolean;
+  daily_target_minutes: number | null;
+  daily_work_minutes: number | null;
+  daily_credit_minutes: number | null;
+  daily_actual_minutes: number | null;
+  daily_absence_type: string | null;
 };
 
 export type PersonHoursAccount = {
@@ -199,10 +209,12 @@ export type PersonHoursAccount = {
 
 export type PersonHoursManualAdjustmentPayload = {
   hours_delta: number;
+  effective_date: string;
   note: string;
 };
 
 export type PersonHoursPayoutPayload = {
   hours: number;
+  effective_date: string;
   note?: string | null;
 };

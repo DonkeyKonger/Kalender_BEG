@@ -9,6 +9,7 @@ import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, Extra
 import type { ExtraWorkManualStatus, MeasurementManualStatus } from "./projectRecordStatuses";
 import type { MobileAssignment, MobileAssignmentSiteHistoryResponse, MobileAssignmentSitesResponse, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileAbsenceResponse, MobilePersonalFileAbsenceType, MobilePersonalFileTool, MobileSite, MobileToolIssueReason, MobileToolIssueReport } from "../types/mobile";
 import type { OvernightStatus, PayrollSiteCockpit, PayrollSiteHistory, PersonWorkDay, TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryReviewDecisionPayload, TimeEntryReviewWeek, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
+import type { PayrollMonthPeriod, PayrollOpeningBalanceUpdate, PayrollSetup, PayrollWeeklyPlanUpdate } from "../types/payrollMonth";
 import type { ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate, ToolMaterialPage, ToolMaterialResponsibility, ToolResponsibleUser } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
 import type { VehicleDatabaseItem, VehicleDatabaseOptions, VehicleDatabasePayload, VehicleDatabaseSortDirection, VehicleDatabaseSortField } from "../types/vehicleDatabase";
@@ -795,6 +796,25 @@ export const api = {
     return request<void>(`/persons/${personId}`, { method: "DELETE" });
   },
 
+  async payrollSetup(effectiveDate: string): Promise<PayrollSetup> {
+    const search = new URLSearchParams({ effective_date: effectiveDate });
+    return request<PayrollSetup>(`/payroll-setup?${search.toString()}`);
+  },
+
+  async confirmPayrollWeeklyPlan(personId: number, payload: PayrollWeeklyPlanUpdate): Promise<PayrollSetup> {
+    return request<PayrollSetup>(`/payroll-setup/workers/${personId}/weekly-plan`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async confirmPayrollOpeningBalance(personId: number, payload: PayrollOpeningBalanceUpdate): Promise<PayrollSetup> {
+    return request<PayrollSetup>(`/payroll-setup/workers/${personId}/opening-balance`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+
   async customers(params: { isActive?: boolean | null } = { isActive: true }): Promise<Customer[]> {
     const search = new URLSearchParams();
     if (params.isActive !== null && params.isActive !== undefined) {
@@ -1021,6 +1041,24 @@ export const api = {
       iso_week: String(params.isoWeek),
     });
     return request<TimeEntryPayrollWeek>(`/time-entries/payroll-week?${search.toString()}`);
+  },
+
+  async payrollMonthPeriod(params: { year: number; month: number }): Promise<PayrollMonthPeriod> {
+    return request<PayrollMonthPeriod>(`/payroll-months/${params.year}/${params.month}`);
+  },
+
+  async lockPayrollMonth(params: { year: number; month: number }): Promise<PayrollMonthPeriod> {
+    return request<PayrollMonthPeriod>(`/payroll-months/${params.year}/${params.month}/lock`, {
+      method: "POST",
+      body: JSON.stringify({ confirmed: true }),
+    });
+  },
+
+  async reopenPayrollMonth(params: { year: number; month: number; reason: string }): Promise<PayrollMonthPeriod> {
+    return request<PayrollMonthPeriod>(`/payroll-months/${params.year}/${params.month}/reopen`, {
+      method: "POST",
+      body: JSON.stringify({ reason: params.reason }),
+    });
   },
 
   async myTimeEntryWeeklyReviews(params: { isoYear: number; isoWeek?: number }): Promise<TimeEntryWeeklyReview[]> {
@@ -1657,20 +1695,26 @@ export const api = {
     return requestBlob(`/exports/time-entries/monthly-xlsx?${search.toString()}`);
   },
 
-  async payrollMonthlyWorkersXlsx(params: { year: number; month: number }): Promise<Blob> {
+  async payrollMonthlyWorkersXlsx(params: { year: number; month: number; version?: number }): Promise<Blob> {
     const search = new URLSearchParams({
       year: String(params.year),
       month: String(params.month),
     });
+    if (params.version !== undefined) {
+      search.set("version", String(params.version));
+    }
     return requestBlob(`/exports/time-entries/payroll-monthly-workers-xlsx?${search.toString()}`);
   },
 
-  async payrollMonthlyWorkerXlsx(params: { personId: number; year: number; month: number }): Promise<Blob> {
+  async payrollMonthlyWorkerXlsx(params: { personId: number; year: number; month: number; version?: number }): Promise<Blob> {
     const search = new URLSearchParams({
       person_id: String(params.personId),
       year: String(params.year),
       month: String(params.month),
     });
+    if (params.version !== undefined) {
+      search.set("version", String(params.version));
+    }
     return requestBlob(`/exports/time-entries/payroll-monthly-worker-xlsx?${search.toString()}`);
   },
 

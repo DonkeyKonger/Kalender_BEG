@@ -108,6 +108,8 @@ class PayrollMonthTemplateLayout:
     travel_14_amount_cell: str = "G50"
     travel_28_amount_cell: str = "G51"
     overnight_20_amount_cell: str = "G52"
+    opening_balance_cell: str = "K50"
+    closing_balance_cell: str = "K51"
     travel_rate_row: int = 9
 
 
@@ -162,6 +164,8 @@ class PayrollMonthSheet:
     absences: Sequence[Absence] = ()
     non_working_dates: Collection[date] = ()
     work_days: Sequence[PersonWorkDay] = ()
+    opening_balance_minutes: int | None = None
+    closing_balance_minutes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -187,6 +191,8 @@ def build_payroll_month_xlsx(
     absences: Sequence[Absence] = (),
     non_working_dates: Collection[date] = (),
     work_days: Sequence[PersonWorkDay] = (),
+    opening_balance_minutes: int | None = None,
+    closing_balance_minutes: int | None = None,
 ) -> PayrollMonthWorkbook:
     """Erstellt eine neue Monatsdatei, ohne Vorlage oder Quelldaten zu verändern."""
     template = load_payroll_monthly_template()
@@ -214,6 +220,8 @@ def build_payroll_month_xlsx(
             absences=absences,
             non_working_dates=non_working_dates,
             work_days=work_days,
+            opening_balance_minutes=opening_balance_minutes,
+            closing_balance_minutes=closing_balance_minutes,
         )
         filled_sheet = ET.tostring(
             sheet_root,
@@ -319,6 +327,8 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
                     absences=sheet.absences,
                     non_working_dates=sheet.non_working_dates,
                     work_days=sheet.work_days,
+                    opening_balance_minutes=sheet.opening_balance_minutes,
+                    closing_balance_minutes=sheet.closing_balance_minutes,
                 )
             )
             filled_sheet = _preserve_ignorable_namespaces(
@@ -348,6 +358,8 @@ def fill_payroll_month_sheet(
     absences: Sequence[Absence] = (),
     non_working_dates: Collection[date] = (),
     work_days: Sequence[PersonWorkDay] = (),
+    opening_balance_minutes: int | None = None,
+    closing_balance_minutes: int | None = None,
 ) -> PayrollMonthPlan:
     """Befüllt genau ein Monatsblatt mit den freigegebenen Tagesfeldern."""
     plan = build_payroll_month_plan(
@@ -360,6 +372,11 @@ def fill_payroll_month_sheet(
         work_days=work_days,
     )
     _write_month_header(sheet, person=person, year=year, month=month)
+    _write_account_balances(
+        sheet,
+        opening_balance_minutes=opening_balance_minutes,
+        closing_balance_minutes=closing_balance_minutes,
+    )
     _clear_month_day_values(sheet, year=year, month=month)
     for day in plan.days:
         _write_month_day(sheet, day)
@@ -989,6 +1006,27 @@ def _write_month_totals(
     )
 
 
+def _write_account_balances(
+    sheet: ET.Element,
+    *,
+    opening_balance_minutes: int | None,
+    closing_balance_minutes: int | None,
+) -> None:
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    for ref, minutes in (
+        (layout.opening_balance_cell, opening_balance_minutes),
+        (layout.closing_balance_cell, closing_balance_minutes),
+    ):
+        if minutes is None:
+            _clear_cell(sheet, ref)
+        elif minutes < 0:
+            # The workbook uses Excel's 1900 date system. Negative numeric times
+            # render as #####, so retain the exact duration as explicit text.
+            _set_cell_string(sheet, ref, f"-{_format_duration(-minutes)}")
+        else:
+            _set_cell_number(sheet, ref, minutes / 1440)
+
+
 def _duration_cell_refs() -> list[str]:
     layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
     return [
@@ -1000,6 +1038,8 @@ def _duration_cell_refs() -> list[str]:
         layout.normal_hours_cell,
         layout.overtime_hours_cell,
         layout.sick_hours_cell,
+        layout.opening_balance_cell,
+        layout.closing_balance_cell,
     ]
 
 
