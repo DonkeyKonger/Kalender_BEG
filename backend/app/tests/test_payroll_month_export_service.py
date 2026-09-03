@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.models import Base
 from app.models.absence import Absence
-from app.models.enums import AbsenceStatus, AbsenceType, PersonType, UserRole
+from app.models.enums import AbsenceStatus, AbsenceType, OvernightStatus, PersonType, UserRole
 from app.models.person import Person
+from app.models.person_work_day import PersonWorkDay
 from app.models.site import Site
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
@@ -178,6 +179,62 @@ def test_downloads_load_calendar_absences_even_without_time_entries(all_workers)
             assert float(second.find('.//m:c[@r="D46"]/m:v', ns).text) * 24 == pytest.approx(160)
         else:
             assert "xl/worksheets/sheet2.xml" not in workbook.namelist()
+
+
+def test_downloads_share_expense_rules_and_load_overnight_only_boundary_days():
+    db = database()
+    anna = person(1, "Anna", "Bau")
+    bernd = person(2, "Bernd", "Strom")
+    site = Site(id=1, site_number="4711", name="Rathaus")
+    db.add_all([anna, bernd, site])
+    db.flush()
+    db.add_all([
+        entry(1, anna.id, site.id, date(2026, 6, 1)),
+        entry(2, anna.id, site.id, date(2026, 6, 3)),
+        entry(3, bernd.id, site.id, date(2026, 6, 1)),
+        PersonWorkDay(person_id=anna.id, work_date=date(2026, 5, 31),
+                      overnight_status=OvernightStatus.BEG_PAID),
+        PersonWorkDay(person_id=anna.id, work_date=date(2026, 6, 1),
+                      overnight_status=OvernightStatus.SELF_PAID),
+        PersonWorkDay(person_id=anna.id, work_date=date(2026, 6, 2),
+                      overnight_status=OvernightStatus.BEG_PAID),
+        PersonWorkDay(person_id=anna.id, work_date=date(2026, 6, 3),
+                      overnight_status=OvernightStatus.NONE),
+        PersonWorkDay(person_id=anna.id, work_date=date(2026, 6, 5),
+                      overnight_status=OvernightStatus.NONE),
+        PersonWorkDay(person_id=bernd.id, work_date=date(2026, 6, 1),
+                      overnight_status=OvernightStatus.NONE),
+    ])
+    db.commit()
+    service = PayrollMonthExportService(db)
+    args = dict(year=2026, month=6, current_user=SimpleNamespace(role=UserRole.ADMIN))
+    single = service.worker_export(person_id=anna.id, **args)
+    multiple = service.all_workers_export(**args)
+    repeated = service.worker_export(person_id=anna.id, **args)
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    with ZipFile(BytesIO(single)) as first, ZipFile(BytesIO(multiple)) as all_workers:
+        assert first.read("xl/worksheets/sheet1.xml") == all_workers.read(
+            "xl/worksheets/sheet1.xml"
+        )
+        sheet = ET.fromstring(first.read("xl/worksheets/sheet1.xml"))
+        other = ET.fromstring(all_workers.read("xl/worksheets/sheet2.xml"))
+        for ref in ("I10", "K10", "L10", "I11", "K11", "J12"):
+            assert sheet.find(f'.//m:c[@r="{ref}"]/m:is/m:t', ns).text == "x", ref
+        for ref in ("J10", "J11", "L11", "E11", "F11", "I12", "K12", "L12", "J14"):
+            assert len(sheet.find(f'.//m:c[@r="{ref}"]', ns)) == 0, ref
+        assert other.find('.//m:c[@r="J10"]/m:is/m:t', ns).text == "x"
+        for ref in ("I10", "K10", "L10", "J11"):
+            assert len(other.find(f'.//m:c[@r="{ref}"]', ns)) == 0
+    # ZIP-Erstellungszeitpunkte dürfen variieren, die Blattinhalte nicht.
+    with ZipFile(BytesIO(single)) as first, ZipFile(BytesIO(repeated)) as again:
+        assert {name: first.read(name) for name in first.namelist()} == {
+            name: again.read(name) for name in again.namelist()
+        }
+
+
+def test_month_source_range_includes_adjacent_days_when_weeks_match_month_edges():
+    assert payroll_month_source_range(2026, 6)[0] == date(2026, 5, 31)
+    assert payroll_month_source_range(2026, 5)[1] == date(2026, 6, 1)
 
 
 def database() -> Session:

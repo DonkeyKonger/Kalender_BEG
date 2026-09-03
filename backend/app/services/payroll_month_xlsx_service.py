@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import calendar
+import logging
 import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -16,6 +17,7 @@ from xml.sax.saxutils import escape, quoteattr
 from app.models.absence import Absence
 from app.models.enums import AbsenceStatus, AbsenceType, OvernightStatus
 from app.models.person import Person
+from app.models.person_work_day import PersonWorkDay
 from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.absence_service import absence_weekdays
@@ -25,10 +27,16 @@ from app.services.person_hours_account_service import (
     effective_weekly_work_minutes,
 )
 from app.services.payroll_xlsx_template import load_payroll_monthly_template
+from app.services.payroll_travel_expense_service import (
+    PayrollTravelPlan,
+    aggregate_payroll_travel_days,
+    build_payroll_travel_plan,
+)
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 
 
 SPREADSHEET_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+logger = logging.getLogger(__name__)
 SHEET_NAMESPACES = {
     "": SPREADSHEET_NS,
     "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
@@ -87,6 +95,10 @@ class PayrollMonthTemplateLayout:
     overnight_column: str = "F"
     commission_column: str = "G"
     address_column: str = "H"
+    travel_10_column: str = "I"
+    travel_14_column: str = "J"
+    travel_28_column: str = "K"
+    overnight_20_column: str = "L"
 
 
 PAYROLL_MONTH_TEMPLATE_LAYOUT = PayrollMonthTemplateLayout()
@@ -121,6 +133,7 @@ class PayrollWeekOvertimeRemainder:
 class PayrollMonthPlan:
     days: tuple[PayrollMonthDay, ...]
     overtime_remainders: tuple[PayrollWeekOvertimeRemainder, ...]
+    travel_expenses: PayrollTravelPlan
 
 
 @dataclass(frozen=True)
@@ -138,6 +151,7 @@ class PayrollMonthSheet:
     entries: Sequence[WorkTimeEntry]
     absences: Sequence[Absence] = ()
     non_working_dates: Collection[date] = ()
+    work_days: Sequence[PersonWorkDay] = ()
 
 
 @dataclass(frozen=True)
@@ -162,6 +176,7 @@ def build_payroll_month_xlsx(
     entries: Sequence[WorkTimeEntry],
     absences: Sequence[Absence] = (),
     non_working_dates: Collection[date] = (),
+    work_days: Sequence[PersonWorkDay] = (),
 ) -> PayrollMonthWorkbook:
     """Erstellt eine neue Monatsdatei, ohne Vorlage oder Quelldaten zu verändern."""
     template = load_payroll_monthly_template()
@@ -184,6 +199,7 @@ def build_payroll_month_xlsx(
             entries=entries,
             absences=absences,
             non_working_dates=non_working_dates,
+            work_days=work_days,
         )
         filled_sheet = ET.tostring(
             sheet_root,
@@ -280,6 +296,7 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
                     entries=sheet.entries,
                     absences=sheet.absences,
                     non_working_dates=sheet.non_working_dates,
+                    work_days=sheet.work_days,
                 )
             )
             filled_sheet = _preserve_ignorable_namespaces(
@@ -308,6 +325,7 @@ def fill_payroll_month_sheet(
     entries: Sequence[WorkTimeEntry],
     absences: Sequence[Absence] = (),
     non_working_dates: Collection[date] = (),
+    work_days: Sequence[PersonWorkDay] = (),
 ) -> PayrollMonthPlan:
     """Befüllt genau ein Monatsblatt mit den freigegebenen Tagesfeldern."""
     plan = build_payroll_month_plan(
@@ -317,11 +335,18 @@ def fill_payroll_month_sheet(
         entries=entries,
         absences=absences,
         non_working_dates=non_working_dates,
+        work_days=work_days,
     )
     _write_month_header(sheet, person=person, year=year, month=month)
     _clear_month_day_values(sheet, year=year, month=month)
     for day in plan.days:
         _write_month_day(sheet, day)
+    write_payroll_travel_expenses(sheet, year=year, month=month, plan=plan.travel_expenses)
+    for warning in plan.travel_expenses.warnings:
+        logger.warning(
+            "Reisekosten nicht markiert: person_id=%s, Datum=%s, Grund=%s",
+            warning.person_id, warning.work_date.isoformat(), warning.code,
+        )
     _write_month_totals(
         sheet,
         person=person,
@@ -341,6 +366,7 @@ def build_payroll_month_plan(
     entries: Sequence[WorkTimeEntry],
     absences: Sequence[Absence] = (),
     non_working_dates: Collection[date] = (),
+    work_days: Sequence[PersonWorkDay] = (),
 ) -> PayrollMonthPlan:
     if month < 1 or month > 12:
         raise ValueError("month muss zwischen 1 und 12 liegen.")
@@ -452,6 +478,24 @@ def build_payroll_month_plan(
     return PayrollMonthPlan(
         days=month_days,
         overtime_remainders=(),
+        travel_expenses=build_payroll_travel_plan(
+            person_id=person.id,
+            year=year,
+            month=month,
+            days=aggregate_payroll_travel_days(
+                person_id=person.id,
+                activity_dates=entries_by_date.keys(),
+                work_days=[
+                    *work_days,
+                    *(
+                        entry.work_day for entry in entries
+                        if entry.person_id == person.id
+                        and entry.source != "gps_suggestion"
+                        and entry.work_day is not None
+                    ),
+                ],
+            ),
+        ),
     )
 
 
@@ -723,6 +767,28 @@ def _clear_month_day_values(sheet: ET.Element, *, year: int, month: int) -> None
             layout.address_column,
         ):
             _clear_cell(sheet, f"{column}{row_number}")
+
+
+def write_payroll_travel_expenses(
+    sheet: ET.Element, *, year: int, month: int, plan: PayrollTravelPlan
+) -> None:
+    """Nur I:L der gültigen Tageszeilen aktualisieren, Zellstile unverändert lassen."""
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    columns = (
+        (layout.travel_10_column, "travel_10"),
+        (layout.travel_14_column, "travel_14"),
+        (layout.travel_28_column, "travel_28"),
+        (layout.overnight_20_column, "overnight_20"),
+    )
+    for day_number in range(1, calendar.monthrange(year, month)[1] + 1):
+        row_number = layout.first_day_row + day_number - 1
+        markings = plan.markings.get(date(year, month, day_number))
+        for column, attribute in columns:
+            ref = f"{column}{row_number}"
+            cell = _find_cell(sheet, ref)
+            if cell is None or cell.find(_qname("f")) is not None:
+                raise ValueError(f"Reisekostenzelle {ref} fehlt oder enthält eine Formel.")
+            _set_cell_string(sheet, ref, "x" if getattr(markings, attribute, False) else "")
 
 
 def _write_month_header(

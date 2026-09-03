@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.absence import Absence
 from app.models.enums import PersonType, UserRole
 from app.models.person import Person
+from app.models.person_work_day import PersonWorkDay
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.payroll_month_xlsx_service import (
@@ -48,6 +49,7 @@ class PayrollMonthExportService:
             date_to=period_end,
         )
         absences = self._absences(period_start, period_end, person_id=person_id)
+        work_days = self._work_days(period_start, period_end, person_ids={person_id})
         return build_payroll_months_xlsx(
             [
                 PayrollMonthSheet(
@@ -57,6 +59,7 @@ class PayrollMonthExportService:
                     month=month,
                     entries=entries,
                     absences=absences,
+                    work_days=work_days,
                     non_working_dates=lower_saxony_public_holiday_dates(period_start, period_end),
                 )
             ]
@@ -95,6 +98,9 @@ class PayrollMonthExportService:
         for absence in self._absences(period_start, period_end, person_ids=person_ids):
             absences_by_person[absence.person_id].append(absence)
         holidays = lower_saxony_public_holiday_dates(period_start, period_end)
+        work_days_by_person: dict[int, list[PersonWorkDay]] = defaultdict(list)
+        for work_day in self._work_days(period_start, period_end, person_ids=person_ids):
+            work_days_by_person[work_day.person_id].append(work_day)
 
         return build_payroll_months_xlsx(
             [
@@ -105,11 +111,22 @@ class PayrollMonthExportService:
                     month=month,
                     entries=entries_by_person[person.id],
                     absences=absences_by_person[person.id],
+                    work_days=work_days_by_person[person.id],
                     non_working_dates=holidays,
                 )
                 for person in people
             ]
         ).content
+
+    def _work_days(
+        self, period_start: date, period_end: date, *, person_ids: set[int]
+    ) -> list[PersonWorkDay]:
+        # Auch Hotelnächte ohne Arbeitsbuchung sowie Randtage sind verbindlich.
+        return list(self.db.scalars(select(PersonWorkDay).where(
+            PersonWorkDay.person_id.in_(person_ids),
+            PersonWorkDay.work_date >= period_start,
+            PersonWorkDay.work_date <= period_end,
+        )))
 
     def _absences(
         self,
@@ -138,7 +155,12 @@ def is_payroll_review_person(person: Person) -> bool:
 def payroll_month_source_range(year: int, month: int) -> tuple[date, date]:
     first = date(year, month, 1)
     last = date(year, month, calendar.monthrange(year, month)[1])
-    return first - timedelta(days=first.weekday()), last + timedelta(days=6 - last.weekday())
+    # Vollständige Randwochen plus mindestens ein Tag beiderseits des Monats:
+    # Auch ein Monatsbeginn am Montag darf keine zweite Hotelanreise erzeugen.
+    return (
+        min(first - timedelta(days=first.weekday()), first - timedelta(days=1)),
+        max(last + timedelta(days=6 - last.weekday()), last + timedelta(days=1)),
+    )
 
 
 def lower_saxony_public_holiday_dates(period_start: date, period_end: date) -> set[date]:
