@@ -290,6 +290,51 @@ def test_person_month_approval_accepts_technical_blockers_and_keeps_export_avail
     ) == b"worker-v1"
 
 
+def test_eight_hints_including_open_predecessor_do_not_disable_person_approval(monkeypatch):
+    db = database()
+    admin, worker = payroll_users(db)
+    service = PayrollMonthCloseService(db)
+    ledger = FakePersonLedger()
+    blockers = [
+        PayrollMonthBlocker(
+            code="payroll_week_not_reviewed",
+            message=f"Prüfhinweis {index + 1}",
+            person_id=worker.id,
+            work_date=date(2026, 9, 1 + index),
+        )
+        for index in range(7)
+    ]
+    monkeypatch.setattr(service, "_readiness_blockers", lambda *_args: list(blockers))
+    monkeypatch.setattr(service, "_ledger_service", lambda: ledger)
+    monkeypatch.setattr(
+        service,
+        "_build_person_month_artifact",
+        lambda **_kwargs: {"filename": "worker-v1.xlsx", "content": b"worker-v1", "generation_mode": "STANDARD"},
+    )
+    monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
+
+    open_status = service.get_status(year=2026, month=9, current_user=admin)
+
+    assert open_status.person_approvals[0].blocker_count == 8
+    assert open_status.person_approvals[0].can_approve is True
+    assert any(
+        item.code == "previous_payroll_month_not_locked"
+        for item in open_status.person_approvals[0].blockers
+    )
+
+    approved = service.approve_person_month(
+        year=2026,
+        month=9,
+        person_id=worker.id,
+        confirmed=True,
+        acknowledged_blocker_count=8,
+        current_user=admin,
+    )
+
+    assert approved.person_approvals[0].status == PAYROLL_PERSON_MONTH_APPROVED
+    assert approved.person_approvals[0].blockers == []
+
+
 def test_person_month_approval_falls_back_to_confirmed_source_export_when_ledger_is_unavailable(monkeypatch):
     db = database()
     admin, worker = payroll_users(db)

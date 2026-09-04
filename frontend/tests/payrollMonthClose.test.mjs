@@ -75,8 +75,16 @@ test("regular working time is versioned in the employee master without a weekday
 test("person approval explicitly acknowledges current hints and always enables its retained export", () => {
   assert.match(api, /acknowledged_blocker_count: params\.acknowledgedBlockerCount/);
   assert.match(page, /Ich habe die offenen Hinweise geprüft und bestätige den aktuellen Stand trotzdem/);
+  assert.match(page, /canApproveSelectedPayrollPerson = Boolean\([\s\S]*?selectedPayrollPersonApproval\?\.can_approve[\s\S]*?!isUpdatingPayrollPersonMonth/s);
   assert.match(page, /isExportAvailable=\{Boolean\(selectedPayrollPersonApproval\?\.export_ready\)\}/);
   assert.doesNotMatch(page, /Prüfpunkte verhindern den Abschluss/);
+});
+
+test("payroll setup has a clear purpose and is never a dead permission control", () => {
+  assert.match(page, /\{canManagePayrollClose && \([\s\S]*?Stundenkonto einrichten[\s\S]*?\)\}/s);
+  assert.match(page, /title="Regelmäßige Arbeitszeit und Eröffnungssalden verwalten"/);
+  assert.doesNotMatch(page, /className="payroll-month-setup-button"[\s\S]{0,160}disabled=/s);
+  assert.match(setup, /Wochenpläne ab 01\.08\.2026 und Eröffnungssalden zum 31\.07\.2026/);
 });
 
 test("positive and negative opening balances roundtrip as integer minutes", () => {

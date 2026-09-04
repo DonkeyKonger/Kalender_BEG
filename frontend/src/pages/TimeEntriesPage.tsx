@@ -3006,15 +3006,17 @@ export function TimeEntriesPage() {
                     </span>
                     <span>Gesamtmonat geprüft</span>
                   </label>
-                  <button
-                    className="payroll-month-setup-button"
-                    disabled={!canManagePayrollClose || isUpdatingPayrollMonth}
-                    type="button"
-                    onClick={() => setIsPayrollSetupOpen(true)}
-                  >
-                    <Settings2 aria-hidden="true" size={14} />
-                    Einrichtung
-                  </button>
+                  {canManagePayrollClose && (
+                    <button
+                      className="payroll-month-setup-button"
+                      title="Regelmäßige Arbeitszeit und Eröffnungssalden verwalten"
+                      type="button"
+                      onClick={() => setIsPayrollSetupOpen(true)}
+                    >
+                      <Settings2 aria-hidden="true" size={14} />
+                      Stundenkonto einrichten
+                    </button>
+                  )}
                   <button
                     aria-describedby="time-evaluation-monthly-download-status"
                     className="time-evaluation-monthly-download-button"

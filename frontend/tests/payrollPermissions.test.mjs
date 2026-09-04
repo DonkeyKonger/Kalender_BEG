@@ -44,7 +44,7 @@ test("payroll page and week downloads use payroll access without a phone GPS ver
   assert.match(permissionSource, /return canAccessMainPage\(user, pageKey\)/);
   assert.match(pageSource, /canManageTimeEntries = canEditMainPage\(user, "payroll"\)/);
   assert.match(pageSource, /canManagePayrollClose = canManagePayrollMonthClose\(user\)/);
-  assert.match(pageSource, /disabled=\{!canManagePayrollClose \|\| isUpdatingPayrollMonth\}/);
+  assert.match(pageSource, /\{canManagePayrollClose && \([\s\S]*?Stundenkonto einrichten[\s\S]*?\)\}/s);
   assert.match(pageSource, /api\.weeklyAllWorkersTimeEntriesXlsx/);
   assert.match(pageSource, /api\.weeklyWorkerTimeEntriesXlsx/);
   assert.match(pageSource, /api\.payrollMonthlyWorkersXlsx/);
