@@ -111,7 +111,7 @@ class PersonHoursAccountService:
     ) -> PersonHoursAccountRead:
         self._get_person(person_id)
         ensure_new_ledger_effective_date(effective_date)
-        PayrollPeriodGuard(self.db).assert_date_mutable(effective_date)
+        PayrollPeriodGuard(self.db).assert_date_mutable(effective_date, person_id=person_id)
         minutes_delta = hours_to_minutes(hours_delta)
         if minutes_delta == 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Die Korrektur muss größer oder kleiner als 0 sein.")
@@ -140,7 +140,7 @@ class PersonHoursAccountService:
     ) -> PersonHoursAccountRead:
         self._get_person(person_id)
         ensure_new_ledger_effective_date(effective_date)
-        PayrollPeriodGuard(self.db).assert_date_mutable(effective_date)
+        PayrollPeriodGuard(self.db).assert_date_mutable(effective_date, person_id=person_id)
         minutes = hours_to_minutes(hours)
         if minutes <= 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Auszahlung muss größer als 0 Stunden sein.")

@@ -17,8 +17,11 @@ from app.models.person_work_day import PersonWorkDay
 from app.models.payroll_daily_ledger import PAYROLL_LEDGER_CUTOVER_DATE
 from app.models.payroll_month import (
     PAYROLL_MONTH_LOCKED,
+    PAYROLL_PERSON_MONTH_APPROVED,
     PayrollMonthArtifact,
     PayrollMonthPeriod,
+    PayrollMonthPersonApproval,
+    PayrollMonthPersonApprovalArtifact,
     PayrollMonthSnapshot,
 )
 from app.models.user import User
@@ -52,12 +55,78 @@ class PayrollMonthExportService:
                 opening_balance_minutes=None,
                 closing_balance_minutes=None,
             )
+        period = self.db.scalar(
+            select(PayrollMonthPeriod).where(
+                PayrollMonthPeriod.year == year,
+                PayrollMonthPeriod.month == month,
+            )
+        )
+        if period is None or period.status != PAYROLL_MONTH_LOCKED:
+            return self._approved_person_month_artifact(
+                person_id=person_id,
+                year=year,
+                month=month,
+            ).content
         return self._locked_artifact(
             year=year,
             month=month,
             artifact_key=f"worker:{person_id}",
             version=version,
         ).content
+
+    def _approved_person_month_artifact(
+        self,
+        *,
+        person_id: int,
+        year: int,
+        month: int,
+    ) -> PayrollMonthPersonApprovalArtifact:
+        approval = self.db.scalar(
+            select(PayrollMonthPersonApproval).where(
+                PayrollMonthPersonApproval.year == year,
+                PayrollMonthPersonApproval.month == month,
+                PayrollMonthPersonApproval.person_id == person_id,
+                PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+            )
+        )
+        if approval is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "payroll_person_month_not_approved",
+                    "message": "Die Einzelabrechnung ist erst nach dem Monteurabschluss verfügbar.",
+                },
+            )
+        artifact = self.db.scalar(
+            select(PayrollMonthPersonApprovalArtifact).where(
+                PayrollMonthPersonApprovalArtifact.approval_id == approval.id,
+                PayrollMonthPersonApprovalArtifact.approval_version == approval.approval_version,
+            )
+        )
+        if artifact is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "payroll_person_month_snapshot_missing",
+                    "message": "Der geprüfte Monteurmonat besitzt keine aktive Abschlussreferenz.",
+                },
+            )
+        if (
+            artifact.byte_size != len(artifact.content)
+            or artifact.content_sha256 != hashlib.sha256(artifact.content).hexdigest()
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "payroll_person_month_artifact_corrupt",
+                    "person_id": person_id,
+                    "year": year,
+                    "month": month,
+                    "approval_version": approval.approval_version,
+                    "message": "Die gespeicherte Einzelabrechnung ist beschädigt und wird nicht ausgeliefert.",
+                },
+            )
+        return artifact
 
     def build_worker_export_from_live_data(
         self,

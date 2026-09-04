@@ -1,4 +1,5 @@
 export type PayrollMonthPeriodStatus = "OPEN" | "LOCKED";
+export type PayrollMonthPersonApprovalStatus = "OPEN" | "APPROVED";
 
 export type PayrollMonthBlocker = {
   code: string;
@@ -19,6 +20,30 @@ export type PayrollMonthPeriod = {
   can_reopen: boolean;
   artifacts_ready: boolean;
   blockers: PayrollMonthBlocker[];
+  person_approval_summary: PayrollMonthPersonApprovalSummary | null;
+  person_approvals: PayrollMonthPersonApproval[];
+};
+
+export type PayrollMonthPersonApprovalSummary = {
+  approved_count: number;
+  total_count: number;
+};
+
+export type PayrollMonthPersonApproval = {
+  person_id: number;
+  person_name: string;
+  status: PayrollMonthPersonApprovalStatus;
+  approval_version: number;
+  approved_at: string | null;
+  approved_by_name: string | null;
+  reopened_at: string | null;
+  reopened_by_name: string | null;
+  reopen_reason: string | null;
+  blocker_count: number;
+  blockers: PayrollMonthBlocker[];
+  has_blocking_technical_error: boolean;
+  can_approve: boolean;
+  can_reopen: boolean;
 };
 
 export type PayrollWeeklyPlan = {

@@ -83,7 +83,7 @@ class TimeEntryService:
         return list(self.db.scalars(statement))
 
     def create_entry(self, payload: TimeEntryCreate, current_user: User) -> WorkTimeEntry:
-        PayrollPeriodGuard(self.db).assert_date_mutable(payload.work_date)
+        PayrollPeriodGuard(self.db).assert_date_mutable(payload.work_date, person_id=payload.person_id)
         self._ensure_can_write_person(current_user, payload.person_id)
         self._ensure_person_exists(payload.person_id)
         if payload.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
@@ -146,9 +146,9 @@ class TimeEntryService:
             self._ensure_assignment_matches(values.get("assignment_id", entry.assignment_id), next_person_id, next_site_id)
 
         next_work_date = values.get("work_date", entry.work_date)
-        PayrollPeriodGuard(self.db).assert_dates_mutable(
-            getattr(entry, "work_date", None), next_work_date
-        )
+        guard = PayrollPeriodGuard(self.db)
+        guard.assert_date_mutable(getattr(entry, "work_date", None), person_id=entry.person_id)
+        guard.assert_date_mutable(next_work_date, person_id=next_person_id)
         next_start_time = values.get("start_time", entry.start_time)
         next_end_time = values.get("end_time", entry.end_time)
         self._ensure_no_time_overlap(
@@ -199,7 +199,10 @@ class TimeEntryService:
 
     def delete_entry(self, entry_id: int, current_user: User) -> None:
         entry = self._get_entry(entry_id)
-        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
+        PayrollPeriodGuard(self.db).assert_date_mutable(
+            getattr(entry, "work_date", None),
+            person_id=getattr(entry, "person_id", None),
+        )
         self._ensure_can_write_person(current_user, entry.person_id)
         self._ensure_entry_can_be_deleted(entry)
         self.db.delete(entry)
@@ -208,7 +211,10 @@ class TimeEntryService:
     def delete_payroll_entry(self, entry_id: int, current_user: User) -> PayrollTimeEntryDeletion:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
-        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
+        PayrollPeriodGuard(self.db).assert_date_mutable(
+            getattr(entry, "work_date", None),
+            person_id=getattr(entry, "person_id", None),
+        )
         self._ensure_can_write_person(current_user, entry.person_id)
         iso_year, iso_week, _ = entry.work_date.isocalendar()
         review = self._get_weekly_review(
@@ -233,7 +239,10 @@ class TimeEntryService:
     def approve_time_review(self, entry_id: int, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
-        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
+        PayrollPeriodGuard(self.db).assert_date_mutable(
+            getattr(entry, "work_date", None),
+            person_id=getattr(entry, "person_id", None),
+        )
         self._mark_time_review(
             entry,
             status_value="manually_approved",
@@ -247,7 +256,7 @@ class TimeEntryService:
     def set_payroll_row_review(self, entry_id: int, *, reviewed: bool, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
-        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None), person_id=entry.person_id)
         self._ensure_can_write_person(current_user, entry.person_id)
         if reviewed:
             entry.payroll_reviewed_by_user_id = current_user.id
@@ -271,7 +280,7 @@ class TimeEntryService:
     ) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
-        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None), person_id=entry.person_id)
         self._ensure_can_write_person(current_user, entry.person_id)
         if break_minutes is not None and break_minutes < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Büro-geprüfte Pause darf nicht negativ sein.")
@@ -315,9 +324,9 @@ class TimeEntryService:
         self._ensure_can_write_person(current_user, entry.person_id)
         if entry.work_date == work_date:
             return entry
-        PayrollPeriodGuard(self.db).assert_dates_mutable(
-            getattr(entry, "work_date", None), work_date
-        )
+        guard = PayrollPeriodGuard(self.db)
+        guard.assert_date_mutable(getattr(entry, "work_date", None), person_id=entry.person_id)
+        guard.assert_date_mutable(work_date, person_id=entry.person_id)
         if entry.work_date.isocalendar()[:2] != work_date.isocalendar()[:2]:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Der Eintrag kann nur innerhalb derselben Kalenderwoche verschoben werden.")
 
@@ -338,7 +347,7 @@ class TimeEntryService:
     def correct_time_review(self, entry_id: int, corrected_work_minutes: int, current_user: User) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
-        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None), person_id=entry.person_id)
         self._ensure_can_write_person(current_user, entry.person_id)
         if corrected_work_minutes < 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Korrigierte Arbeitszeit darf nicht negativ sein.")
@@ -367,7 +376,7 @@ class TimeEntryService:
     ) -> WorkTimeEntry:
         self._ensure_can_review_time(current_user)
         entry = self._get_entry(entry_id)
-        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None))
+        PayrollPeriodGuard(self.db).assert_date_mutable(getattr(entry, "work_date", None), person_id=entry.person_id)
         self._ensure_can_write_person(current_user, entry.person_id)
 
         if reviewed_site_id is not None:
@@ -884,7 +893,7 @@ class TimeEntryService:
         overnight_status: OvernightStatus,
     ) -> OvernightStatus:
         self._ensure_can_review_time(current_user)
-        PayrollPeriodGuard(self.db).assert_date_mutable(work_date)
+        PayrollPeriodGuard(self.db).assert_date_mutable(work_date, person_id=person_id)
         self._ensure_person_exists(person_id)
         self._ensure_week_is_open(person_id, work_date)
         self._set_overnight_status(

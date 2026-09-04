@@ -267,9 +267,9 @@ class PayrollDailyLedgerService:
         self._acquire_setup_lock()
         guard = PayrollPeriodGuard(self.db)
         if payload.valid_to is None:
-            guard.assert_open_ended_range_mutable(payload.valid_from)
+            guard.assert_open_ended_range_mutable(payload.valid_from, person_id=person_id)
         else:
-            guard.assert_range_mutable(payload.valid_from, payload.valid_to)
+            guard.assert_range_mutable(payload.valid_from, payload.valid_to, person_id=person_id)
         person = self._lock_person(person_id)
         values = tuple(payload.weekday_minutes)
         weekly_total = sum(values)

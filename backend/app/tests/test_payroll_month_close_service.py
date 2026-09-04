@@ -13,12 +13,16 @@ from app.models.enums import AbsenceStatus, PersonType, UserRole
 from app.models.payroll_month import (
     PAYROLL_MONTH_LOCKED,
     PAYROLL_MONTH_OPEN,
+    PAYROLL_PERSON_MONTH_APPROVED,
+    PAYROLL_PERSON_MONTH_OPEN,
     PayrollMonthArtifact,
     PayrollMonthAudit,
     PayrollMonthPeriod,
+    PayrollMonthPersonApproval,
     PayrollMonthPersonSnapshot,
     PayrollMonthSnapshot,
 )
+from app.schemas.payroll_month import PayrollMonthBlocker
 from app.models.person import Person
 from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.user import User
@@ -183,6 +187,173 @@ def test_weekly_review_blockers_exclude_week_crossing_into_next_month():
     assert date(2026, 8, 31) not in {item.work_date for item in blockers}
 
 
+def test_person_month_approval_acknowledges_worker_blockers_and_allows_month_lock(monkeypatch):
+    db = database()
+    admin, worker = payroll_users(db)
+    service = PayrollMonthCloseService(db)
+    ledger = FakePersonLedger()
+    blocker = PayrollMonthBlocker(
+        code="payroll_week_not_reviewed",
+        message="KW 32/2026 ist noch nicht vollständig geprüft.",
+        person_id=worker.id,
+        work_date=date(2026, 8, 3),
+    )
+    monkeypatch.setattr(service, "_readiness_blockers", lambda *_args: [blocker])
+    monkeypatch.setattr(service, "_ledger_service", lambda: ledger)
+    monkeypatch.setattr(
+        service,
+        "_build_person_month_artifact",
+        lambda **_kwargs: {"filename": "worker-v1.xlsx", "content": b"worker-v1"},
+    )
+    monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
+
+    status_read = service.approve_person_month(
+        year=2026,
+        month=8,
+        person_id=worker.id,
+        confirmed=True,
+        current_user=admin,
+    )
+
+    approval = db.scalar(select(PayrollMonthPersonApproval))
+    assert approval is not None
+    assert approval.status == PAYROLL_PERSON_MONTH_APPROVED
+    assert approval.approval_version == 1
+    assert approval.ledger_reference_id == (
+        f"payroll-person-month:2026-08:person:{worker.id}:v1"
+    )
+    assert approval.blocker_snapshot_json[0]["new_status"] == (
+        "ACKNOWLEDGED_BY_PERSON_MONTH_APPROVAL"
+    )
+    assert status_read.can_lock is True
+    assert status_read.person_approval_summary is not None
+    assert status_read.person_approval_summary.approved_count == 1
+    assert status_read.person_approval_summary.total_count == 1
+    assert status_read.person_approvals[0].status == PAYROLL_PERSON_MONTH_APPROVED
+    assert status_read.person_approvals[0].blocker_count == 1
+    assert ledger.finalized_references == [approval.ledger_reference_id]
+    assert list(db.scalars(select(PayrollMonthAudit.action))) == ["PERSON_MONTH_APPROVED"]
+
+
+def test_person_month_approval_rejects_technical_blockers(monkeypatch):
+    db = database()
+    admin, worker = payroll_users(db)
+    service = PayrollMonthCloseService(db)
+    ledger = FakePersonLedger()
+    blocker = PayrollMonthBlocker(
+        code="incomplete_work_interval",
+        message="Beginn und Ende der Arbeitszeit sind unvollständig.",
+        person_id=worker.id,
+        work_date=date(2026, 8, 5),
+    )
+    monkeypatch.setattr(service, "_readiness_blockers", lambda *_args: [blocker])
+    monkeypatch.setattr(service, "_ledger_service", lambda: ledger)
+
+    with pytest.raises(HTTPException) as caught:
+        service.approve_person_month(
+            year=2026,
+            month=8,
+            person_id=worker.id,
+            confirmed=True,
+            current_user=admin,
+        )
+
+    assert caught.value.status_code == 409
+    assert caught.value.detail["code"] == "payroll_person_month_not_ready"
+    assert caught.value.detail["blockers"][0]["code"] == "incomplete_work_interval"
+    assert ledger.finalized_references == []
+    assert db.scalar(select(PayrollMonthPersonApproval.id)) is None
+
+
+def test_person_month_reopen_requires_reason_and_unfreezes_person_ledger(monkeypatch):
+    db = database()
+    admin, worker = payroll_users(db)
+    service = PayrollMonthCloseService(db)
+    ledger = FakePersonLedger()
+    monkeypatch.setattr(service, "_readiness_blockers", lambda *_args: [])
+    monkeypatch.setattr(service, "_ledger_service", lambda: ledger)
+    monkeypatch.setattr(
+        service,
+        "_build_person_month_artifact",
+        lambda **_kwargs: {"filename": "worker-v1.xlsx", "content": b"worker-v1"},
+    )
+    monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
+
+    approved = service.approve_person_month(
+        year=2026,
+        month=8,
+        person_id=worker.id,
+        confirmed=True,
+        current_user=admin,
+    )
+    assert approved.person_approvals[0].status == PAYROLL_PERSON_MONTH_APPROVED
+    reference_id = ledger.finalized_references[0]
+
+    with pytest.raises(HTTPException) as missing_reason:
+        service.reopen_person_month(
+            year=2026,
+            month=8,
+            person_id=worker.id,
+            reason=" ",
+            current_user=admin,
+        )
+    assert missing_reason.value.status_code == 400
+
+    reopened = service.reopen_person_month(
+        year=2026,
+        month=8,
+        person_id=worker.id,
+        reason="Stundenkorrektur nach Rückfrage",
+        current_user=admin,
+    )
+
+    approval = db.scalar(select(PayrollMonthPersonApproval))
+    assert approval is not None
+    assert approval.status == PAYROLL_PERSON_MONTH_OPEN
+    assert approval.ledger_reference_id is None
+    assert approval.reopen_reason == "Stundenkorrektur nach Rückfrage"
+    assert reopened.can_lock is False
+    assert reopened.person_approvals[0].can_approve is True
+    assert ledger.unfinalized_references == [reference_id]
+    assert list(db.scalars(select(PayrollMonthAudit.action).order_by(PayrollMonthAudit.id))) == [
+        "PERSON_MONTH_APPROVED",
+        "PERSON_MONTH_REOPENED",
+    ]
+
+
+def test_month_lock_requires_every_person_month_approved(monkeypatch):
+    db = database()
+    admin, worker = payroll_users(db)
+    service = PayrollMonthCloseService(db)
+    ledger = FakeLedger(worker)
+    monkeypatch.setattr(service, "_readiness_blockers", lambda *_args: [])
+    monkeypatch.setattr(service, "_ledger_service", lambda: ledger)
+    monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(HTTPException) as caught:
+        service.lock_month(year=2026, month=8, confirmed=True, current_user=admin)
+
+    assert caught.value.status_code == 409
+    assert caught.value.detail["code"] == "payroll_month_not_ready"
+    assert caught.value.detail["blockers"][0]["code"] == "payroll_person_month_not_approved"
+    assert caught.value.detail["blockers"][0]["person_id"] == worker.id
+    assert ledger.finalized_references == []
+
+
+def test_person_month_approval_locks_person_mutations_until_reopened():
+    db = database()
+    _admin, worker = payroll_users(db)
+    approve_person_month_for_test(db, worker)
+
+    with pytest.raises(HTTPException) as caught:
+        PayrollPeriodGuard(db).assert_date_mutable(date(2026, 8, 12), person_id=worker.id)
+
+    assert caught.value.status_code == 409
+    assert caught.value.detail["code"] == "payroll_person_month_locked"
+    assert caught.value.detail["person_id"] == worker.id
+    PayrollPeriodGuard(db).assert_date_mutable(date(2026, 8, 12), person_id=worker.id + 100)
+
+
 def test_lock_reopen_and_relock_retain_versioned_snapshots_and_artifacts(monkeypatch):
     db = database()
     admin, worker = payroll_users(db)
@@ -232,6 +403,7 @@ def test_lock_reopen_and_relock_retain_versioned_snapshots_and_artifacts(monkeyp
 
     monkeypatch.setattr(service, "_build_artifact_specs", artifacts)
 
+    approve_person_month_for_test(db, worker)
     first = service.lock_month(year=2026, month=8, confirmed=True, current_user=admin)
     assert first.status == PAYROLL_MONTH_LOCKED
     assert first.snapshot_version == 1
@@ -247,6 +419,7 @@ def test_lock_reopen_and_relock_retain_versioned_snapshots_and_artifacts(monkeyp
     assert opened.snapshot_version == 1
     assert opened.artifacts_ready is False
 
+    approve_person_month_for_test(db, worker)
     second = service.lock_month(year=2026, month=8, confirmed=True, current_user=admin)
     assert second.status == PAYROLL_MONTH_LOCKED
     assert second.snapshot_version == 2
@@ -483,6 +656,7 @@ def test_failed_close_rolls_back_daily_rows_snapshot_and_artifacts(monkeypatch):
         "_build_artifact_specs",
         lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("Export fehlgeschlagen")),
     )
+    approve_person_month_for_test(db, worker)
 
     with pytest.raises(RuntimeError, match="Export fehlgeschlagen"):
         service.lock_month(year=2026, month=8, confirmed=True, current_user=admin)
@@ -526,10 +700,53 @@ class FakeLedger:
         return 1
 
 
+class FakePersonLedger:
+    def __init__(self) -> None:
+        self.finalized_references: list[str] = []
+        self.unfinalized_references: list[str] = []
+
+    def finalize_person_days(self, **values):
+        self.finalized_references.append(values["reference_id"])
+        return ()
+
+    def unfinalize_person_days(self, **values):
+        self.unfinalized_references.append(values["reference_id"])
+        return 1
+
+
 def database() -> Session:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
     return Session(engine)
+
+
+def approve_person_month_for_test(
+    db: Session,
+    worker: Person,
+    *,
+    year: int = 2026,
+    month: int = 8,
+) -> PayrollMonthPersonApproval:
+    approval = db.scalar(
+        select(PayrollMonthPersonApproval).where(
+            PayrollMonthPersonApproval.year == year,
+            PayrollMonthPersonApproval.month == month,
+            PayrollMonthPersonApproval.person_id == worker.id,
+        )
+    )
+    if approval is None:
+        approval = PayrollMonthPersonApproval(
+            year=year,
+            month=month,
+            person_id=worker.id,
+            approval_version=1,
+            blocker_snapshot_json=[],
+        )
+        db.add(approval)
+    approval.status = PAYROLL_PERSON_MONTH_APPROVED
+    approval.ledger_reference_id = f"test-person-month:{year}-{month}:{worker.id}"
+    db.commit()
+    return approval
 
 
 def payroll_users(db: Session) -> tuple[User, Person]:

@@ -7,6 +7,8 @@ from app.models.user import User
 from app.schemas.payroll_month import (
     PayrollMonthAuditRead,
     PayrollMonthLockRequest,
+    PayrollMonthPersonApprovalRequest,
+    PayrollMonthPersonReopenRequest,
     PayrollMonthReopenRequest,
     PayrollMonthStatusRead,
 )
@@ -59,6 +61,42 @@ def reopen_payroll_month(
     return PayrollMonthCloseService(db).reopen_month(
         year=year,
         month=month,
+        reason=payload.reason,
+        current_user=current_user,
+    )
+
+
+@router.post("/{year}/{month}/people/{person_id}/approve", response_model=PayrollMonthStatusRead)
+def approve_payroll_person_month(
+    year: int,
+    month: int,
+    person_id: int,
+    payload: PayrollMonthPersonApprovalRequest,
+    current_user: User = Depends(CAN_MANAGE),
+    db: Session = Depends(get_db),
+) -> PayrollMonthStatusRead:
+    return PayrollMonthCloseService(db).approve_person_month(
+        year=year,
+        month=month,
+        person_id=person_id,
+        confirmed=payload.confirmed,
+        current_user=current_user,
+    )
+
+
+@router.post("/{year}/{month}/people/{person_id}/reopen", response_model=PayrollMonthStatusRead)
+def reopen_payroll_person_month(
+    year: int,
+    month: int,
+    person_id: int,
+    payload: PayrollMonthPersonReopenRequest,
+    current_user: User = Depends(CAN_MANAGE),
+    db: Session = Depends(get_db),
+) -> PayrollMonthStatusRead:
+    return PayrollMonthCloseService(db).reopen_person_month(
+        year=year,
+        month=month,
+        person_id=person_id,
         reason=payload.reason,
         current_user=current_user,
     )

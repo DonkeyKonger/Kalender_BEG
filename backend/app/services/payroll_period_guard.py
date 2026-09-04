@@ -6,10 +6,16 @@ from fastapi import HTTPException, status
 from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
-from app.models.payroll_month import PAYROLL_MONTH_LOCKED, PayrollMonthPeriod
+from app.models.payroll_month import (
+    PAYROLL_MONTH_LOCKED,
+    PAYROLL_PERSON_MONTH_APPROVED,
+    PayrollMonthPeriod,
+    PayrollMonthPersonApproval,
+)
 
 
 LOCKED_PERIOD_ERROR_CODE = "payroll_month_locked"
+LOCKED_PERSON_PERIOD_ERROR_CODE = "payroll_person_month_locked"
 
 
 class PayrollPeriodGuard:
@@ -22,12 +28,16 @@ class PayrollPeriodGuard:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def assert_date_mutable(self, work_date: date | None) -> None:
+    def assert_date_mutable(self, work_date: date | None, *, person_id: int | None = None) -> None:
         if work_date is None or not self._supports_queries():
             return
         period = self._locked_period_for_date(work_date)
         if period is not None:
             self._raise_locked(period)
+        if person_id is not None:
+            approval = self._approved_person_period_for_date(person_id, work_date)
+            if approval is not None:
+                self._raise_person_locked(approval)
 
     def is_date_locked(self, work_date: date) -> bool:
         if not self._supports_queries():
@@ -44,7 +54,7 @@ class PayrollPeriodGuard:
             )
         )
 
-    def assert_dates_mutable(self, *work_dates: date | None) -> None:
+    def assert_dates_mutable(self, *work_dates: date | None, person_id: int | None = None) -> None:
         if not self._supports_queries():
             return
         dates = {item for item in work_dates if item is not None}
@@ -69,8 +79,28 @@ class PayrollPeriodGuard:
         )
         if period is not None:
             self._raise_locked(period)
+        if person_id is not None:
+            approval_clauses = [
+                (
+                    (PayrollMonthPersonApproval.year == item.year)
+                    & (PayrollMonthPersonApproval.month == item.month)
+                )
+                for item in dates
+            ]
+            approval = self.db.scalar(
+                select(PayrollMonthPersonApproval)
+                .where(
+                    PayrollMonthPersonApproval.person_id == person_id,
+                    PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+                )
+                .where(or_(*approval_clauses))
+                .order_by(PayrollMonthPersonApproval.year, PayrollMonthPersonApproval.month)
+                .limit(1)
+            )
+            if approval is not None:
+                self._raise_person_locked(approval)
 
-    def assert_range_mutable(self, start_date: date, end_date: date) -> None:
+    def assert_range_mutable(self, start_date: date, end_date: date, *, person_id: int | None = None) -> None:
         if not self._supports_queries():
             return
         if end_date < start_date:
@@ -96,8 +126,43 @@ class PayrollPeriodGuard:
         )
         if period is not None:
             self._raise_locked(period)
+        if person_id is not None:
+            approval_clauses = [
+                (
+                    (PayrollMonthPersonApproval.year == year)
+                    & (PayrollMonthPersonApproval.month == month)
+                )
+                for year, month in month_keys
+            ]
+            approval = self.db.scalar(
+                select(PayrollMonthPersonApproval)
+                .where(
+                    PayrollMonthPersonApproval.person_id == person_id,
+                    PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+                )
+                .where(or_(*approval_clauses))
+                .order_by(PayrollMonthPersonApproval.year, PayrollMonthPersonApproval.month)
+                .limit(1)
+            )
+            if approval is not None:
+                self._raise_person_locked(approval)
 
-    def assert_open_ended_range_mutable(self, start_date: date) -> None:
+    def _approved_person_period_for_date(
+        self,
+        person_id: int,
+        work_date: date,
+    ) -> PayrollMonthPersonApproval | None:
+        self.acquire_month_lock(work_date.year, work_date.month)
+        return self.db.scalar(
+            select(PayrollMonthPersonApproval).where(
+                PayrollMonthPersonApproval.year == work_date.year,
+                PayrollMonthPersonApproval.month == work_date.month,
+                PayrollMonthPersonApproval.person_id == person_id,
+                PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+            )
+        )
+
+    def assert_open_ended_range_mutable(self, start_date: date, *, person_id: int | None = None) -> None:
         """Reject an open-ended effective range if any covered month is locked.
 
         Schedule administration acquires the shared setup/close lock before this
@@ -118,6 +183,19 @@ class PayrollPeriodGuard:
         )
         if period is not None:
             self._raise_locked(period)
+        if person_id is not None:
+            approval = self.db.scalar(
+                select(PayrollMonthPersonApproval)
+                .where(
+                    PayrollMonthPersonApproval.person_id == person_id,
+                    PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+                    PayrollMonthPersonApproval.year * 100 + PayrollMonthPersonApproval.month >= start_key,
+                )
+                .order_by(PayrollMonthPersonApproval.year, PayrollMonthPersonApproval.month)
+                .limit(1)
+            )
+            if approval is not None:
+                self._raise_person_locked(approval)
 
     @staticmethod
     def _raise_locked(period: PayrollMonthPeriod) -> None:
@@ -131,6 +209,23 @@ class PayrollPeriodGuard:
                 "message": (
                     f"Der Abrechnungsmonat {period.month:02d}/{period.year} ist abgeschlossen "
                     "und kann nicht verändert werden. Öffnen Sie ihn zuerst in der Monatsauswertung wieder."
+                ),
+            },
+        )
+
+    @staticmethod
+    def _raise_person_locked(approval: PayrollMonthPersonApproval) -> None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": LOCKED_PERSON_PERIOD_ERROR_CODE,
+                "year": approval.year,
+                "month": approval.month,
+                "person_id": approval.person_id,
+                "locked_at": approval.approved_at.isoformat() if approval.approved_at else None,
+                "message": (
+                    f"Der Monteurmonat {approval.month:02d}/{approval.year} ist geprüft "
+                    "und kann nicht verändert werden. Öffnen Sie den Monteurmonat zuerst in der Monatsauswertung wieder."
                 ),
             },
         )

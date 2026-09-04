@@ -23,9 +23,11 @@ from app.models.payroll_daily_ledger import (
 from app.models.payroll_month import (
     PAYROLL_MONTH_LOCKED,
     PAYROLL_MONTH_OPEN,
+    PAYROLL_PERSON_MONTH_APPROVED,
     PayrollMonthArtifact,
     PayrollMonthAudit,
     PayrollMonthPeriod,
+    PayrollMonthPersonApproval,
     PayrollMonthPersonSnapshot,
     PayrollMonthSnapshot,
 )
@@ -209,6 +211,106 @@ def test_postgres_locked_month_rejects_all_dated_payroll_writes(pg_session: Sess
     )
     for statement, parameters in attempts:
         _expect_rejection(pg_session, statement, parameters)
+
+
+def test_postgres_approved_person_month_rejects_that_person_dated_payroll_writes(pg_session: Session):
+    admin, worker = _payroll_users(pg_session)
+    other = Person(
+        first_name="Other",
+        last_name="Worker",
+        display_name=f"Other Worker {uuid4().hex[:8]}",
+        short_code=uuid4().hex[:8],
+        person_type=PersonType.INTERNAL,
+        is_active=True,
+        weekly_hours=40,
+    )
+    pg_session.add(other)
+    pg_session.flush()
+    pg_session.add(PayrollMonthPersonApproval(
+        year=2026,
+        month=8,
+        person_id=worker.id,
+        status=PAYROLL_PERSON_MONTH_APPROVED,
+        approval_version=1,
+        blocker_snapshot_json=[],
+        approved_at=datetime.now(timezone.utc),
+        approved_by_user_id=admin.id,
+    ))
+    pg_session.flush()
+
+    attempts = (
+        (
+            """
+            INSERT INTO work_time_entries
+              (person_id, work_date, break_minutes, travel_minutes, work_minutes,
+               source, status, time_review_status, created_at, updated_at)
+            VALUES
+              (:person_id, '2026-08-04', 30, 0, 450, 'manual', 'submitted',
+               'manually_approved', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """,
+            {"person_id": worker.id},
+        ),
+        (
+            """
+            INSERT INTO person_work_days
+              (person_id, work_date, overnight_status, created_at, updated_at)
+            VALUES
+              (:person_id, '2026-08-04', 'none', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """,
+            {"person_id": worker.id},
+        ),
+        (
+            """
+            INSERT INTO absences
+              (person_id, absence_type, start_date, end_date, status,
+               created_at, updated_at)
+            VALUES
+              (:person_id, 'vacation', '2026-08-04', '2026-08-05', 'active',
+               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """,
+            {"person_id": worker.id},
+        ),
+        (
+            """
+            INSERT INTO person_hours_account_entries
+              (person_id, entry_type, minutes_delta, balance_after_minutes, note,
+               ledger_system, effective_date, source_type, is_active,
+               created_at, updated_at)
+            VALUES
+              (:person_id, 'manual_adjustment', 60, 60, 'Korrektur', 'daily',
+               '2026-08-04', 'manual_adjustment', true,
+               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """,
+            {"person_id": worker.id},
+        ),
+        (
+            """
+            INSERT INTO person_weekly_schedules
+              (person_id, valid_from, valid_until, monday_minutes, tuesday_minutes,
+               wednesday_minutes, thursday_minutes, friday_minutes, saturday_minutes,
+               sunday_minutes, weekly_total_minutes, contract_weekly_minutes,
+               is_confirmed, created_at, updated_at)
+            VALUES
+              (:person_id, '2026-08-01', NULL, 480, 480, 480, 480, 480, 0, 0,
+               2400, 2400, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """,
+            {"person_id": worker.id},
+        ),
+    )
+    for statement, parameters in attempts:
+        _expect_rejection(pg_session, statement, parameters)
+
+    pg_session.execute(text(
+        """
+        INSERT INTO work_time_entries
+          (person_id, work_date, break_minutes, travel_minutes, work_minutes,
+           source, status, time_review_status, created_at, updated_at)
+        VALUES
+          (:person_id, '2026-08-04', 0, 0, 60, 'manual', 'submitted',
+           'manually_approved', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """
+    ), {"person_id": other.id})
+    pg_session.flush()
 
 
 def test_postgres_month_lock_key_serializes_a_parallel_dated_write():

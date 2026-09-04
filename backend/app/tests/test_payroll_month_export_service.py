@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+import hashlib
 from datetime import date, time
 from io import BytesIO
 from types import SimpleNamespace
@@ -12,6 +13,11 @@ from sqlalchemy.orm import Session
 from app.models import Base
 from app.models.absence import Absence
 from app.models.enums import AbsenceStatus, AbsenceType, OvernightStatus, PersonType, UserRole
+from app.models.payroll_month import (
+    PAYROLL_PERSON_MONTH_APPROVED,
+    PayrollMonthPersonApproval,
+    PayrollMonthPersonApprovalArtifact,
+)
 from app.models.person import Person
 from app.models.person_work_day import PersonWorkDay
 from app.models.site import Site
@@ -155,6 +161,63 @@ def test_single_worker_export_excludes_configured_public_holidays_from_normal_ho
         sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
     ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     assert float(sheet.find('.//m:c[@r="D46"]/m:v', ns).text) == pytest.approx(160 / 24)
+
+
+def test_open_person_month_worker_export_requires_approval_and_uses_stored_artifact(monkeypatch):
+    db = database()
+    worker = person(1, "Anna", "Bau")
+    office_user = user(1, "office", UserRole.ADMIN, worker)
+    db.add_all([worker, office_user])
+    db.flush()
+    service = PayrollMonthExportService(db)
+
+    with pytest.raises(Exception) as unapproved:
+        service.worker_export(
+            person_id=worker.id,
+            year=2026,
+            month=8,
+            current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+        )
+    assert getattr(unapproved.value, "detail", {}).get("code") == "payroll_person_month_not_approved"
+
+    approval = PayrollMonthPersonApproval(
+        year=2026,
+        month=8,
+        person_id=worker.id,
+        status=PAYROLL_PERSON_MONTH_APPROVED,
+        approval_version=1,
+        ledger_reference_id="person-close-2026-08",
+        blocker_snapshot_json=[],
+    )
+    db.add(approval)
+    db.flush()
+    content = b"stored-worker-export"
+    db.add(PayrollMonthPersonApprovalArtifact(
+        approval_id=approval.id,
+        year=2026,
+        month=8,
+        person_id=worker.id,
+        approval_version=1,
+        ledger_reference_id="person-close-2026-08",
+        filename="worker-v1.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        content=content,
+        byte_size=len(content),
+        content_sha256=hashlib.sha256(content).hexdigest(),
+    ))
+    db.commit()
+
+    def fake_live_export(**_values):
+        raise AssertionError("Der geprüfte Einzel-Export darf nicht aus Live-Daten neu gebaut werden.")
+
+    monkeypatch.setattr(service, "build_worker_export_from_live_data", fake_live_export)
+
+    assert service.worker_export(
+        person_id=worker.id,
+        year=2026,
+        month=8,
+        current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+    ) == content
 
 
 @pytest.mark.parametrize("all_workers", [False, True])

@@ -19,15 +19,26 @@ from app.models.payroll_daily_ledger import PAYROLL_LEDGER_CUTOVER_DATE
 from app.models.payroll_month import (
     PAYROLL_MONTH_LOCKED,
     PAYROLL_MONTH_OPEN,
+    PAYROLL_PERSON_MONTH_APPROVED,
+    PAYROLL_PERSON_MONTH_OPEN,
     PayrollMonthArtifact,
     PayrollMonthAudit,
     PayrollMonthPeriod,
+    PayrollMonthPersonApproval,
+    PayrollMonthPersonApprovalArtifact,
     PayrollMonthPersonSnapshot,
     PayrollMonthSnapshot,
 )
+from app.models.person import Person
+from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
-from app.schemas.payroll_month import PayrollMonthBlocker, PayrollMonthStatusRead
+from app.schemas.payroll_month import (
+    PayrollMonthBlocker,
+    PayrollMonthPersonApprovalRead,
+    PayrollMonthPersonApprovalSummary,
+    PayrollMonthStatusRead,
+)
 from app.services.audit_service import AuditService
 from app.services.payroll_month_export_service import (
     PayrollMonthSourceBundle,
@@ -42,8 +53,36 @@ from app.services.time_entry_service import TimeEntryService
 
 
 PAYROLL_MONTH_SOURCE = "payroll_month_close"
+PAYROLL_PERSON_MONTH_SOURCE = "payroll_person_month_close"
 PAYROLL_XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PAYROLL_GLOBAL_ADVISORY_LOCK_KEY = 5_259_609
+PERSON_MONTH_APPROVAL_STATUS = "ACKNOWLEDGED_BY_PERSON_MONTH_APPROVAL"
+PERSON_MONTH_TECHNICAL_BLOCKER_CODES = {
+    "before_cutover",
+    "conflicting_absence_types",
+    "daily_entry_without_date",
+    "finalization_reference_reused",
+    "finalized_day_changed",
+    "incomplete_work_interval",
+    "invalid_absence_range",
+    "invalid_break_minutes",
+    "invalid_break_or_interval",
+    "invalid_work_minutes",
+    "no_payroll_workers",
+    "opening_balance_missing",
+    "overlapping_work_intervals",
+    "payroll_export_source_invalid",
+    "payroll_export_validation_failed",
+    "payroll_month_before_cutover",
+    "payroll_template_invalid",
+    "previous_payroll_month_not_locked",
+    "schedule_contract_mismatch",
+    "schedule_missing",
+    "schedule_overlap",
+    "schedule_unconfirmed",
+    "unsupported_absence_type",
+    "work_absence_conflict",
+}
 
 
 class PayrollMonthCloseService:
@@ -54,6 +93,8 @@ class PayrollMonthCloseService:
         _validate_month(year, month)
         period = self._period(year, month)
         current_snapshot = self._current_snapshot(period)
+        people = self._payroll_people()
+        approvals = self._person_approvals(year, month)
         blockers: list[PayrollMonthBlocker] = []
         if period is None or period.status == PAYROLL_MONTH_OPEN:
             blockers = self._readiness_blockers(year, month, current_user)
@@ -61,12 +102,30 @@ class PayrollMonthCloseService:
             if predecessor is not None:
                 blockers.insert(0, predecessor)
         status_value = period.status if period is not None else PAYROLL_MONTH_OPEN
+        may_manage = _may_manage_payroll(current_user)
+        person_approvals = self._person_approval_reads(
+            year=year,
+            month=month,
+            people=people,
+            approvals=approvals,
+            blockers=blockers,
+            month_status=status_value,
+            month_locked_at=period.locked_at if period else None,
+            month_locked_by_name=(period.locked_by.display_name if period and period.locked_by else None),
+            may_manage=may_manage,
+        )
+        approved_person_ids = {
+            item.person_id
+            for item in person_approvals
+            if item.status == PAYROLL_PERSON_MONTH_APPROVED
+        }
+        all_people_approved = bool(people) and len(approved_person_ids) == len(people)
+        unresolved_blockers = self._unresolved_month_blockers(blockers, approved_person_ids)
         artifacts_ready = bool(
             status_value == PAYROLL_MONTH_LOCKED
             and current_snapshot is not None
             and self._artifacts_ready(current_snapshot)
         )
-        may_manage = _may_manage_payroll(current_user)
         can_reopen = bool(
             may_manage
             and status_value == PAYROLL_MONTH_LOCKED
@@ -80,10 +139,20 @@ class PayrollMonthCloseService:
             snapshot_version=current_snapshot.version if current_snapshot else None,
             locked_at=period.locked_at if period else None,
             locked_by_name=(period.locked_by.display_name if period and period.locked_by else None),
-            can_lock=bool(may_manage and status_value == PAYROLL_MONTH_OPEN and not blockers),
+            can_lock=bool(
+                may_manage
+                and status_value == PAYROLL_MONTH_OPEN
+                and all_people_approved
+                and not unresolved_blockers
+            ),
             can_reopen=can_reopen,
             artifacts_ready=artifacts_ready,
             blockers=blockers,
+            person_approval_summary=PayrollMonthPersonApprovalSummary(
+                approved_count=len(approved_person_ids),
+                total_count=len(people),
+            ),
+            person_approvals=person_approvals,
         )
 
     def lock_month(
@@ -122,6 +191,20 @@ class PayrollMonthCloseService:
             if predecessor is not None:
                 self._raise_blockers([predecessor])
             blockers = self._readiness_blockers(year, month, current_user)
+            approved_person_ids = self._approved_person_ids(year, month)
+            missing_approvals = [
+                PayrollMonthBlocker(
+                    code="payroll_person_month_not_approved",
+                    message=f"{person.display_name} ist noch nicht im Monteurabschluss geprüft.",
+                    person_id=person.id,
+                )
+                for person in self._payroll_people()
+                if person.id not in approved_person_ids
+            ]
+            blockers = missing_approvals + self._unresolved_month_blockers(
+                blockers,
+                approved_person_ids,
+            )
             if blockers:
                 self._raise_blockers(blockers)
 
@@ -321,6 +404,22 @@ class PayrollMonthCloseService:
             period.reopened_at = now
             period.reopened_by_user_id = current_user.id
             self.db.flush()
+            person_approvals_to_reopen = list(self.db.scalars(
+                select(PayrollMonthPersonApproval)
+                .where(
+                    PayrollMonthPersonApproval.year == year,
+                    PayrollMonthPersonApproval.month == month,
+                    PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+                )
+                .with_for_update()
+            ))
+            for approval in person_approvals_to_reopen:
+                approval.status = PAYROLL_PERSON_MONTH_OPEN
+                approval.ledger_reference_id = None
+                approval.reopened_at = now
+                approval.reopened_by_user_id = current_user.id
+                approval.reopen_reason = reason
+            self.db.flush()
             superseded_count = self._ledger_service().unfinalize_month(
                 year=year,
                 month=month,
@@ -338,6 +437,7 @@ class PayrollMonthCloseService:
                     details_json={
                         "snapshot_version": snapshot.version,
                         "superseded_ledger_entries": int(superseded_count or 0),
+                        "reopened_person_approvals": len(person_approvals_to_reopen),
                     },
                     user_id=current_user.id,
                 )
@@ -368,6 +468,400 @@ class PayrollMonthCloseService:
                 .order_by(PayrollMonthAudit.created_at.desc(), PayrollMonthAudit.id.desc())
             )
         )
+
+    def approve_person_month(
+        self,
+        *,
+        year: int,
+        month: int,
+        person_id: int,
+        confirmed: bool,
+        current_user: User,
+    ) -> PayrollMonthStatusRead:
+        _validate_month(year, month)
+        _ensure_may_manage(current_user)
+        if not confirmed:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                {
+                    "code": "payroll_person_month_confirmation_required",
+                    "message": "Der Monteurabschluss muss ausdrücklich bestätigt werden.",
+                },
+            )
+        if date(year, month, 1) < PAYROLL_LEDGER_CUTOVER_DATE:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                {
+                    "code": "payroll_month_before_cutover",
+                    "message": "Monate vor dem Umstellungsstichtag können nicht mit dem neuen Verfahren abgeschlossen werden.",
+                },
+            )
+        try:
+            self._acquire_close_locks(year, month)
+            period = self._get_or_create_locked_period_row(year, month)
+            if period.status == PAYROLL_MONTH_LOCKED:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    {
+                        "code": "payroll_month_locked",
+                        "message": "Der Gesamtmonat ist bereits abgeschlossen. Öffnen Sie ihn zuerst, um einzelne Monteure zu ändern.",
+                    },
+                )
+            person = self._payroll_person(person_id)
+            blockers = self._person_blockers(
+                self._readiness_blockers(year, month, current_user),
+                person_id,
+            )
+            predecessor = self._predecessor_blocker(year, month)
+            if predecessor is not None:
+                blockers.insert(0, predecessor)
+            technical_blockers = [item for item in blockers if _is_technical_blocker(item)]
+            if technical_blockers:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    {
+                        "code": "payroll_person_month_not_ready",
+                        "message": "Der Monteurmonat kann wegen technischer Prüfpunkte nicht abgeschlossen werden.",
+                        "blockers": [item.model_dump(mode="json") for item in technical_blockers],
+                    },
+                )
+            approval = self._get_or_create_person_approval(year, month, person_id)
+            if approval.status != PAYROLL_PERSON_MONTH_APPROVED:
+                version = approval.approval_version + 1
+                ledger_reference_id = _person_month_reference_id(year, month, person.id, version)
+                period_start = date(year, month, 1)
+                period_end = date(year, month, calendar.monthrange(year, month)[1])
+                ledger_service = self._ledger_service()
+                ledger_service.finalize_person_days(
+                    person_id=person.id,
+                    period_start=period_start,
+                    period_end=period_end,
+                    source=PAYROLL_PERSON_MONTH_SOURCE,
+                    reference_id=ledger_reference_id,
+                    created_by_user_id=current_user.id,
+                )
+                artifact_spec = self._build_person_month_artifact(
+                    person=person,
+                    year=year,
+                    month=month,
+                    version=version,
+                    ledger_reference_id=ledger_reference_id,
+                    current_user=current_user,
+                )
+                now = datetime.now(timezone.utc)
+                snapshot = _approval_blocker_snapshot(blockers)
+                status_before = approval.status
+                approval.status = PAYROLL_PERSON_MONTH_APPROVED
+                approval.approval_version = version
+                approval.ledger_reference_id = ledger_reference_id
+                approval.blocker_snapshot_json = snapshot
+                approval.approved_at = now
+                approval.approved_by_user_id = current_user.id
+                approval.reopened_at = None
+                approval.reopened_by_user_id = None
+                approval.reopen_reason = None
+                period.row_version += 1
+                content = artifact_spec["content"]
+                content_sha256 = hashlib.sha256(content).hexdigest()
+                self.db.add(
+                    PayrollMonthPersonApprovalArtifact(
+                        approval_id=approval.id,
+                        year=year,
+                        month=month,
+                        person_id=person.id,
+                        approval_version=version,
+                        ledger_reference_id=ledger_reference_id,
+                        filename=artifact_spec["filename"],
+                        media_type=PAYROLL_XLSX_MEDIA_TYPE,
+                        content=content,
+                        byte_size=len(content),
+                        content_sha256=content_sha256,
+                    )
+                )
+                self.db.add(
+                    PayrollMonthAudit(
+                        period_id=period.id,
+                        action="PERSON_MONTH_APPROVED",
+                        status_before=status_before,
+                        status_after=PAYROLL_PERSON_MONTH_APPROVED,
+                        details_json={
+                            "person_id": person.id,
+                            "person_name": person.display_name,
+                            "approval_version": version,
+                            "ledger_reference_id": ledger_reference_id,
+                            "artifact_filename": artifact_spec["filename"],
+                            "artifact_content_sha256": content_sha256,
+                            "blocker_count": len(snapshot),
+                            "blockers": snapshot,
+                        },
+                        user_id=current_user.id,
+                    )
+                )
+                AuditService(self.db).record(
+                    user_id=current_user.id,
+                    action="payroll_person_month.approved",
+                    entity_type="payroll_month_person_approval",
+                    entity_id=approval.id,
+                    old_value={"status": status_before},
+                    new_value={
+                        "status": PAYROLL_PERSON_MONTH_APPROVED,
+                        "year": year,
+                        "month": month,
+                        "person_id": person.id,
+                        "approval_version": version,
+                    },
+                )
+            self.db.commit()
+        except Exception as error:
+            self.db.rollback()
+            self._raise_ledger_validation(error)
+            raise
+        return self.get_status(year=year, month=month, current_user=current_user)
+
+    def reopen_person_month(
+        self,
+        *,
+        year: int,
+        month: int,
+        person_id: int,
+        reason: str,
+        current_user: User,
+    ) -> PayrollMonthStatusRead:
+        _validate_month(year, month)
+        _ensure_may_manage(current_user)
+        reason = (reason or "").strip()
+        if not reason:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Eine Begründung ist Pflicht.")
+        try:
+            self._acquire_close_locks(year, month)
+            period = self._get_or_create_locked_period_row(year, month)
+            if period.status == PAYROLL_MONTH_LOCKED:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    {
+                        "code": "payroll_month_locked",
+                        "message": "Der Gesamtmonat ist gesperrt. Öffnen Sie zuerst den Gesamtmonat.",
+                    },
+                )
+            person = self._payroll_person(person_id)
+            approval = self._person_approval_for_update(year, month, person_id)
+            if approval is None or approval.status != PAYROLL_PERSON_MONTH_APPROVED:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    {
+                        "code": "payroll_person_month_not_approved",
+                        "message": "Dieser Monteurmonat ist noch nicht abgeschlossen.",
+                    },
+                )
+            ledger_reference_id = approval.ledger_reference_id
+            now = datetime.now(timezone.utc)
+            approval.status = PAYROLL_PERSON_MONTH_OPEN
+            approval.reopened_at = now
+            approval.reopened_by_user_id = current_user.id
+            approval.reopen_reason = reason
+            period.row_version += 1
+            self.db.flush()
+            superseded_count = 0
+            if ledger_reference_id:
+                period_start = date(year, month, 1)
+                period_end = date(year, month, calendar.monthrange(year, month)[1])
+                superseded_count = self._ledger_service().unfinalize_person_days(
+                    person_id=person.id,
+                    period_start=period_start,
+                    period_end=period_end,
+                    source=PAYROLL_PERSON_MONTH_SOURCE,
+                    reference_id=ledger_reference_id,
+                )
+            approval.ledger_reference_id = None
+            self.db.add(
+                PayrollMonthAudit(
+                    period_id=period.id,
+                    action="PERSON_MONTH_REOPENED",
+                    status_before=PAYROLL_PERSON_MONTH_APPROVED,
+                    status_after=PAYROLL_PERSON_MONTH_OPEN,
+                    reason=reason,
+                    details_json={
+                        "person_id": person.id,
+                        "person_name": person.display_name,
+                        "approval_version": approval.approval_version,
+                        "ledger_reference_id": ledger_reference_id,
+                        "superseded_ledger_entries": int(superseded_count or 0),
+                    },
+                    user_id=current_user.id,
+                )
+            )
+            AuditService(self.db).record(
+                user_id=current_user.id,
+                action="payroll_person_month.reopened",
+                entity_type="payroll_month_person_approval",
+                entity_id=approval.id,
+                old_value={
+                    "status": PAYROLL_PERSON_MONTH_APPROVED,
+                    "approval_version": approval.approval_version,
+                },
+                new_value={"status": PAYROLL_PERSON_MONTH_OPEN, "reason": reason},
+            )
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        return self.get_status(year=year, month=month, current_user=current_user)
+
+    def _payroll_people(self) -> list[Person]:
+        return PayrollMonthExportService(self.db).payroll_people()
+
+    def _payroll_person(self, person_id: int) -> Person:
+        person = next((item for item in self._payroll_people() if item.id == person_id), None)
+        if person is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Monteur nicht gefunden.")
+        return person
+
+    def _person_approvals(
+        self,
+        year: int,
+        month: int,
+    ) -> dict[int, PayrollMonthPersonApproval]:
+        return {
+            item.person_id: item
+            for item in self.db.scalars(
+                select(PayrollMonthPersonApproval)
+                .options(
+                    selectinload(PayrollMonthPersonApproval.approved_by),
+                    selectinload(PayrollMonthPersonApproval.reopened_by),
+                )
+                .where(
+                    PayrollMonthPersonApproval.year == year,
+                    PayrollMonthPersonApproval.month == month,
+                )
+            )
+        }
+
+    def _approved_person_ids(self, year: int, month: int) -> set[int]:
+        return {
+            person_id
+            for person_id, approval in self._person_approvals(year, month).items()
+            if approval.status == PAYROLL_PERSON_MONTH_APPROVED
+        }
+
+    def _get_or_create_person_approval(
+        self,
+        year: int,
+        month: int,
+        person_id: int,
+    ) -> PayrollMonthPersonApproval:
+        approval = self._person_approval_for_update(year, month, person_id)
+        if approval is None:
+            approval = PayrollMonthPersonApproval(
+                year=year,
+                month=month,
+                person_id=person_id,
+                status=PAYROLL_PERSON_MONTH_OPEN,
+                blocker_snapshot_json=[],
+            )
+            self.db.add(approval)
+            self.db.flush()
+        return approval
+
+    def _person_approval_for_update(
+        self,
+        year: int,
+        month: int,
+        person_id: int,
+    ) -> PayrollMonthPersonApproval | None:
+        return self.db.scalar(
+            select(PayrollMonthPersonApproval)
+            .where(
+                PayrollMonthPersonApproval.year == year,
+                PayrollMonthPersonApproval.month == month,
+                PayrollMonthPersonApproval.person_id == person_id,
+            )
+            .with_for_update()
+        )
+
+    def _person_approval_reads(
+        self,
+        *,
+        year: int,
+        month: int,
+        people: list[Person],
+        approvals: dict[int, PayrollMonthPersonApproval],
+        blockers: list[PayrollMonthBlocker],
+        month_status: str,
+        month_locked_at: datetime | None,
+        month_locked_by_name: str | None,
+        may_manage: bool,
+    ) -> list[PayrollMonthPersonApprovalRead]:
+        result: list[PayrollMonthPersonApprovalRead] = []
+        is_month_locked = month_status == PAYROLL_MONTH_LOCKED
+        for person in people:
+            approval = approvals.get(person.id)
+            stored_status = approval.status if approval else PAYROLL_PERSON_MONTH_OPEN
+            status_value = PAYROLL_PERSON_MONTH_APPROVED if is_month_locked else stored_status
+            current_blockers = self._person_blockers(blockers, person.id)
+            stored_blockers = [
+                _normalise_blocker(item)
+                for item in (approval.blocker_snapshot_json if approval else [])
+            ]
+            display_blockers = stored_blockers if status_value == PAYROLL_PERSON_MONTH_APPROVED else current_blockers
+            has_technical_blocker = any(_is_technical_blocker(item) for item in current_blockers)
+            result.append(
+                PayrollMonthPersonApprovalRead(
+                    person_id=person.id,
+                    person_name=person.display_name,
+                    status=status_value,
+                    approval_version=approval.approval_version if approval else 0,
+                    approved_at=(
+                        approval.approved_at
+                        if approval and approval.approved_at
+                        else month_locked_at if is_month_locked else None
+                    ),
+                    approved_by_name=(
+                        approval.approved_by.display_name
+                        if approval and approval.approved_by
+                        else month_locked_by_name if is_month_locked else None
+                    ),
+                    reopened_at=approval.reopened_at if approval else None,
+                    reopened_by_name=(approval.reopened_by.display_name if approval and approval.reopened_by else None),
+                    reopen_reason=approval.reopen_reason if approval else None,
+                    blocker_count=len(display_blockers),
+                    blockers=display_blockers,
+                    has_blocking_technical_error=has_technical_blocker,
+                    can_approve=bool(
+                        may_manage
+                        and month_status == PAYROLL_MONTH_OPEN
+                        and status_value == PAYROLL_PERSON_MONTH_OPEN
+                        and not has_technical_blocker
+                    ),
+                    can_reopen=bool(
+                        may_manage
+                        and month_status == PAYROLL_MONTH_OPEN
+                        and status_value == PAYROLL_PERSON_MONTH_APPROVED
+                    ),
+                )
+            )
+        return result
+
+    @staticmethod
+    def _person_blockers(
+        blockers: list[PayrollMonthBlocker],
+        person_id: int,
+    ) -> list[PayrollMonthBlocker]:
+        return [item for item in blockers if item.person_id in (None, person_id)]
+
+    @staticmethod
+    def _unresolved_month_blockers(
+        blockers: list[PayrollMonthBlocker],
+        approved_person_ids: set[int],
+    ) -> list[PayrollMonthBlocker]:
+        result: list[PayrollMonthBlocker] = []
+        for blocker in blockers:
+            if (
+                blocker.person_id in approved_person_ids
+                and not _is_technical_blocker(blocker)
+            ):
+                continue
+            result.append(blocker)
+        return result
 
     def _readiness_blockers(
         self,
@@ -774,6 +1268,52 @@ class PayrollMonthCloseService:
             )
         return specs
 
+    def _build_person_month_artifact(
+        self,
+        *,
+        person: Person,
+        year: int,
+        month: int,
+        version: int,
+        ledger_reference_id: str,
+        current_user: User,
+    ) -> dict[str, Any]:
+        export_service = PayrollMonthExportService(self.db)
+        period_start = date(year, month, 1)
+        period_end = date(year, month, calendar.monthrange(year, month)[1])
+        from app.services.payroll_daily_ledger_service import PayrollDailyLedgerService
+
+        ledger_service = PayrollDailyLedgerService(self.db)
+        opening_balance = ledger_service.balance_before(person.id, period_start)
+        movement = self.db.scalar(
+            select(func.coalesce(func.sum(PersonHoursAccountEntry.minutes_delta), 0)).where(
+                PersonHoursAccountEntry.person_id == person.id,
+                PersonHoursAccountEntry.ledger_system == "daily",
+                PersonHoursAccountEntry.is_active.is_(True),
+                PersonHoursAccountEntry.effective_date >= period_start,
+                PersonHoursAccountEntry.effective_date <= period_end,
+            )
+        )
+        export_source = export_service.load_live_source(
+            year=year,
+            month=month,
+            current_user=current_user,
+        )
+        content = export_service.build_worker_export_from_source(
+            source=export_source,
+            person_id=person.id,
+            opening_balance_minutes=opening_balance,
+            closing_balance_minutes=opening_balance + int(movement or 0),
+        )
+        return {
+            "artifact_key": f"worker:{person.id}:approval:{version}",
+            "ledger_reference_id": ledger_reference_id,
+            "filename": (
+                f"lohnabrechnung_{year}_{month:02d}_person_{person.id}_freigabe_v{version}.xlsx"
+            ),
+            "content": content,
+        }
+
     def _persist_artifacts(
         self,
         *,
@@ -1077,6 +1617,25 @@ def _failure_details(error: Exception) -> dict[str, Any]:
         # Never persist database statements, credentials or arbitrary exception text.
         "message": "Der Monatsabschluss ist fehlgeschlagen und wurde vollständig zurückgerollt.",
     }
+
+
+def _is_technical_blocker(blocker: PayrollMonthBlocker) -> bool:
+    return blocker.code in PERSON_MONTH_TECHNICAL_BLOCKER_CODES
+
+
+def _approval_blocker_snapshot(blockers: list[PayrollMonthBlocker]) -> list[dict[str, Any]]:
+    return [
+        item.model_dump(mode="json")
+        | {
+            "previous_status": PAYROLL_PERSON_MONTH_OPEN,
+            "new_status": PERSON_MONTH_APPROVAL_STATUS,
+        }
+        for item in blockers
+    ]
+
+
+def _person_month_reference_id(year: int, month: int, person_id: int, version: int) -> str:
+    return f"payroll-person-month:{year:04d}-{month:02d}:person:{person_id}:v{version}"
 
 
 def _deduplicate_blockers(

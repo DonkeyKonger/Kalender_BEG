@@ -21,6 +21,8 @@ from app.models.base import Base, TimestampMixin
 
 PAYROLL_MONTH_OPEN = "OPEN"
 PAYROLL_MONTH_LOCKED = "LOCKED"
+PAYROLL_PERSON_MONTH_OPEN = "OPEN"
+PAYROLL_PERSON_MONTH_APPROVED = "APPROVED"
 
 
 class PayrollMonthPeriod(TimestampMixin, Base):
@@ -190,3 +192,96 @@ class PayrollMonthAudit(Base):
     period = relationship("PayrollMonthPeriod", back_populates="audits")
     snapshot = relationship("PayrollMonthSnapshot")
     user = relationship("User")
+
+
+class PayrollMonthPersonApproval(TimestampMixin, Base):
+    """Audited approval state for one worker in one payroll month."""
+
+    __tablename__ = "payroll_month_person_approvals"
+    __table_args__ = (
+        UniqueConstraint("year", "month", "person_id", name="uq_payroll_month_person_approval"),
+        CheckConstraint("year BETWEEN 2000 AND 2100", name="ck_payroll_month_person_approvals_year"),
+        CheckConstraint("month BETWEEN 1 AND 12", name="ck_payroll_month_person_approvals_month"),
+        CheckConstraint(
+            "status IN ('OPEN', 'APPROVED')",
+            name="ck_payroll_month_person_approvals_status",
+        ),
+        Index("ix_payroll_month_person_approvals_period", "year", "month"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    person_id: Mapped[int] = mapped_column(
+        ForeignKey("persons.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=PAYROLL_PERSON_MONTH_OPEN
+    )
+    approval_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ledger_reference_id: Mapped[str | None] = mapped_column(String(140))
+    blocker_snapshot_json: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    reopened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reopened_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    reopen_reason: Mapped[str | None] = mapped_column(Text)
+
+    person = relationship("Person")
+    approved_by = relationship("User", foreign_keys=[approved_by_user_id])
+    reopened_by = relationship("User", foreign_keys=[reopened_by_user_id])
+    artifacts = relationship(
+        "PayrollMonthPersonApprovalArtifact",
+        back_populates="approval",
+        order_by="PayrollMonthPersonApprovalArtifact.approval_version",
+        passive_deletes=True,
+    )
+
+
+class PayrollMonthPersonApprovalArtifact(Base):
+    """Immutable single-worker workbook created with a person-month approval."""
+
+    __tablename__ = "payroll_month_person_approval_artifacts"
+    __table_args__ = (
+        UniqueConstraint(
+            "approval_id",
+            "approval_version",
+            name="uq_payroll_month_person_approval_artifact_version",
+        ),
+        Index("ix_payroll_month_person_approval_artifacts_period", "year", "month"),
+        Index(
+            "ix_payroll_month_person_approval_artifacts_person_period",
+            "person_id",
+            "year",
+            "month",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    approval_id: Mapped[int] = mapped_column(
+        ForeignKey("payroll_month_person_approvals.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    person_id: Mapped[int] = mapped_column(
+        ForeignKey("persons.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    approval_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    ledger_reference_id: Mapped[str] = mapped_column(String(140), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    approval = relationship("PayrollMonthPersonApproval", back_populates="artifacts")
+    person = relationship("Person")

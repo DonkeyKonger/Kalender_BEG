@@ -20,6 +20,8 @@ from app.models.payroll_month import (
     PayrollMonthArtifact,
     PayrollMonthAudit,
     PayrollMonthPeriod,
+    PayrollMonthPersonApproval,
+    PayrollMonthPersonApprovalArtifact,
     PayrollMonthPersonSnapshot,
     PayrollMonthSnapshot,
 )
@@ -73,6 +75,8 @@ __all__ = [
     "PayrollMonthArtifact",
     "PayrollMonthAudit",
     "PayrollMonthPeriod",
+    "PayrollMonthPersonApproval",
+    "PayrollMonthPersonApprovalArtifact",
     "PayrollMonthPersonSnapshot",
     "PayrollMonthSnapshot",
     "PlanningCellMark",
