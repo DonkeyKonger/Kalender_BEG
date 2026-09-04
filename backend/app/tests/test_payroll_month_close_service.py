@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
+from io import BytesIO
 from types import SimpleNamespace
+from zipfile import ZipFile
 
 from fastapi import HTTPException
 import pytest
@@ -19,6 +21,7 @@ from app.models.payroll_month import (
     PayrollMonthAudit,
     PayrollMonthPeriod,
     PayrollMonthPersonApproval,
+    PayrollMonthPersonApprovalArtifact,
     PayrollMonthPersonSnapshot,
     PayrollMonthSnapshot,
 )
@@ -203,7 +206,7 @@ def test_person_month_approval_acknowledges_worker_blockers_and_allows_month_loc
     monkeypatch.setattr(
         service,
         "_build_person_month_artifact",
-        lambda **_kwargs: {"filename": "worker-v1.xlsx", "content": b"worker-v1"},
+        lambda **_kwargs: {"filename": "worker-v1.xlsx", "content": b"worker-v1", "generation_mode": "STANDARD"},
     )
     monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
 
@@ -212,6 +215,7 @@ def test_person_month_approval_acknowledges_worker_blockers_and_allows_month_loc
         month=8,
         person_id=worker.id,
         confirmed=True,
+        acknowledged_blocker_count=1,
         current_user=admin,
     )
 
@@ -225,17 +229,27 @@ def test_person_month_approval_acknowledges_worker_blockers_and_allows_month_loc
     assert approval.blocker_snapshot_json[0]["new_status"] == (
         "ACKNOWLEDGED_BY_PERSON_MONTH_APPROVAL"
     )
+    assert approval.blocker_snapshot_json[0]["acknowledged_by_user_id"] == admin.id
+    assert approval.blocker_snapshot_json[0]["approval_version"] == 1
+    assert approval.blocker_snapshot_json[0]["acknowledged_at"]
     assert status_read.can_lock is True
     assert status_read.person_approval_summary is not None
     assert status_read.person_approval_summary.approved_count == 1
     assert status_read.person_approval_summary.total_count == 1
     assert status_read.person_approvals[0].status == PAYROLL_PERSON_MONTH_APPROVED
-    assert status_read.person_approvals[0].blocker_count == 1
+    assert status_read.person_approvals[0].blocker_count == 0
+    assert status_read.person_approvals[0].blockers == []
+    assert status_read.person_approvals[0].export_ready is True
     assert ledger.finalized_references == [approval.ledger_reference_id]
     assert list(db.scalars(select(PayrollMonthAudit.action))) == ["PERSON_MONTH_APPROVED"]
+    audit = db.scalar(select(PayrollMonthAudit))
+    assert audit is not None
+    assert audit.details_json["blocker_count"] == 1
+    assert audit.details_json["source_snapshot_sha256"]
+    assert audit.details_json["export_status"] == "READY"
 
 
-def test_person_month_approval_rejects_technical_blockers(monkeypatch):
+def test_person_month_approval_accepts_technical_blockers_and_keeps_export_available(monkeypatch):
     db = database()
     admin, worker = payroll_users(db)
     service = PayrollMonthCloseService(db)
@@ -248,21 +262,114 @@ def test_person_month_approval_rejects_technical_blockers(monkeypatch):
     )
     monkeypatch.setattr(service, "_readiness_blockers", lambda *_args: [blocker])
     monkeypatch.setattr(service, "_ledger_service", lambda: ledger)
+    monkeypatch.setattr(
+        service,
+        "_build_person_month_artifact",
+        lambda **_kwargs: {"filename": "worker-v1.xlsx", "content": b"worker-v1", "generation_mode": "STANDARD"},
+    )
+    monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
 
-    with pytest.raises(HTTPException) as caught:
-        service.approve_person_month(
-            year=2026,
-            month=8,
+    approved = service.approve_person_month(
+        year=2026,
+        month=8,
+        person_id=worker.id,
+        confirmed=True,
+        acknowledged_blocker_count=1,
+        current_user=admin,
+    )
+
+    assert approved.person_approvals[0].status == PAYROLL_PERSON_MONTH_APPROVED
+    assert approved.person_approvals[0].blockers == []
+    assert approved.person_approvals[0].export_ready is True
+    assert db.scalar(select(PayrollMonthPersonApprovalArtifact)) is not None
+    assert PayrollMonthExportService(db).worker_export(
+        person_id=worker.id,
+        year=2026,
+        month=8,
+        current_user=admin,
+    ) == b"worker-v1"
+
+
+def test_person_month_approval_falls_back_to_confirmed_source_export_when_ledger_is_unavailable(monkeypatch):
+    db = database()
+    admin, worker = payroll_users(db)
+    service = PayrollMonthCloseService(db)
+    ledger = FakePersonLedger()
+
+    def fail_ledger(**_values):
+        raise ValueError("schedule unavailable")
+
+    def fail_standard_export(**_values):
+        raise ValueError("derived export unavailable")
+
+    ledger.finalize_person_days = fail_ledger
+    monkeypatch.setattr(service, "_readiness_blockers", lambda *_args: [
+        PayrollMonthBlocker(
+            code="schedule_missing",
+            message="Regelmäßige Arbeitszeit fehlt.",
             person_id=worker.id,
-            confirmed=True,
-            current_user=admin,
+            work_date=date(2026, 8, 1),
+            work_date_end=date(2026, 8, 31),
         )
+    ])
+    monkeypatch.setattr(service, "_ledger_service", lambda: ledger)
+    monkeypatch.setattr(PayrollMonthExportService, "build_worker_export_from_source", fail_standard_export)
+    monkeypatch.setattr(
+        PayrollMonthExportService,
+        "build_worker_approved_state_fallback",
+        lambda *_args, **_kwargs: b"fallback-xlsx",
+    )
+    monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
 
-    assert caught.value.status_code == 409
-    assert caught.value.detail["code"] == "payroll_person_month_not_ready"
-    assert caught.value.detail["blockers"][0]["code"] == "incomplete_work_interval"
-    assert ledger.finalized_references == []
-    assert db.scalar(select(PayrollMonthPersonApproval.id)) is None
+    approved = service.approve_person_month(
+        year=2026,
+        month=8,
+        person_id=worker.id,
+        confirmed=True,
+        acknowledged_blocker_count=1,
+        current_user=admin,
+    )
+
+    approval = db.scalar(select(PayrollMonthPersonApproval))
+    artifact = db.scalar(select(PayrollMonthPersonApprovalArtifact))
+    audit = db.scalar(select(PayrollMonthAudit))
+    assert approval is not None and approval.ledger_reference_id is None
+    assert artifact is not None and artifact.content == b"fallback-xlsx"
+    assert approved.person_approvals[0].export_ready is True
+    assert approved.person_approvals[0].blockers == []
+    assert audit is not None
+    assert audit.details_json["export_generation_mode"] == "CONFIRMED_SOURCE_FALLBACK"
+    assert audit.details_json["ledger_failure"] is not None
+    assert audit.details_json["blockers"][0]["new_status"] == "ACKNOWLEDGED_BY_PERSON_MONTH_APPROVAL"
+
+
+def test_confirmed_source_fallback_is_a_valid_xlsx_without_audit_warnings():
+    db = database()
+    _admin, worker = payroll_users(db)
+    source = PayrollMonthSourceBundle(
+        year=2026,
+        month=8,
+        period_start=date(2026, 7, 27),
+        period_end=date(2026, 9, 6),
+        people=(worker,),
+        entries=(),
+        absences=(),
+        work_days=(),
+        holidays=frozenset(),
+    )
+
+    content = PayrollMonthExportService(db).build_worker_approved_state_fallback(
+        source=source,
+        person_id=worker.id,
+    )
+
+    with ZipFile(BytesIO(content)) as workbook:
+        assert workbook.testzip() is None
+        worksheet = workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")
+    assert "Freigegebener Monteurmonat" in worksheet
+    assert "01.08.2026 bis 31.08.2026" in worksheet
+    assert "Prüfpunkt" not in worksheet
+    assert "Hinweis" not in worksheet
 
 
 def test_person_month_reopen_requires_reason_and_unfreezes_person_ledger(monkeypatch):
@@ -275,7 +382,7 @@ def test_person_month_reopen_requires_reason_and_unfreezes_person_ledger(monkeyp
     monkeypatch.setattr(
         service,
         "_build_person_month_artifact",
-        lambda **_kwargs: {"filename": "worker-v1.xlsx", "content": b"worker-v1"},
+        lambda **_kwargs: {"filename": "worker-v1.xlsx", "content": b"worker-v1", "generation_mode": "STANDARD"},
     )
     monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
 
@@ -284,6 +391,7 @@ def test_person_month_reopen_requires_reason_and_unfreezes_person_ledger(monkeyp
         month=8,
         person_id=worker.id,
         confirmed=True,
+        acknowledged_blocker_count=0,
         current_user=admin,
     )
     assert approved.person_approvals[0].status == PAYROLL_PERSON_MONTH_APPROVED
@@ -408,6 +516,7 @@ def test_lock_reopen_and_relock_retain_versioned_snapshots_and_artifacts(monkeyp
     assert first.status == PAYROLL_MONTH_LOCKED
     assert first.snapshot_version == 1
     assert first.artifacts_ready is True
+    assert first.person_approvals[0].export_ready is True
 
     opened = service.reopen_month(
         year=2026,
@@ -424,6 +533,7 @@ def test_lock_reopen_and_relock_retain_versioned_snapshots_and_artifacts(monkeyp
     assert second.status == PAYROLL_MONTH_LOCKED
     assert second.snapshot_version == 2
     assert second.artifacts_ready is True
+    assert second.person_approvals[0].export_ready is True
 
     snapshots = list(db.scalars(select(PayrollMonthSnapshot).order_by(PayrollMonthSnapshot.version)))
     assert [item.version for item in snapshots] == [1, 2]

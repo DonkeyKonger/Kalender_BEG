@@ -56,6 +56,7 @@ class PayrollLedgerBlocker:
     message: str
     person_id: int | None = None
     work_date: date | None = None
+    work_date_end: date | None = None
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -63,6 +64,7 @@ class PayrollLedgerBlocker:
             "message": self.message,
             "person_id": self.person_id,
             "work_date": self.work_date.isoformat() if self.work_date else None,
+            "work_date_end": self.work_date_end.isoformat() if self.work_date_end else None,
         }
 
 
@@ -227,6 +229,19 @@ class PayrollDailyLedgerService:
             is_ready=is_ready,
             workers=workers,
         )
+
+    def weekly_schedules_for_person(self, person_id: int) -> list[PayrollWeeklyPlanRead]:
+        person = self.db.scalar(
+            select(Person).where(Person.id == person_id, Person.deleted_at.is_(None))
+        )
+        if person is None:
+            raise PayrollSetupValidationError("Person nicht gefunden.")
+        if person.person_type != PersonType.INTERNAL:
+            raise PayrollSetupValidationError(
+                "Regelmäßige Arbeitszeit kann nur für eigene Mitarbeiter gepflegt werden."
+            )
+        schedules = self._schedules_for_people({person_id}).get(person_id, ())
+        return [self.schedule_read(schedule) for schedule in schedules]
 
     def is_process_active(self) -> bool:
         """True after complete setup or after the first persisted daily close.
@@ -424,6 +439,7 @@ class PayrollDailyLedgerService:
                 period_end=period_end,
             )
         )
+        blockers = self._group_missing_schedule_blockers(blockers, people)
         return MonthReadiness(
             year=year,
             month=month,
@@ -431,6 +447,55 @@ class PayrollDailyLedgerService:
             period_end=period_end,
             blockers=tuple(blockers),
         )
+
+    @staticmethod
+    def _group_missing_schedule_blockers(
+        blockers: list[PayrollLedgerBlocker],
+        people: list[Person],
+    ) -> list[PayrollLedgerBlocker]:
+        """Collapse daily schedule gaps into one actionable range per worker."""
+
+        people_by_id = {person.id: person for person in people}
+        missing_by_person: dict[int, list[date]] = defaultdict(list)
+        other: list[PayrollLedgerBlocker] = []
+        for blocker in blockers:
+            if (
+                blocker.code == "schedule_missing"
+                and blocker.person_id is not None
+                and blocker.work_date is not None
+            ):
+                missing_by_person[blocker.person_id].append(blocker.work_date)
+            else:
+                other.append(blocker)
+
+        grouped: list[PayrollLedgerBlocker] = []
+        for person_id, missing_dates in sorted(missing_by_person.items()):
+            person = people_by_id.get(person_id)
+            weekly_hours = _format_weekly_hours(person.weekly_hours if person else None)
+            person_name = person.display_name if person else f"Mitarbeiter {person_id}"
+            ordered_dates = sorted(set(missing_dates))
+            range_start = ordered_dates[0]
+            range_end = range_start
+            for missing_date in ordered_dates[1:] + [None]:
+                if missing_date is not None and missing_date == range_end + timedelta(days=1):
+                    range_end = missing_date
+                    continue
+                period_label = _format_date_range(range_start, range_end)
+                grouped.append(PayrollLedgerBlocker(
+                    code="schedule_missing",
+                    message=(
+                        f"Für {person_name} ist noch nicht festgelegt, an welchen Wochentagen "
+                        f"die {weekly_hours} vertraglichen Wochenstunden gelten. Deshalb können "
+                        f"Sollstunden und Stundenkonto für {period_label} nicht berechnet werden."
+                    ),
+                    person_id=person_id,
+                    work_date=range_start,
+                    work_date_end=range_end,
+                ))
+                if missing_date is not None:
+                    range_start = missing_date
+                    range_end = missing_date
+        return other + grouped
 
     def finalize_month(
         self,
@@ -1206,6 +1271,20 @@ def _contract_weekly_minutes(weekly_hours: float | None) -> int | None:
             "Die hinterlegten Wochenstunden ergeben keine ganzen Minuten."
         )
     return int(rounded)
+
+
+def _format_weekly_hours(weekly_hours: float | None) -> str:
+    if weekly_hours is None:
+        return "noch nicht hinterlegten"
+    value = Decimal(str(weekly_hours)).normalize()
+    return format(value, "f").replace(".", ",")
+
+
+def _format_date_range(start: date, end: date) -> str:
+    start_label = start.strftime("%d.%m.%Y")
+    if start == end:
+        return start_label
+    return f"{start_label} bis {end.strftime('%d.%m.%Y')}"
 
 
 def _validate_source(source: str, reference_id: str) -> None:

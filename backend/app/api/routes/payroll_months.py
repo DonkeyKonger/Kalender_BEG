@@ -80,6 +80,7 @@ def approve_payroll_person_month(
         month=month,
         person_id=person_id,
         confirmed=payload.confirmed,
+        acknowledged_blocker_count=payload.acknowledged_blocker_count,
         current_user=current_user,
     )
 

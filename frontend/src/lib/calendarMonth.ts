@@ -41,6 +41,14 @@ export function buildCalendarMonthOptions(
   });
 }
 
+export function buildCalendarMonthWindowOptions(
+  selection: CalendarMonthSelection,
+  now = new Date(),
+): CalendarMonthOption[] {
+  const previousDecember = buildCalendarMonthOptions({ year: selection.year - 1, month: 12 }, now)[11];
+  return [previousDecember, ...buildCalendarMonthOptions(selection, now)];
+}
+
 export function formatCalendarMonth(selection: CalendarMonthSelection): string {
   return new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric", timeZone: "UTC" })
     .format(new Date(Date.UTC(selection.year, selection.month - 1, 1)));

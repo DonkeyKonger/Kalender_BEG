@@ -6,6 +6,7 @@ export type PayrollMonthBlocker = {
   message: string;
   person_id?: number | null;
   work_date?: string | null;
+  work_date_end?: string | null;
 };
 
 export type PayrollMonthPeriod = {
@@ -42,19 +43,24 @@ export type PayrollMonthPersonApproval = {
   blocker_count: number;
   blockers: PayrollMonthBlocker[];
   has_blocking_technical_error: boolean;
+  export_ready: boolean;
+  export_status: "READY" | "UNAVAILABLE";
+  export_message: string | null;
   can_approve: boolean;
   can_reopen: boolean;
 };
 
 export type PayrollWeeklyPlan = {
-  id: number | null;
+  id: number;
   valid_from: string;
   valid_to: string | null;
   weekday_minutes: number[];
   weekly_minutes: number;
+  contract_weekly_minutes: number | null;
   is_confirmed: boolean;
   confirmed_by_name: string | null;
   confirmed_at: string | null;
+  note: string | null;
 };
 
 export type PayrollOpeningBalance = {

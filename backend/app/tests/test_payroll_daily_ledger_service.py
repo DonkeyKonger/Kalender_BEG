@@ -583,6 +583,14 @@ def test_missing_confirmed_setup_blocks_readiness_without_guessing():
         "opening_balance_missing",
         "schedule_missing",
     }
+    schedule_blockers = [blocker for blocker in readiness.blockers if blocker.code == "schedule_missing"]
+    assert len(schedule_blockers) == 1
+    assert schedule_blockers[0].work_date == date(2026, 8, 1)
+    assert schedule_blockers[0].work_date_end == date(2026, 8, 31)
+    assert "Regelmäßige Arbeitszeit" not in schedule_blockers[0].message
+    assert "Ohne Plan" in schedule_blockers[0].message
+    assert "40 vertraglichen Wochenstunden" in schedule_blockers[0].message
+    assert "01.08.2026 bis 31.08.2026" in schedule_blockers[0].message
 
 
 def test_empty_setup_does_not_activate_the_daily_payroll_process():

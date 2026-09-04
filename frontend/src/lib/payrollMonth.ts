@@ -63,16 +63,24 @@ export function formatPayrollMonthWorkDateContext(value: string | null | undefin
   return `${dateLabel} · KW ${week}/${year}`;
 }
 
-export function suggestWeekdayMinutes(weeklyHours: number | null): number[] {
+export function suggestWeekdayMinutes(weeklyHours: number | null, selectedDayIndexes: number[] = []): number[] {
   if (weeklyHours === null || !Number.isFinite(weeklyHours) || weeklyHours < 0) {
     return [0, 0, 0, 0, 0, 0, 0];
   }
+  const selectedDays = [...new Set(selectedDayIndexes)]
+    .filter((index) => Number.isInteger(index) && index >= 0 && index < 7)
+    .sort((left, right) => left - right);
+  if (!selectedDays.length) {
+    return [0, 0, 0, 0, 0, 0, 0];
+  }
   const totalMinutes = Math.round(weeklyHours * 60);
-  const baseMinutes = Math.floor(totalMinutes / 5);
-  const remainder = totalMinutes - baseMinutes * 5;
-  return Array.from({ length: 7 }, (_, index) => (
-    index < 5 ? baseMinutes + (index < remainder ? 1 : 0) : 0
-  ));
+  const baseMinutes = Math.floor(totalMinutes / selectedDays.length);
+  const remainder = totalMinutes - baseMinutes * selectedDays.length;
+  const selectedPosition = new Map(selectedDays.map((dayIndex, position) => [dayIndex, position]));
+  return Array.from({ length: 7 }, (_, index) => {
+    const position = selectedPosition.get(index);
+    return position === undefined ? 0 : baseMinutes + (position < remainder ? 1 : 0);
+  });
 }
 
 export function sumWeekdayMinutes(minutes: number[]): number {

@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowRight, CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, LockKeyhole, MoreHorizontal, Search, Settings2, Trash2, Wrench, X } from "lucide-react";
 import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage, canManagePayrollMonthClose } from "../auth/permissions";
@@ -19,7 +20,7 @@ import {
   payrollSnapshotVersion,
 } from "../lib/payrollMonth";
 import {
-  buildCalendarMonthOptions,
+  buildCalendarMonthWindowOptions,
   calendarMonthRange,
   currentCalendarMonth,
   type CalendarMonthSelection,
@@ -206,6 +207,7 @@ const timeSubtabs: { key: TimeSubtab; label: string }[] = [
 
 export function TimeEntriesPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [people, setPeople] = useState<Person[]>([]);
   const [activeTimeSubtab, setActiveTimeSubtab] = useState<TimeSubtab>("review");
   const [activeEvaluationSubtab, setActiveEvaluationSubtab] = useState<EvaluationSubtab>("workers");
@@ -278,6 +280,7 @@ export function TimeEntriesPage() {
   const [payrollMonthPeriodError, setPayrollMonthPeriodError] = useState<string | null>(null);
   const [payrollMonthDialog, setPayrollMonthDialog] = useState<PayrollMonthDialog>(null);
   const [payrollPersonMonthDialog, setPayrollPersonMonthDialog] = useState<PayrollPersonMonthDialog>(null);
+  const [hasAcknowledgedPayrollPersonBlockers, setHasAcknowledgedPayrollPersonBlockers] = useState(false);
   const [payrollMonthReopenReason, setPayrollMonthReopenReason] = useState("");
   const [payrollPersonMonthReopenReason, setPayrollPersonMonthReopenReason] = useState("");
   const [isUpdatingPayrollMonth, setIsUpdatingPayrollMonth] = useState(false);
@@ -499,7 +502,7 @@ export function TimeEntriesPage() {
     [currentReviewWeek],
   );
   const evaluationMonthOptions = useMemo(
-    () => buildCalendarMonthOptions(selectedEvaluationMonth),
+    () => buildCalendarMonthWindowOptions(selectedEvaluationMonth),
     [selectedEvaluationMonth],
   );
   const payrollReviewWorkerIds = useMemo(
@@ -692,8 +695,10 @@ export function TimeEntriesPage() {
       : null,
     [payrollMonthPeriod, selectedEvaluationWorker],
   );
-  const selectedPayrollPersonBlockers = selectedPayrollPersonApproval?.blockers ?? [];
   const isSelectedPayrollPersonApproved = selectedPayrollPersonApproval?.status === "APPROVED";
+  const selectedPayrollPersonBlockers = isSelectedPayrollPersonApproved
+    ? []
+    : selectedPayrollPersonApproval?.blockers ?? [];
   const canApproveSelectedPayrollPerson = Boolean(
     selectedEvaluationWorker
     && selectedPayrollPersonApproval?.can_approve
@@ -1096,7 +1101,7 @@ export function TimeEntriesPage() {
       return;
     }
     const container = evaluationMonthStripRef.current;
-    alignEvaluationMonthsToSelection(container, selectedEvaluationMonth.month);
+    alignEvaluationMonthsToSelection(container, selectedEvaluationMonth);
     updateEvaluationMonthScrollState();
   }, [activeTimeSubtab, selectedEvaluationMonth.month, selectedEvaluationMonth.year]);
 
@@ -1110,7 +1115,7 @@ export function TimeEntriesPage() {
     }
     updateEvaluationMonthScrollState();
     const alignVisibleMonths = () => {
-      alignEvaluationMonthsToSelection(container, selectedEvaluationMonth.month, "auto");
+      alignEvaluationMonthsToSelection(container, selectedEvaluationMonth, "auto");
       updateEvaluationMonthScrollState();
     };
     container.addEventListener("scroll", updateEvaluationMonthScrollState, { passive: true });
@@ -2168,9 +2173,11 @@ export function TimeEntriesPage() {
       const updatedPeriod = await api.approvePayrollPersonMonth({
         ...selectedEvaluationMonth,
         personId: selectedEvaluationWorker.personId,
+        acknowledgedBlockerCount: selectedPayrollPersonBlockers.length,
       });
       setPayrollMonthPeriod(updatedPeriod);
       setPayrollPersonMonthDialog(null);
+      setHasAcknowledgedPayrollPersonBlockers(false);
       setIsPayrollPersonLogExpanded(false);
     } catch (requestError) {
       setPayrollMonthPeriodError(readApiError(requestError, "Monteurmonat konnte nicht abgeschlossen werden."));
@@ -2895,15 +2902,19 @@ export function TimeEntriesPage() {
               canApprove={canApproveSelectedPayrollPerson}
               canReopen={canReopenSelectedPayrollPerson}
               isDownloadingWorkerExport={isDownloadingPayrollMonthXlsx}
-              isExportAvailable={isSelectedPayrollPersonApproved}
+              isExportAvailable={Boolean(selectedPayrollPersonApproval?.export_ready)}
               isLoading={isLoadingPayrollMonthPeriod}
               isLogExpanded={isPayrollPersonLogExpanded}
               isUpdating={isUpdatingPayrollPersonMonth}
               month={selectedEvaluationMonth}
               selectedWorker={selectedEvaluationWorker}
               onDownloadWorkerExport={() => void downloadSelectedPayrollMonthXlsx()}
-              onOpenApprove={() => setPayrollPersonMonthDialog("approve")}
+              onOpenApprove={() => {
+                setHasAcknowledgedPayrollPersonBlockers(false);
+                setPayrollPersonMonthDialog("approve");
+              }}
               onOpenReopen={() => setPayrollPersonMonthDialog("reopen")}
+              onOpenWorkingTime={(personId) => navigate(`/persons?workingTimePersonId=${personId}`)}
               onToggleLog={() => setIsPayrollPersonLogExpanded((current) => !current)}
             />
           )}
@@ -2918,15 +2929,16 @@ export function TimeEntriesPage() {
                     {evaluationMonthOptions.map((option) => (
                       <button
                         className={[
-                          option.month === selectedEvaluationMonth.month ? "is-active" : "",
+                          option.year === selectedEvaluationMonth.year && option.month === selectedEvaluationMonth.month ? "is-active" : "",
                           option.isCurrent ? "is-current" : "",
                         ].filter(Boolean).join(" ")}
                         data-month={option.month}
-                        key={option.month}
+                        data-year={option.year}
+                        key={`${option.year}-${option.month}`}
                         title={`${option.label} ${option.year} · ${formatRangeLabel(calendarMonthRange(option).start, calendarMonthRange(option).end)}`}
                         type="button"
                         aria-current={option.isCurrent ? "date" : undefined}
-                        aria-pressed={option.month === selectedEvaluationMonth.month}
+                        aria-pressed={option.year === selectedEvaluationMonth.year && option.month === selectedEvaluationMonth.month}
                         onClick={() => selectEvaluationMonth(option)}
                       >
                         {option.label}
@@ -3387,7 +3399,10 @@ export function TimeEntriesPage() {
         <div
           className="payroll-month-dialog-backdrop"
           role="presentation"
-          onClick={isUpdatingPayrollPersonMonth ? undefined : () => setPayrollPersonMonthDialog(null)}
+          onClick={isUpdatingPayrollPersonMonth ? undefined : () => {
+            setPayrollPersonMonthDialog(null);
+            setHasAcknowledgedPayrollPersonBlockers(false);
+          }}
         >
           <div
             aria-describedby="payroll-person-month-dialog-description"
@@ -3409,7 +3424,18 @@ export function TimeEntriesPage() {
               {payrollPersonMonthDialog === "approve" ? (
                 <>
                   <p>Möchtest du die Monatsabrechnung von {selectedEvaluationWorker.personName} für {formatPayrollMonthLabel(selectedEvaluationMonth)} als geprüft markieren?</p>
-                  <p>Dabei werden {selectedPayrollPersonBlockers.length} offene Prüfpunkte dieses Monteurs als geprüft dokumentiert.</p>
+                  <p>Der aktuelle Stand wird eingefroren. {selectedPayrollPersonBlockers.length > 0 ? `${selectedPayrollPersonBlockers.length} offene Hinweise werden dabei nachvollziehbar als bewusst akzeptiert dokumentiert.` : "Es liegen keine offenen Hinweise vor."}</p>
+                  {selectedPayrollPersonBlockers.length > 0 && (
+                    <label className="payroll-person-month-acknowledgement">
+                      <input
+                        checked={hasAcknowledgedPayrollPersonBlockers}
+                        disabled={isUpdatingPayrollPersonMonth}
+                        type="checkbox"
+                        onChange={(event) => setHasAcknowledgedPayrollPersonBlockers(event.target.checked)}
+                      />
+                      <span>Ich habe die offenen Hinweise geprüft und bestätige den aktuellen Stand trotzdem.</span>
+                    </label>
+                  )}
                 </>
               ) : (
                 <>
@@ -3435,13 +3461,20 @@ export function TimeEntriesPage() {
                 className="secondary"
                 disabled={isUpdatingPayrollPersonMonth}
                 type="button"
-                onClick={() => setPayrollPersonMonthDialog(null)}
+                onClick={() => {
+                  setPayrollPersonMonthDialog(null);
+                  setHasAcknowledgedPayrollPersonBlockers(false);
+                }}
               >
                 Abbrechen
               </button>
               <button
                 className={payrollPersonMonthDialog === "reopen" ? "is-warning" : ""}
-                disabled={isUpdatingPayrollPersonMonth || (payrollPersonMonthDialog === "reopen" && !payrollPersonMonthReopenReason.trim())}
+                disabled={
+                  isUpdatingPayrollPersonMonth
+                  || (payrollPersonMonthDialog === "reopen" && !payrollPersonMonthReopenReason.trim())
+                  || (payrollPersonMonthDialog === "approve" && selectedPayrollPersonBlockers.length > 0 && !hasAcknowledgedPayrollPersonBlockers)
+                }
                 type="button"
                 onClick={() => void (payrollPersonMonthDialog === "approve" ? confirmPayrollPersonMonthApproval() : confirmPayrollPersonMonthReopen())}
               >
@@ -3909,6 +3942,7 @@ function PayrollPersonMonthClosePanel({
   onDownloadWorkerExport,
   onOpenApprove,
   onOpenReopen,
+  onOpenWorkingTime,
   onToggleLog,
   selectedWorker,
 }: {
@@ -3925,6 +3959,7 @@ function PayrollPersonMonthClosePanel({
   onDownloadWorkerExport: () => void;
   onOpenApprove: () => void;
   onOpenReopen: () => void;
+  onOpenWorkingTime: (personId: number) => void;
   onToggleLog: () => void;
   selectedWorker: TimeReviewWorkerSummary | null;
 }) {
@@ -3949,7 +3984,9 @@ function PayrollPersonMonthClosePanel({
     ? "Monteur auswählen, um die Monatsabrechnung herunterzuladen."
     : isExportAvailable
       ? "Geprüfte Einzelabrechnung des Monteurmonats herunterladen."
-      : "Der Download ist nach dem Monteurabschluss verfügbar.";
+      : isApproved
+        ? approval?.export_message ?? "Für diesen geprüften Stand ist keine Excel-Datei verfügbar."
+        : "Der Download ist nach dem Monteurabschluss verfügbar.";
 
   useEffect(() => {
     if (!isLogExpanded) {
@@ -4004,6 +4041,9 @@ function PayrollPersonMonthClosePanel({
             <Download aria-hidden="true" size={14} />
             <span>{isDownloadingWorkerExport ? "Wird erstellt..." : "Excel herunterladen"}</span>
           </button>
+          {isApproved && !isExportAvailable && approval?.export_message ? (
+            <small className="payroll-person-month-export-status">{approval.export_message}</small>
+          ) : null}
         </div>
       </div>
       <div className="payroll-person-month-log-anchor">
@@ -4017,22 +4057,27 @@ function PayrollPersonMonthClosePanel({
                     ? `${blockers.length} ${blockers.length === 1 ? "Prüfpunkt wurde" : "Prüfpunkte wurden"} im Monteurabschluss geprüft.`
                     : approvedMeta ?? "Monteurabschluss wurde geprüft."
                   : firstBlocker
-                    ? `${blockers.length} ${blockers.length === 1 ? "Prüfpunkt verhindert" : "Prüfpunkte verhindern"} den Abschluss · ${formatPayrollMonthWorkDateContext(firstBlocker.work_date)} · ${firstBlocker.message}`
-                    : "Keine offenen Prüfpunkte. Der Monteurmonat kann abgeschlossen werden."
+                    ? `${blockers.length} ${blockers.length === 1 ? "Hinweis zum Stand" : "Hinweise zum Stand"} · ${firstBlocker.code === "schedule_missing" ? "Regelmäßige Arbeitszeit fehlt · " : ""}${formatPayrollBlockerDateContext(firstBlocker)} · ${firstBlocker.message}`
+                    : "Keine offenen Hinweise. Der Monteurmonat kann abgeschlossen werden."
                 : "Wähle links einen Monteur aus, um den Monatsabschluss zu prüfen."}
             </span>
           </div>
-          {canToggleLog && (
-            <button
-              aria-controls="payroll-person-month-log-flyout"
-              aria-expanded={isLogExpanded}
-              type="button"
-              onClick={onToggleLog}
-            >
-              {isLogExpanded ? "Weniger anzeigen" : "Alle anzeigen"}
-              <ChevronRight aria-hidden="true" size={14} />
-            </button>
-          )}
+          <div className="payroll-person-month-log-actions">
+            {!isApproved && firstBlocker?.code === "schedule_missing" && firstBlocker.person_id ? (
+              <button type="button" onClick={() => onOpenWorkingTime(firstBlocker.person_id!)}>Arbeitszeit festlegen</button>
+            ) : null}
+            {canToggleLog && (
+              <button
+                aria-controls="payroll-person-month-log-flyout"
+                aria-expanded={isLogExpanded}
+                type="button"
+                onClick={onToggleLog}
+              >
+                {isLogExpanded ? "Weniger anzeigen" : "Alle anzeigen"}
+                <ChevronRight aria-hidden="true" size={14} />
+              </button>
+            )}
+          </div>
         </div>
         {isLogExpanded && visibleBlockers.length > 1 && (
           <div
@@ -4050,9 +4095,12 @@ function PayrollPersonMonthClosePanel({
             <div className="payroll-person-month-log-list" role="list">
               {visibleBlockers.map((blocker, index) => (
                 <div className="payroll-person-month-log-entry" key={`${blocker.code}-${blocker.work_date ?? "month"}-${index}`} role="listitem">
-                  <span>{formatPayrollMonthWorkDateContext(blocker.work_date)}</span>
-                  <strong>{blocker.code}</strong>
+                  <span>{formatPayrollBlockerDateContext(blocker)}</span>
+                  <strong>{blocker.code === "schedule_missing" ? "Regelmäßige Arbeitszeit fehlt" : "Prüfhinweis"}</strong>
                   <p>{blocker.message}</p>
+                  {blocker.code === "schedule_missing" && blocker.person_id ? (
+                    <button type="button" onClick={() => onOpenWorkingTime(blocker.person_id!)}>Arbeitszeit festlegen</button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -4061,6 +4109,14 @@ function PayrollPersonMonthClosePanel({
       </div>
     </section>
   );
+}
+
+function formatPayrollBlockerDateContext(blocker: PayrollMonthBlocker): string {
+  const start = formatPayrollMonthWorkDateContext(blocker.work_date);
+  if (!blocker.work_date_end || blocker.work_date_end === blocker.work_date) {
+    return start;
+  }
+  return `${start} bis ${formatDetailDate(blocker.work_date_end)}`;
 }
 
 function MonthlyPayrollWorkerWorkspace({
@@ -4307,20 +4363,23 @@ function evaluationMonthStartIndex(container: HTMLDivElement, buttons: HTMLButto
 
 function alignEvaluationMonthsToSelection(
   container: HTMLDivElement | null,
-  selectedMonth: number,
+  selection: CalendarMonthSelection,
   behavior: ScrollBehavior = "auto",
 ): void {
   if (!container) {
     return;
   }
   const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button"));
-  const selectedIndex = buttons.findIndex((button) => Number(button.dataset.month) === selectedMonth);
+  const selectedIndex = buttons.findIndex((button) => (
+    Number(button.dataset.year) === selection.year
+    && Number(button.dataset.month) === selection.month
+  ));
   if (selectedIndex < 0) {
     return;
   }
   const visibleCount = evaluationMonthVisibleButtonCount(container, buttons);
   const maxStartIndex = Math.max(0, buttons.length - visibleCount);
-  const targetIndex = Math.min(maxStartIndex, selectedIndex);
+  const targetIndex = Math.min(maxStartIndex, Math.max(0, selectedIndex - 1));
   container.scrollTo({ left: buttons[targetIndex]?.offsetLeft ?? 0, behavior });
 }
 

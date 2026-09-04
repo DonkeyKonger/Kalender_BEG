@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_business_page, require_roles
@@ -21,9 +21,14 @@ from app.schemas.person_hours_account import (
     PersonHoursManualAdjustmentCreate,
     PersonHoursPayoutCreate,
 )
+from app.schemas.payroll_setup import PayrollWeeklyPlanRead, PayrollWeeklyPlanUpsert
 from app.services.geo_service import search_geocoding_candidates
 from app.services.person_hours_account_service import PersonHoursAccountService
 from app.services.person_service import PersonService
+from app.services.payroll_daily_ledger_service import (
+    PayrollDailyLedgerService,
+    PayrollSetupValidationError,
+)
 from app.services.tool_material_service import ToolMaterialService
 
 router = APIRouter(prefix="/persons", tags=["persons"])
@@ -99,6 +104,45 @@ def list_person_tool_material_items(
     db: Session = Depends(get_db),
 ) -> list[PersonToolMaterialRead]:
     return ToolMaterialService(db).list_person_assignments(person_id)
+
+
+@router.get(
+    "/{person_id}/regular-working-time",
+    response_model=list[PayrollWeeklyPlanRead],
+)
+def list_regular_working_time(
+    person_id: int,
+    _user=Depends(CAN_EMPLOYEE_READ),
+    db: Session = Depends(get_db),
+) -> list[PayrollWeeklyPlanRead]:
+    try:
+        return PayrollDailyLedgerService(db).weekly_schedules_for_person(person_id)
+    except PayrollSetupValidationError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
+
+
+@router.put(
+    "/{person_id}/regular-working-time",
+    response_model=PayrollWeeklyPlanRead,
+)
+def upsert_regular_working_time(
+    person_id: int,
+    payload: PayrollWeeklyPlanUpsert,
+    current_user=Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> PayrollWeeklyPlanRead:
+    service = PayrollDailyLedgerService(db)
+    try:
+        schedule = service.upsert_weekly_schedule(
+            person_id=person_id,
+            payload=payload,
+            current_user=current_user,
+        )
+        db.commit()
+        return service.schedule_read(schedule)
+    except PayrollSetupValidationError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 
 
 @router.get("/{person_id}/hours-account", response_model=PersonHoursAccountRead)

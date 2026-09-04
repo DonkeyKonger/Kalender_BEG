@@ -10,6 +10,7 @@ class PayrollMonthBlocker(BaseModel):
     message: str
     person_id: int | None = None
     work_date: date | None = None
+    work_date_end: date | None = None
 
 
 class PayrollMonthPersonApprovalSummary(BaseModel):
@@ -30,6 +31,9 @@ class PayrollMonthPersonApprovalRead(BaseModel):
     blocker_count: int
     blockers: list[PayrollMonthBlocker] = Field(default_factory=list)
     has_blocking_technical_error: bool
+    export_ready: bool
+    export_status: str
+    export_message: str | None = None
     can_approve: bool
     can_reopen: bool
 
@@ -52,6 +56,7 @@ class PayrollMonthStatusRead(BaseModel):
 
 class PayrollMonthPersonApprovalRequest(BaseModel):
     confirmed: bool
+    acknowledged_blocker_count: int = Field(ge=0)
 
 
 class PayrollMonthPersonReopenRequest(BaseModel):

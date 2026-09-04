@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   buildCalendarMonthOptions,
+  buildCalendarMonthWindowOptions,
   calendarMonthRange,
   formatCalendarMonth,
 } from "../src/lib/calendarMonth.ts";
@@ -27,6 +28,19 @@ test("Monatsauswahl hält Jahr und aktiven Monat getrennt und verständlich", ()
   assert.equal(options[11].label, "Dezember");
   assert.equal(formatCalendarMonth({ year: 2027, month: 2 }), "Februar 2027");
   assert.equal(options.some((option) => option.isCurrent), false);
+});
+
+test("Standardfenster stellt Vormonat und aktuellen Monat auch über den Jahreswechsel bereit", () => {
+  const september = buildCalendarMonthWindowOptions({ year: 2026, month: 9 }, new Date(2026, 8, 4));
+  assert.deepEqual(september.slice(8, 10).map(({ year, month }) => ({ year, month })), [
+    { year: 2026, month: 8 },
+    { year: 2026, month: 9 },
+  ]);
+  const january = buildCalendarMonthWindowOptions({ year: 2027, month: 1 }, new Date(2027, 0, 4));
+  assert.deepEqual(january.slice(0, 2).map(({ year, month }) => ({ year, month })), [
+    { year: 2026, month: 12 },
+    { year: 2027, month: 1 },
+  ]);
 });
 
 test("Monatssummen aggregieren vollständige Einträge je Monteur und Baustelle", () => {
@@ -64,7 +78,7 @@ test("Monatsnavigation zeigt zwei Monate und die Jahressteuerung vor der Exportg
   assert.match(pageSource, /scrollEvaluationMonths\(-1\)[\s\S]*?scrollEvaluationMonths\(1\)/s);
   assert.match(pageSource, /function evaluationMonthVisibleButtonCount[\s\S]*?Math\.floor\(\(container\.clientWidth - firstButton\.offsetWidth\) \/ step\) \+ 1/s);
   assert.match(pageSource, /function scrollEvaluationMonths[\s\S]*?targetIndex[\s\S]*?container\.scrollTo\(\{ left: buttons\[targetIndex\]\?\.offsetLeft/s);
-  assert.match(pageSource, /alignEvaluationMonthsToSelection\(container, selectedEvaluationMonth\.month\)/);
+  assert.match(pageSource, /alignEvaluationMonthsToSelection\(container, selectedEvaluationMonth\)/);
   assert.match(styles, /\.time-evaluation-month-strip\s*\{[^}]*display:\s*flex;[^}]*position:\s*relative;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/s);
   assert.match(pageSource, /time-evaluation-period-controls[\s\S]*?time-evaluation-period-selection[\s\S]*?time-evaluation-month-strip-shell[\s\S]*?time-evaluation-year-navigation[\s\S]*?time-evaluation-period-actions/s);
   assert.match(pageSource, /className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr"[\s\S]*?Vorheriges Jahr auswählen[\s\S]*?\{selectedEvaluationMonth\.year\}[\s\S]*?Nächstes Jahr auswählen/s);
@@ -75,7 +89,7 @@ test("Monatsnavigation zeigt zwei Monate und die Jahressteuerung vor der Exportg
   assert.match(styles, /\.time-evaluation-year-navigation\s*\{[^}]*border:\s*1px solid var\(--time-border\);[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /\.time-evaluation-year-navigation \.time-week-scroll-button\s*\{[^}]*width:\s*34px;[^}]*height:\s*34px;[^}]*border:\s*0;[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /@media \(max-width: 580px\)\s*\{[\s\S]*?\.time-evaluation-period-selection\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*8px;/s);
-  assert.match(pageSource, /const targetIndex = Math\.min\(maxStartIndex, selectedIndex\);/);
+  assert.match(pageSource, /const targetIndex = Math\.min\(maxStartIndex, Math\.max\(0, selectedIndex - 1\)\);/);
   assert.match(styles, /@media \(max-width: 420px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*min-width:\s*0;[^}]*font-size:\s*0\.78rem;/s);
   assert.match(styles, /\.time-evaluation-month-strip button\.is-active\s*\{[^}]*border-color:\s*#1459e7;[^}]*background:\s*#1459e7;/s);
   assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
@@ -84,7 +98,7 @@ test("Monatsnavigation zeigt zwei Monate und die Jahressteuerung vor der Exportg
 test("Monatsabrechnungen verwenden den globalen oder persönlichen Freigabe-Snapshot", () => {
   assert.match(pageSource, /api\.payrollMonthlyWorkersXlsx\(\{[\s\S]*?\.\.\.selectedEvaluationMonth,[\s\S]*?version: payrollMonthVersion/s);
   assert.match(pageSource, /api\.payrollMonthlyWorkerXlsx\(\{[\s\S]*?personId: selectedEvaluationWorker\.personId,[\s\S]*?\.\.\.selectedEvaluationMonth,[\s\S]*?payrollMonthVersion === null \? \{\} : \{ version: payrollMonthVersion \}/s);
-  assert.match(pageSource, /isExportAvailable=\{isSelectedPayrollPersonApproved\}/);
+  assert.match(pageSource, /isExportAvailable=\{Boolean\(selectedPayrollPersonApproval\?\.export_ready\)\}/);
   assert.match(pageSource, /const downloadDisabled = !selectedWorker \|\| !isExportAvailable \|\| isDownloadingWorkerExport/);
   assert.match(pageSource, /onClick=\{onDownloadWorkerExport\}[\s\S]*?Excel herunterladen/s);
   assert.match(pageSource, /onClick=\{\(\) => void downloadAllPayrollMonthXlsx\(\)\}[\s\S]*?Alle Monteure/s);

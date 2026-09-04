@@ -42,8 +42,8 @@ test("the mixed week keeps its week-level approval independent from locked days"
 test("selected worker blockers show German date and ISO week context", () => {
   assert.equal(formatPayrollMonthWorkDateContext("2026-08-31"), "31.08.2026 · KW 36/2026");
   assert.equal(formatPayrollMonthWorkDateContext(null), "Gesamter Monat");
-  assert.match(page, /const selectedPayrollPersonBlockers = selectedPayrollPersonApproval\?\.blockers \?\? \[\]/);
+  assert.match(page, /const selectedPayrollPersonBlockers = isSelectedPayrollPersonApproved[\s\S]*?\? \[][\s\S]*?: selectedPayrollPersonApproval\?\.blockers \?\? \[\]/);
   assert.match(page, /blockers=\{selectedPayrollPersonBlockers\}/);
-  assert.match(page, /formatPayrollMonthWorkDateContext\(blocker\.work_date\)/);
+  assert.match(page, /formatPayrollBlockerDateContext\(blocker\)/);
   assert.match(page, /selectedWorker\?\.personName \?\? "Monteur auswählen"/);
 });

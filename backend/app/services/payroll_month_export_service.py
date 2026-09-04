@@ -5,6 +5,9 @@ import hashlib
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
+from xml.sax.saxutils import escape
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -174,6 +177,74 @@ class PayrollMonthExportService:
                 )
             ]
         ).content
+
+    def build_worker_approved_state_fallback(
+        self,
+        *,
+        source: "PayrollMonthSourceBundle",
+        person_id: int,
+    ) -> bytes:
+        """Create a deterministic raw-data workbook when derived payroll fields fail.
+
+        The fallback contains only persisted, reviewed source values. It deliberately
+        leaves unavailable derived balances out instead of inventing replacements.
+        """
+
+        person = next((item for item in source.people if item.id == person_id), None)
+        if person is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Person nicht gefunden.")
+        month_start = date(source.year, source.month, 1)
+        month_end = date(source.year, source.month, calendar.monthrange(source.year, source.month)[1])
+        rows: list[list[object]] = [
+            ["Freigegebener Monteurmonat", person.display_name],
+            ["Zeitraum", f"{month_start.strftime('%d.%m.%Y')} bis {month_end.strftime('%d.%m.%Y')}"],
+            [],
+            ["Datum", "Beginn", "Ende", "Pause (Min.)", "Arbeitszeit (Min.)", "Baustelle", "Notiz", "Quelle"],
+        ]
+        for entry in sorted(
+            (
+                item for item in source.entries
+                if item.person_id == person_id and month_start <= item.work_date <= month_end
+            ),
+            key=lambda item: (item.work_date, item.id),
+        ):
+            site = entry.site or entry.original_site
+            site_label = ""
+            if site is not None:
+                site_label = " · ".join(
+                    str(part) for part in (getattr(site, "site_number", None), getattr(site, "name", None))
+                    if part
+                )
+            rows.append([
+                entry.work_date.strftime("%d.%m.%Y"),
+                entry.payroll_corrected_start_time or entry.start_time or "",
+                entry.payroll_corrected_end_time or entry.end_time or "",
+                entry.payroll_corrected_break_minutes if entry.payroll_corrected_break_minutes is not None else entry.break_minutes,
+                _approved_entry_minutes(entry),
+                site_label,
+                entry.note or "",
+                entry.source or "",
+            ])
+        for absence in sorted(
+            (
+                item for item in source.absences
+                if item.person_id == person_id
+                and item.start_date <= month_end
+                and item.end_date >= month_start
+            ),
+            key=lambda item: (item.start_date, item.id),
+        ):
+            rows.append([
+                f"{max(absence.start_date, month_start).strftime('%d.%m.%Y')} bis {min(absence.end_date, month_end).strftime('%d.%m.%Y')}",
+                "",
+                "",
+                "",
+                "",
+                "",
+                absence.absence_type.value,
+                "Abwesenheit",
+            ])
+        return _build_simple_xlsx(rows, sheet_name="Freigegebener Stand")
 
     def all_workers_export(
         self,
@@ -533,6 +604,85 @@ def _work_day_manifest(work_day) -> dict[str, object] | None:
         "work_date": work_day.work_date.isoformat(),
         "overnight_status": work_day.overnight_status,
     }
+
+
+def _approved_entry_minutes(entry: WorkTimeEntry) -> int | str:
+    for value in (
+        entry.payroll_corrected_work_minutes,
+        entry.corrected_work_minutes,
+        entry.work_minutes,
+        entry.original_work_minutes,
+    ):
+        if value is not None:
+            return int(value)
+    return ""
+
+
+def _build_simple_xlsx(rows: list[list[object]], *, sheet_name: str) -> bytes:
+    worksheet_rows: list[str] = []
+    for row_index, row in enumerate(rows, start=1):
+        cells = "".join(
+            _simple_xlsx_cell(row_index, column_index, value)
+            for column_index, value in enumerate(row, start=1)
+            if value not in (None, "")
+        )
+        worksheet_rows.append(f'<row r="{row_index}">{cells}</row>')
+    worksheet = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData>' + "".join(worksheet_rows) + '</sheetData></worksheet>'
+    )
+    workbook = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<sheets><sheet name="{escape(sheet_name)}" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    )
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '</Types>'
+    )
+    package_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        '</Relationships>'
+    )
+    workbook_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        '</Relationships>'
+    )
+    output = BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", content_types)
+        archive.writestr("_rels/.rels", package_rels)
+        archive.writestr("xl/workbook.xml", workbook)
+        archive.writestr("xl/_rels/workbook.xml.rels", workbook_rels)
+        archive.writestr("xl/worksheets/sheet1.xml", worksheet)
+    return output.getvalue()
+
+
+def _simple_xlsx_cell(row_index: int, column_index: int, value: object) -> str:
+    reference = f"{_xlsx_column_name(column_index)}{row_index}"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f'<c r="{reference}"><v>{value}</v></c>'
+    text = escape(str(value))
+    return f'<c r="{reference}" t="inlineStr"><is><t xml:space="preserve">{text}</t></is></c>'
+
+
+def _xlsx_column_name(index: int) -> str:
+    result = ""
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
 
 
 @dataclass(frozen=True)

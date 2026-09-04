@@ -9,7 +9,7 @@ import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, Extra
 import type { ExtraWorkManualStatus, MeasurementManualStatus } from "./projectRecordStatuses";
 import type { MobileAssignment, MobileAssignmentSiteHistoryResponse, MobileAssignmentSitesResponse, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileAbsenceResponse, MobilePersonalFileAbsenceType, MobilePersonalFileTool, MobileSite, MobileToolIssueReason, MobileToolIssueReport } from "../types/mobile";
 import type { OvernightStatus, PayrollSiteCockpit, PayrollSiteHistory, PersonWorkDay, TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryReviewDecisionPayload, TimeEntryReviewWeek, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
-import type { PayrollMonthPeriod, PayrollOpeningBalanceUpdate, PayrollSetup, PayrollWeeklyPlanUpdate } from "../types/payrollMonth";
+import type { PayrollMonthPeriod, PayrollOpeningBalanceUpdate, PayrollSetup, PayrollWeeklyPlan, PayrollWeeklyPlanUpdate } from "../types/payrollMonth";
 import type { ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate, ToolMaterialPage, ToolMaterialResponsibility, ToolResponsibleUser } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
 import type { VehicleDatabaseItem, VehicleDatabaseOptions, VehicleDatabasePayload, VehicleDatabaseSortDirection, VehicleDatabaseSortField } from "../types/vehicleDatabase";
@@ -808,6 +808,20 @@ export const api = {
     });
   },
 
+  async personRegularWorkingTime(personId: number): Promise<PayrollWeeklyPlan[]> {
+    return request<PayrollWeeklyPlan[]>(`/persons/${personId}/regular-working-time`);
+  },
+
+  async savePersonRegularWorkingTime(
+    personId: number,
+    payload: PayrollWeeklyPlanUpdate,
+  ): Promise<PayrollWeeklyPlan> {
+    return request<PayrollWeeklyPlan>(`/persons/${personId}/regular-working-time`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+
   async confirmPayrollOpeningBalance(personId: number, payload: PayrollOpeningBalanceUpdate): Promise<PayrollSetup> {
     return request<PayrollSetup>(`/payroll-setup/workers/${personId}/opening-balance`, {
       method: "PUT",
@@ -1061,10 +1075,10 @@ export const api = {
     });
   },
 
-  async approvePayrollPersonMonth(params: { year: number; month: number; personId: number }): Promise<PayrollMonthPeriod> {
+  async approvePayrollPersonMonth(params: { year: number; month: number; personId: number; acknowledgedBlockerCount: number }): Promise<PayrollMonthPeriod> {
     return request<PayrollMonthPeriod>(`/payroll-months/${params.year}/${params.month}/people/${params.personId}/approve`, {
       method: "POST",
-      body: JSON.stringify({ confirmed: true }),
+      body: JSON.stringify({ confirmed: true, acknowledged_blocker_count: params.acknowledgedBlockerCount }),
     });
   },
 

@@ -12,6 +12,7 @@ import {
 
 const page = readFileSync(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
 const setup = readFileSync(new URL("../src/components/PayrollSetupDialog.tsx", import.meta.url), "utf8");
+const personsPage = readFileSync(new URL("../src/pages/PersonsPage.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
@@ -53,12 +54,29 @@ test("locked months disable editing and exports use the immutable snapshot versi
 });
 
 test("setup suggestion stays editable and must match weekly hours before confirmation", () => {
-  assert.deepEqual(suggestWeekdayMinutes(40), [480, 480, 480, 480, 480, 0, 0]);
-  assert.deepEqual(suggestWeekdayMinutes(36), [432, 432, 432, 432, 432, 0, 0]);
+  assert.deepEqual(suggestWeekdayMinutes(40), [0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(suggestWeekdayMinutes(40, [1, 2, 3, 4]), [0, 600, 600, 600, 600, 0, 0]);
+  assert.deepEqual(suggestWeekdayMinutes(37.5, [0, 2, 4, 6]), [563, 0, 563, 0, 562, 0, 562]);
   assert.equal(sumWeekdayMinutes([600, 600, 600, 600, 0, 0, 0]), 2400);
   assert.match(setup, /Vorausgefüllter Vorschlag – noch nicht verbindlich/);
   assert.match(setup, /weeklySumMatches[\s\S]*?Wochenplan bestätigen/s);
   assert.match(setup, /worker\.plan\?\.is_confirmed[\s\S]*?disabled/s);
+});
+
+test("regular working time is versioned in the employee master without a weekday assumption", () => {
+  assert.match(personsPage, /Regelmäßige Arbeitszeit/);
+  assert.match(personsPage, /PAYROLL_WEEKDAY_LABELS\.map/);
+  assert.match(personsPage, /Gleichmäßig[\s\S]*?Individuell/s);
+  assert.match(personsPage, /valid_from: validFrom[\s\S]*?weekday_minutes: weekdayMinutes[\s\S]*?confirm: true/s);
+  assert.match(personsPage, /Neue Version/);
+  assert.match(api, /personRegularWorkingTime[\s\S]*?\/persons\/\$\{personId\}\/regular-working-time/s);
+});
+
+test("person approval explicitly acknowledges current hints and always enables its retained export", () => {
+  assert.match(api, /acknowledged_blocker_count: params\.acknowledgedBlockerCount/);
+  assert.match(page, /Ich habe die offenen Hinweise geprüft und bestätige den aktuellen Stand trotzdem/);
+  assert.match(page, /isExportAvailable=\{Boolean\(selectedPayrollPersonApproval\?\.export_ready\)\}/);
+  assert.doesNotMatch(page, /Prüfpunkte verhindern den Abschluss/);
 });
 
 test("positive and negative opening balances roundtrip as integer minutes", () => {

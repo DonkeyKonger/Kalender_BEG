@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
@@ -27,7 +27,8 @@ import { StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { canAccessMainPage, canEditMainPage } from "../auth/permissions";
 import { ApiError, api } from "../lib/api";
-import { PAYROLL_CUTOVER_DATE, payrollBusinessDateIso } from "../lib/payrollMonth";
+import { PAYROLL_CUTOVER_DATE, PAYROLL_WEEKDAY_LABELS, payrollBusinessDateIso, suggestWeekdayMinutes, sumWeekdayMinutes } from "../lib/payrollMonth";
+import { formatGermanDetailDate } from "../lib/formatters";
 import {
   formatPersonToolMaterialDate,
   getPersonToolMaterialViewState,
@@ -37,6 +38,7 @@ import { buildToolMaterialEditPath } from "../lib/toolMaterialRouting";
 import type { Absence } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
 import type { Person, PersonCreate, PersonEmploymentStatus, PersonGeocodeSearchResult, PersonHoursAccount, PersonHoursAccountEntry, PersonLocationStatus, PersonToolMaterialItem, PersonType } from "../types/person";
+import type { PayrollWeeklyPlan } from "../types/payrollMonth";
 import { calendarPersonCode, getEmployeeShortName } from "../types/person";
 
 const personTypeLabels: Record<PersonType, string> = {
@@ -127,6 +129,7 @@ const emptyPerson: PersonCreate = {
 export function PersonsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const canEdit = canEditMainPage(user, "employees");
   const canEditToolMaterials = Boolean(user && canAccessMainPage(user, "miscellaneous"));
   const canManageHoursAccount = canEdit;
@@ -148,6 +151,22 @@ export function PersonsPage() {
   useEffect(() => {
     void loadPeople();
   }, []);
+
+  useEffect(() => {
+    const requestedPersonId = Number(searchParams.get("workingTimePersonId"));
+    if (isLoading || !Number.isInteger(requestedPersonId) || requestedPersonId <= 0) {
+      return;
+    }
+    const requestedPerson = people.find((person) => person.id === requestedPersonId);
+    if (!requestedPerson) {
+      return;
+    }
+    setPersonScope("internal");
+    openPersonDrawer(requestedPersonId);
+    const next = new URLSearchParams(searchParams);
+    next.delete("workingTimePersonId");
+    setSearchParams(next, { replace: true });
+  }, [isLoading, people, searchParams, setSearchParams]);
 
   async function loadPeople() {
     setIsLoading(true);
@@ -797,6 +816,10 @@ function PersonReadView({
           </div>
         </section>
 
+        {person.person_type === "internal" ? (
+          <PersonRegularWorkingTime person={person} canEdit={canEdit} />
+        ) : null}
+
         <section className="detail-read-section customer-detail-address-section person-detail-address-section">
           <div className="customer-detail-section-heading person-detail-address-heading">
             <h3>Adresse</h3>
@@ -909,6 +932,233 @@ function PersonReadView({
       ) : null}
     </div>
   );
+}
+
+type RegularWorkingTimeMode = "equal" | "individual";
+
+function PersonRegularWorkingTime({ person, canEdit }: { person: Person; canEdit: boolean }) {
+  const [plans, setPlans] = useState<PayrollWeeklyPlan[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<RegularWorkingTimeMode>("equal");
+  const [validFrom, setValidFrom] = useState(defaultRegularWorkingTimeStart());
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [individualMinutes, setIndividualMinutes] = useState<number[]>(() => Array(7).fill(0));
+
+  const currentPlan = useMemo(() => currentRegularWorkingTimePlan(plans), [plans]);
+  const weekdayMinutes = mode === "equal"
+    ? suggestWeekdayMinutes(person.weekly_hours, selectedDays)
+    : individualMinutes.map((minutes, index) => selectedDays.includes(index) ? minutes : 0);
+  const weeklyMinutes = sumWeekdayMinutes(weekdayMinutes);
+  const contractMinutes = person.weekly_hours === null ? null : Math.round(person.weekly_hours * 60);
+  const isSumValid = contractMinutes !== null && weeklyMinutes === contractMinutes;
+
+  useEffect(() => {
+    let active = true;
+    setPlans([]);
+    setIsLoading(true);
+    setIsEditing(false);
+    setMode("equal");
+    setValidFrom(defaultRegularWorkingTimeStart());
+    setSelectedDays([]);
+    setIndividualMinutes(Array(7).fill(0));
+    setError(null);
+    api.personRegularWorkingTime(person.id)
+      .then((loadedPlans) => {
+        if (active) {
+          setPlans(loadedPlans);
+          setIsEditing(loadedPlans.length === 0);
+        }
+      })
+      .catch((requestError) => {
+        if (active) {
+          setError(readApiError(requestError, "Regelmäßige Arbeitszeit konnte nicht geladen werden."));
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [person.id]);
+
+  function beginEdit(): void {
+    const source = currentPlan?.weekday_minutes ?? Array(7).fill(0);
+    const workdays = source.map((minutes, index) => minutes > 0 ? index : -1).filter((index) => index >= 0);
+    setSelectedDays(workdays);
+    setIndividualMinutes(source.slice(0, 7));
+    setMode(isEqualDistribution(source, workdays) ? "equal" : "individual");
+    setValidFrom(defaultRegularWorkingTimeStart(currentPlan));
+    setError(null);
+    setIsEditing(true);
+  }
+
+  function toggleDay(dayIndex: number): void {
+    setSelectedDays((current) => current.includes(dayIndex)
+      ? current.filter((index) => index !== dayIndex)
+      : [...current, dayIndex].sort((left, right) => left - right));
+  }
+
+  async function savePlan(): Promise<void> {
+    if (!canEdit || !selectedDays.length || !isSumValid || isSaving) {
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    try {
+      const saved = await api.savePersonRegularWorkingTime(person.id, {
+        valid_from: validFrom,
+        weekday_minutes: weekdayMinutes,
+        confirm: true,
+      });
+      setPlans((current) => [...current.filter((plan) => plan.id !== saved.id), saved]
+        .sort((left, right) => left.valid_from.localeCompare(right.valid_from)));
+      setIsEditing(false);
+    } catch (requestError) {
+      setError(readApiError(requestError, "Regelmäßige Arbeitszeit konnte nicht gespeichert werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <section className="detail-read-section person-regular-working-time-section">
+      <div className="person-regular-working-time-heading">
+        <div>
+          <span>Arbeitszeitmodell</span>
+          <h3>Regelmäßige Arbeitszeit</h3>
+        </div>
+        {canEdit && !isEditing && (
+          <button className="icon-button secondary" type="button" onClick={beginEdit}>
+            <Pencil aria-hidden="true" size={13} />
+            <span>Neue Version</span>
+          </button>
+        )}
+      </div>
+      {isLoading ? (
+        <p className="person-regular-working-time-state">Arbeitszeitmodell wird geladen...</p>
+      ) : isEditing ? (
+        <div className="person-regular-working-time-editor">
+          <div className="person-regular-working-time-controls">
+            <label>
+              <span>Vertragliche Wochenstunden</span>
+              <strong>{formatWeeklyHours(person.weekly_hours)}</strong>
+            </label>
+            <label>
+              <span>Gültig ab</span>
+              <input min={PAYROLL_CUTOVER_DATE} type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} />
+            </label>
+            <div className="person-regular-working-time-mode" role="group" aria-label="Verteilung der Wochenstunden">
+              <button className={mode === "equal" ? "is-active" : ""} type="button" onClick={() => setMode("equal")}>Gleichmäßig</button>
+              <button className={mode === "individual" ? "is-active" : ""} type="button" onClick={() => setMode("individual")}>Individuell</button>
+            </div>
+          </div>
+          <div className="person-regular-working-time-days">
+            {PAYROLL_WEEKDAY_LABELS.map((label, index) => {
+              const selected = selectedDays.includes(index);
+              return (
+                <div className={`person-regular-working-time-day${selected ? " is-selected" : ""}`} key={label}>
+                  <label>
+                    <input checked={selected} type="checkbox" onChange={() => toggleDay(index)} />
+                    <span>{label}</span>
+                  </label>
+                  {mode === "individual" ? (
+                    <input
+                      aria-label={`${label} Sollzeit`}
+                      disabled={!selected}
+                      step={60}
+                      type="time"
+                      value={formatMinutesInput(individualMinutes[index] ?? 0)}
+                      onChange={(event) => {
+                        const minutes = parseMinutesInput(event.target.value);
+                        if (minutes !== null) {
+                          setIndividualMinutes((current) => current.map((value, dayIndex) => dayIndex === index ? minutes : value));
+                        }
+                      }}
+                    />
+                  ) : (
+                    <strong>{selected ? formatMinutesInput(weekdayMinutes[index]) : "–"}</strong>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="person-regular-working-time-footer">
+            <span className={isSumValid ? "is-valid" : "is-invalid"}>
+              Wochensumme {formatMinutesInput(weeklyMinutes)} / {contractMinutes === null ? "–" : formatMinutesInput(contractMinutes)}
+            </span>
+            <div>
+              {currentPlan && <button disabled={isSaving} type="button" onClick={() => setIsEditing(false)}>Abbrechen</button>}
+              <button disabled={!selectedDays.length || !isSumValid || isSaving} type="button" onClick={() => void savePlan()}>
+                {isSaving ? "Speichert..." : "Arbeitszeit festlegen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : currentPlan ? (
+        <div className="person-regular-working-time-summary">
+          <div className="person-regular-working-time-week">
+            {PAYROLL_WEEKDAY_LABELS.map((label, index) => (
+              <span className={currentPlan.weekday_minutes[index] > 0 ? "is-workday" : ""} key={label}>
+                <small>{label}</small>
+                <strong>{currentPlan.weekday_minutes[index] > 0 ? formatMinutesInput(currentPlan.weekday_minutes[index]) : "–"}</strong>
+              </span>
+            ))}
+          </div>
+          <p>Gültig ab {formatGermanDetailDate(currentPlan.valid_from)} · {formatMinutesInput(currentPlan.weekly_minutes)} pro Woche</p>
+        </div>
+      ) : (
+        <p className="person-regular-working-time-state">Regelmäßige Arbeitszeit ist noch nicht festgelegt.</p>
+      )}
+      {error && <p className="person-regular-working-time-error" role="alert">{error}</p>}
+    </section>
+  );
+}
+
+function currentRegularWorkingTimePlan(plans: PayrollWeeklyPlan[]): PayrollWeeklyPlan | null {
+  const today = payrollBusinessDateIso();
+  return [...plans]
+    .filter((plan) => plan.valid_from <= today && (!plan.valid_to || plan.valid_to >= today))
+    .sort((left, right) => right.valid_from.localeCompare(left.valid_from))[0]
+    ?? [...plans].sort((left, right) => right.valid_from.localeCompare(left.valid_from))[0]
+    ?? null;
+}
+
+function defaultRegularWorkingTimeStart(currentPlan?: PayrollWeeklyPlan | null): string {
+  const today = payrollBusinessDateIso();
+  if (!currentPlan || currentPlan.valid_from < today) {
+    return today < PAYROLL_CUTOVER_DATE ? PAYROLL_CUTOVER_DATE : today;
+  }
+  const next = new Date(`${currentPlan.valid_from}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString().slice(0, 10);
+}
+
+function isEqualDistribution(minutes: number[], selectedDays: number[]): boolean {
+  if (!selectedDays.length) {
+    return true;
+  }
+  const selectedValues = selectedDays.map((index) => minutes[index]);
+  return Math.max(...selectedValues) - Math.min(...selectedValues) <= 1;
+}
+
+function formatMinutesInput(minutes: number): string {
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  return `${String(Math.floor(safeMinutes / 60)).padStart(2, "0")}:${String(safeMinutes % 60).padStart(2, "0")}`;
+}
+
+function parseMinutesInput(value: string): number | null {
+  const match = /^(\d{1,2}):([0-5]\d)$/.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  const minutes = Number(match[1]) * 60 + Number(match[2]);
+  return minutes <= 24 * 60 ? minutes : null;
 }
 
 function PersonToolMaterialPanel({ personId }: { personId: number }) {
