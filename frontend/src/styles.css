@@ -17569,12 +17569,17 @@ body.mobile-modal-scroll-locked {
 
 .payroll-person-month-close {
   display: grid;
+  position: relative;
+  z-index: 20;
+  box-sizing: border-box;
+  height: 112px;
   min-height: 112px;
+  grid-template-rows: minmax(0, 1fr) 33px;
   margin: 10px var(--time-review-layout-inline) 12px;
   border: 1px solid var(--time-border);
   border-radius: 0;
   background: #ffffff;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .payroll-person-month-close-main {
@@ -17714,6 +17719,11 @@ body.mobile-modal-scroll-locked {
   line-height: 1.35;
 }
 
+.payroll-person-month-log-anchor {
+  position: relative;
+  min-width: 0;
+}
+
 .payroll-person-month-log.is-warning {
   border-top-color: #f0c979;
   background: #fff8e8;
@@ -17761,12 +17771,60 @@ body.mobile-modal-scroll-locked {
   transition: transform 120ms ease;
 }
 
+.payroll-person-month-log button[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+.payroll-person-month-log-flyout {
+  position: absolute;
+  z-index: 30;
+  top: 100%;
+  right: -1px;
+  left: -1px;
+  border: 1px solid #d9b967;
+  background: #fffdf7;
+  box-shadow: 0 12px 26px rgb(15 23 42 / 18%);
+}
+
+.payroll-person-month-log-flyout-header {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #ead59c;
+  background: #fff8e8;
+  color: #5f430c;
+  padding: 6px 10px 6px 16px;
+  font-size: 0.74rem;
+}
+
+.payroll-person-month-log-flyout-header button {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.payroll-person-month-log-flyout-header button:hover,
+.payroll-person-month-log-flyout-header button:focus-visible {
+  border-color: #d9b967;
+  background: #ffffff;
+  outline: none;
+}
+
 .payroll-person-month-log-list {
   display: grid;
-  max-height: 168px;
+  max-height: min(320px, calc(100dvh - 270px));
   overflow: auto;
-  border-top: 1px solid #ead59c;
   background: #fffdf7;
+  overscroll-behavior: contain;
 }
 
 .payroll-person-month-log-entry {
@@ -20341,6 +20399,10 @@ body.mobile-modal-scroll-locked {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-evaluation-main.has-person-month-close {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .time-entries-page.is-figma-times-workspace .time-entries-toolbar,
 .time-entries-page.is-figma-times-workspace .time-panel-header {
   align-items: center;
@@ -21534,6 +21596,12 @@ body.mobile-modal-scroll-locked {
 }
 
 @media (max-width: 980px) {
+  .payroll-person-month-close {
+    height: auto;
+    min-height: 0;
+    grid-template-rows: auto auto;
+  }
+
   .payroll-person-month-close-main {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;

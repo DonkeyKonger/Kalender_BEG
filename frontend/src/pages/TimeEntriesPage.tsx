@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, LockKeyhole, MoreHorizontal, Search, Settings2, Trash2, Wrench } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, LockKeyhole, MoreHorizontal, Search, Settings2, Trash2, Wrench, X } from "lucide-react";
 import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -2887,7 +2887,7 @@ export function TimeEntriesPage() {
       )}
 
       {activeTimeSubtab === "evaluation" && (
-        <div className="time-entries-main time-review-main time-evaluation-main">
+        <div className={`time-entries-main time-review-main time-evaluation-main${activeEvaluationSubtab === "workers" ? " has-person-month-close" : ""}`}>
           {activeEvaluationSubtab === "workers" && (
             <PayrollPersonMonthClosePanel
               approval={selectedPayrollPersonApproval}
@@ -3951,6 +3951,21 @@ function PayrollPersonMonthClosePanel({
       ? "Geprüfte Einzelabrechnung des Monteurmonats herunterladen."
       : "Der Download ist nach dem Monteurabschluss verfügbar.";
 
+  useEffect(() => {
+    if (!isLogExpanded) {
+      return;
+    }
+
+    function closeLogOnEscape(event: globalThis.KeyboardEvent): void {
+      if (event.key === "Escape") {
+        onToggleLog();
+      }
+    }
+
+    document.addEventListener("keydown", closeLogOnEscape);
+    return () => document.removeEventListener("keydown", closeLogOnEscape);
+  }, [isLogExpanded, onToggleLog]);
+
   return (
     <section className="payroll-person-month-close" aria-busy={isLoading || isUpdating}>
       <div className="payroll-person-month-close-main">
@@ -3991,39 +4006,59 @@ function PayrollPersonMonthClosePanel({
           </button>
         </div>
       </div>
-      <div className={`payroll-person-month-log ${statusClass}`}>
-        <div className="payroll-person-month-log-summary">
-          {statusClass === "is-warning" ? <AlertTriangle aria-hidden="true" size={15} /> : <Check aria-hidden="true" size={15} />}
-          <span>
-            {selectedWorker
-              ? isApproved
-                ? blockers.length > 0
-                  ? `${blockers.length} ${blockers.length === 1 ? "Prüfpunkt wurde" : "Prüfpunkte wurden"} im Monteurabschluss geprüft.`
-                  : approvedMeta ?? "Monteurabschluss wurde geprüft."
-                : firstBlocker
-                  ? `${blockers.length} ${blockers.length === 1 ? "Prüfpunkt verhindert" : "Prüfpunkte verhindern"} den Abschluss · ${formatPayrollMonthWorkDateContext(firstBlocker.work_date)} · ${firstBlocker.message}`
-                  : "Keine offenen Prüfpunkte. Der Monteurmonat kann abgeschlossen werden."
-              : "Wähle links einen Monteur aus, um den Monatsabschluss zu prüfen."}
-          </span>
+      <div className="payroll-person-month-log-anchor">
+        <div className={`payroll-person-month-log ${statusClass}`}>
+          <div className="payroll-person-month-log-summary">
+            {statusClass === "is-warning" ? <AlertTriangle aria-hidden="true" size={15} /> : <Check aria-hidden="true" size={15} />}
+            <span>
+              {selectedWorker
+                ? isApproved
+                  ? blockers.length > 0
+                    ? `${blockers.length} ${blockers.length === 1 ? "Prüfpunkt wurde" : "Prüfpunkte wurden"} im Monteurabschluss geprüft.`
+                    : approvedMeta ?? "Monteurabschluss wurde geprüft."
+                  : firstBlocker
+                    ? `${blockers.length} ${blockers.length === 1 ? "Prüfpunkt verhindert" : "Prüfpunkte verhindern"} den Abschluss · ${formatPayrollMonthWorkDateContext(firstBlocker.work_date)} · ${firstBlocker.message}`
+                    : "Keine offenen Prüfpunkte. Der Monteurmonat kann abgeschlossen werden."
+                : "Wähle links einen Monteur aus, um den Monatsabschluss zu prüfen."}
+            </span>
+          </div>
+          {canToggleLog && (
+            <button
+              aria-controls="payroll-person-month-log-flyout"
+              aria-expanded={isLogExpanded}
+              type="button"
+              onClick={onToggleLog}
+            >
+              {isLogExpanded ? "Weniger anzeigen" : "Alle anzeigen"}
+              <ChevronRight aria-hidden="true" size={14} />
+            </button>
+          )}
         </div>
-        {canToggleLog && (
-          <button type="button" onClick={onToggleLog}>
-            {isLogExpanded ? "Weniger anzeigen" : "Alle anzeigen"}
-            <ChevronRight aria-hidden="true" size={14} />
-          </button>
+        {isLogExpanded && visibleBlockers.length > 1 && (
+          <div
+            aria-label={`Alle ${visibleBlockers.length} Prüfpunkte`}
+            className="payroll-person-month-log-flyout"
+            id="payroll-person-month-log-flyout"
+            role="region"
+          >
+            <div className="payroll-person-month-log-flyout-header">
+              <strong>Prüfpunkte ({visibleBlockers.length})</strong>
+              <button aria-label="Prüfpunkte schließen" type="button" onClick={onToggleLog}>
+                <X aria-hidden="true" size={15} />
+              </button>
+            </div>
+            <div className="payroll-person-month-log-list" role="list">
+              {visibleBlockers.map((blocker, index) => (
+                <div className="payroll-person-month-log-entry" key={`${blocker.code}-${blocker.work_date ?? "month"}-${index}`} role="listitem">
+                  <span>{formatPayrollMonthWorkDateContext(blocker.work_date)}</span>
+                  <strong>{blocker.code}</strong>
+                  <p>{blocker.message}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
-      {isLogExpanded && visibleBlockers.length > 1 && (
-        <div className="payroll-person-month-log-list" role="list">
-          {visibleBlockers.map((blocker, index) => (
-            <div className="payroll-person-month-log-entry" key={`${blocker.code}-${blocker.work_date ?? "month"}-${index}`} role="listitem">
-              <span>{formatPayrollMonthWorkDateContext(blocker.work_date)}</span>
-              <strong>{blocker.code}</strong>
-              <p>{blocker.message}</p>
-            </div>
-          ))}
-        </div>
-      )}
     </section>
   );
 }

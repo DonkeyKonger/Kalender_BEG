@@ -30,10 +30,10 @@ test("month lock is server controlled and reopening requires a reason", () => {
 
 test("locked months disable editing and exports use the immutable snapshot version", () => {
   assert.match(page, /arePayrollMonthExportsAvailable = isPayrollMonthLocked[\s\S]*?artifacts_ready/s);
-  assert.match(page, /canManageTimeEntries=\{canManageTimeEntries && !isPayrollMonthLocked\}/);
+  assert.match(page, /canManageTimeEntries=\{canManageTimeEntries && !isPayrollMonthLocked && !isSelectedPayrollPersonApproved\}/);
   assert.match(page, /version: payrollMonthVersion/);
-  assert.match(page, /Der Monat kann noch bearbeitet werden\./);
-  assert.match(page, /Monat abgeschlossen – Änderungen gesperrt/);
+  assert.match(page, /checked=\{isPayrollMonthLocked\}/);
+  assert.match(page, /Der Gesamtmonat kann erst abgeschlossen werden, wenn alle Monteure geprüft sind/);
   assert.equal(
     payrollMonthFilename("Lohnabrechnung_2026_08_Test", {
       year: 2026,
@@ -76,4 +76,19 @@ test("month close and setup geometry remains locally scoped and square", () => {
   assert.match(styles, /\.payroll-month-dialog\s*\{[^}]*border-radius:\s*0;/s);
   assert.match(styles, /\.payroll-setup-dialog\s*\{[^}]*border-radius:\s*0;/s);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.payroll-setup-worker\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
+});
+
+test("person month close reserves a stable desktop row above month navigation", () => {
+  assert.match(page, /time-evaluation-main\$\{activeEvaluationSubtab === "workers" \? " has-person-month-close" : ""\}/);
+  assert.match(styles, /\.payroll-person-month-close\s*\{[^}]*height:\s*112px;[^}]*grid-template-rows:\s*minmax\(0, 1fr\) 33px;/s);
+  assert.match(styles, /\.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/s);
+  assert.match(styles, /@media \(max-width: 980px\)[\s\S]*?\.payroll-person-month-close\s*\{[^}]*height:\s*auto;[^}]*grid-template-rows:\s*auto auto;/s);
+});
+
+test("person blockers open as an anchored non-layout flyout", () => {
+  assert.match(page, /className="payroll-person-month-log-anchor"[\s\S]*?aria-controls="payroll-person-month-log-flyout"[\s\S]*?aria-expanded=\{isLogExpanded\}/s);
+  assert.match(page, /className="payroll-person-month-log-flyout"[\s\S]*?aria-label="Prüfpunkte schließen"/s);
+  assert.match(page, /event\.key === "Escape"[\s\S]*?onToggleLog\(\)/s);
+  assert.match(styles, /\.payroll-person-month-log-flyout\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*30;[^}]*top:\s*100%;[^}]*background:\s*#fffdf7;/s);
+  assert.match(styles, /\.payroll-person-month-log-list\s*\{[^}]*max-height:\s*min\(320px, calc\(100dvh - 270px\)\);[^}]*overflow:\s*auto;/s);
 });

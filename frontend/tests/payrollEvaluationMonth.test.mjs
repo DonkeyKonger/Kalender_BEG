@@ -81,11 +81,13 @@ test("Monatsnavigation zeigt zwei Monate und die Jahressteuerung vor der Exportg
   assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
 });
 
-test("Monatsabrechnungen für alle und den ausgewählten Monteur sind nur aus einem gesperrten Snapshot verfügbar", () => {
+test("Monatsabrechnungen verwenden den globalen oder persönlichen Freigabe-Snapshot", () => {
   assert.match(pageSource, /api\.payrollMonthlyWorkersXlsx\(\{[\s\S]*?\.\.\.selectedEvaluationMonth,[\s\S]*?version: payrollMonthVersion/s);
-  assert.match(pageSource, /api\.payrollMonthlyWorkerXlsx\(\{[\s\S]*?personId: selectedEvaluationWorker\.personId,[\s\S]*?version: payrollMonthVersion,[\s\S]*?\.\.\.selectedEvaluationMonth/s);
-  assert.match(pageSource, /className="time-evaluation-period-actions"[\s\S]*?time-evaluation-export-heading[\s\S]*?Monatsabrechnung[\s\S]*?time-evaluation-export-buttons[\s\S]*?onClick=\{\(\) => void downloadAllPayrollMonthXlsx\(\)\}[\s\S]*?Alle Monteure[\s\S]*?onClick=\{\(\) => void downloadSelectedPayrollMonthXlsx\(\)\}[\s\S]*?Ausgewählter Monteur/s);
-  assert.match(pageSource, /disabled=\{!arePayrollMonthExportsAvailable \|\| !selectedEvaluationWorker \|\| !isEvaluationDataReady \|\| isDownloadingPayrollMonthXlsx\}/);
+  assert.match(pageSource, /api\.payrollMonthlyWorkerXlsx\(\{[\s\S]*?personId: selectedEvaluationWorker\.personId,[\s\S]*?\.\.\.selectedEvaluationMonth,[\s\S]*?payrollMonthVersion === null \? \{\} : \{ version: payrollMonthVersion \}/s);
+  assert.match(pageSource, /isExportAvailable=\{isSelectedPayrollPersonApproved\}/);
+  assert.match(pageSource, /const downloadDisabled = !selectedWorker \|\| !isExportAvailable \|\| isDownloadingWorkerExport/);
+  assert.match(pageSource, /onClick=\{onDownloadWorkerExport\}[\s\S]*?Excel herunterladen/s);
+  assert.match(pageSource, /onClick=\{\(\) => void downloadAllPayrollMonthXlsx\(\)\}[\s\S]*?Alle Monteure/s);
   assert.match(pageSource, /id="time-evaluation-monthly-download-status"[\s\S]*?Excel-Monatsabrechnungen sind erst nach dem Monatsabschluss verfügbar/);
   const monthlyStart = pageSource.indexOf("function MonthlyPayrollWorkerWorkspace");
   const monthlySource = pageSource.slice(monthlyStart, pageSource.indexOf("function currentIsoWeek", monthlyStart));
@@ -94,8 +96,6 @@ test("Monatsabrechnungen für alle und den ausgewählten Monteur sind nur aus ei
   assert.match(monthlySource, /className="time-review-worker-detail">\s*<div className="time-review-week-check-table"/);
   assert.doesNotMatch(pageSource, /Noch keine Excel-Vorlage für die Monatsabrechnung hinterlegt/);
   assert.match(styles, /\.time-evaluation-period-actions\s*\{[^}]*display:\s*grid;[^}]*margin-left:\s*auto;[^}]*border-left:\s*1px solid var\(--time-border\);[^}]*gap:\s*8px;/s);
-  assert.match(styles, /\.time-evaluation-period-actions > h3\s*\{[^}]*font-size:\s*0\.68rem;[^}]*text-transform:\s*uppercase;/s);
-  assert.match(styles, /\.time-evaluation-export-buttons\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);[^}]*align-items:\s*stretch;/s);
   assert.match(styles, /\.time-evaluation-monthly-download-button\s*\{[^}]*min-height:\s*36px;[^}]*border-radius:\s*0;[^}]*font-size:\s*0\.78rem;[^}]*white-space:\s*nowrap;/s);
   assert.match(styles, /\.time-evaluation-monthly-download-button:disabled\s*\{[^}]*background:\s*#ffffff;[^}]*color:\s*#64748b;[^}]*cursor:\s*not-allowed;[^}]*opacity:\s*1;/s);
   assert.match(styles, /@media \(max-width: 420px\)\s*\{[\s\S]*?\.time-evaluation-period-actions\s*\{[^}]*width:\s*100%;[\s\S]*?\.time-evaluation-monthly-download-button\s*\{[^}]*min-width:\s*0;[^}]*white-space:\s*normal;/s);
@@ -130,7 +130,7 @@ test("Baustellen-Untertab verwendet die eigenständige monatliche Realisierungsa
 
 test("Auswertungs-Untertabs teilen die kompakte Headerzeile mit der Hauptnavigation", () => {
   const navigationStart = pageSource.indexOf('className="time-payroll-navigation-row"');
-  const evaluationMainStart = pageSource.indexOf('className="time-entries-main time-review-main time-evaluation-main"');
+  const evaluationMainStart = pageSource.indexOf('time-entries-main time-review-main time-evaluation-main');
 
   assert.ok(navigationStart >= 0);
   assert.ok(evaluationMainStart > navigationStart);
@@ -141,6 +141,7 @@ test("Auswertungs-Untertabs teilen die kompakte Headerzeile mit der Hauptnavigat
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.page-subtitle\s*\{[^}]*font-size:\s*0\.86rem;/s);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-evaluation-month-nav\s*\{[^}]*padding:\s*8px 24px;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/s);
   assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2, minmax\(96px, 1fr\)\);[^}]*margin:\s*0 0 0 auto;[^}]*border:\s*0;[^}]*border-radius:\s*0;/s);
   assert.match(styles, /\.time-evaluation-subtabs button:focus-visible\s*\{[^}]*box-shadow:/s);
   assert.match(styles, /\.time-evaluation-subtabs button\s*\{[^}]*min-height:\s*34px;[^}]*border:\s*1px solid var\(--time-border\);[^}]*border-radius:\s*0;[^}]*background:\s*#ffffff;[^}]*color:\s*#243b5a;[^}]*font-size:\s*0\.78rem;/s);
