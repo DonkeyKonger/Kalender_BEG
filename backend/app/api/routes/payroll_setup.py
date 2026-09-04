@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_admin_or_office_page
+from app.api.dependencies import require_business_page
 from app.core.database import get_db
 from app.models.payroll_daily_ledger import PAYROLL_LEDGER_CUTOVER_DATE
 from app.models.user import User
@@ -19,7 +19,7 @@ from app.services.payroll_daily_ledger_service import (
 
 
 router = APIRouter(prefix="/payroll-setup", tags=["payroll-setup"])
-CAN_MANAGE = require_admin_or_office_page("payroll")
+CAN_MANAGE = require_business_page("payroll")
 
 
 @router.get("", response_model=PayrollSetupRead)

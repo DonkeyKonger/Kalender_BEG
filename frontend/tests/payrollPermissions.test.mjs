@@ -25,11 +25,11 @@ test("payroll opt-in grants office users normal payroll page actions", () => {
   assert.equal(canAccessMainPage(officeWithoutOptIn, "payroll"), false);
 });
 
-test("month close and setup are reserved for admins and payroll-enabled office users", () => {
+test("month close and setup use the general payroll permission without person assignment", () => {
   assert.equal(canManagePayrollMonthClose(currentUser("admin")), true);
+  assert.equal(canManagePayrollMonthClose(currentUser("project_manager")), true);
   assert.equal(canManagePayrollMonthClose(currentUser("office", ["payroll"])), true);
   assert.equal(canManagePayrollMonthClose(currentUser("office", ["export"])), false);
-  assert.equal(canManagePayrollMonthClose(currentUser("project_manager")), false);
   assert.equal(canManagePayrollMonthClose(currentUser("monteur")), false);
   assert.equal(canManagePayrollMonthClose(null), false);
 });
@@ -44,6 +44,8 @@ test("payroll page and week downloads use payroll access without a phone GPS ver
   assert.match(permissionSource, /return canAccessMainPage\(user, pageKey\)/);
   assert.match(pageSource, /canManageTimeEntries = canEditMainPage\(user, "payroll"\)/);
   assert.match(pageSource, /canManagePayrollClose = canManagePayrollMonthClose\(user\)/);
+  assert.match(pageSource, /payrollPersonApprovalDisabledReason[\s\S]*?Für den Monatsabschluss fehlt die allgemeine Lohnprüfungsberechtigung/s);
+  assert.match(pageSource, /aria-describedby=\{disabledReason \? "payroll-person-month-toggle-reason" : undefined\}/);
   assert.match(pageSource, /\{canManagePayrollClose && \([\s\S]*?Stundenkonto einrichten[\s\S]*?\)\}/s);
   assert.match(pageSource, /api\.weeklyAllWorkersTimeEntriesXlsx/);
   assert.match(pageSource, /api\.weeklyWorkerTimeEntriesXlsx/);

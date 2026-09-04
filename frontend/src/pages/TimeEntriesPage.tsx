@@ -709,6 +709,23 @@ export function TimeEntriesPage() {
     && selectedPayrollPersonApproval?.can_reopen
     && !isUpdatingPayrollPersonMonth,
   );
+  const payrollPersonApprovalDisabledReason = !selectedEvaluationWorker
+    ? "Bitte zuerst einen Monteur auswählen."
+    : isLoadingPayrollMonthPeriod
+      ? "Der Monatsstatus wird noch geladen."
+      : isUpdatingPayrollPersonMonth
+        ? "Der Monteurmonat wird gerade verarbeitet."
+        : !canManagePayrollClose
+          ? "Für den Monatsabschluss fehlt die allgemeine Lohnprüfungsberechtigung."
+          : !payrollMonthPeriod || !selectedPayrollPersonApproval
+            ? "Der Status dieses Monteurmonats ist derzeit nicht verfügbar."
+            : isPayrollMonthLocked
+              ? "Der Gesamtmonat ist bereits abgeschlossen. Öffne ihn zuerst wieder."
+              : isSelectedPayrollPersonApproved && !selectedPayrollPersonApproval.can_reopen
+                ? "Dieser Monteurmonat kann im aktuellen Stand nicht wieder geöffnet werden."
+                : !isSelectedPayrollPersonApproved && !selectedPayrollPersonApproval.can_approve
+                  ? "Dieser Monteurmonat kann im aktuellen Stand nicht abgeschlossen werden."
+                  : null;
   const payrollPersonApprovalSummary = payrollMonthPeriod?.person_approval_summary ?? null;
   useEffect(() => {
     let ignore = false;
@@ -2901,6 +2918,7 @@ export function TimeEntriesPage() {
               blockers={selectedPayrollPersonBlockers}
               canApprove={canApproveSelectedPayrollPerson}
               canReopen={canReopenSelectedPayrollPerson}
+              disabledReason={payrollPersonApprovalDisabledReason}
               isDownloadingWorkerExport={isDownloadingPayrollMonthXlsx}
               isExportAvailable={Boolean(selectedPayrollPersonApproval?.export_ready)}
               isLoading={isLoadingPayrollMonthPeriod}
@@ -3935,6 +3953,7 @@ function PayrollPersonMonthClosePanel({
   blockers,
   canApprove,
   canReopen,
+  disabledReason,
   isDownloadingWorkerExport,
   isExportAvailable,
   isLoading,
@@ -3952,6 +3971,7 @@ function PayrollPersonMonthClosePanel({
   blockers: PayrollMonthBlocker[];
   canApprove: boolean;
   canReopen: boolean;
+  disabledReason: string | null;
   isDownloadingWorkerExport: boolean;
   isExportAvailable: boolean;
   isLoading: boolean;
@@ -4021,8 +4041,12 @@ function PayrollPersonMonthClosePanel({
           {statusText}
         </div>
         <div className="payroll-person-month-actions">
-          <label className={`payroll-person-month-toggle${isApproved ? " is-checked" : ""}`}>
+          <label
+            className={`payroll-person-month-toggle${isApproved ? " is-checked" : ""}`}
+            title={disabledReason ?? undefined}
+          >
             <input
+              aria-describedby={disabledReason ? "payroll-person-month-toggle-reason" : undefined}
               checked={isApproved}
               disabled={!canToggleApproval || isUpdating}
               type="checkbox"
@@ -4033,6 +4057,11 @@ function PayrollPersonMonthClosePanel({
             </span>
             <span>Monteurmonat geprüft</span>
           </label>
+          {disabledReason && selectedWorker ? (
+            <small className="payroll-person-month-disabled-reason" id="payroll-person-month-toggle-reason">
+              {disabledReason}
+            </small>
+          ) : null}
           <button
             className="time-evaluation-monthly-download-button payroll-person-month-download-button"
             disabled={downloadDisabled}

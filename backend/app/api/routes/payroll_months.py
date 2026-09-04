@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_admin_or_office_page, require_business_page
+from app.api.dependencies import require_business_page
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.payroll_month import (
@@ -17,7 +17,7 @@ from app.services.payroll_month_close_service import PayrollMonthCloseService
 
 router = APIRouter(prefix="/payroll-months", tags=["payroll-months"])
 CAN_READ = require_business_page("payroll")
-CAN_MANAGE = require_admin_or_office_page("payroll")
+CAN_MANAGE = require_business_page("payroll")
 
 
 @router.get("/{year}/{month}", response_model=PayrollMonthStatusRead)

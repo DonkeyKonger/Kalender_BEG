@@ -206,7 +206,11 @@ def test_person_month_approval_acknowledges_worker_blockers_and_allows_month_loc
     monkeypatch.setattr(
         service,
         "_build_person_month_artifact",
-        lambda **_kwargs: {"filename": "worker-v1.xlsx", "content": b"worker-v1", "generation_mode": "STANDARD"},
+        lambda **_kwargs: {
+            "filename": "worker-v1.xlsx",
+            "content": b"worker-v1",
+            "generation_mode": "STANDARD",
+        },
     )
     monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
 
@@ -292,7 +296,19 @@ def test_person_month_approval_accepts_technical_blockers_and_keeps_export_avail
 
 def test_eight_hints_including_open_predecessor_do_not_disable_person_approval(monkeypatch):
     db = database()
-    admin, worker = payroll_users(db)
+    _admin, worker = payroll_users(db)
+    office_user = User(
+        username="office-payroll",
+        display_name="Lohnbüro",
+        password_hash="test",
+        role=UserRole.OFFICE,
+        is_active=True,
+        must_change_password=False,
+        office_page_permissions=["payroll"],
+        person_id=None,
+    )
+    db.add(office_user)
+    db.commit()
     service = PayrollMonthCloseService(db)
     ledger = FakePersonLedger()
     blockers = [
@@ -313,7 +329,7 @@ def test_eight_hints_including_open_predecessor_do_not_disable_person_approval(m
     )
     monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
 
-    open_status = service.get_status(year=2026, month=9, current_user=admin)
+    open_status = service.get_status(year=2026, month=9, current_user=office_user)
 
     assert open_status.person_approvals[0].blocker_count == 8
     assert open_status.person_approvals[0].can_approve is True
@@ -328,7 +344,7 @@ def test_eight_hints_including_open_predecessor_do_not_disable_person_approval(m
         person_id=worker.id,
         confirmed=True,
         acknowledged_blocker_count=8,
-        current_user=admin,
+        current_user=office_user,
     )
 
     assert approved.person_approvals[0].status == PAYROLL_PERSON_MONTH_APPROVED
@@ -703,8 +719,9 @@ def test_artifacts_ready_requires_complete_set_and_download_checks_hash(monkeypa
     assert caught.value.detail["code"] == "payroll_artifact_corrupt"
 
 
-def test_project_manager_cannot_lock_or_reopen_payroll_month():
+def test_project_manager_can_approve_and_reopen_person_month_without_assignment(monkeypatch):
     db = database()
+    _admin, worker = payroll_users(db)
     project_manager = User(
         username="project-payroll",
         display_name="Projektleitung",
@@ -712,8 +729,75 @@ def test_project_manager_cannot_lock_or_reopen_payroll_month():
         role=UserRole.PROJECT_MANAGER,
         is_active=True,
         must_change_password=False,
+        person_id=None,
     )
     db.add(project_manager)
+    db.commit()
+    service = PayrollMonthCloseService(db)
+    ledger = FakePersonLedger()
+    monkeypatch.setattr(service, "_readiness_blockers", lambda *_args: [])
+    monkeypatch.setattr(service, "_ledger_service", lambda: ledger)
+    monkeypatch.setattr(
+        service,
+        "_build_person_month_artifact",
+        lambda **_kwargs: {
+            "filename": "worker-v1.xlsx",
+            "content": b"worker-v1",
+            "generation_mode": "STANDARD",
+        },
+    )
+    monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
+
+    open_status = service.get_status(year=2026, month=8, current_user=project_manager)
+    assert open_status.person_approvals[0].can_approve is True
+
+    approved = service.approve_person_month(
+        year=2026,
+        month=8,
+        person_id=worker.id,
+        confirmed=True,
+        acknowledged_blocker_count=0,
+        current_user=project_manager,
+    )
+    reopened = service.reopen_person_month(
+        year=2026,
+        month=8,
+        person_id=worker.id,
+        reason="Korrektur durch Projektleitung",
+        current_user=project_manager,
+    )
+
+    assert approved.person_approvals[0].status == PAYROLL_PERSON_MONTH_APPROVED
+    assert reopened.person_approvals[0].status == PAYROLL_PERSON_MONTH_OPEN
+    assert ledger.finalized_references == [
+        f"payroll-person-month:2026-08:person:{worker.id}:v1"
+    ]
+    assert ledger.unfinalized_references == ledger.finalized_references
+    assert list(db.scalars(select(PayrollMonthAudit.action).order_by(PayrollMonthAudit.id))) == [
+        "PERSON_MONTH_APPROVED",
+        "PERSON_MONTH_REOPENED",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("role", "permissions"),
+    [
+        (UserRole.OFFICE, []),
+        (UserRole.MONTEUR, []),
+    ],
+)
+def test_users_without_general_payroll_permission_cannot_manage_month(role, permissions):
+    db = database()
+    unauthorized_user = User(
+        username=f"unauthorized-{role.value}",
+        display_name="Ohne Lohnprüfungsrecht",
+        password_hash="test",
+        role=role,
+        is_active=True,
+        must_change_password=False,
+        office_page_permissions=permissions,
+    )
+    db.add(unauthorized_user)
     db.commit()
     service = PayrollMonthCloseService(db)
 
@@ -722,7 +806,7 @@ def test_project_manager_cannot_lock_or_reopen_payroll_month():
             year=2026,
             month=8,
             confirmed=True,
-            current_user=project_manager,
+            current_user=unauthorized_user,
         )
     assert lock_error.value.status_code == 403
 
@@ -731,7 +815,7 @@ def test_project_manager_cannot_lock_or_reopen_payroll_month():
             year=2026,
             month=8,
             reason="Nicht berechtigt",
-            current_user=project_manager,
+            current_user=unauthorized_user,
         )
     assert reopen_error.value.status_code == 403
 

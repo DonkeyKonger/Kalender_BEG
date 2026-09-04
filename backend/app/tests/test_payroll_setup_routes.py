@@ -74,13 +74,13 @@ def client(monkeypatch, current_user) -> tuple[TestClient, FakeDb]:
     ("current_user", "expected"),
     [
         (user(UserRole.ADMIN), 200),
+        (user(UserRole.PROJECT_MANAGER), 200),
         (user(UserRole.OFFICE, "payroll"), 200),
         (user(UserRole.OFFICE), 403),
-        (user(UserRole.PROJECT_MANAGER, "payroll"), 403),
         (user(UserRole.MONTEUR), 403),
     ],
 )
-def test_payroll_setup_is_restricted_to_admin_and_payroll_office(
+def test_payroll_setup_uses_the_general_payroll_permission(
     monkeypatch, current_user, expected
 ):
     api, _db = client(monkeypatch, current_user)
@@ -90,8 +90,17 @@ def test_payroll_setup_is_restricted_to_admin_and_payroll_office(
     assert response.status_code == expected
 
 
-def test_confirm_setup_routes_return_complete_refreshed_setup(monkeypatch):
-    api, db = client(monkeypatch, user(UserRole.OFFICE, "payroll"))
+@pytest.mark.parametrize(
+    ("role", "permissions"),
+    [
+        (UserRole.PROJECT_MANAGER, ()),
+        (UserRole.OFFICE, ("payroll",)),
+    ],
+)
+def test_confirm_setup_routes_return_complete_refreshed_setup(
+    monkeypatch, role, permissions
+):
+    api, db = client(monkeypatch, user(role, *permissions))
 
     plan_response = api.put(
         "/api/payroll-setup/workers/42/weekly-plan",

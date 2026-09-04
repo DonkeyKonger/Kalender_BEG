@@ -1585,7 +1585,7 @@ def _validate_month(year: int, month: int) -> None:
 
 
 def _may_manage_payroll(user: User) -> bool:
-    return user.role == UserRole.ADMIN or (
+    return user.role in {UserRole.ADMIN, UserRole.PROJECT_MANAGER} or (
         user.role == UserRole.OFFICE and office_user_can_access(user, OFFICE_PAGE_PAYROLL)
     )
 

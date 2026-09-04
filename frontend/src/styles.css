@@ -17961,6 +17961,17 @@ body.mobile-modal-scroll-locked {
   text-align: right;
 }
 
+.payroll-person-month-disabled-reason {
+  flex-basis: 100%;
+  max-width: 330px;
+  margin-left: auto;
+  color: #8a4d00;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: right;
+}
+
 .payroll-person-month-log {
   display: flex;
   min-height: 33px;
@@ -21907,6 +21918,11 @@ body.mobile-modal-scroll-locked {
 
   .payroll-person-month-actions {
     justify-content: flex-start;
+  }
+
+  .payroll-person-month-disabled-reason {
+    margin-left: 0;
+    text-align: left;
   }
 
   .payroll-person-month-log {
