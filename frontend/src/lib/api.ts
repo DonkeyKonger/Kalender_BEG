@@ -9,7 +9,7 @@ import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, Extra
 import type { ExtraWorkManualStatus, MeasurementManualStatus } from "./projectRecordStatuses";
 import type { MobileAssignment, MobileAssignmentSiteHistoryResponse, MobileAssignmentSitesResponse, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileAbsenceResponse, MobilePersonalFileAbsenceType, MobilePersonalFileTool, MobileSite, MobileToolIssueReason, MobileToolIssueReport } from "../types/mobile";
 import type { OvernightStatus, PayrollSiteCockpit, PayrollSiteHistory, PersonWorkDay, TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryReviewDecisionPayload, TimeEntryReviewWeek, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
-import type { PayrollMonthPeriod, PayrollOpeningBalanceUpdate, PayrollSetup, PayrollWeeklyPlan, PayrollWeeklyPlanUpdate } from "../types/payrollMonth";
+import type { PayrollMonthLockStatus, PayrollMonthPeriod, PayrollOpeningBalanceUpdate, PayrollSetup, PayrollWeeklyPlan, PayrollWeeklyPlanUpdate } from "../types/payrollMonth";
 import type { ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate, ToolMaterialPage, ToolMaterialResponsibility, ToolResponsibleUser } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
 import type { VehicleDatabaseItem, VehicleDatabaseOptions, VehicleDatabasePayload, VehicleDatabaseSortDirection, VehicleDatabaseSortField } from "../types/vehicleDatabase";
@@ -1059,6 +1059,10 @@ export const api = {
 
   async payrollMonthPeriod(params: { year: number; month: number }): Promise<PayrollMonthPeriod> {
     return request<PayrollMonthPeriod>(`/payroll-months/${params.year}/${params.month}`);
+  },
+
+  async payrollMonthLockStatus(params: { year: number; month: number }): Promise<PayrollMonthLockStatus> {
+    return request<PayrollMonthLockStatus>(`/payroll-months/${params.year}/${params.month}/lock-status`, { cache: "no-store" });
   },
 
   async lockPayrollMonth(params: { year: number; month: number }): Promise<PayrollMonthPeriod> {

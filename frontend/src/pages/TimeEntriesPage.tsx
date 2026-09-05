@@ -14,7 +14,7 @@ import { ApiError, api } from "../lib/api";
 import {
   formatPayrollMonthWorkDateContext,
   payrollMonthKey,
-  payrollMonthKeyForDate,
+  payrollWorkDateLock,
   payrollMonthFilename,
   payrollMonthSelectionsForDateRange,
   payrollSnapshotVersion,
@@ -61,7 +61,7 @@ import {
 import type { Absence } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
 import type { Person } from "../types/person";
-import type { PayrollMonthBlocker, PayrollMonthPeriod, PayrollMonthPersonApproval } from "../types/payrollMonth";
+import type { PayrollMonthBlocker, PayrollMonthLockStatus, PayrollMonthPeriod, PayrollMonthPersonApproval } from "../types/payrollMonth";
 import type { SiteSummary } from "../types/site";
 import type { OvernightStatus, PayrollSiteCockpit as PayrollSiteCockpitData, TimeEntry, TimeEntryPayrollCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryPayrollWeekPerson, TimeEntryWeeklyReview } from "../types/timeEntry";
 
@@ -198,6 +198,7 @@ const TIME_REVIEW_API_REVIEW_WEEK = "review week";
 const TIME_REVIEW_API_ABSENCES = "absences";
 const TIME_REVIEW_API_PAYROLL_WEEK = "payroll week";
 const TIME_REVIEW_API_WEEKLY_REVIEWS = "weekly reviews";
+const TIME_REVIEW_API_MONTH_LOCKS = "month locks";
 const EMPTY_REVIEW_ENTRIES: TimeEntry[] = [];
 const EMPTY_REVIEW_ABSENCES: Absence[] = [];
 const timeSubtabs: { key: TimeSubtab; label: string }[] = [
@@ -286,7 +287,7 @@ export function TimeEntriesPage() {
   const [isUpdatingPayrollMonth, setIsUpdatingPayrollMonth] = useState(false);
   const [isUpdatingPayrollPersonMonth, setIsUpdatingPayrollPersonMonth] = useState(false);
   const [isPayrollPersonLogExpanded, setIsPayrollPersonLogExpanded] = useState(false);
-  const [reviewWeekPayrollMonthStatuses, setReviewWeekPayrollMonthStatuses] = useState<Record<string, PayrollMonthPeriod["status"]>>({});
+  const [reviewWeekPayrollMonthStatuses, setReviewWeekPayrollMonthStatuses] = useState<Record<string, PayrollMonthLockStatus>>({});
   const [reviewWeekPayrollMonthStatusRangeKey, setReviewWeekPayrollMonthStatusRangeKey] = useState<string | null>(null);
   const [isLoadingReviewWeekPayrollMonthStatuses, setIsLoadingReviewWeekPayrollMonthStatuses] = useState(false);
   const [reviewWeekPayrollMonthStatusError, setReviewWeekPayrollMonthStatusError] = useState<string | null>(null);
@@ -610,11 +611,10 @@ export function TimeEntriesPage() {
   const writableReviewWeekDayOptions = useMemo(
     () => areReviewWeekPayrollMonthStatusesReady
       ? selectedReviewWeekDayOptions.filter((option) => {
-          const monthKey = payrollMonthKeyForDate(option.date);
-          return monthKey !== null && reviewWeekPayrollMonthStatuses[monthKey] === "OPEN";
+          return payrollWorkDateLock(reviewWeekPayrollMonthStatuses, option.date, selectedReviewWorker?.personId ?? null) === null;
         })
       : [],
-    [areReviewWeekPayrollMonthStatusesReady, reviewWeekPayrollMonthStatuses, selectedReviewWeekDayOptions],
+    [areReviewWeekPayrollMonthStatusesReady, reviewWeekPayrollMonthStatuses, selectedReviewWeekDayOptions, selectedReviewWorker?.personId],
   );
   const payrollManualDateOptions = useMemo(
     () => writableReviewWeekDayOptions.map((option) => ({
@@ -1363,15 +1363,18 @@ export function TimeEntriesPage() {
 
     let ignore = false;
     const monthSelections = payrollMonthSelectionsForDateRange(reviewWeekRange.start, reviewWeekRange.end);
+    const perfStart = timeReviewPerfNow();
+    let perfOk = false;
     setIsLoadingReviewWeekPayrollMonthStatuses(true);
     setReviewWeekPayrollMonthStatuses({});
     setReviewWeekPayrollMonthStatusRangeKey(null);
     setReviewWeekPayrollMonthStatusError(null);
-    Promise.all(monthSelections.map((selection) => api.payrollMonthPeriod(selection)))
+    Promise.all(monthSelections.map((selection) => api.payrollMonthLockStatus(selection)))
       .then((periods) => {
+        perfOk = true;
         if (!ignore) {
           setReviewWeekPayrollMonthStatuses(Object.fromEntries(
-            periods.map((period) => [payrollMonthKey(period), period.status]),
+            periods.map((period) => [payrollMonthKey(period), period]),
           ));
           setReviewWeekPayrollMonthStatusRangeKey(reviewWeekRangeKey);
         }
@@ -1386,6 +1389,10 @@ export function TimeEntriesPage() {
       .finally(() => {
         if (!ignore) {
           setIsLoadingReviewWeekPayrollMonthStatuses(false);
+          recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_MONTH_LOCKS, perfStart, {
+            details: `${monthSelections.length} Monate · ${reviewWeekRange.start} bis ${reviewWeekRange.end}`,
+            ok: perfOk,
+          });
         }
       });
 
@@ -1569,29 +1576,28 @@ export function TimeEntriesPage() {
     });
   }
 
-  function isReviewWeekWorkDateLocked(workDate: string): boolean {
+  function reviewWeekWorkDateLockLabel(workDate: string): string | null {
     if (activeTimeSubtab !== "review" || reviewWeekPayrollMonthStatusRangeKey !== reviewWeekRangeKey) {
-      return false;
+      return null;
     }
-    const monthKey = payrollMonthKeyForDate(workDate);
-    return monthKey !== null && reviewWeekPayrollMonthStatuses[monthKey] === "LOCKED";
+    const lock = payrollWorkDateLock(reviewWeekPayrollMonthStatuses, workDate, selectedReviewWorker?.personId ?? null);
+    return lock === "month" ? "Monat abgeschlossen" : lock === "person" ? "Monteurmonat abgeschlossen" : null;
   }
 
-  function isReviewWeekWorkDateReadOnly(workDate: string): boolean {
+  function isReviewWeekWorkDateReadOnly(workDate: string, personId: number | null = selectedReviewWorker?.personId ?? null): boolean {
     if (activeTimeSubtab !== "review") {
       return false;
     }
     if (!areReviewWeekPayrollMonthStatusesReady) {
       return true;
     }
-    const monthKey = payrollMonthKeyForDate(workDate);
-    return monthKey === null || reviewWeekPayrollMonthStatuses[monthKey] !== "OPEN";
+    return payrollWorkDateLock(reviewWeekPayrollMonthStatuses, workDate, personId) !== null;
   }
 
   async function togglePayrollRowReview(entry: TimeEntry): Promise<void> {
     if (
       !canManageTimeEntries
-      || isReviewWeekWorkDateReadOnly(entry.work_date)
+      || isReviewWeekWorkDateReadOnly(entry.work_date, entry.person_id)
       || payrollReviewActionEntryId !== null
       || entry.id < 0
     ) {
@@ -1615,7 +1621,7 @@ export function TimeEntriesPage() {
   }
 
   function openTimeReviewDiagnostic(entry: TimeEntry): void {
-    if (isReviewWeekWorkDateReadOnly(entry.work_date)) {
+    if (isReviewWeekWorkDateReadOnly(entry.work_date, entry.person_id)) {
       return;
     }
     setTimeReviewPopupTop(payrollPanelTop());
@@ -1649,7 +1655,7 @@ export function TimeEntriesPage() {
   }
 
   function openLocationReviewDiagnostic(entry: TimeEntry): void {
-    if (isReviewWeekWorkDateReadOnly(entry.work_date)) {
+    if (isReviewWeekWorkDateReadOnly(entry.work_date, entry.person_id)) {
       return;
     }
     setLocationReviewPopupTop(payrollPanelTop());
@@ -1746,7 +1752,7 @@ export function TimeEntriesPage() {
   function togglePayrollDatePicker(entry: TimeEntry, button: HTMLButtonElement): void {
     if (
       !canManageTimeEntries
-      || isReviewWeekWorkDateReadOnly(entry.work_date)
+      || isReviewWeekWorkDateReadOnly(entry.work_date, entry.person_id)
       || payrollDateActionEntryId !== null
       || entry.id < 0
     ) {
@@ -1774,7 +1780,7 @@ export function TimeEntriesPage() {
   function openPayrollDeleteDialog(entry: TimeEntry): void {
     if (
       !canManageTimeEntries
-      || isReviewWeekWorkDateReadOnly(entry.work_date)
+      || isReviewWeekWorkDateReadOnly(entry.work_date, entry.person_id)
       || payrollDateActionEntryId !== null
       || entry.id < 0
     ) {
@@ -1800,7 +1806,7 @@ export function TimeEntriesPage() {
     if (
       !canManageTimeEntries
       || !payrollDeleteDialog
-      || isReviewWeekWorkDateReadOnly(payrollDeleteDialog.entry.work_date)
+      || isReviewWeekWorkDateReadOnly(payrollDeleteDialog.entry.work_date, payrollDeleteDialog.entry.person_id)
       || isDeletingPayrollEntry
     ) {
       return;
@@ -1829,8 +1835,8 @@ export function TimeEntriesPage() {
   async function movePayrollEntryDate(entry: TimeEntry, targetWorkDate: string): Promise<void> {
     if (
       !canManageTimeEntries
-      || isReviewWeekWorkDateReadOnly(entry.work_date)
-      || isReviewWeekWorkDateReadOnly(targetWorkDate)
+      || isReviewWeekWorkDateReadOnly(entry.work_date, entry.person_id)
+      || isReviewWeekWorkDateReadOnly(targetWorkDate, entry.person_id)
       || payrollDateActionEntryId !== null
       || entry.id < 0
     ) {
@@ -1863,7 +1869,7 @@ export function TimeEntriesPage() {
       !canManageTimeEntries
       || activeReviewWorker?.personId !== personId
       || (!isEvaluationWorkerReview && activeReviewWorker.isReviewed)
-      || isReviewWeekWorkDateReadOnly(workDate)
+      || isReviewWeekWorkDateReadOnly(workDate, personId)
       || payrollOvernightSavingKey !== null
     ) {
       return;
@@ -1903,7 +1909,7 @@ export function TimeEntriesPage() {
     if (
       !canManageTimeEntries
       || !timeReviewDiagnosticEntry
-      || isReviewWeekWorkDateReadOnly(timeReviewDiagnosticEntry.work_date)
+      || isReviewWeekWorkDateReadOnly(timeReviewDiagnosticEntry.work_date, timeReviewDiagnosticEntry.person_id)
       || isSavingPayrollCorrection
     ) {
       return;
@@ -1999,7 +2005,7 @@ export function TimeEntriesPage() {
     if (
       !canManageTimeEntries
       || !locationReviewDiagnosticEntry
-      || isReviewWeekWorkDateReadOnly(locationReviewDiagnosticEntry.work_date)
+      || isReviewWeekWorkDateReadOnly(locationReviewDiagnosticEntry.work_date, locationReviewDiagnosticEntry.person_id)
       || isSavingLocationReview
     ) {
       return;
@@ -2692,11 +2698,12 @@ export function TimeEntriesPage() {
                 <div className="time-review-week-check-table" role="table" aria-label={`Lohnprüfung ${selectedReviewWorker.personName} KW ${selectedReviewWeek.week}`}>
                   <PayrollReviewTableHeaders />
                   {selectedReviewWeekDays.map((day) => {
-                    const isLockedPayrollDay = isReviewWeekWorkDateLocked(day.date);
+                    const payrollDayLockLabel = reviewWeekWorkDateLockLabel(day.date);
+                    const isLockedPayrollDay = payrollDayLockLabel !== null;
                     const isReadOnlyPayrollDay = isReviewWeekWorkDateReadOnly(day.date);
                     return (
                     <section
-                      aria-label={`${day.weekdayLabel}, ${formatDate(day.date)}${isLockedPayrollDay ? ", Monat abgeschlossen" : ""}`}
+                      aria-label={`${day.weekdayLabel}, ${formatDate(day.date)}${payrollDayLockLabel ? `, ${payrollDayLockLabel}` : ""}`}
                       className={`time-review-day-group${isLockedPayrollDay ? " is-payroll-month-locked" : ""}`}
                       key={day.date}
                       role="rowgroup"
@@ -2726,7 +2733,7 @@ export function TimeEntriesPage() {
                           {isLockedPayrollDay && (
                             <span className="time-review-day-month-lock-badge">
                               <LockKeyhole aria-hidden="true" size={12} />
-                              Monat abgeschlossen
+                              {payrollDayLockLabel}
                             </span>
                           )}
                         </span>
@@ -2883,7 +2890,7 @@ export function TimeEntriesPage() {
                         type="button"
                         role="menuitemradio"
                         aria-checked={option.date === payrollDatePickerEntry.work_date}
-                        title={isReviewWeekWorkDateLocked(option.date) ? "Monat abgeschlossen" : undefined}
+                        title={reviewWeekWorkDateLockLabel(option.date) ?? undefined}
                         onClick={() => void movePayrollEntryDate(payrollDatePickerEntry, option.date)}
                       >
                         {option.label}
@@ -3815,6 +3822,7 @@ function startTimeReviewPerfSession(
       TIME_REVIEW_API_REVIEW_WEEK,
       TIME_REVIEW_API_ABSENCES,
       TIME_REVIEW_API_PAYROLL_WEEK,
+      TIME_REVIEW_API_MONTH_LOCKS,
       ...(includeWeeklyReviews ? [TIME_REVIEW_API_WEEKLY_REVIEWS] : []),
     ],
     flushScheduled: false,

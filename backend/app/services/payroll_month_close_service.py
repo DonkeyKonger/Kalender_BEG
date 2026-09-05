@@ -35,6 +35,7 @@ from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.schemas.payroll_month import (
     PayrollMonthBlocker,
+    PayrollMonthLockStatusRead,
     PayrollMonthPersonApprovalRead,
     PayrollMonthPersonApprovalSummary,
     PayrollMonthStatusRead,
@@ -88,6 +89,30 @@ PERSON_MONTH_TECHNICAL_BLOCKER_CODES = {
 class PayrollMonthCloseService:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def get_lock_status(self, *, year: int, month: int) -> PayrollMonthLockStatusRead:
+        """Read edit locks only; never calculate readiness or load retained artifacts."""
+        _validate_month(year, month)
+        with self.db.no_autoflush:
+            month_status = self.db.scalar(
+                select(PayrollMonthPeriod.status).where(
+                    PayrollMonthPeriod.year == year,
+                    PayrollMonthPeriod.month == month,
+                )
+            )
+            approved_person_ids = list(self.db.scalars(
+                select(PayrollMonthPersonApproval.person_id).where(
+                    PayrollMonthPersonApproval.year == year,
+                    PayrollMonthPersonApproval.month == month,
+                    PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+                ).order_by(PayrollMonthPersonApproval.person_id)
+            ))
+        return PayrollMonthLockStatusRead(
+            year=year,
+            month=month,
+            status=month_status if month_status is not None else PAYROLL_MONTH_OPEN,
+            approved_person_ids=approved_person_ids,
+        )
 
     def get_status(self, *, year: int, month: int, current_user: User) -> PayrollMonthStatusRead:
         _validate_month(year, month)

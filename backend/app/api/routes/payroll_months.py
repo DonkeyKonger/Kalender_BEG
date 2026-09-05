@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_business_page
@@ -7,6 +7,7 @@ from app.models.user import User
 from app.schemas.payroll_month import (
     PayrollMonthAuditRead,
     PayrollMonthLockRequest,
+    PayrollMonthLockStatusRead,
     PayrollMonthPersonApprovalRequest,
     PayrollMonthPersonReopenRequest,
     PayrollMonthReopenRequest,
@@ -18,6 +19,18 @@ from app.services.payroll_month_close_service import PayrollMonthCloseService
 router = APIRouter(prefix="/payroll-months", tags=["payroll-months"])
 CAN_READ = require_business_page("payroll")
 CAN_MANAGE = require_business_page("payroll")
+
+
+@router.get("/{year}/{month}/lock-status", response_model=PayrollMonthLockStatusRead)
+def get_payroll_month_lock_status(
+    year: int,
+    month: int,
+    response: Response,
+    _current_user: User = Depends(CAN_READ),
+    db: Session = Depends(get_db),
+) -> PayrollMonthLockStatusRead:
+    response.headers["Cache-Control"] = "no-store"
+    return PayrollMonthCloseService(db).get_lock_status(year=year, month=month)
 
 
 @router.get("/{year}/{month}", response_model=PayrollMonthStatusRead)

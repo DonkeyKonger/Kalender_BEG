@@ -1,6 +1,13 @@
 export type PayrollMonthPeriodStatus = "OPEN" | "LOCKED";
 export type PayrollMonthPersonApprovalStatus = "OPEN" | "APPROVED";
 
+export type PayrollMonthLockStatus = {
+  year: number;
+  month: number;
+  status: PayrollMonthPeriodStatus;
+  approved_person_ids: number[];
+};
+
 export type PayrollMonthBlocker = {
   code: string;
   message: string;

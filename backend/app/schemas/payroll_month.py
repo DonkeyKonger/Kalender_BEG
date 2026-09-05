@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -36,6 +37,13 @@ class PayrollMonthPersonApprovalRead(BaseModel):
     export_message: str | None = None
     can_approve: bool
     can_reopen: bool
+
+
+class PayrollMonthLockStatusRead(BaseModel):
+    year: int
+    month: int
+    status: Literal["OPEN", "LOCKED"]
+    approved_person_ids: list[int]
 
 
 class PayrollMonthStatusRead(BaseModel):

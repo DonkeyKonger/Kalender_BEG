@@ -1,4 +1,4 @@
-import type { PayrollMonthPeriod } from "../types/payrollMonth";
+import type { PayrollMonthLockStatus, PayrollMonthPeriod } from "../types/payrollMonth";
 
 export const PAYROLL_CUTOVER_DATE = "2026-08-01";
 export const PAYROLL_OPENING_BALANCE_DATE = "2026-07-31";
@@ -32,6 +32,19 @@ export function payrollMonthKey(selection: PayrollMonthSelection): string {
 export function payrollMonthKeyForDate(value: string): string | null {
   const selection = payrollMonthSelectionForDate(value);
   return selection ? payrollMonthKey(selection) : null;
+}
+
+export function payrollWorkDateLock(
+  statuses: Record<string, PayrollMonthLockStatus>,
+  workDate: string,
+  personId: number | null,
+): "unknown" | "month" | "person" | null {
+  const key = payrollMonthKeyForDate(workDate);
+  const period = key ? statuses[key] : undefined;
+  if (!period || !key || payrollMonthKey(period) !== key) return "unknown";
+  if (period.status === "LOCKED") return "month";
+  if (period.status !== "OPEN" || personId === null || !Array.isArray(period.approved_person_ids)) return "unknown";
+  return period.approved_person_ids.includes(personId) ? "person" : null;
 }
 
 export function payrollMonthSelectionsForDateRange(start: string, end: string): PayrollMonthSelection[] {
