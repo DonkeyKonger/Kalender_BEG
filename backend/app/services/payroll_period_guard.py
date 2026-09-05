@@ -39,10 +39,12 @@ class PayrollPeriodGuard:
             if approval is not None:
                 self._raise_person_locked(approval)
 
-    def is_date_locked(self, work_date: date) -> bool:
+    def is_date_locked(self, work_date: date, *, person_id: int | None = None) -> bool:
         if not self._supports_queries():
             return False
-        return self._locked_period_for_date(work_date) is not None
+        if self._locked_period_for_date(work_date) is not None:
+            return True
+        return person_id is not None and self._approved_person_period_for_date(person_id, work_date) is not None
 
     def _locked_period_for_date(self, work_date: date) -> PayrollMonthPeriod | None:
         self.acquire_month_lock(work_date.year, work_date.month)

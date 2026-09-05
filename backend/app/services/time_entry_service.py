@@ -446,12 +446,21 @@ class TimeEntryService:
             return False
         current_month_start = date(check_date.year, check_date.month, 1)
         changed = False
+        guard = PayrollPeriodGuard(self.db)
+        locked_person_months: dict[tuple[int | None, int, int], bool] = {}
         for entry in entries:
             if entry.work_date >= current_month_start:
                 continue
-            if PayrollPeriodGuard(self.db).is_date_locked(entry.work_date):
-                continue
             if not self.is_open_time_review_case(entry, gps_minutes_by_entry_id.get(entry.id)):
+                continue
+            person_id = getattr(entry, "person_id", None)
+            month_key = (person_id, entry.work_date.year, entry.work_date.month)
+            # This read path also writes deadline decisions. Respect personal
+            # approvals before touching rows protected by the database trigger.
+            # Month locks are held until commit; reuse checks only within this call.
+            if month_key not in locked_person_months:
+                locked_person_months[month_key] = guard.is_date_locked(entry.work_date, person_id=person_id)
+            if locked_person_months[month_key]:
                 continue
             entry.time_review_status = "auto_closed_by_deadline"
             entry.time_review_method = "deadline"
