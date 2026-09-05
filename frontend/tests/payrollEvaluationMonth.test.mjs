@@ -102,7 +102,7 @@ test("Monatsabrechnungen verwenden den globalen oder persönlichen Freigabe-Snap
   assert.match(pageSource, /const downloadDisabled = !selectedWorker \|\| !isExportAvailable \|\| isDownloadingWorkerExport/);
   assert.match(pageSource, /onClick=\{onDownloadWorkerExport\}[\s\S]*?Excel herunterladen/s);
   assert.match(pageSource, /onClick=\{\(\) => void downloadAllPayrollMonthXlsx\(\)\}[\s\S]*?Alle Monteure/s);
-  assert.match(pageSource, /id="time-evaluation-monthly-download-status"[\s\S]*?Excel-Monatsabrechnungen sind erst nach dem Monatsabschluss verfügbar/);
+  assert.match(pageSource, /id="time-evaluation-monthly-download-status"[\s\S]*?Der Gesamtdownload wartet auf die einzelnen Monteurfreigaben und deren Excel-Dateien/);
   const monthlyStart = pageSource.indexOf("function MonthlyPayrollWorkerWorkspace");
   const monthlySource = pageSource.slice(monthlyStart, pageSource.indexOf("function currentIsoWeek", monthlyStart));
   assert.ok(monthlyStart >= 0);

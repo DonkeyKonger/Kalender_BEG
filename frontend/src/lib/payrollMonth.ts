@@ -9,6 +9,26 @@ export type PayrollMonthSelection = {
   month: number;
 };
 
+export function payrollApprovedPersonIds(period: PayrollMonthPeriod | null): Set<number> {
+  return new Set(period?.person_approvals
+    .filter((approval) => approval.status === "APPROVED")
+    .map((approval) => approval.person_id) ?? []);
+}
+
+export function payrollAllWorkersExportAvailable(period: PayrollMonthPeriod | null): boolean {
+  if (!period) return false;
+  if (period.status === "LOCKED") {
+    return payrollSnapshotVersion(period) !== null && period.artifacts_ready;
+  }
+  const approvals = period.person_approvals;
+  const summary = period.person_approval_summary;
+  return Boolean(summary && summary.total_count > 0
+    && summary.approved_count === summary.total_count
+    && approvals.length === summary.total_count
+    && payrollApprovedPersonIds(period).size === summary.total_count
+    && approvals.every((approval) => approval.export_ready));
+}
+
 export function payrollBusinessDateIso(value: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat("de-DE", {
     timeZone: "Europe/Berlin",

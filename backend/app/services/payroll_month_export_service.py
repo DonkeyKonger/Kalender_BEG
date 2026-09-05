@@ -10,7 +10,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from xml.sax.saxutils import escape
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.absence import Absence
@@ -34,6 +34,7 @@ from app.services.payroll_month_xlsx_service import (
     build_payroll_months_xlsx,
 )
 from app.services.time_entry_service import TimeEntryService
+from app.services.payroll_approved_workbook_merge import merge_approved_payroll_workbooks
 
 
 class PayrollMonthExportService:
@@ -264,12 +265,74 @@ class PayrollMonthExportService:
                 source=source,
                 balances_by_person={person.id: (None, None) for person in source.people},
             )
+        month_status = self.db.scalar(select(PayrollMonthPeriod.status).where(
+            PayrollMonthPeriod.year == year, PayrollMonthPeriod.month == month,
+        ))
+        if month_status != PAYROLL_MONTH_LOCKED and version is None:
+            return self._approved_workers_export(year=year, month=month)
+        # Existing locked snapshots/versioned links retain their exact semantics.
         return self._locked_artifact(
             year=year,
             month=month,
             artifact_key="all_workers",
             version=version,
         ).content
+
+    def _approved_workers_export(self, *, year: int, month: int) -> bytes:
+        """Package existing individual approvals without closing or booking a month."""
+        people = self.payroll_people()
+        if not people:
+            raise HTTPException(404, "Keine aktiven Monteure gefunden.")
+        # Read current approval versions and their artifacts together: never mix
+        # a reopened approval with an older retained version or rebuild live data.
+        rows = self.db.execute(
+            select(PayrollMonthPersonApproval, PayrollMonthPersonApprovalArtifact)
+            .outerjoin(PayrollMonthPersonApprovalArtifact, and_(
+                PayrollMonthPersonApprovalArtifact.approval_id == PayrollMonthPersonApproval.id,
+                PayrollMonthPersonApprovalArtifact.approval_version
+                == PayrollMonthPersonApproval.approval_version,
+            ))
+            .where(
+                PayrollMonthPersonApproval.year == year,
+                PayrollMonthPersonApproval.month == month,
+                PayrollMonthPersonApproval.person_id.in_({person.id for person in people}),
+                PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+            ).execution_options(populate_existing=True)
+        ).all()
+        approved = {approval.person_id: (approval, artifact) for approval, artifact in rows}
+        if len(approved) != len(people):
+            raise HTTPException(409, {
+                "code": "payroll_person_month_not_approved",
+                "message": "Der Gesamtdownload ist verfügbar, sobald jeder Monteurmonat einzeln geprüft ist.",
+            })
+        workbooks = []
+        for person in people:
+            approval, artifact = approved[person.id]
+            if artifact is None:
+                raise HTTPException(409, {
+                    "code": "payroll_person_month_snapshot_missing",
+                    "person_id": person.id,
+                    "message": "Der geprüfte Monteurmonat besitzt keine aktive Abschlussreferenz.",
+                })
+            if (
+                artifact.byte_size != len(artifact.content)
+                or artifact.content_sha256 != hashlib.sha256(artifact.content).hexdigest()
+            ):
+                raise HTTPException(409, {
+                    "code": "payroll_person_month_artifact_corrupt",
+                    "person_id": person.id, "year": year, "month": month,
+                    "approval_version": approval.approval_version,
+                    "message": "Eine gespeicherte Einzelabrechnung ist beschädigt und wird nicht ausgeliefert.",
+                })
+            workbooks.append((person.display_name, artifact.content))
+        try:
+            return merge_approved_payroll_workbooks(workbooks)
+        except ValueError as error:
+            raise HTTPException(409, {
+                "code": "payroll_approved_workbooks_incompatible",
+                "message": "Die freigegebenen Excel-Stände sind nicht gemeinsam exportierbar. Betroffene Monteurmonate erneut freigeben.",
+                "reason": str(error),
+            }) from error
 
     def build_all_workers_export_from_live_data(
         self,

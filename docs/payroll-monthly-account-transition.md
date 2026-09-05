@@ -60,6 +60,24 @@ aktuellen Bestand, bereinigt um ersetzte Monatsautomatik. Sie sind ausdrücklich
 keine Rekonstruktion eines historischen Monatsanfangs. Unbekannte Salden bleiben
 leer; Büro- und mobile Kontoansicht zeigen „Kontostand offen“.
 
+## Wochenfreigabe und monteursweiser Monatsablauf
+
+Eine gültige Gesamtfreigabe der Monteurwoche (`reviewed`) deckt alle datierten
+Unterprüfpunkte dieser Person/ISO-Woche ab, einschließlich Zeit, Ort, GPS und
+Reisekosten/Übernachtung. Monatsstatus und Freigabevalidierung verwenden dieselbe
+Prüfpunktliste. Ungeprüfte oder regulär zurückgesetzte Wochen bleiben prüfpflichtig;
+Quelldaten, Diagnosehistorie und Exportberechnung werden nicht überschrieben.
+Nicht einer Woche zuordenbare technische Export-/Vorlagenfehler bleiben sichtbar.
+
+Die Monatsoberfläche bietet ausschließlich einzelne Monteurfreigaben an.
+Monteursliste und Gesamtfortschritt zählen diese Freigaben, nicht Einzelzeilenhaken.
+Sobald alle Monteurmonate freigegeben und ihre gespeicherten Exceldateien vorhanden
+sind, ist „Alle Monteure“ ohne zusätzlichen Gesamtabschluss verfügbar. Der Download
+verpackt nur die unveränderten Einzeldateien: keine Live-Neuberechnung, Kontobuchung
+oder globale Sperre. Fehlende/ungültige aktuelle Einzeldateien führen zum Fehler,
+nicht zum Rückgriff auf ältere oder ungeprüfte Daten. Historisch global gesperrte
+Monate behalten Snapshotdownloads und die bestehende begründete Wiederöffnung.
+
 ## Migration und Prüfgrenzen
 
 Migration `20260905_0112` macht absolute Salden und Snapshotbeträge nullable und

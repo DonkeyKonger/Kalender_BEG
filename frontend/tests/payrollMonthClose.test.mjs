@@ -20,21 +20,18 @@ test("month lock is server controlled and reopening requires a reason", () => {
   assert.match(api, /payrollMonthPeriod[\s\S]*?\/payroll-months\/\$\{params\.year\}\/\$\{params\.month\}/s);
   assert.match(api, /lockPayrollMonth[\s\S]*?\/lock[\s\S]*?confirmed: true/s);
   assert.match(api, /reopenPayrollMonth[\s\S]*?\/reopen[\s\S]*?reason: params\.reason/s);
-  assert.match(page, /checked=\{isPayrollMonthLocked\}[\s\S]*?onChange=\{\(\) => setPayrollMonthDialog\(isPayrollMonthLocked \? "reopen" : "lock"\)\}/s);
-  assert.match(page, /const updatedPeriod = await api\.lockPayrollMonth[\s\S]*?setPayrollMonthPeriod\(updatedPeriod\)/s);
+  assert.doesNotMatch(page, /api\.lockPayrollMonth|confirmPayrollMonthLock|Gesamtmonat geprüft/);
   assert.match(page, /payrollMonthReopenReason\.trim\(\)[\s\S]*?api\.reopenPayrollMonth/s);
-  assert.match(page, /Begründung \*[\s\S]*?disabled=\{isUpdatingPayrollMonth \|\| \(payrollMonthDialog === "reopen" && !payrollMonthReopenReason\.trim\(\)\)\}/s);
-  assert.match(page, /`Monat \$\{formatPayrollMonthLabel\(selectedEvaluationMonth\)\} abschließen\?`/);
+  assert.match(page, /Begründung \*[\s\S]*?disabled=\{isUpdatingPayrollMonth \|\| !payrollMonthReopenReason\.trim\(\)\}/s);
   assert.match(page, /`Monat \$\{formatPayrollMonthLabel\(selectedEvaluationMonth\)\} wieder öffnen\?`/);
-  assert.match(page, /Monat verbindlich abschließen/);
+  assert.match(page, /isPayrollMonthLocked && canManagePayrollClose &&/);
 });
 
 test("locked months disable editing and exports use the immutable snapshot version", () => {
-  assert.match(page, /arePayrollMonthExportsAvailable = isPayrollMonthLocked[\s\S]*?artifacts_ready/s);
+  assert.match(page, /arePayrollMonthExportsAvailable = payrollAllWorkersExportAvailable\(payrollMonthPeriod\)/);
   assert.match(page, /canManageTimeEntries=\{canManageTimeEntries && !isPayrollMonthLocked && !isSelectedPayrollPersonApproved\}/);
   assert.match(page, /version: payrollMonthVersion/);
-  assert.match(page, /checked=\{isPayrollMonthLocked\}/);
-  assert.match(page, /Der Gesamtmonat kann erst abgeschlossen werden, wenn alle Monteure geprüft sind/);
+  assert.match(page, /Monteurmonat geprüft/);
   assert.equal(
     payrollMonthFilename("Lohnabrechnung_2026_08_Test", {
       year: 2026,
@@ -85,7 +82,7 @@ test("person approval explicitly acknowledges current hints and always enables i
 
 test("normal payroll no longer requires or mounts an account setup dialog", () => {
   assert.doesNotMatch(page, /Stundenkonto einrichten|PayrollSetupDialog|isPayrollSetupOpen|payrollMonthPeriodRefreshKey/);
-  assert.match(page, /Gesamtmonat geprüft/);
+  assert.match(page, /Monteurmonat geprüft/);
   // Existing optional schedule/setup code remains intact, not deleted or migrated.
   assert.match(setup, /Wochenpläne ab 01\.08\.2026 und Eröffnungssalden zum 31\.07\.2026/);
 });
@@ -101,7 +98,7 @@ test("positive and negative opening balances roundtrip as integer minutes", () =
 });
 
 test("month close and setup geometry remains locally scoped and square", () => {
-  assert.match(styles, /\.payroll-month-lock-box\s*\{[^}]*border-radius:\s*0;/s);
+  assert.doesNotMatch(styles, /\.payroll-month-lock-(?:box|toggle)/);
   assert.match(styles, /\.payroll-month-dialog\s*\{[^}]*border-radius:\s*0;/s);
   assert.match(styles, /\.payroll-setup-dialog\s*\{[^}]*border-radius:\s*0;/s);
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.payroll-setup-worker\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);

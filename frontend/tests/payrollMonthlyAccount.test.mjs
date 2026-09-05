@@ -40,6 +40,7 @@ test("monthly transitions and exact reversals retain meaningful log labels", () 
 
 test("normal payroll keeps review and approval controls without mandatory setup", () => {
   assert.doesNotMatch(payroll, /PayrollSetupDialog|Stundenkonto einrichten|isPayrollSetupOpen/);
-  assert.match(payroll, /Gesamtmonat geprüft/);
+  assert.match(payroll, /Monteurmonat geprüft/);
+  assert.doesNotMatch(payroll, /Gesamtmonat geprüft/);
   assert.match(payroll, /Stundenkonto wird erst beim Monatsabschluss aktualisiert/);
 });

@@ -12,6 +12,8 @@ import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../compone
 import { ApiError, api } from "../lib/api";
 import {
   formatPayrollMonthWorkDateContext,
+  payrollApprovedPersonIds,
+  payrollAllWorkersExportAvailable,
   payrollMonthKey,
   payrollWorkDateLock,
   payrollMonthFilename,
@@ -188,7 +190,7 @@ type TimeReviewPerfState = {
   startedAt: number;
   to: CalendarWeekSelection;
 };
-type PayrollMonthDialog = "lock" | "reopen" | null;
+type PayrollMonthDialog = "reopen" | null;
 type PayrollPersonMonthDialog = "approve" | "reopen" | null;
 const GPS_TIME_TOLERANCE_MINUTES = 15;
 const GPS_NOT_CHECKABLE_NOTICE = "GPS nicht eindeutig prüfbar";
@@ -632,8 +634,8 @@ export function TimeEntriesPage() {
   const evaluationEntries = isEvaluationDataReady ? reviewAllEntries : EMPTY_REVIEW_ENTRIES;
   const evaluationAbsences = isEvaluationDataReady ? reviewAbsences : EMPTY_REVIEW_ABSENCES;
   const evaluationReviewedWorkerIds = useMemo(
-    () => reviewedWorkersWithAllEntriesReviewed(evaluationEntries),
-    [evaluationEntries],
+    () => payrollApprovedPersonIds(payrollMonthPeriod),
+    [payrollMonthPeriod],
   );
   const evaluationWorkers = useMemo(
     () => buildTimeReviewWorkerSummaries(
@@ -683,9 +685,7 @@ export function TimeEntriesPage() {
   );
   const isPayrollMonthLocked = payrollMonthPeriod?.status === "LOCKED";
   const payrollMonthVersion = payrollSnapshotVersion(payrollMonthPeriod);
-  const arePayrollMonthExportsAvailable = isPayrollMonthLocked
-    && payrollMonthVersion !== null
-    && payrollMonthPeriod.artifacts_ready;
+  const arePayrollMonthExportsAvailable = payrollAllWorkersExportAvailable(payrollMonthPeriod);
   const selectedPayrollPersonApproval = useMemo(
     () => selectedEvaluationWorker && payrollMonthPeriod
       ? payrollMonthPeriod.person_approvals.find((item) => item.person_id === selectedEvaluationWorker.personId) ?? null
@@ -2094,7 +2094,7 @@ export function TimeEntriesPage() {
   }
 
   async function downloadAllPayrollMonthXlsx(): Promise<void> {
-    if (!payrollMonthPeriod || !arePayrollMonthExportsAvailable || payrollMonthVersion === null || isDownloadingAllPayrollMonthXlsx) {
+    if (!payrollMonthPeriod || !arePayrollMonthExportsAvailable || isDownloadingAllPayrollMonthXlsx) {
       return;
     }
     setIsDownloadingAllPayrollMonthXlsx(true);
@@ -2102,7 +2102,7 @@ export function TimeEntriesPage() {
     try {
       const blob = await api.payrollMonthlyWorkersXlsx({
         ...selectedEvaluationMonth,
-        version: payrollMonthVersion,
+        ...(payrollMonthVersion === null ? {} : { version: payrollMonthVersion }),
       });
       downloadBlobFile(
         blob,
@@ -2141,23 +2141,6 @@ export function TimeEntriesPage() {
       setPayrollMonthDownloadError(readApiError(requestError, "Monatsabrechnung konnte nicht erstellt werden."));
     } finally {
       setIsDownloadingPayrollMonthXlsx(false);
-    }
-  }
-
-  async function confirmPayrollMonthLock(): Promise<void> {
-    if (!canManagePayrollClose || !payrollMonthPeriod || payrollMonthPeriod.status !== "OPEN" || !payrollMonthPeriod.can_lock || isUpdatingPayrollMonth) {
-      return;
-    }
-    setIsUpdatingPayrollMonth(true);
-    setPayrollMonthPeriodError(null);
-    try {
-      const updatedPeriod = await api.lockPayrollMonth(selectedEvaluationMonth);
-      setPayrollMonthPeriod(updatedPeriod);
-      setPayrollMonthDialog(null);
-    } catch (requestError) {
-      setPayrollMonthPeriodError(readApiError(requestError, "Monat konnte nicht abgeschlossen werden."));
-    } finally {
-      setIsUpdatingPayrollMonth(false);
     }
   }
 
@@ -3005,36 +2988,24 @@ export function TimeEntriesPage() {
                   </strong>
                 </div>
                 <div className="payroll-month-compact-actions">
-                  <label
-                    className={`payroll-month-lock-toggle${isPayrollMonthLocked ? " is-locked" : ""}`}
-                    title={payrollMonthPeriod?.status === "OPEN" && !payrollMonthPeriod.can_lock
-                      ? "Der Gesamtmonat kann erst abgeschlossen werden, wenn alle Monteure geprüft sind und keine technischen Prüfpunkte offen sind."
-                      : undefined}
-                  >
-                    <input
-                      aria-describedby="time-evaluation-monthly-download-status"
-                      checked={isPayrollMonthLocked}
-                      disabled={isLoadingPayrollMonthPeriod
-                        || isUpdatingPayrollMonth
-                        || !canManagePayrollClose
-                        || !payrollMonthPeriod
-                        || (payrollMonthPeriod.status === "OPEN" && !payrollMonthPeriod.can_lock)
-                        || (payrollMonthPeriod.status === "LOCKED" && !payrollMonthPeriod.can_reopen)}
-                      type="checkbox"
-                      onChange={() => setPayrollMonthDialog(isPayrollMonthLocked ? "reopen" : "lock")}
-                    />
-                    <span className="payroll-month-lock-box" aria-hidden="true">
-                      {isPayrollMonthLocked ? <Check size={13} strokeWidth={3} /> : null}
-                    </span>
-                    <span>Gesamtmonat geprüft</span>
-                  </label>
+                  {isPayrollMonthLocked && canManagePayrollClose && (
+                    <button
+                      className="time-evaluation-monthly-download-button"
+                      disabled={isLoadingPayrollMonthPeriod || isUpdatingPayrollMonth || !payrollMonthPeriod?.can_reopen}
+                      title="Historisch abgeschlossenen Gesamtmonat mit Begründung wieder öffnen"
+                      type="button"
+                      onClick={() => setPayrollMonthDialog("reopen")}
+                    >
+                      Monat wieder öffnen
+                    </button>
+                  )}
                   <button
                     aria-describedby="time-evaluation-monthly-download-status"
                     className="time-evaluation-monthly-download-button"
                     disabled={!arePayrollMonthExportsAvailable || isDownloadingAllPayrollMonthXlsx}
                     title={arePayrollMonthExportsAvailable
-                      ? `Abgeschlossene Monatsabrechnungen aller Monteure (v${payrollMonthVersion}) herunterladen`
-                      : "Der Download ist nach einem erfolgreichen Monatsabschluss verfügbar."}
+                      ? "Einzeln freigegebene Monatsabrechnungen aller Monteure herunterladen"
+                      : "Der Download ist verfügbar, sobald alle Monteure einzeln geprüft und ihre Excel-Dateien bereit sind."}
                     type="button"
                     onClick={() => void downloadAllPayrollMonthXlsx()}
                   >
@@ -3047,8 +3018,8 @@ export function TimeEntriesPage() {
                   {isDownloadingAllPayrollMonthXlsx || isDownloadingPayrollMonthXlsx
                     ? "Die Excel-Monatsabrechnung wird erstellt."
                     : arePayrollMonthExportsAvailable
-                      ? `Excel-Monatsabrechnungen aus Snapshot v${payrollMonthVersion} sind zum Download verfügbar.`
-                      : "Excel-Monatsabrechnungen sind erst nach dem Monatsabschluss verfügbar."}
+                      ? "Die freigegebenen Excel-Monatsabrechnungen aller Monteure sind zum Download verfügbar."
+                      : "Der Gesamtdownload wartet auf die einzelnen Monteurfreigaben und deren Excel-Dateien."}
                 </span>
                 <h3 className="sr-only" id="time-evaluation-export-heading">Monatsabrechnung</h3>
               </div>
@@ -3062,8 +3033,8 @@ export function TimeEntriesPage() {
               filteredWorkers={filteredEvaluationWorkers}
               filter={evaluationWorkerFilter}
               filterCounts={evaluationWorkerFilterCounts}
-              isLoading={isLoadingPeople || isLoadingReviewAllEntries || !isEvaluationDataReady}
-              isReady={isEvaluationDataReady}
+              isLoading={isLoadingPeople || isLoadingReviewAllEntries || !isEvaluationDataReady || isLoadingPayrollMonthPeriod}
+              isReady={isEvaluationDataReady && !isLoadingPayrollMonthPeriod && payrollMonthPeriod !== null}
               canManageTimeEntries={canManageTimeEntries && !isPayrollMonthLocked && !isSelectedPayrollPersonApproved}
               onChangeFilter={setEvaluationWorkerFilter}
               onChangeSearch={setEvaluationWorkerSearch}
@@ -3519,34 +3490,23 @@ export function TimeEntriesPage() {
             <header>
               <span>Lohnprüfung</span>
               <h2 id="payroll-month-dialog-title">
-                {payrollMonthDialog === "lock"
-                  ? `Monat ${formatPayrollMonthLabel(selectedEvaluationMonth)} abschließen?`
-                  : `Monat ${formatPayrollMonthLabel(selectedEvaluationMonth)} wieder öffnen?`}
+                {`Monat ${formatPayrollMonthLabel(selectedEvaluationMonth)} wieder öffnen?`}
               </h2>
             </header>
             <div className="payroll-month-dialog-content" id="payroll-month-dialog-description">
-              {payrollMonthDialog === "lock" ? (
-                <>
-                  <p>Alle abrechnungsrelevanten Daten dieses Monats werden anschließend in sämtlichen Ansichten gesperrt.</p>
-                  <p>Die Excel-Dateien werden unveränderlich aus dem abgeschlossenen Snapshot erzeugt.</p>
-                </>
-              ) : (
-                <>
-                  <p>Die bestehende Abrechnungsversion bleibt im Protokoll erhalten, ist danach aber nicht mehr die aktuelle freigegebene Version. Nach den Änderungen muss der Monat erneut geprüft und gesperrt werden.</p>
-                  <label>
-                    <span>Begründung *</span>
-                    <textarea
-                      autoFocus
-                      disabled={isUpdatingPayrollMonth}
-                      maxLength={1000}
-                      placeholder="Warum muss der Monat wieder geöffnet werden?"
-                      rows={4}
-                      value={payrollMonthReopenReason}
-                      onChange={(event) => setPayrollMonthReopenReason(event.target.value)}
-                    />
-                  </label>
-                </>
-              )}
+              <p>Die bestehende Abrechnungsversion bleibt im Protokoll erhalten, ist danach aber nicht mehr die aktuelle freigegebene Version. Nach den Änderungen werden die Monteurmonate wieder einzeln geprüft.</p>
+              <label>
+                <span>Begründung *</span>
+                <textarea
+                  autoFocus
+                  disabled={isUpdatingPayrollMonth}
+                  maxLength={1000}
+                  placeholder="Warum muss der Monat wieder geöffnet werden?"
+                  rows={4}
+                  value={payrollMonthReopenReason}
+                  onChange={(event) => setPayrollMonthReopenReason(event.target.value)}
+                />
+              </label>
             </div>
             {payrollMonthPeriodError && <p className="payroll-month-dialog-error" role="alert">{payrollMonthPeriodError}</p>}
             <footer>
@@ -3559,16 +3519,14 @@ export function TimeEntriesPage() {
                 Abbrechen
               </button>
               <button
-                className={payrollMonthDialog === "reopen" ? "is-warning" : ""}
-                disabled={isUpdatingPayrollMonth || (payrollMonthDialog === "reopen" && !payrollMonthReopenReason.trim())}
+                className="is-warning"
+                disabled={isUpdatingPayrollMonth || !payrollMonthReopenReason.trim()}
                 type="button"
-                onClick={() => void (payrollMonthDialog === "lock" ? confirmPayrollMonthLock() : confirmPayrollMonthReopen())}
+                onClick={() => void confirmPayrollMonthReopen()}
               >
                 {isUpdatingPayrollMonth
                   ? "Wird verarbeitet..."
-                  : payrollMonthDialog === "lock"
-                    ? "Monat verbindlich abschließen"
-                    : "Monat wieder öffnen"}
+                  : "Monat wieder öffnen"}
               </button>
             </footer>
           </div>
@@ -4652,21 +4610,6 @@ function timeReviewWorkerStatus(worker: TimeReviewWorkerSummary): TimeReviewWork
     return "reviewed";
   }
   return worker.submittedMinutes > 0 ? "open" : "missing";
-}
-
-function reviewedWorkersWithAllEntriesReviewed(entries: TimeEntry[]): Set<number> {
-  const reviewStateByPerson = new Map<number, { hasEntries: boolean; allReviewed: boolean }>();
-  entries.forEach((entry) => {
-    const current = reviewStateByPerson.get(entry.person_id) ?? { hasEntries: false, allReviewed: true };
-    current.hasEntries = true;
-    current.allReviewed = current.allReviewed && entry.payroll_reviewed_at !== null;
-    reviewStateByPerson.set(entry.person_id, current);
-  });
-  return new Set(
-    [...reviewStateByPerson.entries()]
-      .filter(([, state]) => state.hasEntries && state.allReviewed)
-      .map(([personId]) => personId),
-  );
 }
 
 function timeReviewWorkerStatusLabel(status: TimeReviewWorkerStatus): string {
