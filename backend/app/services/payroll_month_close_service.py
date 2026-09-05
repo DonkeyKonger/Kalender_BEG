@@ -4,7 +4,7 @@ import calendar
 import hashlib
 import json
 from dataclasses import asdict, is_dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Any
@@ -51,7 +51,7 @@ from app.services.payroll_approved_workbook_merge import merge_approved_payroll_
 from app.services.payroll_period_guard import PayrollPeriodGuard
 from app.services.payroll_xlsx_template import PayrollXlsxTemplateError, load_payroll_monthly_template
 from app.services.gps_service import GpsPresenceService
-from app.services.time_entry_service import TimeEntryService
+from app.services.time_entry_service import TimeEntryService, WEEKLY_REVIEW_STATUS_REVIEWED
 
 
 PAYROLL_MONTH_SOURCE = "payroll_month_close"
@@ -931,7 +931,10 @@ class PayrollMonthCloseService:
                 )
             ]
 
-        blockers.extend(self._weekly_review_blockers(source, month_start, month_end))
+        reviewed_weeks = self._reviewed_week_keys(source, month_start, month_end)
+        blockers.extend(self._weekly_review_blockers(
+            source, month_start, month_end, reviewed_weeks=reviewed_weeks,
+        ))
         entries = [
             entry for entry in source.entries if month_start <= entry.work_date <= month_end
         ]
@@ -1021,7 +1024,58 @@ class PayrollMonthCloseService:
                     message=str(error),
                 )
             )
-        return _deduplicate_blockers(blockers)
+        # A valid human week approval covers every subordinate day check, not
+        # just one kind of GPS diagnostic. Preserve source/history and the real
+        # export calculation; only unresolved month-readiness hints remain.
+        # Undated source/template/export failures cannot be covered by a week.
+        return _deduplicate_blockers([
+            item for item in blockers
+            if not self._covered_by_reviewed_weeks(item, reviewed_weeks)
+        ])
+
+    def _reviewed_week_keys(
+        self,
+        source: PayrollMonthSourceBundle,
+        month_start: date,
+        month_end: date,
+    ) -> set[tuple[int, int, int]]:
+        # Include partial weeks at both month edges and the ISO year boundary.
+        weeks = set()
+        day = month_start
+        while day <= month_end:
+            iso = day.isocalendar()
+            weeks.add((iso.year, iso.week))
+            day += timedelta(days=1)
+        return {
+            (review.person_id, review.iso_year, review.iso_week)
+            for review in self.db.scalars(
+                select(TimeEntryWeeklyReview).where(
+                    TimeEntryWeeklyReview.person_id.in_({person.id for person in source.people}),
+                    TimeEntryWeeklyReview.iso_year.in_({year for year, _week in weeks}),
+                    TimeEntryWeeklyReview.iso_week.in_({week for _year, week in weeks}),
+                    TimeEntryWeeklyReview.status == WEEKLY_REVIEW_STATUS_REVIEWED,
+                )
+            )
+            if (review.iso_year, review.iso_week) in weeks
+        }
+
+    @staticmethod
+    def _covered_by_reviewed_weeks(
+        blocker: PayrollMonthBlocker,
+        reviewed_weeks: set[tuple[int, int, int]],
+    ) -> bool:
+        if blocker.person_id is None or blocker.work_date is None:
+            return False
+        end = blocker.work_date_end or blocker.work_date
+        if end < blocker.work_date:
+            return False
+        day = blocker.work_date
+        while day <= end:
+            iso = day.isocalendar()
+            if (blocker.person_id, iso.year, iso.week) not in reviewed_weeks:
+                return False
+            day += timedelta(days=1)
+        return True
 
     @staticmethod
     def _time_entry_blockers(entries) -> list[PayrollMonthBlocker]:
@@ -1166,6 +1220,8 @@ class PayrollMonthCloseService:
         source: PayrollMonthSourceBundle,
         month_start: date,
         month_end: date,
+        *,
+        reviewed_weeks: set[tuple[int, int, int]] | None = None,
     ) -> list[PayrollMonthBlocker]:
         full_weeks: list[tuple[int, int, date]] = []
         cursor = month_start
@@ -1180,22 +1236,12 @@ class PayrollMonthCloseService:
             cursor = date.fromordinal(cursor.toordinal() + 1)
         if not full_weeks:
             return []
-        person_ids = {person.id for person in source.people}
-        reviews = {
-            (review.person_id, review.iso_year, review.iso_week): review
-            for review in self.db.scalars(
-                select(TimeEntryWeeklyReview).where(
-                    TimeEntryWeeklyReview.person_id.in_(person_ids),
-                    TimeEntryWeeklyReview.iso_year.in_({item[0] for item in full_weeks}),
-                    TimeEntryWeeklyReview.iso_week.in_({item[1] for item in full_weeks}),
-                )
-            )
-        }
+        if reviewed_weeks is None:
+            reviewed_weeks = self._reviewed_week_keys(source, month_start, month_end)
         blockers: list[PayrollMonthBlocker] = []
         for person in source.people:
             for iso_year, iso_week, monday in full_weeks:
-                review = reviews.get((person.id, iso_year, iso_week))
-                if review is None or review.status != "reviewed":
+                if (person.id, iso_year, iso_week) not in reviewed_weeks:
                     blockers.append(
                         PayrollMonthBlocker(
                             code="payroll_week_not_reviewed",
