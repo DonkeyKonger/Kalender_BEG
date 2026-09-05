@@ -63,13 +63,16 @@ test("setup suggestion stays editable and must match weekly hours before confirm
   assert.match(setup, /worker\.plan\?\.is_confirmed[\s\S]*?disabled/s);
 });
 
-test("regular working time is versioned in the employee master without a weekday assumption", () => {
-  assert.match(personsPage, /Regelmäßige Arbeitszeit/);
-  assert.match(personsPage, /PAYROLL_WEEKDAY_LABELS\.map/);
-  assert.match(personsPage, /Gleichmäßig[\s\S]*?Individuell/s);
-  assert.match(personsPage, /valid_from: validFrom[\s\S]*?weekday_minutes: weekdayMinutes[\s\S]*?confirm: true/s);
-  assert.match(personsPage, /Neue Version/);
+test("employee details omit the regular working time editor but preserve independent weekly hours", () => {
+  assert.doesNotMatch(personsPage, /PersonRegularWorkingTime|Arbeitszeitmodell|Regelmäßige Arbeitszeit|Arbeitszeit festlegen|person-regular-working-time/);
+  assert.doesNotMatch(personsPage, /api\.(?:personRegularWorkingTime|savePersonRegularWorkingTime)\(/);
+  assert.doesNotMatch(styles, /person-regular-working-time/);
+  assert.match(personsPage, /<PersonDetailField label="Wochenstunden">[\s\S]*?ariaLabel="Wochenstunden bearbeiten"[\s\S]*?displayValue=\{formatWeeklyHours\(person\.weekly_hours\)\}[\s\S]*?onSave=\{\(value\) => onInformationSave\(\{ weekly_hours: parseOptionalDecimal\(value\) \}\)\}/s);
+  // The address follows master data directly: no empty section or placeholder remains.
+  assert.match(personsPage, /<PersonDetailField label="Fahrzeug">[\s\S]*?<\/PersonDetailField>\s*<\/div>\s*<\/section>\s*<section className="detail-read-section customer-detail-address-section person-detail-address-section">/s);
+  // Stored/versioned plans and their API are retained; this is only a UI removal.
   assert.match(api, /personRegularWorkingTime[\s\S]*?\/persons\/\$\{personId\}\/regular-working-time/s);
+  assert.match(api, /savePersonRegularWorkingTime[\s\S]*?\/persons\/\$\{personId\}\/regular-working-time/s);
 });
 
 test("person approval explicitly acknowledges current hints and always enables its retained export", () => {
