@@ -202,8 +202,8 @@ def test_postgres_locked_month_rejects_all_dated_payroll_writes(pg_session: Sess
                ledger_system, effective_date, source_type, is_active,
                created_at, updated_at)
             VALUES
-              (:person_id, 'manual_adjustment', 60, 60, 'Korrektur', 'daily',
-               '2026-08-04', 'manual_adjustment', true,
+              (:person_id, 'daily_balance', 60, 60, 'Tagesabschluss', 'daily',
+               '2026-08-04', 'payroll_person_month_close', true,
                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """,
             {"person_id": worker.id},
@@ -277,8 +277,8 @@ def test_postgres_approved_person_month_rejects_that_person_dated_payroll_writes
                ledger_system, effective_date, source_type, is_active,
                created_at, updated_at)
             VALUES
-              (:person_id, 'manual_adjustment', 60, 60, 'Korrektur', 'daily',
-               '2026-08-04', 'manual_adjustment', true,
+              (:person_id, 'daily_balance', 60, 60, 'Tagesabschluss', 'daily',
+               '2026-08-04', 'payroll_person_month_close', true,
                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """,
             {"person_id": worker.id},
@@ -420,6 +420,32 @@ def test_postgres_snapshots_artifacts_and_audits_are_append_only(pg_session: Ses
             statement,
             {"id": row_id, "value": "changed"},
         )
+
+
+@pytest.mark.parametrize("global_close", [False, True])
+@pytest.mark.parametrize("entry_type,delta", [("manual_adjustment", 120), ("manual_adjustment", -30), ("payout", -60)])
+def test_postgres_locked_month_allows_only_new_manual_account_insert(pg_session, global_close, entry_type, delta):
+    admin, worker = _payroll_users(pg_session)
+    if global_close:
+        pg_session.add(PayrollMonthPeriod(year=2026, month=8, status=PAYROLL_MONTH_LOCKED))
+    else:
+        pg_session.add(PayrollMonthPersonApproval(year=2026, month=8, person_id=worker.id,
+                                                status=PAYROLL_PERSON_MONTH_APPROVED))
+    pg_session.flush()
+    insert_sql = """INSERT INTO person_hours_account_entries
+      (person_id, entry_type, minutes_delta, balance_after_minutes, note, ledger_system,
+       effective_date, source_type, is_active, created_at, updated_at)
+      VALUES (:person_id, :entry_type, :delta, :delta, 'Independent', 'daily',
+              '2026-08-31', :source_type, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING id"""
+    parameters = {"person_id": worker.id, "entry_type": entry_type, "source_type": entry_type, "delta": delta}
+    identifier = pg_session.scalar(text(insert_sql), parameters)
+    assert identifier is not None
+    # The exception is INSERT-only: existing account rows are still protected.
+    _expect_rejection(pg_session, "UPDATE person_hours_account_entries SET minutes_delta = 0 WHERE id = :id", {"id": identifier})
+    _expect_rejection(pg_session, "DELETE FROM person_hours_account_entries WHERE id = :id", {"id": identifier})
+    _expect_rejection(pg_session, insert_sql, {**parameters, "entry_type": "monthly_balance", "source_type": "payroll_month_close"})
+    _expect_rejection(pg_session, insert_sql, {**parameters, "source_type": "WEEK_APPROVAL"})
 
 
 def _expect_rejection(

@@ -41,6 +41,28 @@ class PayrollMonthAccountService:
     def _entries(self, person_id: int) -> list[Entry]:
         return list(self.db.scalars(select(Entry).where(Entry.person_id == person_id).order_by(Entry.id)))
 
+    @staticmethod
+    def accepted_balance(opening: PersonHoursOpeningBalance | None, entries: list[Entry]) -> int | None:
+        included = [row for row in entries if row.is_active and (opening is None or row.ledger_system == "daily")]
+        # The established account defines an empty history as a regular zero.
+        # An explicitly unknown balance on actual history is a different case.
+        if opening is None and any(row.balance_after_minutes is None for row in included):
+            return None
+        return (opening.balance_minutes if opening is not None else 0) + sum(row.minutes_delta for row in included)
+
+    @staticmethod
+    def _transition_baseline(transition: Entry) -> int | None:
+        payload = transition.source_payload
+        baseline = payload["baseline_minutes"]
+        if (baseline is None and payload.get("included_entries") == []
+                and "opening_id" in payload and payload["opening_id"] is None
+                and transition.source_type == TRANSITION
+                and transition.note == "Anfangsbestand ungeklärt; Monatsbewegungen werden getrennt erfasst."):
+            # Compatibility with the precise empty-zero misclassification in
+            # 8c77461. Keep its original row, payload and frozen exports intact.
+            return 0
+        return baseline
+
     def capture(self, person_id: int, user_id: int | None) -> Entry:
         self.lock_person(person_id)
         existing = self.transition(person_id)
@@ -52,9 +74,7 @@ class PayrollMonthAccountService:
         ))
         entries = [row for row in self._entries(person_id)
                    if row.is_active and (opening is None or row.ledger_system == "daily")]
-        baseline = ((opening.balance_minutes if opening is not None else 0)
-                    + sum(row.minutes_delta for row in entries)) if opening is not None or any(
-                        row.balance_after_minutes is not None for row in entries) else None
+        baseline = self.accepted_balance(opening, entries)
         snapshot = [{
             "id": row.id, "minutes_delta": row.minutes_delta, "entry_type": row.entry_type,
             "ledger_system": row.ledger_system,
@@ -80,7 +100,7 @@ class PayrollMonthAccountService:
         transition = transition or self.transition(person_id)
         if transition is None:
             raise ValueError("Monthly account transition has not been captured.")
-        baseline = transition.source_payload["baseline_minutes"]
+        baseline = self._transition_baseline(transition)
         entries = self._entries(person_id)
         if baseline is None or any(row.entry_type == MONTHLY and row.is_active
                                    and row.source_payload.get("pending_reason") for row in entries):
@@ -99,7 +119,7 @@ class PayrollMonthAccountService:
         if transition is None:
             return []
         notices = []
-        if transition.source_payload["baseline_minutes"] is None:
+        if self._transition_baseline(transition) is None:
             notices.append("Anfangsbestand ungeklärt; der absolute Kontostand bleibt offen.")
         notices.extend(row.note for row in self._entries(person_id)
                        if row.entry_type == MONTHLY and row.is_active and row.source_payload.get("pending_reason"))

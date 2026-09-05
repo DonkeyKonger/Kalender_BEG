@@ -20,7 +20,6 @@ from app.schemas.person_hours_account import (
     PersonHoursAccountRead,
 )
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
-from app.services.payroll_period_guard import PayrollPeriodGuard
 from app.services.payroll_month_account_service import PayrollMonthAccountService
 
 
@@ -79,13 +78,15 @@ class PersonHoursAccountService:
             )
         )
         entries = self._list_entries(person_id)
-        notices = PayrollMonthAccountService(self.db).notices(person_id)
-        has_start = opening is not None or any(entry.is_active and entry.balance_after_minutes is not None for entry in entries)
-        if not has_start and not notices:
+        monthly = PayrollMonthAccountService(self.db)
+        transition = monthly.transition(person_id)
+        balance = monthly.current_balance(person_id, transition) if transition is not None else monthly.accepted_balance(opening, entries)
+        notices = monthly.notices(person_id)
+        if balance is None and not notices:
             notices = ["Anfangsbestand ungeklärt; der absolute Kontostand bleibt offen."]
         return PersonHoursAccountRead(
             person_id=person_id,
-            current_balance_minutes=self._current_balance_minutes(person_id) if has_start else None,
+            current_balance_minutes=balance,
             notices=notices,
             opening_balance=(
                 PersonHoursAccountOpeningRead(
@@ -118,7 +119,8 @@ class PersonHoursAccountService:
     ) -> PersonHoursAccountRead:
         self._get_person(person_id)
         ensure_new_ledger_effective_date(effective_date)
-        PayrollPeriodGuard(self.db).assert_date_mutable(effective_date, person_id=person_id)
+        # Independent append-only account movement; payroll/time locks remain
+        # unchanged. _append_entry uses the shared per-person account lock.
         minutes_delta = hours_to_minutes(hours_delta)
         if minutes_delta == 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Die Korrektur muss größer oder kleiner als 0 sein.")
@@ -147,7 +149,6 @@ class PersonHoursAccountService:
     ) -> PersonHoursAccountRead:
         self._get_person(person_id)
         ensure_new_ledger_effective_date(effective_date)
-        PayrollPeriodGuard(self.db).assert_date_mutable(effective_date, person_id=person_id)
         minutes = hours_to_minutes(hours)
         if minutes <= 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Auszahlung muss größer als 0 Stunden sein.")

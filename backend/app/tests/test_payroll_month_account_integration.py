@@ -22,7 +22,7 @@ from app.tests.test_payroll_daily_ledger_service import db_session
 from app.tests.test_payroll_month_xlsx_service import cell_text
 
 
-def context(*, known=True, weekly_hours=40):
+def context(*, known=True, weekly_hours=40, unclear=False):
     db = db_session()
     person = Person(first_name="Monthly", last_name="Test", display_name="Monthly Test", short_code="MT",
                     person_type=PersonType.INTERNAL, weekly_hours=weekly_hours)
@@ -32,6 +32,9 @@ def context(*, known=True, weekly_hours=40):
     if known:
         db.add(Entry(person_id=person.id, entry_type="manual_adjustment", minutes_delta=6000,
                      balance_after_minutes=6000, note="Accepted current balance"))
+    if unclear:
+        db.add(Entry(person_id=person.id, entry_type="manual_adjustment", minutes_delta=0,
+                     balance_after_minutes=None, note="Explizit ungeklärter Altbestand"))
     for day in range(1, 32):
         work_date = date(2026, 8, day)
         if work_date.weekday() < 5:
@@ -58,7 +61,7 @@ def workbook_sheet(content):
 
 @pytest.mark.parametrize("known", [False, True])
 def test_real_month_approval_without_day_setup_matches_excel_and_global_does_not_rebook(known):
-    db, person, user, service = context(known=known)
+    db, person, user, service = context(known=known, unclear=not known)
     approve(service, person, user)
     account_service = PayrollMonthAccountService(db)
     posting = db.scalar(select(Entry).where(Entry.entry_type == MONTHLY))

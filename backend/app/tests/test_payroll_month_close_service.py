@@ -246,11 +246,11 @@ def test_person_month_approval_acknowledges_worker_blockers_and_allows_month_loc
         db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id))
     )
     assert [row.entry_type for row in account_rows] == [TRANSITION, MONTHLY]
-    assert account_rows[0].balance_after_minutes is None
+    assert account_rows[0].balance_after_minutes == 0
     assert account_rows[1].source_reference_id == approval.ledger_reference_id
     assert account_rows[1].source_payload["movement_minutes"] == -(168 * 60)
-    assert account_rows[1].source_payload["opening_balance_minutes"] is None
-    assert account_rows[1].source_payload["closing_balance_minutes"] is None
+    assert account_rows[1].source_payload["opening_balance_minutes"] == 0
+    assert account_rows[1].source_payload["closing_balance_minutes"] == -(168 * 60)
     assert list(db.scalars(select(PayrollMonthAudit.action))) == ["PERSON_MONTH_APPROVED"]
     audit = db.scalar(select(PayrollMonthAudit))
     assert audit is not None

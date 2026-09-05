@@ -114,6 +114,9 @@ def test_explicit_zero_is_known_but_missing_start_remains_null_in_schema(known_z
         person = Person(first_name="New", last_name="Test", display_name="New", short_code="NEW", weekly_hours=40)
         db.add(person)
         db.flush()
+        db.add(Entry(person_id=person.id, entry_type="manual_adjustment", minutes_delta=0,
+                     balance_after_minutes=None, note="Explizit ungeklärter Altbestand", is_active=True))
+        db.flush()
     service = PayrollMonthAccountService(db)
     row = post(service, person)
     account = PersonHoursAccountService(db).get_account(person_id=person.id)
@@ -170,8 +173,10 @@ def test_manual_movements_with_missing_start_remain_independent_without_inventin
     db = db_session()
     person, user, _ = configured_worker(db, [480] * 5 + [0, 0])
     from app.models.payroll_daily_ledger import PersonHoursOpeningBalance
-    # Isolated fixture represents a worker for whom no starting balance exists.
+    # Actual unknown history is distinct from a regular empty zero account.
     db.delete(db.scalar(select(PersonHoursOpeningBalance)))
+    db.add(Entry(person_id=person.id, entry_type="manual_adjustment", minutes_delta=0,
+                 balance_after_minutes=None, note="Explizit ungeklärter Altbestand", is_active=True))
     db.commit()
     account = PersonHoursAccountService(db)
     assert account.get_account(person_id=person.id).current_balance_minutes is None

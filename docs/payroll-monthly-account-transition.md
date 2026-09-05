@@ -26,8 +26,13 @@ persönliche Abschluss-Transaktion zurück.
   Eröffnung. Die Übernahme speichert Zeitpunkt, alte Eröffnungsreferenz und die
   exakten darin enthaltenen aktiven Buchungs-IDs und Werte.
 - Bestätigte alte Eröffnungen bestimmen weiterhin, ob Legacy-Wochenbuchungen
-  bereits ausgeschlossen waren. Ein belegter Nullsaldo bleibt bekannt; fehlender
-  Anfangsbestand bleibt `null`, auch nach manuellen Bewegungen.
+  bereits ausgeschlossen waren. Auch ein reguläres leeres Konto ohne Buchungszeile
+  und ohne bestätigte Eröffnung hat nach der bestehenden Kontologik den bekannten
+  Anfangsbestand **0**. Explizit unbekannte/inkonsistente tatsächliche Historie
+  bleibt davon getrennt `null`, auch nach manuellen Bewegungen.
+  Der exakt identifizierbare frühere Fehlerfall einer leeren Null-Übernahme aus
+  `8c77461` wird beim Lesen als 0 erkannt; seine alten Zeilen, Payloads und bereits
+  gespeicherten Excel-Dateien werden nicht verändert.
 - Eindeutige enthaltene Tagesautomatik bzw. vollständig innerhalb des Monats
   liegende Legacy-Wochenautomatik wird vom neuen Monatsbetrag abgezogen. Beispiel:
   akzeptierter Bestand 100 h enthält schon 5 h Automatik, Excel ergibt 8 h:
@@ -45,7 +50,10 @@ persönliche Abschluss-Transaktion zurück.
   ihre bestehende Tages-Rücknahmereferenz; der Gesamtabschluss erfindet keine neue.
 - Personensperre serialisiert Bestandsübernahme, Monats- und manuelle Buchungen.
   Eindeutige Referenzen plus Datenbankindex erlauben nur eine aktive Monatsbuchung
-  pro Person/Monat. Manuelle Nachbuchungen ändern keine früheren Saldozeilen.
+  pro Person/Monat. Neue manuelle Korrekturen (+/−) und Auszahlungen sind auch bei
+  persönlicher/globaler Sperre ihres Wirksamkeitsmonats möglich. Sie sind
+  eigenständige Kontobuchungen und ändern weder frühere Saldozeilen noch eingefrorene
+  Excel-Dateien oder Zeitmeldungen. Bestehende Rollenrechte bleiben unverändert.
 
 Die Excel-Felder „Kontostand alt/neu“ stammen aus dem bei Buchung verfügbaren
 aktuellen Bestand, bereinigt um ersetzte Monatsautomatik. Sie sind ausdrücklich
@@ -59,6 +67,16 @@ ergänzt den aktiven Monatsindex. Sie ändert keine bestehenden Daten. Eine
 verlustbehaftete Rückmigration bei vorhandener Monatskontohistorie wird abgewiesen.
 Die Migration muss bei einer später separat freigegebenen Auslieferung vor dem
 neuen Backend laufen. Sie wurde hier nur in einer isolierten Testdatenbank geprüft.
+
+Folgemigration `20260905_0113` ergänzt ausschließlich eine PostgreSQL-Trigger-
+Ausnahme für neue aktive `daily`-Inserts der Typen `manual_adjustment`/`payout`
+mit passender Quelle und ohne Payroll-/Wochenreferenz. Diese Inserts verwenden
+dieselbe Personenkontosperre. UPDATE/DELETE vorhandener Buchungen und alle
+gewöhnlichen Payroll-/Zeitänderungen unterliegen weiter den bisherigen Sperren.
+Keine Datenmigration oder Umschreibung bestehender Historie ist damit verbunden.
+Die echten PostgreSQL-Fälle (Erlaubnis plus unveränderte Negativfälle) sind als
+isolierte Integrationstests hinterlegt; ohne `PAYROLL_POSTGRES_TEST_URL` werden sie
+ausdrücklich übersprungen und nicht als ausgeführt gezählt.
 
 SQLite-Integration prüft echte Standard-Excel-Dateien, Einzel-/Gesamtabschluss,
 Retry, Reopen/Reapprove, Altbuchungen, beide Monatsreihenfolgen, unbekannte Salden,
