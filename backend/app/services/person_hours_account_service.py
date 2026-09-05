@@ -21,6 +21,7 @@ from app.schemas.person_hours_account import (
 )
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 from app.services.payroll_period_guard import PayrollPeriodGuard
+from app.services.payroll_month_account_service import PayrollMonthAccountService
 
 
 HOURS_ACCOUNT_WEEKLY = "weekly_balance"
@@ -77,9 +78,15 @@ class PersonHoursAccountService:
                 PersonHoursOpeningBalance.is_confirmed.is_(True),
             )
         )
+        entries = self._list_entries(person_id)
+        notices = PayrollMonthAccountService(self.db).notices(person_id)
+        has_start = opening is not None or any(entry.is_active and entry.balance_after_minutes is not None for entry in entries)
+        if not has_start and not notices:
+            notices = ["Anfangsbestand ungeklärt; der absolute Kontostand bleibt offen."]
         return PersonHoursAccountRead(
             person_id=person_id,
-            current_balance_minutes=self._current_balance_minutes(person_id),
+            current_balance_minutes=self._current_balance_minutes(person_id) if has_start else None,
+            notices=notices,
             opening_balance=(
                 PersonHoursAccountOpeningRead(
                     id=opening.id,
@@ -97,7 +104,7 @@ class PersonHoursAccountService:
                 if opening is not None and opening.confirmed_at is not None
                 else None
             ),
-            entries=[self._entry_read(entry) for entry in self._list_entries(person_id)],
+            entries=[self._entry_read(entry) for entry in entries],
         )
 
     def create_manual_adjustment(
@@ -295,7 +302,13 @@ class PersonHoursAccountService:
         source_type: str | None = None,
         source_reference_id: str | None = None,
     ) -> PersonHoursAccountEntry:
-        balance_after = self._current_balance_minutes(person_id) + minutes_delta
+        monthly = PayrollMonthAccountService(self.db)
+        if entry_type in (HOURS_ACCOUNT_MANUAL, HOURS_ACCOUNT_PAYOUT):
+            monthly.capture(person_id, current_user.id)
+        else:
+            monthly.lock_person(person_id)
+        balance = self._current_balance_minutes(person_id)
+        balance_after = balance + minutes_delta if balance is not None else None
         entry = PersonHoursAccountEntry(
             person_id=person_id,
             entry_type=entry_type,
@@ -319,13 +332,11 @@ class PersonHoursAccountService:
         )
         self.db.add(entry)
         self.db.flush()
-        if ledger_system == "daily":
-            from app.services.payroll_daily_ledger_service import PayrollDailyLedgerService
-
-            PayrollDailyLedgerService(self.db).recalculate_balance_history(person_id)
+        # New manual movements never recalculate historical balance_after values;
+        # doing so would mutate retained history (and hit locked-month triggers).
         return entry
 
-    def _current_balance_minutes(self, person_id: int) -> int:
+    def _current_balance_minutes(self, person_id: int) -> int | None:
         # Import lazily because the daily service intentionally reuses the
         # established effective-work-minute helper from this module.
         from app.services.payroll_daily_ledger_service import PayrollDailyLedgerService

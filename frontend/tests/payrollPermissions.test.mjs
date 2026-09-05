@@ -46,7 +46,7 @@ test("payroll page and week downloads use payroll access without a phone GPS ver
   assert.match(pageSource, /canManagePayrollClose = canManagePayrollMonthClose\(user\)/);
   assert.match(pageSource, /payrollPersonApprovalDisabledReason[\s\S]*?Für den Monatsabschluss fehlt die allgemeine Lohnprüfungsberechtigung/s);
   assert.match(pageSource, /aria-describedby=\{disabledReason \? "payroll-person-month-toggle-reason" : undefined\}/);
-  assert.match(pageSource, /\{canManagePayrollClose && \([\s\S]*?Stundenkonto einrichten[\s\S]*?\)\}/s);
+  assert.doesNotMatch(pageSource, /Stundenkonto einrichten|PayrollSetupDialog/);
   assert.match(pageSource, /api\.weeklyAllWorkersTimeEntriesXlsx/);
   assert.match(pageSource, /api\.weeklyWorkerTimeEntriesXlsx/);
   assert.match(pageSource, /api\.payrollMonthlyWorkersXlsx/);

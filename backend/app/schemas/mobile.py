@@ -81,7 +81,7 @@ class MobilePersonalFileVehicle(BaseModel):
 
 
 class MobilePersonalFileHoursAccount(BaseModel):
-    current_balance_minutes: int
+    current_balance_minutes: int | None
     last_entry_at: datetime | None = None
 
 

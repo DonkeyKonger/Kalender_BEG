@@ -177,7 +177,7 @@ export type PersonHoursAccountEntry = {
   person_id: number;
   entry_type: PersonHoursAccountEntryType;
   minutes_delta: number;
-  balance_after_minutes: number;
+  balance_after_minutes: number | null;
   note: string;
   iso_year: number | null;
   iso_week: number | null;
@@ -203,7 +203,8 @@ export type PersonHoursAccountEntry = {
 
 export type PersonHoursAccount = {
   person_id: number;
-  current_balance_minutes: number;
+  current_balance_minutes: number | null;
+  notices?: string[];
   entries: PersonHoursAccountEntry[];
 };
 

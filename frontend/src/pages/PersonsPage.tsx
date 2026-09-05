@@ -1835,8 +1835,8 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
     }
   }
 
-  const balanceMinutes = account?.current_balance_minutes ?? 0;
-  const balanceTone = balanceMinutes < 0 ? "is-negative" : balanceMinutes > 0 ? "is-positive" : "is-neutral";
+  const balanceMinutes = account?.current_balance_minutes ?? null;
+  const balanceTone = balanceMinutes === null ? "is-neutral" : balanceMinutes < 0 ? "is-negative" : balanceMinutes > 0 ? "is-positive" : "is-neutral";
   const overtimeAbsenceMinutesByWeek = useMemo(
     () => summarizeHoursAccountOvertimeAbsenceMinutes(account?.entries ?? []),
     [account?.entries],
@@ -1851,7 +1851,7 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
       <section className={`person-hours-balance-card ${balanceTone}`}>
         <div>
           <span>Aktueller Stand</span>
-          <strong>{formatHoursAccountMinutes(balanceMinutes)}</strong>
+          <strong>{isLoading ? "Wird geladen …" : formatHoursAccountMinutes(balanceMinutes)}</strong>
         </div>
         {canManage ? (
           <div className="person-hours-account-actions">
@@ -1868,6 +1868,8 @@ function PersonHoursAccountPanel({ person, canManage }: { person: Person; canMan
           </div>
         ) : null}
       </section>
+
+      {account?.notices?.map((notice) => <p key={notice} role="status">{notice}</p>)}
 
       {activeForm ? (
         <form className="person-hours-account-form" onSubmit={(event) => void submitHoursAccountForm(event)}>
@@ -2535,7 +2537,8 @@ function parseHoursAccountInput(value: string): { ok: true; value: number } | { 
   return { ok: true, value: parsed };
 }
 
-function formatHoursAccountMinutes(minutes: number): string {
+function formatHoursAccountMinutes(minutes: number | null): string {
+  if (minutes === null) return "Kontostand offen";
   const sign = minutes > 0 ? "+" : minutes < 0 ? "-" : "";
   const hours = Math.abs(minutes) / 60;
   return `${sign}${new Intl.NumberFormat("de-DE", {
@@ -2562,6 +2565,8 @@ function hoursAccountEntryPrimaryDate(entry: PersonHoursAccountEntry): string {
 }
 
 function hoursAccountEntrySourceLabel(entry: PersonHoursAccountEntry): string {
+  if (entry.source_type === "monthly_transition") return "Quelle: Bestandsübernahme zum Umstellungszeitpunkt";
+  if (entry.source_type === "payroll_month_reopen") return "Quelle: Monatsabschluss zurückgenommen";
   if (entry.ledger_system !== "daily") {
     return "Quelle: Legacy-Buchung";
   }
@@ -2581,6 +2586,9 @@ function hoursAccountEntrySourceLabel(entry: PersonHoursAccountEntry): string {
 }
 
 function hoursAccountEntryTitle(entry: PersonHoursAccountEntry): string {
+  if (entry.entry_type === "monthly_transition") return "Aktueller Anfangsbestand";
+  if (entry.entry_type === "monthly_balance") return "Monatsbewegung gemäß Excel";
+  if (entry.entry_type === "monthly_reversal") return "Monatsbewegung zurückgenommen";
   if (entry.entry_type === "weekly_balance") {
     return entry.iso_year && entry.iso_week
       ? `Wochenabschluss KW ${entry.iso_week} / ${entry.iso_year}`

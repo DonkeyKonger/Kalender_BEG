@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, LockKeyhole, MoreHorizontal, Search, Settings2, Trash2, Wrench, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, LockKeyhole, MoreHorizontal, Search, Trash2, Wrench, X } from "lucide-react";
 import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -6,7 +6,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage, canManagePayrollMonthClose } from "../auth/permissions";
 import { DashboardNotePicker } from "../components/DashboardNotePickers";
-import { PayrollSetupDialog } from "../components/PayrollSetupDialog";
 import { PayrollSiteCockpit } from "../components/PayrollSiteCockpit";
 import { PayrollOvernightStatusControl } from "../components/PayrollOvernightStatusControl";
 import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
@@ -291,8 +290,6 @@ export function TimeEntriesPage() {
   const [reviewWeekPayrollMonthStatusRangeKey, setReviewWeekPayrollMonthStatusRangeKey] = useState<string | null>(null);
   const [isLoadingReviewWeekPayrollMonthStatuses, setIsLoadingReviewWeekPayrollMonthStatuses] = useState(false);
   const [reviewWeekPayrollMonthStatusError, setReviewWeekPayrollMonthStatusError] = useState<string | null>(null);
-  const [isPayrollSetupOpen, setIsPayrollSetupOpen] = useState(false);
-  const [payrollMonthPeriodRefreshKey, setPayrollMonthPeriodRefreshKey] = useState(0);
   const [markingReviewWeekPersonId, setMarkingReviewWeekPersonId] = useState<number | null>(null);
   const [isReviewWeekActionsMenuOpen, setIsReviewWeekActionsMenuOpen] = useState(false);
   const [reviewWeekActionsMenuPosition, setReviewWeekActionsMenuPosition] = useState<PayrollReviewStatusMenuState | null>(null);
@@ -1430,7 +1427,7 @@ export function TimeEntriesPage() {
     return () => {
       ignore = true;
     };
-  }, [activeTimeSubtab, payrollMonthPeriodRefreshKey, selectedEvaluationMonth]);
+  }, [activeTimeSubtab, selectedEvaluationMonth]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "evaluation" || activeEvaluationSubtab !== "sites") {
@@ -3031,17 +3028,6 @@ export function TimeEntriesPage() {
                     </span>
                     <span>Gesamtmonat geprüft</span>
                   </label>
-                  {canManagePayrollClose && (
-                    <button
-                      className="payroll-month-setup-button"
-                      title="Regelmäßige Arbeitszeit und Eröffnungssalden verwalten"
-                      type="button"
-                      onClick={() => setIsPayrollSetupOpen(true)}
-                    >
-                      <Settings2 aria-hidden="true" size={14} />
-                      Stundenkonto einrichten
-                    </button>
-                  )}
                   <button
                     aria-describedby="time-evaluation-monthly-download-status"
                     className="time-evaluation-monthly-download-button"
@@ -3400,7 +3386,7 @@ export function TimeEntriesPage() {
               {payrollDeleteDialog.weeklyReviewed && (
                 <p className="time-review-delete-warning">
                   <strong>Diese Monteurwoche wurde bereits geprüft.</strong>
-                  Durch das Löschen wird der Prüfstatus zurückgesetzt und die Stundenkonto-Buchung neutralisiert. Die Woche muss anschließend erneut geprüft werden.
+                  Durch das Löschen wird der Prüfstatus zurückgesetzt. Die Woche muss anschließend erneut geprüft werden; das Stundenkonto wird erst beim Monatsabschluss aktualisiert.
                 </p>
               )}
               {payrollDeleteError && <p className="time-review-delete-error">{payrollDeleteError}</p>}
@@ -3588,12 +3574,6 @@ export function TimeEntriesPage() {
           </div>
         </div>
       )}
-
-      <PayrollSetupDialog
-        open={isPayrollSetupOpen && canManagePayrollClose}
-        onClose={() => setIsPayrollSetupOpen(false)}
-        onSetupChanged={() => setPayrollMonthPeriodRefreshKey((current) => current + 1)}
-      />
 
       {locationReviewDiagnosticEntry && (
         <div

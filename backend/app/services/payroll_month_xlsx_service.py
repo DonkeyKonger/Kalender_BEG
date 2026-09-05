@@ -149,6 +149,16 @@ class PayrollMonthPlan:
 
 
 @dataclass(frozen=True)
+class PayrollMonthTotals:
+    total_minutes: int
+    normal_minutes: int | None
+    overtime_minutes: int | None
+    sick_day_count: int
+    sick_minutes: int
+    workday_count: int
+
+
+@dataclass(frozen=True)
 class PayrollMonthWorkbook:
     content: bytes
     plan: PayrollMonthPlan
@@ -937,6 +947,44 @@ def _write_month_day(sheet: ET.Element, day: PayrollMonthDay) -> None:
     )
 
 
+def calculate_payroll_month_totals(
+    *,
+    person: Person,
+    plan: PayrollMonthPlan,
+    year: int,
+    month: int,
+    non_working_dates: Collection[date],
+) -> PayrollMonthTotals:
+    """The existing Excel month convention, independent of individual day plans.
+
+    A missing contractual weekly total is unknown, never a target of zero.
+    Redistribution only changes the display days; their monthly sum is retained.
+    """
+    total_minutes = sum(day.net_work_minutes for day in plan.days)
+    sick_day_count = sum(day.absence_type == AbsenceType.SICK for day in plan.days)
+    sick_minutes = sick_day_count * SICK_DAY_HOURS * 60
+    workday_count = sum(
+        work_date.weekday() < 5 and work_date not in non_working_dates
+        for day_number in range(1, calendar.monthrange(year, month)[1] + 1)
+        for work_date in (date(year, month, day_number),)
+    )
+    normal_minutes = None
+    if person.weekly_hours is not None:
+        normal_minutes = int(
+            (Decimal(str(person.weekly_hours)) / 5 * workday_count * 60).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        ) - sick_minutes
+    return PayrollMonthTotals(
+        total_minutes=total_minutes,
+        normal_minutes=normal_minutes,
+        overtime_minutes=None if normal_minutes is None else total_minutes - normal_minutes,
+        sick_day_count=sick_day_count,
+        sick_minutes=sick_minutes,
+        workday_count=workday_count,
+    )
+
+
 def _write_month_totals(
     sheet: ET.Element,
     *,
@@ -947,49 +995,39 @@ def _write_month_totals(
     non_working_dates: Collection[date],
 ) -> None:
     layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
-    total_minutes = sum(day.net_work_minutes for day in plan.days)
+    totals = calculate_payroll_month_totals(
+        person=person, plan=plan, year=year, month=month, non_working_dates=non_working_dates,
+    )
     _set_cell_formula(
         sheet,
         layout.total_hours_cell,
         f"SUM({layout.net_work_column}{layout.first_day_row}:"
         f"{layout.net_work_column}{layout.last_day_row})",
-        total_minutes / 1440,
+        totals.total_minutes / 1440,
     )
-    sick_day_count = sum(day.absence_type == AbsenceType.SICK for day in plan.days)
-    sick_minutes = sick_day_count * SICK_DAY_HOURS * 60
-    _set_cell_number(sheet, layout.sick_days_cell, sick_day_count)
+    _set_cell_number(sheet, layout.sick_days_cell, totals.sick_day_count)
     _set_cell_formula(
         sheet,
         layout.sick_hours_cell,
         f"{layout.sick_days_cell}*{SICK_DAY_HOURS}/24",
-        sick_minutes / 1440,
+        totals.sick_minutes / 1440,
     )
     weekly_hours = person.weekly_hours
-    if weekly_hours is None:
+    if weekly_hours is None or totals.normal_minutes is None or totals.overtime_minutes is None:
         # Fehlende Stammdaten sind kein Soll von null Stunden.
         _set_cell_string(sheet, layout.normal_hours_cell, "–")
         _set_cell_string(sheet, layout.overtime_hours_cell, "–")
         return
 
-    workday_count = sum(
-        work_date.weekday() < 5 and work_date not in non_working_dates
-        for day_number in range(1, calendar.monthrange(year, month)[1] + 1)
-        for work_date in (date(year, month, day_number),)
-    )
     weekly_hours_decimal = Decimal(str(weekly_hours))
-    normal_minutes = int(
-        (weekly_hours_decimal / 5 * workday_count * 60).quantize(
-            Decimal("1"), rounding=ROUND_HALF_UP
-        )
-    ) - sick_minutes
     # Krankenstunden mindern nur das Soll, nicht die tatsächlich erfassten Stunden.
     _set_cell_formula(
         sheet,
         layout.normal_hours_cell,
-        f"ROUND({weekly_hours_decimal}/5*{workday_count}*60,0)/1440-{layout.sick_hours_cell}",
-        normal_minutes / 1440,
+        f"ROUND({weekly_hours_decimal}/5*{totals.workday_count}*60,0)/1440-{layout.sick_hours_cell}",
+        totals.normal_minutes / 1440,
     )
-    overtime_minutes = total_minutes - normal_minutes
+    overtime_minutes = totals.overtime_minutes
     delta = f"ROUND(({layout.total_hours_cell}-{layout.normal_hours_cell})*1440,0)"
     # Excel im 1900-Datumssystem kann negative Zeitwerte nicht anzeigen.
     # Nur der negative Fall wird deshalb als formatierter Text ausgegeben.

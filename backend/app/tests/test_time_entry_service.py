@@ -21,7 +21,11 @@ from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
-from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE, effective_weekly_work_minutes
+from app.services.person_hours_account_service import (
+    OFFICE_ONLY_TIME_ENTRY_NOTE,
+    PersonHoursAccountService,
+    effective_weekly_work_minutes,
+)
 from app.services.time_entry_service import TimeEntryService
 
 
@@ -1327,7 +1331,7 @@ def test_delete_payroll_entry_removes_exact_open_entry():
     assert db.get(WorkTimeEntry, second.id) is None
 
 
-def test_delete_payroll_entry_resets_reviewed_week_and_neutralizes_hours_account():
+def test_delete_payroll_entry_resets_reviewed_week_without_touching_hours_account_history():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1354,7 +1358,19 @@ def test_delete_payroll_entry_resets_reviewed_week_and_neutralizes_hours_account
         payroll_reviewed_at=datetime(2026, 8, 7, 12, 0),
         payroll_corrected_work_minutes=2520,
     )
-    db.add(entry)
+    historical_entry = PersonHoursAccountEntry(
+        person=person,
+        entry_type="weekly_balance",
+        minutes_delta=120,
+        balance_after_minutes=120,
+        note="Historische Wochenbuchung",
+        iso_year=2026,
+        iso_week=32,
+        created_by=user,
+        ledger_system="legacy",
+        is_active=True,
+    )
+    db.add_all([entry, historical_entry])
     db.commit()
     review = TimeEntryService(db).mark_weekly_review(
         person_id=person.id,
@@ -1362,7 +1378,8 @@ def test_delete_payroll_entry_resets_reviewed_week_and_neutralizes_hours_account
         iso_week=32,
         current_user=user,
     )
-    assert sum(item.minutes_delta for item in db.scalars(select(PersonHoursAccountEntry))) == 120
+    review.daily_ledger_reference_id = "weekly-review:historical-reference"
+    db.commit()
 
     result = TimeEntryService(db).delete_payroll_entry(entry.id, user)
 
@@ -1370,10 +1387,13 @@ def test_delete_payroll_entry_resets_reviewed_week_and_neutralizes_hours_account
     assert db.get(WorkTimeEntry, entry.id) is None
     db.refresh(review)
     assert review.status == "reset"
+    assert review.daily_ledger_reference_id == "weekly-review:historical-reference"
     account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
-    assert [item.minutes_delta for item in account_entries] == [120, -120]
-    assert sum(item.minutes_delta for item in account_entries) == 0
-    assert "neutralisiert" in account_entries[-1].note
+    assert [item.id for item in account_entries] == [historical_entry.id]
+    assert account_entries[0].minutes_delta == 120
+    assert account_entries[0].balance_after_minutes == 120
+    assert account_entries[0].note == "Historische Wochenbuchung"
+    assert account_entries[0].is_active is True
 
 
 def test_delete_payroll_entry_rejects_monteur_role():
@@ -1442,7 +1462,7 @@ def test_mark_weekly_review_updates_existing_person_week_status():
     assert commits == [True]
 
 
-def test_reset_weekly_review_marks_person_week_as_reset():
+def test_reset_and_retry_transition_week_are_status_only_without_setup_and_preserve_old_reference():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1452,37 +1472,66 @@ def test_reset_weekly_review_marks_person_week_as_reset():
         person_type=PersonType.INTERNAL,
     )
     user = User(username="office", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
-    db.add_all([person, user])
+    old_reference = "weekly-review:pre-monthly-transition"
+    historical_daily_entry = PersonHoursAccountEntry(
+        person=person,
+        entry_type="daily_balance",
+        minutes_delta=90,
+        balance_after_minutes=90,
+        note="Historische Tagesbuchung",
+        ledger_system="daily",
+        effective_date=date(2026, 8, 1),
+        source_type="WEEK_APPROVAL",
+        source_reference_id=old_reference,
+        is_active=True,
+    )
+    db.add_all([person, user, historical_daily_entry])
     db.commit()
 
     service = TimeEntryService(db)
     reviewed = service.mark_weekly_review(
         person_id=person.id,
         iso_year=2026,
-        iso_week=24,
+        iso_week=31,
         current_user=user,
     )
+    reviewed.daily_ledger_reference_id = old_reference
+    db.commit()
     reset = service.reset_weekly_review(
         person_id=person.id,
         iso_year=2026,
-        iso_week=24,
+        iso_week=31,
         current_user=user,
     )
     assert reset.id == reviewed.id
     assert reset.status == "reset"
+    assert reset.daily_ledger_reference_id == old_reference
 
     reviewed_again = service.mark_weekly_review(
         person_id=person.id,
         iso_year=2026,
-        iso_week=24,
+        iso_week=31,
+        current_user=user,
+    )
+    retry = service.mark_weekly_review(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=31,
         current_user=user,
     )
 
     assert reviewed_again.id == reviewed.id
     assert reviewed_again.status == "reviewed"
+    assert retry.id == reviewed.id
+    assert retry.daily_ledger_reference_id == old_reference
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry)))
+    assert [item.id for item in account_entries] == [historical_daily_entry.id]
+    assert account_entries[0].minutes_delta == 90
+    assert account_entries[0].balance_after_minutes == 90
+    assert account_entries[0].is_active is True
 
 
-def test_mark_weekly_review_books_hours_account_once():
+def test_mark_weekly_review_and_retries_are_status_only_and_preserve_history():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1503,12 +1552,23 @@ def test_mark_weekly_review_books_hours_account_once():
         break_minutes=0,
         travel_minutes=0,
     )
+    historical_entry = PersonHoursAccountEntry(
+        person=person,
+        entry_type="manual_adjustment",
+        minutes_delta=75,
+        balance_after_minutes=75,
+        note="Bestehende Korrektur",
+        created_by=user,
+        ledger_system="legacy",
+        is_active=True,
+    )
     db.add_all([
         WorkTimeEntry(person=person, work_date=monday, work_minutes=480, break_minutes=0, travel_minutes=0),
         WorkTimeEntry(person=person, work_date=monday + timedelta(days=1), work_minutes=480, break_minutes=0, travel_minutes=0),
         WorkTimeEntry(person=person, work_date=monday + timedelta(days=2), work_minutes=480, break_minutes=0, travel_minutes=0),
         WorkTimeEntry(person=person, work_date=monday + timedelta(days=3), work_minutes=480, break_minutes=0, travel_minutes=0),
         friday_entry,
+        historical_entry,
     ])
     db.commit()
 
@@ -1528,14 +1588,11 @@ def test_mark_weekly_review_books_hours_account_once():
 
     account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
     assert first_review.id == second_review.id
-    assert len(account_entries) == 1
-    assert account_entries[0].entry_type == "weekly_balance"
-    assert account_entries[0].minutes_delta == 180
-    assert account_entries[0].balance_after_minutes == 180
-    assert account_entries[0].weekly_actual_minutes == 2580
-    assert account_entries[0].weekly_required_minutes == 2400
-    assert account_entries[0].iso_year == 2026
-    assert account_entries[0].iso_week == 24
+    assert first_review.status == "reviewed"
+    assert [item.id for item in account_entries] == [historical_entry.id]
+    assert account_entries[0].minutes_delta == 75
+    assert account_entries[0].balance_after_minutes == 75
+    assert account_entries[0].note == "Bestehende Korrektur"
 
     friday_entry.work_minutes = 600
     third_review = service.mark_weekly_review(
@@ -1546,12 +1603,12 @@ def test_mark_weekly_review_books_hours_account_once():
     )
     corrected_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
     assert third_review.id == first_review.id
-    assert len(corrected_entries) == 2
-    assert corrected_entries[1].minutes_delta == -60
-    assert corrected_entries[1].balance_after_minutes == 120
+    assert [item.id for item in corrected_entries] == [historical_entry.id]
+    assert corrected_entries[0].minutes_delta == 75
+    assert corrected_entries[0].is_active is True
 
 
-def test_mark_weekly_review_books_zero_hours_account_entry_once():
+def test_legacy_weekly_breakdown_reports_exact_target_without_writing_history():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1574,32 +1631,20 @@ def test_mark_weekly_review_books_zero_hours_account_entry_once():
     ])
     db.commit()
 
-    service = TimeEntryService(db)
-    first_review = service.mark_weekly_review(
+    breakdown = PersonHoursAccountService(db)._weekly_actual_minutes(
         person_id=person.id,
         iso_year=2026,
         iso_week=25,
-        current_user=user,
-    )
-    second_review = service.mark_weekly_review(
-        person_id=person.id,
-        iso_year=2026,
-        iso_week=25,
-        current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
-    assert first_review.id == second_review.id
-    assert len(account_entries) == 1
-    assert account_entries[0].entry_type == "weekly_balance"
-    assert account_entries[0].minutes_delta == 0
-    assert account_entries[0].balance_after_minutes == 0
-    assert account_entries[0].weekly_actual_minutes == 2400
-    assert account_entries[0].weekly_required_minutes == 2400
-    assert "Sollzeit erreicht" in account_entries[0].note
+    assert breakdown.work_minutes == 2400
+    assert breakdown.actual_minutes == 2400
+    assert breakdown.overtime_absence_minutes == 0
+    assert breakdown.absence_minutes_by_type == {}
+    assert list(db.scalars(select(PersonHoursAccountEntry))) == []
 
 
-def test_mark_weekly_review_counts_absence_days_in_hours_account():
+def test_legacy_weekly_breakdown_counts_absence_days():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1627,26 +1672,20 @@ def test_mark_weekly_review_counts_absence_days_in_hours_account():
     ])
     db.commit()
 
-    TimeEntryService(db).mark_weekly_review(
+    breakdown = PersonHoursAccountService(db)._weekly_actual_minutes(
         person_id=person.id,
         iso_year=2026,
         iso_week=28,
-        current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
-    assert len(account_entries) == 1
-    assert account_entries[0].entry_type == "weekly_balance"
-    assert account_entries[0].weekly_actual_minutes == 2220
-    assert account_entries[0].weekly_required_minutes == 2400
-    assert account_entries[0].weekly_work_minutes == 1260
-    assert account_entries[0].weekly_overtime_absence_minutes == 0
-    assert account_entries[0].weekly_absence_breakdown == [{"absence_type": "sick", "minutes": 960}]
-    assert account_entries[0].minutes_delta == -180
-    assert account_entries[0].balance_after_minutes == -180
+    assert breakdown.actual_minutes == 2220
+    assert breakdown.work_minutes == 1260
+    assert breakdown.overtime_absence_minutes == 0
+    assert breakdown.absence_minutes_by_type == {"sick": 960}
+    assert breakdown.actual_minutes - 2400 == -180
 
 
-def test_mark_weekly_review_tops_up_absence_day_without_double_counting():
+def test_legacy_weekly_breakdown_tops_up_absence_day_without_double_counting():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1672,23 +1711,19 @@ def test_mark_weekly_review_tops_up_absence_day_without_double_counting():
     ])
     db.commit()
 
-    TimeEntryService(db).mark_weekly_review(
+    breakdown = PersonHoursAccountService(db)._weekly_actual_minutes(
         person_id=person.id,
         iso_year=2026,
         iso_week=29,
-        current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
-    assert len(account_entries) == 1
-    assert account_entries[0].weekly_actual_minutes == 960
-    assert account_entries[0].weekly_required_minutes == 2400
-    assert account_entries[0].weekly_work_minutes == 300
-    assert account_entries[0].weekly_absence_breakdown == [{"absence_type": "sick", "minutes": 660}]
-    assert account_entries[0].minutes_delta == -1440
+    assert breakdown.actual_minutes == 960
+    assert breakdown.work_minutes == 300
+    assert breakdown.absence_minutes_by_type == {"sick": 660}
+    assert breakdown.actual_minutes - 2400 == -1440
 
 
-def test_mark_weekly_review_credits_and_separately_deducts_one_overtime_absence_day():
+def test_legacy_weekly_breakdown_credits_and_separately_reports_overtime_absence():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1717,32 +1752,17 @@ def test_mark_weekly_review_credits_and_separately_deducts_one_overtime_absence_
     ])
     db.commit()
 
-    service = TimeEntryService(db)
-    first_review = service.mark_weekly_review(
+    breakdown = PersonHoursAccountService(db)._weekly_actual_minutes(
         person_id=person.id,
         iso_year=2026,
         iso_week=30,
-        current_user=user,
-    )
-    second_review = service.mark_weekly_review(
-        person_id=person.id,
-        iso_year=2026,
-        iso_week=30,
-        current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
-    assert first_review.id == second_review.id
-    assert len(account_entries) == 1
-    assert account_entries[0].entry_type == "weekly_balance"
-    assert account_entries[0].minutes_delta == -480
-    assert account_entries[0].balance_after_minutes == -480
-    assert account_entries[0].weekly_work_minutes == 1920
-    assert account_entries[0].weekly_actual_minutes == 2400
-    assert account_entries[0].weekly_required_minutes == 2400
-    assert account_entries[0].weekly_overtime_absence_minutes == 480
-    assert account_entries[0].weekly_absence_breakdown == []
-    assert "Ist 40,0 h / Soll 40,0 h -> 0,0 h; Überstundenabbau -8,0 h" in account_entries[0].note
+    assert breakdown.work_minutes == 1920
+    assert breakdown.actual_minutes == 2400
+    assert breakdown.overtime_absence_minutes == 480
+    assert breakdown.absence_minutes_by_type == {}
+    assert breakdown.actual_minutes - 2400 - breakdown.overtime_absence_minutes == -480
 
 
 @pytest.mark.parametrize(
@@ -1752,7 +1772,7 @@ def test_mark_weekly_review_credits_and_separately_deducts_one_overtime_absence_
         (450, 2280, -600),
     ],
 )
-def test_overtime_absence_keeps_real_weekly_over_or_under_work(
+def test_legacy_weekly_breakdown_keeps_real_over_or_under_work_with_overtime_absence(
     daily_work_minutes: int,
     expected_actual_minutes: int,
     expected_booking_minutes: int,
@@ -1791,22 +1811,19 @@ def test_overtime_absence_keeps_real_weekly_over_or_under_work(
     ])
     db.commit()
 
-    TimeEntryService(db).mark_weekly_review(
+    breakdown = PersonHoursAccountService(db)._weekly_actual_minutes(
         person_id=person.id,
         iso_year=2026,
         iso_week=34,
-        current_user=user,
     )
 
-    account_entry = db.scalar(select(PersonHoursAccountEntry))
-    assert account_entry is not None
-    assert account_entry.weekly_work_minutes == daily_work_minutes * 4
-    assert account_entry.weekly_actual_minutes == expected_actual_minutes
-    assert account_entry.weekly_overtime_absence_minutes == 480
-    assert account_entry.minutes_delta == expected_booking_minutes
+    assert breakdown.work_minutes == daily_work_minutes * 4
+    assert breakdown.actual_minutes == expected_actual_minutes
+    assert breakdown.overtime_absence_minutes == 480
+    assert breakdown.actual_minutes - 2400 - breakdown.overtime_absence_minutes == expected_booking_minutes
 
 
-def test_work_on_overtime_absence_day_is_not_double_credited_but_still_deducts_full_day():
+def test_legacy_weekly_breakdown_does_not_double_credit_work_on_overtime_absence_day():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1838,22 +1855,19 @@ def test_work_on_overtime_absence_day_is_not_double_credited_but_still_deducts_f
     ])
     db.commit()
 
-    TimeEntryService(db).mark_weekly_review(
+    breakdown = PersonHoursAccountService(db)._weekly_actual_minutes(
         person_id=person.id,
         iso_year=2026,
         iso_week=37,
-        current_user=user,
     )
 
-    account_entry = db.scalar(select(PersonHoursAccountEntry))
-    assert account_entry is not None
-    assert account_entry.weekly_work_minutes == 120
-    assert account_entry.weekly_actual_minutes == 480
-    assert account_entry.weekly_overtime_absence_minutes == 480
-    assert account_entry.minutes_delta == -480
+    assert breakdown.work_minutes == 120
+    assert breakdown.actual_minutes == 480
+    assert breakdown.overtime_absence_minutes == 480
+    assert breakdown.actual_minutes - 480 - breakdown.overtime_absence_minutes == -480
 
 
-def test_vacation_credits_weekly_actual_without_overtime_deduction():
+def test_legacy_weekly_breakdown_credits_vacation_without_overtime_deduction():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1888,21 +1902,19 @@ def test_vacation_credits_weekly_actual_without_overtime_deduction():
     ])
     db.commit()
 
-    TimeEntryService(db).mark_weekly_review(
+    breakdown = PersonHoursAccountService(db)._weekly_actual_minutes(
         person_id=person.id,
         iso_year=2026,
         iso_week=35,
-        current_user=user,
     )
 
-    account_entry = db.scalar(select(PersonHoursAccountEntry))
-    assert account_entry is not None
-    assert account_entry.weekly_actual_minutes == 2400
-    assert account_entry.weekly_overtime_absence_minutes == 0
-    assert account_entry.minutes_delta == 0
+    assert breakdown.actual_minutes == 2400
+    assert breakdown.overtime_absence_minutes == 0
+    assert breakdown.absence_minutes_by_type == {"vacation": 480}
+    assert breakdown.actual_minutes - 2400 == 0
 
 
-def test_mark_weekly_review_books_multiple_overtime_absence_days():
+def test_legacy_weekly_breakdown_reports_multiple_overtime_absence_days():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1930,26 +1942,20 @@ def test_mark_weekly_review_books_multiple_overtime_absence_days():
     ])
     db.commit()
 
-    TimeEntryService(db).mark_weekly_review(
+    breakdown = PersonHoursAccountService(db)._weekly_actual_minutes(
         person_id=person.id,
         iso_year=2026,
         iso_week=31,
-        current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
-    assert len(account_entries) == 1
-    assert account_entries[0].entry_type == "weekly_balance"
-    assert account_entries[0].minutes_delta == -960
-    assert account_entries[0].balance_after_minutes == -960
-    assert account_entries[0].weekly_work_minutes == 1440
-    assert account_entries[0].weekly_actual_minutes == 2400
-    assert account_entries[0].weekly_required_minutes == 2400
-    assert account_entries[0].weekly_overtime_absence_minutes == 960
-    assert account_entries[0].weekly_absence_breakdown == []
+    assert breakdown.work_minutes == 1440
+    assert breakdown.actual_minutes == 2400
+    assert breakdown.overtime_absence_minutes == 960
+    assert breakdown.absence_minutes_by_type == {}
+    assert breakdown.actual_minutes - 2400 - breakdown.overtime_absence_minutes == -960
 
 
-def test_mark_weekly_review_logs_corrected_office_hours_without_overtime_absence_breakdown():
+def test_legacy_weekly_breakdown_uses_corrected_office_hours_and_separates_absences():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -1999,25 +2005,20 @@ def test_mark_weekly_review_logs_corrected_office_hours_without_overtime_absence
     ])
     db.commit()
 
-    TimeEntryService(db).mark_weekly_review(
+    breakdown = PersonHoursAccountService(db)._weekly_actual_minutes(
         person_id=person.id,
         iso_year=2026,
         iso_week=33,
-        current_user=user,
     )
 
-    account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
-    assert len(account_entries) == 1
-    assert account_entries[0].entry_type == "weekly_balance"
-    assert account_entries[0].weekly_work_minutes == 1320
-    assert account_entries[0].weekly_actual_minutes == 2760
-    assert account_entries[0].weekly_required_minutes == 2400
-    assert account_entries[0].weekly_overtime_absence_minutes == 960
-    assert account_entries[0].weekly_absence_breakdown == [{"absence_type": "vacation", "minutes": 480}]
-    assert account_entries[0].minutes_delta == -600
+    assert breakdown.work_minutes == 1320
+    assert breakdown.actual_minutes == 2760
+    assert breakdown.overtime_absence_minutes == 960
+    assert breakdown.absence_minutes_by_type == {"vacation": 480}
+    assert breakdown.actual_minutes - 2400 - breakdown.overtime_absence_minutes == -600
 
 
-def test_mark_weekly_review_does_not_duplicate_correct_legacy_overtime_absence_balance():
+def test_mark_weekly_review_does_not_modify_correct_legacy_overtime_absence_history():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -2068,7 +2069,7 @@ def test_mark_weekly_review_does_not_duplicate_correct_legacy_overtime_absence_b
     ])
     db.commit()
 
-    TimeEntryService(db).mark_weekly_review(
+    review = TimeEntryService(db).mark_weekly_review(
         person_id=person.id,
         iso_year=2026,
         iso_week=32,
@@ -2079,9 +2080,11 @@ def test_mark_weekly_review_does_not_duplicate_correct_legacy_overtime_absence_b
     assert len(account_entries) == 2
     assert [entry.entry_type for entry in account_entries] == ["weekly_balance", "overtime_absence"]
     assert sum(entry.minutes_delta for entry in account_entries) == -480
+    assert all(entry.is_active for entry in account_entries)
+    assert review.status == "reviewed"
 
 
-def test_recalculated_week_corrects_old_double_overtime_deduction_once():
+def test_mark_weekly_review_does_not_recalculate_old_double_overtime_deduction():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -2135,11 +2138,12 @@ def test_recalculated_week_corrects_old_double_overtime_deduction_once():
     service.mark_weekly_review(person_id=person.id, iso_year=2026, iso_week=36, current_user=user)
 
     account_entries = list(db.scalars(select(PersonHoursAccountEntry).order_by(PersonHoursAccountEntry.id)))
-    assert len(account_entries) == 2
-    assert account_entries[1].minutes_delta == 480
-    assert account_entries[1].weekly_actual_minutes == 2400
-    assert account_entries[1].weekly_overtime_absence_minutes == 480
-    assert sum(entry.minutes_delta for entry in account_entries) == -480
+    assert len(account_entries) == 1
+    assert account_entries[0].minutes_delta == -960
+    assert account_entries[0].weekly_actual_minutes == 1440
+    assert account_entries[0].weekly_overtime_absence_minutes == 480
+    assert account_entries[0].note == "Old double deduction"
+    assert account_entries[0].is_active is True
 
 
 def test_monteur_cannot_mark_weekly_review():
@@ -2292,22 +2296,47 @@ def test_review_decision_assign_site_keeps_existing_time_review_unchanged():
     assert updated.reviewed_at == datetime(2026, 7, 1, 8, 0)
 
 
-def test_deadline_auto_closes_previous_month_open_review_case():
-    entry = SimpleNamespace(
-        id=1,
-        work_date=date(2026, 6, 30),
+def test_deadline_auto_close_is_status_only_and_preserves_account_history_without_setup():
+    db = db_session()
+    person = Person(
+        first_name="Ohne",
+        last_name="Setup",
+        display_name="Ohne Setup",
+        short_code="OS",
+        person_type=PersonType.INTERNAL,
+    )
+    entry = WorkTimeEntry(
+        person=person,
+        work_date=date(2026, 8, 31),
         work_minutes=480,
+        break_minutes=0,
+        travel_minutes=0,
         status="draft",
         time_review_status="open",
         time_review_method=None,
-        reviewed_by_user_id=99,
+        reviewed_by_user_id=None,
         reviewed_at=None,
     )
-    commits: list[bool] = []
-    item = TimeEntryService.__new__(TimeEntryService)
-    item.db = SimpleNamespace(commit=lambda: commits.append(True))
+    historical_entry = PersonHoursAccountEntry(
+        person=person,
+        entry_type="daily_balance",
+        minutes_delta=45,
+        balance_after_minutes=45,
+        note="Bereits gebuchte Historie",
+        ledger_system="daily",
+        effective_date=date(2026, 8, 15),
+        source_type="month_close",
+        source_reference_id="historical-2026-08",
+        is_active=True,
+    )
+    db.add_all([person, entry, historical_entry])
+    db.commit()
 
-    changed = item.auto_close_deadline_reviews([entry], {entry.id: None}, today=date(2026, 7, 5))
+    changed = TimeEntryService(db).auto_close_deadline_reviews(
+        [entry],
+        {entry.id: None},
+        today=date(2026, 9, 5),
+    )
 
     assert changed is True
     assert entry.time_review_status == "auto_closed_by_deadline"
@@ -2315,7 +2344,12 @@ def test_deadline_auto_closes_previous_month_open_review_case():
     assert entry.status == "reviewed"
     assert entry.reviewed_by_user_id is None
     assert entry.reviewed_at is not None
-    assert commits == [True]
+    account_entries = list(db.scalars(select(PersonHoursAccountEntry)))
+    assert [item.id for item in account_entries] == [historical_entry.id]
+    assert account_entries[0].minutes_delta == 45
+    assert account_entries[0].balance_after_minutes == 45
+    assert account_entries[0].source_reference_id == "historical-2026-08"
+    assert account_entries[0].is_active is True
 
 
 def test_deadline_does_not_close_current_month_review_case():

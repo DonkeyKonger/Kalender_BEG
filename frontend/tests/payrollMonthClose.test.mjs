@@ -80,10 +80,10 @@ test("person approval explicitly acknowledges current hints and always enables i
   assert.doesNotMatch(page, /Prüfpunkte verhindern den Abschluss/);
 });
 
-test("payroll setup has a clear purpose and is never a dead permission control", () => {
-  assert.match(page, /\{canManagePayrollClose && \([\s\S]*?Stundenkonto einrichten[\s\S]*?\)\}/s);
-  assert.match(page, /title="Regelmäßige Arbeitszeit und Eröffnungssalden verwalten"/);
-  assert.doesNotMatch(page, /className="payroll-month-setup-button"[\s\S]{0,160}disabled=/s);
+test("normal payroll no longer requires or mounts an account setup dialog", () => {
+  assert.doesNotMatch(page, /Stundenkonto einrichten|PayrollSetupDialog|isPayrollSetupOpen|payrollMonthPeriodRefreshKey/);
+  assert.match(page, /Gesamtmonat geprüft/);
+  // Existing optional schedule/setup code remains intact, not deleted or migrated.
   assert.match(setup, /Wochenpläne ab 01\.08\.2026 und Eröffnungssalden zum 31\.07\.2026/);
 });
 

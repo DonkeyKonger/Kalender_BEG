@@ -30,7 +30,6 @@ from app.models.payroll_month import (
     PayrollMonthSnapshot,
 )
 from app.models.person import Person
-from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.schemas.payroll_month import (
@@ -46,7 +45,9 @@ from app.services.payroll_month_export_service import (
     PayrollMonthExportService,
     payroll_month_source_range,
 )
-from app.services.payroll_month_xlsx_service import build_payroll_month_plan
+from app.services.payroll_month_xlsx_service import build_payroll_month_plan, calculate_payroll_month_totals
+from app.services.payroll_month_account_service import PayrollMonthAccountService
+from app.services.payroll_approved_workbook_merge import merge_approved_payroll_workbooks
 from app.services.payroll_period_guard import PayrollPeriodGuard
 from app.services.payroll_xlsx_template import PayrollXlsxTemplateError, load_payroll_monthly_template
 from app.services.gps_service import GpsPresenceService
@@ -123,9 +124,6 @@ class PayrollMonthCloseService:
         blockers: list[PayrollMonthBlocker] = []
         if period is None or period.status == PAYROLL_MONTH_OPEN:
             blockers = self._readiness_blockers(year, month, current_user)
-            predecessor = self._predecessor_blocker(year, month)
-            if predecessor is not None:
-                blockers.insert(0, predecessor)
         status_value = period.status if period is not None else PAYROLL_MONTH_OPEN
         may_manage = _may_manage_payroll(current_user)
         artifacts_ready = bool(
@@ -213,9 +211,6 @@ class PayrollMonthCloseService:
                     status.HTTP_409_CONFLICT,
                     {"code": "payroll_month_already_locked", "year": year, "month": month, "message": "Der Monat ist bereits abgeschlossen."},
                 )
-            predecessor = self._predecessor_blocker(year, month)
-            if predecessor is not None:
-                self._raise_blockers([predecessor])
             blockers = self._readiness_blockers(year, month, current_user)
             approved_person_ids = self._approved_person_ids(year, month)
             missing_approvals = [
@@ -236,48 +231,13 @@ class PayrollMonthCloseService:
 
             version = period.last_snapshot_version + 1
             reference_id = f"payroll-month:{year:04d}-{month:02d}:v{version}"
-            ledger_result = self._ledger_service().finalize_month(
-                year=year,
-                month=month,
-                source=PAYROLL_MONTH_SOURCE,
-                reference_id=reference_id,
-                created_by_user_id=current_user.id,
-            )
-            person_values = self._normalise_finalization(ledger_result)
-            if not person_values:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT,
-                    {"code": "payroll_month_has_no_workers", "message": "Der Monat enthält keine abrechenbaren Monteure."},
-                )
-
-            export_service = PayrollMonthExportService(self.db)
-            export_source = export_service.load_live_source(
-                year=year,
-                month=month,
-                current_user=current_user,
-            )
-            if {person.id for person in export_source.people} != {
-                item["person_id"] for item in person_values
-            }:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT,
-                    {
-                        "code": "payroll_snapshot_person_mismatch",
-                        "message": "Ledger und Export enthalten nicht dieselben abrechenbaren Monteure.",
-                    },
-                )
-            artifact_specs = self._build_artifact_specs(
-                export_service=export_service,
-                export_source=export_source,
-                year=year,
-                month=month,
-                version=version,
-                person_values=person_values,
-            )
+            # Personal approvals already booked the account and froze the normal
+            # workbook. A global close only packages those exact approved results.
+            person_values, artifact_specs, approved_sources = self._approved_month_results(year, month, version)
             period_start = date(year, month, 1)
             period_end = date(year, month, calendar.monthrange(year, month)[1])
             payload = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "year": year,
                 "month": month,
                 "period_start": period_start.isoformat(),
@@ -285,7 +245,7 @@ class PayrollMonthCloseService:
                 "cutover_date": PAYROLL_LEDGER_CUTOVER_DATE.isoformat(),
                 "reference_id": reference_id,
                 "people": person_values,
-                "export_source": export_service.source_manifest(export_source),
+                "approved_person_sources": approved_sources,
                 "artifacts": [
                     {
                         "artifact_key": item["artifact_key"],
@@ -441,17 +401,22 @@ class PayrollMonthCloseService:
             ))
             for approval in person_approvals_to_reopen:
                 approval.status = PAYROLL_PERSON_MONTH_OPEN
-                approval.ledger_reference_id = None
                 approval.reopened_at = now
                 approval.reopened_by_user_id = current_user.id
                 approval.reopen_reason = reason
             self.db.flush()
-            superseded_count = self._ledger_service().unfinalize_month(
-                year=year,
-                month=month,
-                source=PAYROLL_MONTH_SOURCE,
-                reference_id=snapshot.reference_id,
-            )
+            superseded_count = 0
+            for approval in person_approvals_to_reopen:
+                superseded_count += self._reverse_person_account(approval, current_user.id)
+                approval.ledger_reference_id = None
+            if snapshot.payload_json.get("schema_version", 1) == 1:
+                monthly = PayrollMonthAccountService(self.db)
+                for row in sorted(snapshot.person_rows, key=lambda item: item.person_id):
+                    monthly.capture(row.person_id, current_user.id)
+                superseded_count += self._ledger_service().unfinalize_month(
+                    year=year, month=month, source=PAYROLL_MONTH_SOURCE,
+                    reference_id=snapshot.reference_id,
+                ) or 0
             self.db.add(
                 PayrollMonthAudit(
                     period_id=period.id,
@@ -535,13 +500,14 @@ class PayrollMonthCloseService:
                     },
                 )
             person = self._payroll_person(person_id)
+            approval = self._get_or_create_person_approval(year, month, person_id)
+            if approval.status == PAYROLL_PERSON_MONTH_APPROVED:
+                self.db.commit()
+                return self.get_status(year=year, month=month, current_user=current_user)
             blockers = self._person_blockers(
                 self._readiness_blockers(year, month, current_user),
                 person_id,
             )
-            predecessor = self._predecessor_blocker(year, month)
-            if predecessor is not None:
-                blockers.insert(0, predecessor)
             if acknowledged_blocker_count != len(blockers):
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
@@ -551,12 +517,9 @@ class PayrollMonthCloseService:
                         "expected_blocker_count": len(blockers),
                     },
                 )
-            approval = self._get_or_create_person_approval(year, month, person_id)
             if approval.status != PAYROLL_PERSON_MONTH_APPROVED:
                 version = approval.approval_version + 1
                 reference_candidate = _person_month_reference_id(year, month, person.id, version)
-                period_start = date(year, month, 1)
-                period_end = date(year, month, calendar.monthrange(year, month)[1])
                 export_service = PayrollMonthExportService(self.db)
                 export_source = export_service.load_live_source(
                     year=year,
@@ -575,21 +538,20 @@ class PayrollMonthCloseService:
                     acknowledged_at=now,
                     approval_version=version,
                 )
-                ledger_failure: dict[str, Any] | None = None
-                ledger_reference_id: str | None = None
-                try:
-                    with self.db.begin_nested():
-                        self._ledger_service().finalize_person_days(
-                            person_id=person.id,
-                            period_start=period_start,
-                            period_end=period_end,
-                            source=PAYROLL_PERSON_MONTH_SOURCE,
-                            reference_id=reference_candidate,
-                            created_by_user_id=current_user.id,
-                        )
-                    ledger_reference_id = reference_candidate
-                except (HTTPException, ValueError) as error:
-                    ledger_failure = _person_export_failure_details(error)
+                plan = build_payroll_month_plan(
+                    person=person, year=year, month=month,
+                    entries=[item for item in export_source.entries if item.person_id == person.id],
+                    absences=[item for item in export_source.absences if item.person_id == person.id],
+                    work_days=[item for item in export_source.work_days if item.person_id == person.id],
+                    non_working_dates=export_source.holidays,
+                )
+                totals = calculate_payroll_month_totals(person=person, plan=plan, year=year, month=month,
+                                                        non_working_dates=export_source.holidays)
+                posting = PayrollMonthAccountService(self.db).post(
+                    person_id=person.id, year=year, month=month, reference_id=reference_candidate,
+                    totals=totals, user_id=current_user.id,
+                )
+                ledger_reference_id = reference_candidate
                 artifact_spec = self._build_person_month_artifact(
                     person=person,
                     year=year,
@@ -597,7 +559,7 @@ class PayrollMonthCloseService:
                     version=version,
                     ledger_reference_id=reference_candidate,
                     export_source=export_source,
-                    has_finalized_ledger=ledger_reference_id is not None,
+                    balances=posting.source_payload,
                 )
                 status_before = approval.status
                 approval.status = PAYROLL_PERSON_MONTH_APPROVED
@@ -645,7 +607,7 @@ class PayrollMonthCloseService:
                             "export_status": "READY",
                             "export_generation_mode": artifact_spec["generation_mode"],
                             "export_generation_notice": artifact_spec.get("generation_notice"),
-                            "ledger_failure": ledger_failure,
+                            "monthly_account": posting.source_payload,
                             "blocker_count": len(snapshot),
                             "blockers": snapshot,
                         },
@@ -700,6 +662,8 @@ class PayrollMonthCloseService:
                 )
             person = self._payroll_person(person_id)
             approval = self._person_approval_for_update(year, month, person_id)
+            if self._has_later_person_approval(year, month, person_id):
+                raise HTTPException(409, "Spätere Monteurmonate müssen zuerst wieder geöffnet werden.")
             if approval is None or approval.status != PAYROLL_PERSON_MONTH_APPROVED:
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
@@ -716,17 +680,7 @@ class PayrollMonthCloseService:
             approval.reopen_reason = reason
             period.row_version += 1
             self.db.flush()
-            superseded_count = 0
-            if ledger_reference_id:
-                period_start = date(year, month, 1)
-                period_end = date(year, month, calendar.monthrange(year, month)[1])
-                superseded_count = self._ledger_service().unfinalize_person_days(
-                    person_id=person.id,
-                    period_start=period_start,
-                    period_end=period_end,
-                    source=PAYROLL_PERSON_MONTH_SOURCE,
-                    reference_id=ledger_reference_id,
-                )
+            superseded_count = self._reverse_person_account(approval, current_user.id)
             approval.ledger_reference_id = None
             self.db.add(
                 PayrollMonthAudit(
@@ -909,6 +863,7 @@ class PayrollMonthCloseService:
                         may_manage
                         and month_status == PAYROLL_MONTH_OPEN
                         and status_value == PAYROLL_PERSON_MONTH_APPROVED
+                        and not self._has_later_person_approval(year, month, person.id)
                     ),
                 )
             )
@@ -949,11 +904,8 @@ class PayrollMonthCloseService:
                     message="Der neue Monatsabschluss beginnt am 01.08.2026.",
                 )
             ]
-        readiness = self._ledger_service().validate_month_readiness(year=year, month=month)
-        raw_blockers = getattr(readiness, "blockers", ())
-        blockers = [_normalise_blocker(item) for item in raw_blockers]
-        blockers.extend(self._domain_blockers(year, month, current_user))
-        return blockers
+        # Optional day plans/opening setup are not prerequisites for normal payroll.
+        return self._domain_blockers(year, month, current_user)
 
     def _domain_blockers(
         self,
@@ -1254,22 +1206,6 @@ class PayrollMonthCloseService:
                     )
         return blockers
 
-    def _predecessor_blocker(self, year: int, month: int) -> PayrollMonthBlocker | None:
-        current = date(year, month, 1)
-        if current <= PAYROLL_LEDGER_CUTOVER_DATE:
-            return None
-        previous_last = date.fromordinal(current.toordinal() - 1)
-        previous = self._period(previous_last.year, previous_last.month)
-        if previous is None or previous.status != PAYROLL_MONTH_LOCKED:
-            return PayrollMonthBlocker(
-                code="previous_payroll_month_not_locked",
-                message=(
-                    f"Der Vormonat {previous_last.month:02d}/{previous_last.year} muss zuerst abgeschlossen werden, "
-                    "damit der Eröffnungssaldo lückenlos übernommen werden kann."
-                ),
-            )
-        return None
-
     def _raise_blockers(self, blockers: list[PayrollMonthBlocker]) -> None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -1280,66 +1216,58 @@ class PayrollMonthCloseService:
             },
         )
 
-    def _build_artifact_specs(
-        self,
-        *,
-        export_service: PayrollMonthExportService,
-        export_source,
-        year: int,
-        month: int,
-        version: int,
-        person_values: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        balances = {
-            item["person_id"]: (
-                item["opening_balance_minutes"],
-                item["closing_balance_minutes"],
-            )
-            for item in person_values
-        }
-        people = list(export_source.people)
-        person_ids = {person.id for person in people}
-        if person_ids != set(balances):
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                {
-                    "code": "payroll_snapshot_person_mismatch",
-                    "message": "Ledger und Export enthalten nicht dieselben abrechenbaren Monteure.",
-                },
-            )
-        combined = export_service.build_all_workers_export_from_source(
-            source=export_source,
-            balances_by_person=balances,
-        )
-        specs: list[dict[str, Any]] = [
-            {
-                "artifact_key": "all_workers",
-                "person_id": None,
-                "filename": (
-                    f"lohnabrechnung_{year}_{month:02d}_alle_monteure_v{version}.xlsx"
-                ),
-                "content": combined,
-            }
-        ]
+    def _approved_month_results(self, year: int, month: int, version: int):
+        people = self._payroll_people()
+        approvals = self._person_approvals(year, month)
+        person_values, specs, sources, workbooks = [], [], [], []
         for person in people:
-            opening, closing = balances[person.id]
-            content = export_service.build_worker_export_from_source(
-                source=export_source,
-                person_id=person.id,
-                opening_balance_minutes=opening,
-                closing_balance_minutes=closing,
-            )
-            specs.append(
-                {
-                    "artifact_key": f"worker:{person.id}",
-                    "person_id": person.id,
-                    "filename": (
-                        f"lohnabrechnung_{year}_{month:02d}_person_{person.id}_v{version}.xlsx"
-                    ),
-                    "content": content,
-                }
-            )
-        return specs
+            approval = approvals.get(person.id)
+            artifact = next((item for item in approval.artifacts
+                             if item.approval_version == approval.approval_version), None) if approval else None
+            if approval is None or approval.status != PAYROLL_PERSON_MONTH_APPROVED or artifact is None:
+                raise HTTPException(409, "Ein freigegebenes Monteur-Excel fehlt; Monteurmonat bitte erneut prüfen.")
+            content = bytes(artifact.content)
+            if artifact.byte_size != len(content) or artifact.content_sha256 != hashlib.sha256(content).hexdigest():
+                raise HTTPException(409, "Die gespeicherte Monteur-Datei ist beschädigt.")
+            posting = PayrollMonthAccountService(self.db).posting(approval.ledger_reference_id)
+            balances = posting.source_payload if posting is not None and posting.is_active else {}
+            # Historical personal approvals may have no monthly posting. Preserve
+            # their retained workbook; never infer or silently add a new movement.
+            person_values.append({
+                "person_id": person.id, "person_name": person.display_name,
+                "opening_balance_minutes": balances.get("opening_balance_minutes"),
+                "movement_minutes": balances.get("movement_minutes"),
+                "closing_balance_minutes": balances.get("closing_balance_minutes"),
+                "days": [], "monthly_account": balances or None,
+                "approval_id": approval.id, "approval_version": approval.approval_version,
+            })
+            audit = self.db.scalars(select(PayrollMonthAudit).where(
+                PayrollMonthAudit.action == "PERSON_MONTH_APPROVED",
+                PayrollMonthAudit.period_id == self._period(year, month).id,
+            ).order_by(PayrollMonthAudit.id.desc()))
+            details = next((item.details_json for item in audit
+                            if (item.details_json or {}).get("person_id") == person.id
+                            and item.details_json.get("approval_version") == approval.approval_version), {})
+            sources.append({"person_id": person.id, "approval_version": approval.approval_version,
+                            "source_snapshot": details.get("source_snapshot"),
+                            "source_snapshot_sha256": details.get("source_snapshot_sha256"),
+                            "artifact_content_sha256": artifact.content_sha256})
+            workbooks.append((person.display_name, content))
+            specs.append({"artifact_key": f"worker:{person.id}", "person_id": person.id,
+                          "filename": f"lohnabrechnung_{year}_{month:02d}_person_{person.id}_v{version}.xlsx",
+                          "content": content})
+        if not workbooks:
+            raise HTTPException(409, "Der Monat enthält keine abrechenbaren Monteure.")
+        try:
+            combined = merge_approved_payroll_workbooks(workbooks)
+        except ValueError as error:
+            raise HTTPException(409, {"code": "payroll_approved_workbooks_incompatible",
+                                     "message": "Die freigegebenen Excel-Stände sind nicht gemeinsam exportierbar. Betroffene Monteurmonate erneut freigeben.",
+                                     "reason": str(error)}) from error
+        specs.insert(0, {"artifact_key": "all_workers", "person_id": None,
+                         "filename": f"lohnabrechnung_{year}_{month:02d}_alle_monteure_v{version}.xlsx",
+                         "content": combined})
+        return person_values, specs, sources
 
     def _build_person_month_artifact(
         self,
@@ -1350,41 +1278,16 @@ class PayrollMonthCloseService:
         version: int,
         ledger_reference_id: str,
         export_source: PayrollMonthSourceBundle,
-        has_finalized_ledger: bool,
+        balances: dict,
     ) -> dict[str, Any]:
         export_service = PayrollMonthExportService(self.db)
-        period_start = date(year, month, 1)
-        period_end = date(year, month, calendar.monthrange(year, month)[1])
-        opening_balance: int | None = None
-        closing_balance: int | None = None
-        if has_finalized_ledger:
-            opening_balance = self._ledger_service().balance_before(person.id, period_start)
-            movement = self.db.scalar(
-                select(func.coalesce(func.sum(PersonHoursAccountEntry.minutes_delta), 0)).where(
-                    PersonHoursAccountEntry.person_id == person.id,
-                    PersonHoursAccountEntry.ledger_system == "daily",
-                    PersonHoursAccountEntry.is_active.is_(True),
-                    PersonHoursAccountEntry.effective_date >= period_start,
-                    PersonHoursAccountEntry.effective_date <= period_end,
-                )
-            )
-            closing_balance = opening_balance + int(movement or 0)
-        generation_mode = "STANDARD"
-        generation_notice = None
-        try:
-            content = export_service.build_worker_export_from_source(
-                source=export_source,
-                person_id=person.id,
-                opening_balance_minutes=opening_balance,
-                closing_balance_minutes=closing_balance,
-            )
-        except Exception as error:
-            generation_mode = "CONFIRMED_SOURCE_FALLBACK"
-            generation_notice = _person_export_failure_details(error)
-            content = export_service.build_worker_approved_state_fallback(
-                source=export_source,
-                person_id=person.id,
-            )
+        # A failed standard export rolls the whole approval/account transaction
+        # back. Missing setup/balance is supported by the normal workbook itself.
+        content = export_service.build_worker_export_from_source(
+            source=export_source, person_id=person.id,
+            opening_balance_minutes=balances.get("opening_balance_minutes"),
+            closing_balance_minutes=balances.get("closing_balance_minutes"),
+        )
         return {
             "artifact_key": f"worker:{person.id}:approval:{version}",
             "ledger_reference_id": ledger_reference_id,
@@ -1392,9 +1295,26 @@ class PayrollMonthCloseService:
                 f"lohnabrechnung_{year}_{month:02d}_person_{person.id}_freigabe_v{version}.xlsx"
             ),
             "content": content,
-            "generation_mode": generation_mode,
-            "generation_notice": generation_notice,
+            "generation_mode": "STANDARD",
+            "generation_notice": balances.get("pending_reason"),
         }
+
+    def _reverse_person_account(self, approval: PayrollMonthPersonApproval, user_id: int) -> int:
+        monthly = PayrollMonthAccountService(self.db)
+        monthly.lock_person(approval.person_id)
+        if monthly.reverse(approval.ledger_reference_id, user_id=user_id):
+            return 1
+        if not approval.ledger_reference_id:
+            return 0
+        # Switch to the accepted-current-balance basis before deactivating old
+        # day rows. Their reversal must not recalculate other retained months.
+        monthly.capture(approval.person_id, user_id)
+        return self._ledger_service().unfinalize_person_days(
+            person_id=approval.person_id,
+            period_start=date(approval.year, approval.month, 1),
+            period_end=date(approval.year, approval.month, calendar.monthrange(approval.year, approval.month)[1]),
+            source=PAYROLL_PERSON_MONTH_SOURCE, reference_id=approval.ledger_reference_id,
+        ) or 0
 
     def _persist_artifacts(
         self,
@@ -1537,7 +1457,7 @@ class PayrollMonthCloseService:
 
     def _has_later_locked_month(self, year: int, month: int) -> bool:
         key = year * 100 + month
-        return bool(
+        return self._has_later_person_approval(year, month) or bool(
             self.db.scalar(
                 select(func.count(PayrollMonthPeriod.id)).where(
                     PayrollMonthPeriod.status == PAYROLL_MONTH_LOCKED,
@@ -1545,6 +1465,15 @@ class PayrollMonthCloseService:
                 )
             )
         )
+
+    def _has_later_person_approval(self, year: int, month: int, person_id: int | None = None) -> bool:
+        query = select(PayrollMonthPersonApproval.id).where(
+            PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+            PayrollMonthPersonApproval.year * 100 + PayrollMonthPersonApproval.month > year * 100 + month,
+        )
+        if person_id is not None:
+            query = query.where(PayrollMonthPersonApproval.person_id == person_id)
+        return self.db.scalar(query.limit(1)) is not None
 
     def _acquire_close_locks(self, year: int, month: int) -> None:
         guard = PayrollPeriodGuard(self.db)
@@ -1566,28 +1495,6 @@ class PayrollMonthCloseService:
         from app.services.payroll_daily_ledger_service import PayrollDailyLedgerService
 
         return PayrollDailyLedgerService(self.db)
-
-    def _normalise_finalization(self, result: Any) -> list[dict[str, Any]]:
-        raw_people = getattr(result, "people", None)
-        if raw_people is None:
-            raw_people = getattr(result, "persons", None)
-        if raw_people is None:
-            raw_people = getattr(result, "person_results", ())
-        values: list[dict[str, Any]] = []
-        for raw in raw_people:
-            data = _json_value(raw)
-            values.append(
-                {
-                    "person_id": int(_first(data, "person_id")),
-                    "person_name": str(_first(data, "person_name", "display_name", default=f"Person {_first(data, 'person_id')}")),
-                    "opening_balance_minutes": int(_first(data, "opening_balance_minutes")),
-                    "movement_minutes": int(_first(data, "movement_minutes", "month_delta_minutes", "monthly_movement_minutes")),
-                    "closing_balance_minutes": int(_first(data, "closing_balance_minutes")),
-                    "days": _json_value(_first(data, "daily_values", "days", "daily_entries", default=[])),
-                }
-            )
-        values.sort(key=lambda item: (item["person_name"].casefold(), item["person_id"]))
-        return values
 
     @staticmethod
     def _raise_ledger_validation(error: Exception) -> None:
@@ -1739,16 +1646,6 @@ def _person_source_manifest(source: dict[str, Any], person_id: int) -> dict[str,
     result["absences"] = [item for item in source.get("absences", []) if item.get("person_id") == person_id]
     result["work_days"] = [item for item in source.get("work_days", []) if item.get("person_id") == person_id]
     return result
-
-
-def _person_export_failure_details(error: Exception) -> dict[str, Any]:
-    details = _failure_details(error)
-    return {
-        "code": str(details.get("code") or "payroll_person_month_export_unavailable"),
-        "error_type": type(error).__name__,
-        "message": "Die Freigabe wurde gespeichert, die Excel-Datei konnte für diesen Stand jedoch nicht erzeugt werden.",
-        "details": details,
-    }
 
 
 def _deduplicate_blockers(

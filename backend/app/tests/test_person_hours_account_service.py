@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models import Base
 from app.models.enums import PersonType, UserRole
 from app.models.person import Person
+from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.user import User
 from app.services.person_hours_account_service import PersonHoursAccountService
 
@@ -27,6 +28,9 @@ def test_manual_adjustment_and_payout_update_hours_account_balance():
     )
     user = User(username="office", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
     db.add_all([person, user])
+    db.flush()
+    db.add(PersonHoursAccountEntry(person_id=person.id, entry_type="manual_adjustment", minutes_delta=0,
+                                   balance_after_minutes=0, note="Bereits geführter Nullsaldo"))
     db.commit()
 
     service = PersonHoursAccountService(db)
@@ -47,7 +51,8 @@ def test_manual_adjustment_and_payout_update_hours_account_balance():
 
     assert adjusted.current_balance_minutes == 330
     assert paid.current_balance_minutes == 210
-    assert [entry.entry_type for entry in paid.entries] == ["payout", "manual_adjustment"]
+    assert [entry.entry_type for entry in paid.entries[:2]] == ["payout", "manual_adjustment"]
+    assert any(entry.entry_type == "monthly_transition" for entry in paid.entries)
     assert paid.entries[0].minutes_delta == -120
     assert paid.entries[0].balance_after_minutes == 210
     assert paid.entries[1].minutes_delta == 330

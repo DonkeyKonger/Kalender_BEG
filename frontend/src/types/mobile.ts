@@ -63,7 +63,7 @@ export type MobilePersonalFileVehicle = {
 };
 
 export type MobilePersonalFileHoursAccount = {
-  current_balance_minutes: number;
+  current_balance_minutes: number | null;
   last_entry_at: string | null;
 };
 

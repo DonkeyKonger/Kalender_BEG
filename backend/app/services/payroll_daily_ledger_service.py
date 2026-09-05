@@ -629,7 +629,13 @@ class PayrollDailyLedgerService:
         )
         return int(value or 0)
 
-    def current_balance_minutes(self, person_id: int) -> int:
+    def current_balance_minutes(self, person_id: int) -> int | None:
+        from app.services.payroll_month_account_service import PayrollMonthAccountService
+
+        monthly = PayrollMonthAccountService(self.db)
+        transition = monthly.transition(person_id)
+        if transition is not None:
+            return monthly.current_balance(person_id, transition)
         opening = self._confirmed_opening(person_id)
         daily_value = self._daily_movement_minutes(person_id)
         if opening is None:
@@ -655,9 +661,15 @@ class PayrollDailyLedgerService:
         )
         return opening.balance_minutes + int(movement or 0)
 
-    def recalculate_balance_history(self, person_id: int) -> int:
+    def recalculate_balance_history(self, person_id: int) -> int | None:
         """Refresh derived running balances in effective-date order."""
+        from app.services.payroll_month_account_service import PayrollMonthAccountService
 
+        monthly = PayrollMonthAccountService(self.db)
+        transition = monthly.transition(person_id)
+        if transition is not None:
+            # Accepted history and already approved month snapshots are immutable.
+            return monthly.current_balance(person_id, transition)
         opening = self._confirmed_opening(person_id)
         running = (
             opening.balance_minutes

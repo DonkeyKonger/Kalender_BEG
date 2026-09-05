@@ -429,7 +429,7 @@ def test_personal_file_hours_account_supports_negative_zero_and_empty_states():
     service = MobilePersonalFileService(db)
 
     empty_summary = service.get_summary(current_user=user, today=date(2026, 7, 15))
-    assert empty_summary.hours_account.current_balance_minutes == 0
+    assert empty_summary.hours_account.current_balance_minutes is None
     assert empty_summary.hours_account.last_entry_at is None
 
     now = datetime(2026, 7, 18, 7, 0, tzinfo=timezone.utc)

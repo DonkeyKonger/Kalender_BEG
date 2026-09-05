@@ -127,9 +127,9 @@ class PayrollMonthPersonSnapshot(Base):
         ForeignKey("persons.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     person_name: Mapped[str] = mapped_column(String(240), nullable=False)
-    opening_balance_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
-    movement_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
-    closing_balance_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    opening_balance_minutes: Mapped[int | None] = mapped_column(Integer)
+    movement_minutes: Mapped[int | None] = mapped_column(Integer)
+    closing_balance_minutes: Mapped[int | None] = mapped_column(Integer)
     daily_values_json: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
     source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
 

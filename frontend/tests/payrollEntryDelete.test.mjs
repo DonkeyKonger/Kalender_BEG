@@ -16,7 +16,8 @@ test("payroll row menu deletes the selected database entry by stable id", () => 
 test("payroll delete uses confirmation, failure handling and reviewed-week reset state", () => {
   assert.match(pageSource, /role="alertdialog"/);
   assert.match(pageSource, /Diese Monteurwoche wurde bereits geprüft/);
-  assert.match(pageSource, /Stundenkonto-Buchung neutralisiert/);
+  assert.match(pageSource, /Stundenkonto wird erst beim Monatsabschluss aktualisiert/);
+  assert.doesNotMatch(pageSource, /Stundenkonto-Buchung neutralisiert/);
   assert.match(pageSource, /setPayrollDeleteError\(readApiError\(requestError, "Zeiteintrag konnte nicht gelöscht werden\."\)\)/);
   assert.match(pageSource, /result\.weekly_review_reset/);
   assert.match(pageSource, /resetMatchingWeeklyReview/);

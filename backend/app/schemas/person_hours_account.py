@@ -15,7 +15,7 @@ class PersonHoursAccountEntryRead(BaseModel):
     person_id: int
     entry_type: str
     minutes_delta: int
-    balance_after_minutes: int
+    balance_after_minutes: int | None
     note: str
     iso_year: int | None = None
     iso_week: int | None = None
@@ -56,7 +56,8 @@ class PersonHoursAccountOpeningRead(BaseModel):
 
 class PersonHoursAccountRead(BaseModel):
     person_id: int
-    current_balance_minutes: int
+    current_balance_minutes: int | None
+    notices: list[str] = Field(default_factory=list)
     opening_balance: PersonHoursAccountOpeningRead | None = None
     entries: list[PersonHoursAccountEntryRead]
 

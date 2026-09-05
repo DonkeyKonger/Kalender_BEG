@@ -9,7 +9,12 @@ from app.models import Base
 from app.models.absence import Absence
 from app.models.enums import AbsenceStatus, AbsenceType, PersonType, UserRole
 from app.models.payroll_daily_ledger import PersonHoursOpeningBalance, PersonWeeklySchedule
-from app.models.payroll_month import PAYROLL_MONTH_LOCKED, PayrollMonthPeriod
+from app.models.payroll_month import (
+    PAYROLL_MONTH_LOCKED,
+    PAYROLL_PERSON_MONTH_APPROVED,
+    PayrollMonthPeriod,
+    PayrollMonthPersonApproval,
+)
 from app.models.person import Person
 from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
@@ -420,27 +425,61 @@ def test_cross_month_week_is_split_and_reopen_keeps_september_active():
     assert active_dates == [date(2026, 9, day) for day in range(1, 7)]
 
 
-def test_week_approval_and_reset_touch_only_open_side_of_cross_month_week():
+@pytest.mark.parametrize("lock_scope", ["month", "person"])
+def test_partial_month_lock_keeps_week_review_status_mutable_and_account_neutral_without_setup(
+    lock_scope: str,
+):
     db = db_session()
-    person, user, ledger = configured_worker(db, [480, 480, 480, 480, 480, 0, 0])
-    ledger.finalize_person_days(
+    person = Person(
+        first_name="Ohne",
+        last_name="Setup",
+        display_name=f"Ohne Setup {lock_scope}",
+        short_code=f"OS-{lock_scope}",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username=f"office-partial-{lock_scope}",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add_all([person, user])
+    db.flush()
+    historical_entry = PersonHoursAccountEntry(
         person_id=person.id,
-        period_start=date(2026, 8, 31),
-        period_end=date(2026, 8, 31),
-        source="month_close",
-        reference_id="2026-08-v1",
+        entry_type=ENTRY_TYPE_DAILY_BALANCE,
+        minutes_delta=30,
+        balance_after_minutes=30,
+        note="Historischer Monatsabschluss",
+        ledger_system=LEDGER_SYSTEM_DAILY,
+        effective_date=date(2026, 8, 31),
+        source_type="month_close",
+        source_reference_id="2026-08-v1",
+        is_active=True,
         created_by_user_id=user.id,
     )
-    db.add(PayrollMonthPeriod(year=2026, month=8, status=PAYROLL_MONTH_LOCKED))
+    lock = (
+        PayrollMonthPeriod(year=2026, month=8, status=PAYROLL_MONTH_LOCKED)
+        if lock_scope == "month"
+        else PayrollMonthPersonApproval(
+            year=2026,
+            month=8,
+            person_id=person.id,
+            status=PAYROLL_PERSON_MONTH_APPROVED,
+        )
+    )
+    db.add_all([historical_entry, lock])
     db.commit()
 
     time_entries = TimeEntryService(db)
-    time_entries.mark_weekly_review(
+    review = time_entries.mark_weekly_review(
         person_id=person.id,
         iso_year=2026,
         iso_week=36,
         current_user=user,
     )
+    assert review.status == "reviewed"
+    assert review.daily_ledger_reference_id is None
     active = list(db.scalars(
         select(PersonHoursAccountEntry)
         .where(
@@ -449,20 +488,18 @@ def test_week_approval_and_reset_touch_only_open_side_of_cross_month_week():
         )
         .order_by(PersonHoursAccountEntry.effective_date)
     ))
-    assert [entry.effective_date for entry in active] == [
-        date(2026, 8, 31),
-        *[date(2026, 9, day) for day in range(1, 7)],
-    ]
+    assert [entry.id for entry in active] == [historical_entry.id]
+    assert active[0].effective_date == date(2026, 8, 31)
     assert active[0].source_type == "month_close"
-    assert {entry.source_type for entry in active[1:]} == {"WEEK_APPROVAL"}
-    assert not any(entry.entry_type == "weekly_balance" for entry in active)
+    assert active[0].minutes_delta == 30
 
-    time_entries.reset_weekly_review(
+    reset = time_entries.reset_weekly_review(
         person_id=person.id,
         iso_year=2026,
         iso_week=36,
         current_user=user,
     )
+    assert reset.status == "reset"
     remaining = list(db.scalars(
         select(PersonHoursAccountEntry).where(
             PersonHoursAccountEntry.entry_type == ENTRY_TYPE_DAILY_BALANCE,
@@ -470,17 +507,48 @@ def test_week_approval_and_reset_touch_only_open_side_of_cross_month_week():
         )
     ))
     assert len(remaining) == 1
+    assert remaining[0].id == historical_entry.id
     assert remaining[0].effective_date == date(2026, 8, 31)
     assert remaining[0].source_type == "month_close"
+    assert remaining[0].minutes_delta == 30
+    assert remaining[0].is_active is True
 
 
-def test_locked_post_cutover_week_cannot_reset_a_transitional_legacy_review():
+@pytest.mark.parametrize("lock_scope", ["month", "person"])
+@pytest.mark.parametrize("operation", ["mark", "reset"])
+def test_fully_locked_post_cutover_week_rejects_week_review_changes_without_setup(
+    lock_scope: str,
+    operation: str,
+):
     db = db_session()
-    person, user, _ledger = configured_worker(
-        db, [480, 480, 480, 480, 480, 0, 0]
+    person = Person(
+        first_name="Gesperrt",
+        last_name="Ohne Setup",
+        display_name=f"Gesperrt {lock_scope} {operation}",
+        short_code=f"G-{lock_scope[:1]}-{operation[:1]}",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username=f"office-locked-{lock_scope}-{operation}",
+        display_name="Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add_all([person, user])
+    db.flush()
+    old_reference = "weekly-review:historical-locked"
+    lock = (
+        PayrollMonthPeriod(year=2026, month=8, status=PAYROLL_MONTH_LOCKED)
+        if lock_scope == "month"
+        else PayrollMonthPersonApproval(
+            year=2026,
+            month=8,
+            person_id=person.id,
+            status=PAYROLL_PERSON_MONTH_APPROVED,
+        )
     )
     db.add_all([
-        PayrollMonthPeriod(year=2026, month=8, status=PAYROLL_MONTH_LOCKED),
+        lock,
         TimeEntryWeeklyReview(
             person_id=person.id,
             iso_year=2026,
@@ -488,21 +556,23 @@ def test_locked_post_cutover_week_cannot_reset_a_transitional_legacy_review():
             status="reviewed",
             reviewed_by_user_id=user.id,
             reviewed_at=datetime.now(timezone.utc),
-            daily_ledger_reference_id=None,
+            daily_ledger_reference_id=old_reference,
         ),
     ])
     db.commit()
 
     with pytest.raises(HTTPException) as caught:
-        TimeEntryService(db).reset_weekly_review(
-            person_id=person.id,
-            iso_year=2026,
-            iso_week=35,
-            current_user=user,
-        )
+        method = getattr(TimeEntryService(db), f"{operation}_weekly_review")
+        method(person_id=person.id, iso_year=2026, iso_week=35, current_user=user)
 
     assert caught.value.status_code == 409
     assert "vollständig in abgeschlossenen Monaten" in str(caught.value.detail)
+    review = db.scalar(select(TimeEntryWeeklyReview))
+    assert review is not None
+    assert review.status == "reviewed"
+    assert review.daily_ledger_reference_id == old_reference
+    assert list(db.scalars(select(PersonHoursOpeningBalance))) == []
+    assert list(db.scalars(select(PersonWeeklySchedule))) == []
 
 
 def test_month_result_uses_opening_and_all_effective_dated_new_entries():

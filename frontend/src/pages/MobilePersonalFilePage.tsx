@@ -643,7 +643,8 @@ function formatAvailableDays(value: number): string {
 }
 
 
-function formatOvertimeHours(minutes: number): string {
+function formatOvertimeHours(minutes: number | null): string {
+  if (minutes === null) return "Kontostand offen";
   const sign = minutes > 0 ? "+" : minutes < 0 ? "-" : "";
   const hours = Math.abs(minutes) / 60;
   return `${sign}${new Intl.NumberFormat("de-DE", {
@@ -665,14 +666,16 @@ function formatHoursAccountStand(value: string | null): string {
 }
 
 
-function hoursAccountTone(minutes: number): string {
+function hoursAccountTone(minutes: number | null): string {
+  if (minutes === null) return "is-neutral";
   if (minutes > 0) return "is-positive";
   if (minutes < 0) return "is-negative";
   return "is-neutral";
 }
 
 
-function hoursAccountStatusLabel(minutes: number): string {
+function hoursAccountStatusLabel(minutes: number | null): string {
+  if (minutes === null) return "Klärung offen";
   if (minutes > 0) return "Guthaben";
   if (minutes < 0) return "Minusstunden";
   return "Ausgeglichen";

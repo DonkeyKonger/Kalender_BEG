@@ -44,6 +44,12 @@ class PersonHoursAccountEntry(TimestampMixin, Base):
             "source_reference_id",
         ),
         Index(
+            "uq_person_hours_account_entries_active_month",
+            "person_id", "effective_date", unique=True,
+            sqlite_where=text("entry_type = 'monthly_balance' AND is_active = 1"),
+            postgresql_where=text("entry_type = 'monthly_balance' AND is_active = true"),
+        ),
+        Index(
             "uq_person_hours_account_entries_active_daily",
             "person_id",
             "effective_date",
@@ -69,7 +75,7 @@ class PersonHoursAccountEntry(TimestampMixin, Base):
     )
     entry_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     minutes_delta: Mapped[int] = mapped_column(Integer, nullable=False)
-    balance_after_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    balance_after_minutes: Mapped[int | None] = mapped_column(Integer)
     note: Mapped[str] = mapped_column(Text, nullable=False)
     iso_year: Mapped[int | None] = mapped_column(Integer)
     iso_week: Mapped[int | None] = mapped_column(Integer)
