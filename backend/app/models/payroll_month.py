@@ -220,6 +220,7 @@ class PayrollMonthPersonApproval(TimestampMixin, Base):
     )
     approval_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     ledger_reference_id: Mapped[str | None] = mapped_column(String(140))
+    remarks: Mapped[str | None] = mapped_column(Text)
     blocker_snapshot_json: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     approved_by_user_id: Mapped[int | None] = mapped_column(

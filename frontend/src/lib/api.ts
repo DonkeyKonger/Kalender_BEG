@@ -1,5 +1,6 @@
 import type { Absence, AbsenceCreate, AbsenceUpdate, VacationCarryover, VacationCarryoverUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
+import type { PayrollRemarks } from "./payrollRemarks";
 import type { Customer, CustomerCreate, CustomerRemoveResponse, CustomerUpdate } from "../types/customer";
 import type { MicrosoftGraphBackfillProjectFoldersResponse, MicrosoftGraphConnectionTestResponse, MicrosoftGraphCreateTestFolderResponse } from "../types/admin";
 import type { AdminUser, AdminUserCreate, AdminUserUpdate } from "../types/user";
@@ -1083,6 +1084,16 @@ export const api = {
     return request<PayrollMonthPeriod>(`/payroll-months/${params.year}/${params.month}/people/${params.personId}/approve`, {
       method: "POST",
       body: JSON.stringify({ confirmed: true, acknowledged_blocker_count: params.acknowledgedBlockerCount }),
+    });
+  },
+
+  async payrollRemarks(params: { year: number; month: number; personId: number }): Promise<PayrollRemarks> {
+    return request<PayrollRemarks>(`/payroll-months/${params.year}/${params.month}/people/${params.personId}/remarks`, { cache: "no-store" });
+  },
+
+  async savePayrollRemarks(params: { year: number; month: number; personId: number; remarks: string }): Promise<PayrollRemarks> {
+    return request<PayrollRemarks>(`/payroll-months/${params.year}/${params.month}/people/${params.personId}/remarks`, {
+      method: "PUT", body: JSON.stringify({ remarks: params.remarks }),
     });
   },
 

@@ -12,6 +12,8 @@ from app.schemas.payroll_month import (
     PayrollMonthPersonReopenRequest,
     PayrollMonthReopenRequest,
     PayrollMonthStatusRead,
+    PayrollMonthRemarksRequest,
+    PayrollMonthRemarksRead,
 )
 from app.services.payroll_month_close_service import PayrollMonthCloseService
 
@@ -19,6 +21,28 @@ from app.services.payroll_month_close_service import PayrollMonthCloseService
 router = APIRouter(prefix="/payroll-months", tags=["payroll-months"])
 CAN_READ = require_business_page("payroll")
 CAN_MANAGE = require_business_page("payroll")
+
+
+@router.get("/{year}/{month}/people/{person_id}/remarks", response_model=PayrollMonthRemarksRead)
+def get_payroll_month_remarks(
+    year: int, month: int, person_id: int, response: Response,
+    current_user: User = Depends(CAN_READ), db: Session = Depends(get_db),
+) -> PayrollMonthRemarksRead:
+    response.headers["Cache-Control"] = "no-store"
+    return PayrollMonthCloseService(db).get_person_remarks(
+        year=year, month=month, person_id=person_id, current_user=current_user,
+    )
+
+
+@router.put("/{year}/{month}/people/{person_id}/remarks", response_model=PayrollMonthRemarksRead)
+def save_payroll_month_remarks(
+    year: int, month: int, person_id: int, payload: PayrollMonthRemarksRequest,
+    current_user: User = Depends(CAN_MANAGE), db: Session = Depends(get_db),
+) -> PayrollMonthRemarksRead:
+    return PayrollMonthCloseService(db).save_person_remarks(
+        year=year, month=month, person_id=person_id, remarks=payload.remarks,
+        current_user=current_user,
+    )
 
 
 @router.get("/{year}/{month}/lock-status", response_model=PayrollMonthLockStatusRead)

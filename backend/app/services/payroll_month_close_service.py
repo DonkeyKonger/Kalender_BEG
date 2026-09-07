@@ -38,6 +38,7 @@ from app.schemas.payroll_month import (
     PayrollMonthPersonApprovalRead,
     PayrollMonthPersonApprovalSummary,
     PayrollMonthStatusRead,
+    PayrollMonthRemarksRead,
 )
 from app.services.audit_service import AuditService
 from app.services.payroll_month_export_service import (
@@ -49,6 +50,7 @@ from app.services.payroll_month_xlsx_service import build_payroll_month_plan, ca
 from app.services.payroll_month_account_service import PayrollMonthAccountService
 from app.services.payroll_approved_workbook_merge import merge_approved_payroll_workbooks
 from app.services.payroll_period_guard import PayrollPeriodGuard
+from app.services.payroll_remarks import remarks_layout, validate_remarks
 from app.services.payroll_xlsx_template import PayrollXlsxTemplateError, load_payroll_monthly_template
 from app.services.gps_service import GpsPresenceService
 from app.services.time_entry_service import TimeEntryService, WEEKLY_REVIEW_STATUS_REVIEWED
@@ -460,6 +462,68 @@ class PayrollMonthCloseService:
             )
         )
 
+    def get_person_remarks(
+        self, *, year: int, month: int, person_id: int, current_user: User,
+    ) -> PayrollMonthRemarksRead:
+        _validate_month(year, month)
+        _ensure_may_manage(current_user)
+        self._payroll_person(person_id)
+        period = self._period(year, month)
+        approval = self.db.scalar(select(PayrollMonthPersonApproval).where(
+            PayrollMonthPersonApproval.year == year,
+            PayrollMonthPersonApproval.month == month,
+            PayrollMonthPersonApproval.person_id == person_id,
+        ))
+        return PayrollMonthRemarksRead(
+            remarks=approval.remarks or "" if approval else "",
+            editable=bool(
+                date(year, month, 1) >= PAYROLL_LEDGER_CUTOVER_DATE
+                and (period is None or period.status == PAYROLL_MONTH_OPEN)
+                and (approval is None or approval.status == PAYROLL_PERSON_MONTH_OPEN)
+            ),
+            layout=remarks_layout(),
+        )
+
+    def save_person_remarks(
+        self, *, year: int, month: int, person_id: int, remarks: str, current_user: User,
+    ) -> PayrollMonthRemarksRead:
+        _validate_month(year, month)
+        _ensure_may_manage(current_user)
+        try:
+            remarks = validate_remarks(remarks)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        try:
+            # Use the same locks/order as approval: a concurrent save cannot alter
+            # the text after the approved workbook has been frozen.
+            self._acquire_close_locks(year, month)
+            period = self._get_or_create_locked_period_row(year, month)
+            self._payroll_person(person_id)
+            approval = self._get_or_create_person_approval(year, month, person_id)
+            if (date(year, month, 1) < PAYROLL_LEDGER_CUTOVER_DATE
+                    or period.status == PAYROLL_MONTH_LOCKED
+                    or approval.status == PAYROLL_PERSON_MONTH_APPROVED):
+                raise HTTPException(409, {
+                    "code": "payroll_remarks_locked",
+                    "message": "Die Eingabe ist gesperrt. Bemerkungen sind nur vor der Monatsprüfung möglich.",
+                })
+            previous = approval.remarks or ""
+            approval.remarks = remarks or None
+            if previous != remarks:
+                period.row_version += 1
+                AuditService(self.db).record(
+                    user_id=current_user.id, action="payroll_person_month.remarks_updated",
+                    entity_type="payroll_month_person_approval", entity_id=approval.id,
+                    old_value={"remarks": previous},
+                    new_value={"remarks": remarks, "year": year, "month": month,
+                               "person_id": person_id},
+                )
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        return PayrollMonthRemarksRead(remarks=remarks, editable=True, layout=remarks_layout())
+
     def approve_person_month(
         self,
         *,
@@ -533,6 +597,7 @@ class PayrollMonthCloseService:
                     export_service.source_manifest(export_source),
                     person.id,
                 )
+                source_snapshot["remarks"] = approval.remarks or ""
                 source_snapshot_sha256 = _sha256_json(source_snapshot)
                 snapshot = _approval_blocker_snapshot(
                     blockers,
@@ -562,6 +627,7 @@ class PayrollMonthCloseService:
                     ledger_reference_id=reference_candidate,
                     export_source=export_source,
                     balances=posting.source_payload,
+                    remarks=approval.remarks or "",
                 )
                 status_before = approval.status
                 approval.status = PAYROLL_PERSON_MONTH_APPROVED
@@ -1327,6 +1393,7 @@ class PayrollMonthCloseService:
         ledger_reference_id: str,
         export_source: PayrollMonthSourceBundle,
         balances: dict,
+        remarks: str = "",
     ) -> dict[str, Any]:
         export_service = PayrollMonthExportService(self.db)
         # A failed standard export rolls the whole approval/account transaction
@@ -1336,6 +1403,7 @@ class PayrollMonthCloseService:
             opening_balance_minutes=balances.get("opening_balance_minutes"),
             closing_balance_minutes=balances.get("closing_balance_minutes"),
             account_settlement=balances,
+            remarks=remarks,
         )
         return {
             "artifact_key": f"worker:{person.id}:approval:{version}",

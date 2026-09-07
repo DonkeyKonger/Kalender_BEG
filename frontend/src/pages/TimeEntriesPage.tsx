@@ -8,6 +8,7 @@ import { canEditMainPage, canManagePayrollMonthClose } from "../auth/permissions
 import { DashboardNotePicker } from "../components/DashboardNotePickers";
 import { PayrollSiteCockpit } from "../components/PayrollSiteCockpit";
 import { PayrollOvernightStatusControl } from "../components/PayrollOvernightStatusControl";
+import { PayrollRemarksDialog } from "../components/PayrollRemarksDialog";
 import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import {
@@ -282,6 +283,7 @@ export function TimeEntriesPage() {
   const [payrollMonthPeriodError, setPayrollMonthPeriodError] = useState<string | null>(null);
   const [payrollMonthDialog, setPayrollMonthDialog] = useState<PayrollMonthDialog>(null);
   const [payrollPersonMonthDialog, setPayrollPersonMonthDialog] = useState<PayrollPersonMonthDialog>(null);
+  const [payrollRemarksOpen, setPayrollRemarksOpen] = useState(false);
   const [hasAcknowledgedPayrollPersonBlockers, setHasAcknowledgedPayrollPersonBlockers] = useState(false);
   const [payrollMonthReopenReason, setPayrollMonthReopenReason] = useState("");
   const [payrollPersonMonthReopenReason, setPayrollPersonMonthReopenReason] = useState("");
@@ -693,6 +695,9 @@ export function TimeEntriesPage() {
     [payrollMonthPeriod, selectedEvaluationWorker],
   );
   const isSelectedPayrollPersonApproved = selectedPayrollPersonApproval?.status === "APPROVED";
+  useEffect(() => {
+    setPayrollRemarksOpen(false);
+  }, [selectedEvaluationWorker?.personId, selectedEvaluationMonth.year, selectedEvaluationMonth.month, activeTimeSubtab]);
   const selectedPayrollPersonBlockers = isSelectedPayrollPersonApproved
     ? []
     : selectedPayrollPersonApproval?.blockers ?? [];
@@ -3019,6 +3024,7 @@ export function TimeEntriesPage() {
               month={selectedEvaluationMonth}
               selectedWorker={selectedEvaluationWorker}
               onDownloadWorkerExport={() => void downloadSelectedPayrollMonthXlsx()}
+              onOpenRemarks={() => setPayrollRemarksOpen(true)}
               onOpenApprove={() => {
                 setHasAcknowledgedPayrollPersonBlockers(false);
                 setPayrollPersonMonthDialog("approve");
@@ -3382,6 +3388,15 @@ export function TimeEntriesPage() {
         </div>
       )}
 
+      {payrollRemarksOpen && selectedEvaluationWorker && (
+        <PayrollRemarksDialog
+          key={`${selectedEvaluationMonth.year}-${selectedEvaluationMonth.month}-${selectedEvaluationWorker.personId}`}
+          year={selectedEvaluationMonth.year} month={selectedEvaluationMonth.month}
+          personId={selectedEvaluationWorker.personId}
+          canEdit={canApproveSelectedPayrollPerson && !isPayrollMonthLocked}
+          onClose={() => setPayrollRemarksOpen(false)}
+        />
+      )}
       {payrollPersonMonthDialog && selectedEvaluationWorker && (
         <div
           className="payroll-month-dialog-backdrop"
@@ -3911,6 +3926,7 @@ function PayrollPersonMonthClosePanel({
   month,
   onDownloadWorkerExport,
   onOpenApprove,
+  onOpenRemarks,
   onOpenReopen,
   onOpenWorkingTime,
   onToggleLog,
@@ -3929,6 +3945,7 @@ function PayrollPersonMonthClosePanel({
   month: CalendarMonthSelection;
   onDownloadWorkerExport: () => void;
   onOpenApprove: () => void;
+  onOpenRemarks: () => void;
   onOpenReopen: () => void;
   onOpenWorkingTime: (personId: number) => void;
   onToggleLog: () => void;
@@ -3977,14 +3994,21 @@ function PayrollPersonMonthClosePanel({
   return (
     <section className="payroll-person-month-close" aria-busy={isLoading || isUpdating}>
       <div className="payroll-person-month-close-main">
-        <div className="payroll-person-month-identity">
-          <span>Monteurabschluss</span>
-          <h2>{selectedWorker?.personName ?? "Monteur auswählen"}</h2>
-          <p>
-            {selectedWorker
-              ? `${formatPayrollMonthLabel(month)} · ${formatSubmittedHours(selectedWorker.submittedMinutes)} Std.`
-              : "Wähle links einen Monteur aus, um den Monatsabschluss zu prüfen."}
-          </p>
+        <div className="payroll-person-month-name-actions">
+          <div className="payroll-person-month-identity">
+            <span>Monteurabschluss</span>
+            <h2>{selectedWorker?.personName ?? "Monteur auswählen"}</h2>
+            <p>
+              {selectedWorker
+                ? `${formatPayrollMonthLabel(month)} · ${formatSubmittedHours(selectedWorker.submittedMinutes)} Std.`
+                : "Wähle links einen Monteur aus, um den Monatsabschluss zu prüfen."}
+            </p>
+          </div>
+          <span title={isApproved ? "Die Eingabe ist nach der Monatsprüfung gesperrt." : "Bemerkungen können nur vor der Monatsprüfung eingetragen werden."}>
+            <button className="payroll-remarks-button" type="button"
+              disabled={!selectedWorker || !canApprove || isApproved || isLoading || isUpdating}
+              onClick={onOpenRemarks}>Bemerkungen hinzufügen</button>
+          </span>
         </div>
         <div className="payroll-person-month-status-group">
           <div className={`payroll-person-month-status ${statusClass}`} role="status">

@@ -27,6 +27,7 @@ from app.services.person_hours_account_service import (
     effective_weekly_work_minutes,
 )
 from app.services.payroll_xlsx_template import load_payroll_monthly_template
+from app.services.payroll_remarks import validate_remarks, wrap_remarks
 from app.services.payroll_travel_expense_service import (
     PayrollTravelPlan,
     aggregate_payroll_travel_days,
@@ -177,6 +178,7 @@ class PayrollMonthSheet:
     opening_balance_minutes: int | None = None
     closing_balance_minutes: int | None = None
     account_settlement: dict | None = None
+    remarks: str = ""
 
 
 @dataclass(frozen=True)
@@ -205,6 +207,7 @@ def build_payroll_month_xlsx(
     opening_balance_minutes: int | None = None,
     closing_balance_minutes: int | None = None,
     account_settlement: dict | None = None,
+    remarks: str = "",
 ) -> PayrollMonthWorkbook:
     """Erstellt eine neue Monatsdatei, ohne Vorlage oder Quelldaten zu verändern."""
     template = load_payroll_monthly_template()
@@ -235,6 +238,7 @@ def build_payroll_month_xlsx(
             opening_balance_minutes=opening_balance_minutes,
             closing_balance_minutes=closing_balance_minutes,
             account_settlement=account_settlement,
+            remarks=remarks,
         )
         filled_sheet = ET.tostring(
             sheet_root,
@@ -343,6 +347,7 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
                     opening_balance_minutes=sheet.opening_balance_minutes,
                     closing_balance_minutes=sheet.closing_balance_minutes,
                     account_settlement=sheet.account_settlement,
+                    remarks=sheet.remarks,
                 )
             )
             filled_sheet = _preserve_ignorable_namespaces(
@@ -375,6 +380,7 @@ def fill_payroll_month_sheet(
     opening_balance_minutes: int | None = None,
     closing_balance_minutes: int | None = None,
     account_settlement: dict | None = None,
+    remarks: str = "",
 ) -> PayrollMonthPlan:
     """Befüllt genau ein Monatsblatt mit den freigegebenen Tagesfeldern."""
     plan = build_payroll_month_plan(
@@ -412,7 +418,27 @@ def fill_payroll_month_sheet(
     )
     if account_settlement is not None:
         _write_month_account_settlement(sheet, account_settlement)
+    _write_remarks(sheet, remarks)
     return plan
+
+
+def _write_remarks(sheet: ET.Element, remarks: str) -> None:
+    lines = wrap_remarks(validate_remarks(remarks))
+    for index, row in enumerate(range(46, 50)):
+        ref = f"I{row}"
+        _clear_cell(sheet, ref)
+        if index >= len(lines) or not lines[index]:
+            continue
+        cell = _find_cell(sheet, ref)
+        if cell is None:
+            raise ValueError(f"Bemerkungsfeld {ref} fehlt in der Monatsvorlage.")
+        cell.set("t", "inlineStr")
+        run = ET.SubElement(ET.SubElement(cell, _qname("is")), _qname("r"))
+        properties = ET.SubElement(run, _qname("rPr"))
+        ET.SubElement(properties, _qname("rFont"), {"val": "Arial"})
+        ET.SubElement(properties, _qname("sz"), {"val": "10"})
+        text = ET.SubElement(run, _qname("t"), {"{http://www.w3.org/XML/1998/namespace}space": "preserve"})
+        text.text = lines[index]
 
 
 def build_payroll_month_plan(

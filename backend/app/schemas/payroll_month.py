@@ -67,6 +67,16 @@ class PayrollMonthPersonApprovalRequest(BaseModel):
     acknowledged_blocker_count: int = Field(ge=0)
 
 
+class PayrollMonthRemarksRequest(BaseModel):
+    remarks: str = Field(max_length=512)
+
+
+class PayrollMonthRemarksRead(BaseModel):
+    remarks: str
+    editable: bool
+    layout: dict
+
+
 class PayrollMonthPersonReopenRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=1000)
 

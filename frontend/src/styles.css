@@ -17594,6 +17594,78 @@ body.mobile-modal-scroll-locked {
   min-width: 0;
 }
 
+.payroll-person-month-name-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  min-width: 0;
+}
+
+.payroll-remarks-button {
+  padding: 8px 10px;
+  border: 1px solid #b4c8e4;
+  background: #ffffff;
+  color: #234568;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.payroll-remarks-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.payroll-remarks-dialog {
+  box-sizing: border-box;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #243b59;
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(20 35 55 / 24%);
+}
+
+.payroll-remarks-dialog::backdrop { background: rgb(15 30 50 / 42%); }
+.payroll-remarks-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.payroll-remarks-dialog h2 { margin: 0; font-size: 1rem; color: #14233b; }
+.payroll-remarks-dialog p { margin: 16px 0; font-size: 0.82rem; line-height: 1.5; }
+.payroll-remarks-dialog header button { border: 0; background: transparent; padding: 4px; color: inherit; cursor: pointer; }
+.payroll-remarks-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 104px;
+  padding: 10px;
+  resize: none;
+  border: 1px solid #b9cbe3;
+  border-radius: 0;
+  font: 14px/1.5 Arial, sans-serif;
+  color: #243b59;
+  background: #fff;
+}
+.payroll-remarks-dialog textarea:focus-visible { outline: 2px solid #1455e5; outline-offset: 1px; }
+.payroll-remarks-dialog small { display: block; margin-top: 6px; color: #52637b; font-size: 0.75rem; }
+.payroll-remarks-dialog .payroll-remarks-error { color: #a32b23; }
+.payroll-remarks-dialog footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.payroll-remarks-dialog footer button {
+  padding: 9px 16px;
+  border: 1px solid #c7d5e7;
+  background: #fff;
+  color: #243b59;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.payroll-remarks-dialog footer .is-primary { background: #1555e8; border-color: #1555e8; color: #fff; }
+.payroll-remarks-dialog button:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .payroll-person-month-identity > span,
 .payroll-month-total-status > span {
   display: block;
