@@ -17925,37 +17925,23 @@ body.mobile-modal-scroll-locked {
   box-shadow: 0 12px 26px rgb(15 23 42 / 18%);
 }
 
-.payroll-person-month-log-flyout-header {
-  display: flex;
-  min-height: 34px;
+.payroll-person-month-log.has-checklist {
+  min-height: 38px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-bottom: 1px solid var(--payroll-sand-border);
-  background: var(--payroll-sand-surface);
-  color: var(--payroll-sand-text);
-  padding: 6px 10px 6px 16px;
-  font-size: 0.74rem;
+  flex-direction: row;
+  padding: 6px 16px;
 }
 
-.payroll-person-month-log-flyout-header button {
-  display: inline-grid;
+.payroll-person-month-log-title {
+  margin: 0;
+  font: inherit;
+  font-weight: 700;
+}
+
+.payroll-person-month-log .payroll-person-month-log-close {
+  justify-content: center;
   width: 24px;
   height: 24px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: inherit;
-  padding: 0;
-}
-
-.payroll-person-month-log-flyout-header button:hover,
-.payroll-person-month-log-flyout-header button:focus-visible {
-  border-color: #d9b967;
-  background: #ffffff;
-  outline: none;
 }
 
 .payroll-person-month-log-list {

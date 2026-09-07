@@ -94,7 +94,7 @@ test("person month close heads the selected worker table and grows for long name
 
 test("person blockers open as an anchored non-layout flyout", () => {
   assert.match(page, /className="payroll-person-month-log-anchor"[\s\S]*?aria-controls="payroll-person-month-log-flyout"[\s\S]*?aria-expanded=\{isLogExpanded\}/s);
-  assert.match(page, /className="payroll-person-month-log-flyout"[\s\S]*?aria-label="Prüfpunkte schließen"/s);
+  assert.match(page, /aria-label=\{isLogExpanded \? "Prüfpunkte schließen" : undefined\}/);
   assert.match(page, /event\.key === "Escape"[\s\S]*?onToggleLog\(\)/s);
   assert.match(styles, /\.payroll-person-month-log-flyout\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*30;[^}]*top:\s*100%;[^}]*background:\s*#fffdf7;/s);
   assert.match(styles, /\.payroll-person-month-log-list\s*\{[^}]*max-height:\s*min\(320px, calc\(100dvh - 270px\)\);[^}]*overflow:\s*auto;/s);

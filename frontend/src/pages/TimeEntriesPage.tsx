@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, LockKeyhole, MoreHorizontal, Search, Trash2, Wrench, X } from "lucide-react";
+import { ArrowRight, CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, LockKeyhole, MoreHorizontal, Search, Trash2, Wrench, X } from "lucide-react";
 import { type FormEvent, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -4472,13 +4472,7 @@ function PayrollPersonMonthClosePanel({
         : "Keine offenen Prüfpunkte"
     : "Monteur auswählen";
   const firstBlocker = blockers[0] ?? null;
-  const firstBlockerContext = firstBlocker ? formatPayrollBlockerDateContext(firstBlocker) : "";
-  const contextWeek = firstBlockerContext.match(/ · (KW \d+\/\d{4})$/)?.[1];
-  const summaryContext = contextWeek && firstBlocker?.message.startsWith(`${contextWeek} `)
-    ? firstBlockerContext.slice(0, -contextWeek.length - 3)
-    : firstBlockerContext;
-  const visibleBlockers = isLogExpanded ? blockers : blockers.slice(0, 1);
-  const canToggleLog = blockers.length > 1;
+  const canToggleLog = blockers.length > 0;
   const approvedMeta = approval?.approved_at
     ? `Geprüft am ${formatPayrollApprovalTimestamp(approval.approved_at)}${approval.approved_by_name ? ` von ${approval.approved_by_name}` : ""}.`
     : null;
@@ -4570,21 +4564,23 @@ function PayrollPersonMonthClosePanel({
         </div>
       </div>
       <div className="payroll-person-month-log-anchor">
-        <div className={`payroll-person-month-log ${statusClass}`}>
-          <div className="payroll-person-month-log-summary">
-            {statusClass === "is-warning" ? <AlertTriangle aria-hidden="true" size={15} /> : <Check aria-hidden="true" size={15} />}
-            <span>
-              {selectedWorker
-                ? isApproved
-                  ? blockers.length > 0
-                    ? `${blockers.length} ${blockers.length === 1 ? "Prüfpunkt wurde" : "Prüfpunkte wurden"} im Monteurabschluss geprüft.`
-                    : approvedMeta ?? "Monteurabschluss wurde geprüft."
-                  : firstBlocker
-                    ? `${blockers.length} ${blockers.length === 1 ? "Hinweis zum Stand" : "Hinweise zum Stand"} · ${firstBlocker.code === "schedule_missing" ? "Regelmäßige Arbeitszeit fehlt · " : ""}${summaryContext} · ${firstBlocker.message}`
+        <div className={`payroll-person-month-log ${statusClass}${canToggleLog ? " has-checklist" : ""}`}>
+          {canToggleLog ? (
+            <h3 className="payroll-person-month-log-title" id="payroll-person-month-log-title">
+              Prüfpunkte ({blockers.length})
+            </h3>
+          ) : (
+            <div className="payroll-person-month-log-summary">
+              <Check aria-hidden="true" size={15} />
+              <span>
+                {selectedWorker
+                  ? isApproved
+                    ? approvedMeta ?? "Monteurabschluss wurde geprüft."
                     : "Keine offenen Hinweise. Der Monteurmonat kann abgeschlossen werden."
-                : "Wähle links einen Monteur aus, um den Monatsabschluss zu prüfen."}
-            </span>
-          </div>
+                  : "Wähle links einen Monteur aus, um den Monatsabschluss zu prüfen."}
+              </span>
+            </div>
+          )}
           <div className="payroll-person-month-log-actions">
             {!isApproved && firstBlocker?.code === "schedule_missing" && firstBlocker.person_id ? (
               <button type="button" onClick={() => onOpenWorkingTime(firstBlocker.person_id!)}>Arbeitszeit festlegen</button>
@@ -4592,31 +4588,28 @@ function PayrollPersonMonthClosePanel({
             {canToggleLog && (
               <button
                 aria-controls="payroll-person-month-log-flyout"
+                aria-label={isLogExpanded ? "Prüfpunkte schließen" : undefined}
+                className={isLogExpanded ? "payroll-person-month-log-close" : undefined}
                 aria-expanded={isLogExpanded}
                 type="button"
                 onClick={onToggleLog}
               >
-                {isLogExpanded ? "Weniger anzeigen" : "Alle anzeigen"}
-                <ChevronRight aria-hidden="true" size={14} />
+                {isLogExpanded ? <X aria-hidden="true" size={15} /> : (
+                  <>Alle anzeigen <ChevronRight aria-hidden="true" size={14} /></>
+                )}
               </button>
             )}
           </div>
         </div>
-        {isLogExpanded && visibleBlockers.length > 1 && (
+        {isLogExpanded && canToggleLog && (
           <div
-            aria-label={`Alle ${visibleBlockers.length} Prüfpunkte`}
+            aria-labelledby="payroll-person-month-log-title"
             className="payroll-person-month-log-flyout"
             id="payroll-person-month-log-flyout"
             role="region"
           >
-            <div className="payroll-person-month-log-flyout-header">
-              <strong>Prüfpunkte ({visibleBlockers.length})</strong>
-              <button aria-label="Prüfpunkte schließen" type="button" onClick={onToggleLog}>
-                <X aria-hidden="true" size={15} />
-              </button>
-            </div>
             <div className="payroll-person-month-log-list" role="list">
-              {visibleBlockers.map((blocker, index) => (
+              {blockers.map((blocker, index) => (
                 <div className="payroll-person-month-log-entry" key={`${blocker.code}-${blocker.work_date ?? "month"}-${index}`} role="listitem">
                   <span>{formatPayrollBlockerDateContext(blocker)}</span>
                   <strong>{blocker.code === "schedule_missing" ? "Regelmäßige Arbeitszeit fehlt" : "Prüfhinweis"}</strong>
