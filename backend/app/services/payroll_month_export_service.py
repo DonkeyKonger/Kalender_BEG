@@ -62,6 +62,14 @@ class PayrollMonthExportService:
                 opening_balance_minutes=None,
                 closing_balance_minutes=None,
             )
+        if version is not None:
+            artifact = self._locked_artifact(
+                year=year,
+                month=month,
+                artifact_key=f"worker:{person_id}",
+                version=version,
+            )
+            return prepare_payroll_workbook_download(artifact.content)
         period = self.db.scalar(
             select(PayrollMonthPeriod).where(
                 PayrollMonthPeriod.year == year,
@@ -79,7 +87,6 @@ class PayrollMonthExportService:
             year=year,
             month=month,
             artifact_key=f"worker:{person_id}",
-            version=version,
         )
         return prepare_payroll_workbook_download(artifact.content)
 

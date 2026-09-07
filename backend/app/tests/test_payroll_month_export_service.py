@@ -220,6 +220,18 @@ def test_open_person_month_worker_export_requires_approval_and_uses_stored_artif
         current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
     ) == content
 
+    with pytest.raises(Exception) as versioned_open_month:
+        service.worker_export(
+            person_id=worker.id,
+            year=2026,
+            month=8,
+            version=1,
+            current_user=SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+        )
+    assert getattr(versioned_open_month.value, "detail", {}).get("code") == (
+        "payroll_month_not_locked"
+    )
+
 
 @pytest.mark.parametrize("all_workers", [False, True])
 def test_downloads_load_calendar_absences_even_without_time_entries(all_workers):
