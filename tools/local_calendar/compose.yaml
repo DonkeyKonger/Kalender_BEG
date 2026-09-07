@@ -1,0 +1,92 @@
+name: beg-local-test
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: kalender_test
+      POSTGRES_USER: kalender_test
+      POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:?Use manage.py}
+    volumes:
+      - test_database:/var/lib/postgresql/data
+    networks: [isolated]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U kalender_test -d postgres']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    security_opt: [no-new-privileges:true]
+
+  app:
+    image: beg-local-test-app
+    build:
+      context: ../..
+      dockerfile: tools/local_calendar/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://kalender_test:${LOCAL_DB_PASSWORD:?Use manage.py}@db:5432/${LOCAL_DB_NAME:?Use manage.py}
+      SECRET_KEY: ${LOCAL_SECRET_KEY:?Use manage.py}
+      LOCAL_TEST_MODE: 'isolated'
+      ENVIRONMENT: local-test
+      ADMIN_USERNAME: local-test-admin
+      ADMIN_PASSWORD: ${LOCAL_ADMIN_PASSWORD:?Use manage.py}
+      ADMIN_DISPLAY_NAME: Lokaler Testadministrator
+      RUN_SEED_DATA: 'false'
+      CORS_ORIGINS: http://127.0.0.1:18727
+      MS_GRAPH_ENABLED: 'false'
+      MS_GRAPH_CREATE_TEST_FOLDERS_ENABLED: 'false'
+      MS_GRAPH_CREATE_PROJECT_FOLDERS_ENABLED: 'false'
+      CTRACK_SYNC_ENABLED: 'false'
+      FCM_ENABLED: 'false'
+      PUSH_PLAN_SCHEDULER_ENABLED: 'false'
+      SMTP_HOST: ''
+      SMTP_USERNAME: ''
+      SMTP_PASSWORD: ''
+      SMTP_FROM_EMAIL: ''
+    networks: [isolated]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    volumes:
+      - ../../.local-calendar/metadata.json:/local-metadata.json:ro
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/__local-test__/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 90s
+
+  gateway:
+    image: nginx:1.28-alpine
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:18727:8080'
+    networks: [entrance, isolated]
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    user: '101:101'
+    entrypoint: [nginx, -g, 'daemon off;']
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/__local-test__/health']
+      interval: 5s
+      timeout: 4s
+      retries: 20
+
+networks:
+  entrance: {}
+  isolated:
+    internal: true
+
+volumes:
+  test_database:

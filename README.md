@@ -13,6 +13,10 @@ Die Anwendung wird getrennt aufgebaut:
 
 ## Lokal starten
 
+Für den abgeschotteten Testkalender mit eigenem Datenbestand und macOS-Dock-Icon:
+[Lokalen BEG-Testkalender verwenden](docs/LOCAL_TEST_CALENDAR.md). Dieser nutzt
+eine separate Konfiguration und verändert die folgende Entwicklungsumgebung nicht.
+
 Voraussetzungen:
 
 - Docker Desktop

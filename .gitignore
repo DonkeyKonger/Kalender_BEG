@@ -13,6 +13,7 @@ node_modules/
 dist/
 build/
 postgres_data/
+.local-calendar/
 docs/Prompt_Kalender_V1.rtf
 docs/reference/*.xlsm
 *-firebase-adminsdk-*.json

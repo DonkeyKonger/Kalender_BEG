@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BEG Testkalender · Nur lokal</title>
+  <link rel="icon" href="/icon.svg">
+  <link rel="stylesheet" href="/__local-test__/assets/shell.css">
+  <script src="/__local-test__/assets/shell.js" defer></script>
+</head>
+<body>
+  <header aria-label="Kennzeichnung der lokalen Testumgebung">
+    <strong>TESTKALENDER <span>· NUR LOKAL</span></strong>
+    <span id="data-state" role="status">Datenstand wird geladen …</span>
+    <a href="/__local-test__/" title="Testkalender neu öffnen">Neu öffnen</a>
+  </header>
+  <iframe src="/" title="Lokaler BEG-Testkalender"
+    sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"></iframe>
+</body>
+</html>
