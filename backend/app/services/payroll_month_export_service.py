@@ -158,6 +158,7 @@ class PayrollMonthExportService:
         person_id: int,
         opening_balance_minutes: int | None,
         closing_balance_minutes: int | None,
+        account_settlement: dict | None = None,
     ) -> bytes:
         person = next((item for item in source.people if item.id == person_id), None)
         if person is None:
@@ -175,6 +176,7 @@ class PayrollMonthExportService:
                     non_working_dates=source.holidays,
                     opening_balance_minutes=opening_balance_minutes,
                     closing_balance_minutes=closing_balance_minutes,
+                    account_settlement=account_settlement,
                 )
             ]
         ).content

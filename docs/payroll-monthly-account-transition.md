@@ -1,64 +1,109 @@
 # Monatliche Stundenkonto-Fortschreibung
 
-Die normale Lohnprüfung benötigt keine bestätigten Tagespläne und keine
-Eröffnung zum 31.07.2026 mehr. Bestehende Pläne, Eröffnungen und Buchungen bleiben
-erhalten. Wochenprüfung, Wochen-Reset, Deadline-Prüfung und das Rücksetzen nach
-einer Eintragslöschung verändern das Konto nicht.
+## Verbindliche Betriebsregel
 
-## Betrag und Zeitpunkt
+Mehrarbeit wird über den ganzen Kalendermonat gegen das persönliche Vertragssoll
+ermittelt. Bei 48 Wochenstunden und 21 Arbeitstagen sind das 201:36 Stunden Soll.
+Urlaub und Krankheit bleiben entsprechend der Nutzervorgabe pauschal bei acht
+Stunden je vollem Tag. Die bestehende Viertelstundenrundung je Zeitbuchung,
+Fahrtzeitbewertung, Feiertagsbehandlung und 4-auf-5-Tage-Verteilung ab 36 Stunden
+bleiben erhalten.
 
-Der persönliche Monatsabschluss bucht die Differenz des normalen Excel-Blatts.
-Excel und Kontobuchung verwenden denselben Rechenkern. Die bestehende Rundung,
-4-auf-5-Tage-Verteilung ab einschließlich 36 Stunden, Abwesenheits- und
-Reisekostenregeln bleiben unverändert. Fehlende Vertragswochenstunden ergeben
-eine unbekannte Differenz, nicht null Stunden.
+Positive Monatsmehrarbeit füllt das Stundenkonto bis 100 Stunden auf. Nur der
+verbleibende Teil kommt in das Excel-Feld „Überstunden 25 %“. Diese Stunden werden
+mit 25 % Zuschlag vergütet. Der Zuschlag erhöht den Geldbetrag, nicht die Stunden.
+Das Programm übermittelt hier die Zeitstunden; es berechnet oder überweist kein
+Geld. Negative Monatsdifferenzen belasten das Konto und erzeugen keine Auszahlung.
 
-Der Gesamtabschluss verwendet die bereits gespeicherten persönlichen
-Abschlussdateien. Er bucht nicht erneut. Das kombinierte Workbook kopiert ihre
-Worksheet-XML unverändert; inkompatible alte/raw Workbooks werden mit einem
-Konflikt abgewiesen, nicht still umgebaut. Standardexportfehler nehmen die ganze
-persönliche Abschluss-Transaktion zurück.
+| Vorbestand | Monatsdifferenz | Kontobuchung | Excel Überstunden 25 % | Endbestand |
+| --- | --- | --- | --- | --- |
+| 90:00 | +8:09 | +8:09 | 0:00 | 98:09 |
+| 97:00 | +8:09 | +3:00 | 5:09 | 100:00 |
+| 100:00 | +8:09 | 0:00 | 8:09 | 100:00 |
+| 100:00 | −8:09 | −8:09 | 0:00 | 91:51 |
 
-## Übergang und Rücknahme
+Die Aufteilung erfolgt in ganzen Minuten. Ein bereits vorhandener oder manuell
+hergestellter Bestand über 100 Stunden wird nicht still gekürzt. Neue positive
+Monatsmehrarbeit wird in diesem Fall vollständig zur Auszahlung ausgewiesen.
+Manuelle Entnahmen aus bestehendem Guthaben bleiben eigenständige negative
+Kontobuchungen; der direkt ausgezahlte Monatsüberschuss wird nicht nochmals vom
+bereits auf 100 Stunden begrenzten Konto abgezogen.
 
-- Beim ersten Monatsabschluss oder der ersten neuen manuellen Buchung wird der
-  dann tatsächlich geführte Bestand übernommen. Das ist keine rückdatierte
-  Eröffnung. Die Übernahme speichert Zeitpunkt, alte Eröffnungsreferenz und die
-  exakten darin enthaltenen aktiven Buchungs-IDs und Werte.
-- Bestätigte alte Eröffnungen bestimmen weiterhin, ob Legacy-Wochenbuchungen
-  bereits ausgeschlossen waren. Auch ein reguläres leeres Konto ohne Buchungszeile
-  und ohne bestätigte Eröffnung hat nach der bestehenden Kontologik den bekannten
-  Anfangsbestand **0**. Explizit unbekannte/inkonsistente tatsächliche Historie
-  bleibt davon getrennt `null`, auch nach manuellen Bewegungen.
-  Der exakt identifizierbare frühere Fehlerfall einer leeren Null-Übernahme aus
-  `8c77461` wird beim Lesen als 0 erkannt; seine alten Zeilen, Payloads und bereits
-  gespeicherten Excel-Dateien werden nicht verändert.
-- Eindeutige enthaltene Tagesautomatik bzw. vollständig innerhalb des Monats
-  liegende Legacy-Wochenautomatik wird vom neuen Monatsbetrag abgezogen. Beispiel:
-  akzeptierter Bestand 100 h enthält schon 5 h Automatik, Excel ergibt 8 h:
-  tatsächlich zusätzlich gebucht werden 3 h. Manuelle Beträge werden nie als
-  Automatik verrechnet. Monatsergebnis, Altreferenzen und Nettobuchung stehen
-  getrennt im Buchungspayload und Ereignistext.
-- Legacy-Grenzwochen ohne belastbare Aufteilung werden nicht nach Erstellungsdatum
-  oder Tagesanteilen verteilt. Die Monatsdifferenz wird als offener Fall erfasst;
-  bis zur fachlichen Klärung gibt es keine Nettobuchung und keinen behaupteten
-  absoluten Saldo. Abschluss und Standard-Excel bleiben verfügbar.
-- Rücknahme setzt die aktive Monatsversion außer Kraft und hängt die exakt
-  entgegengesetzte Nettobuchung an. Alte Beträge/Saldo-Snapshots bleiben erhalten.
-  Spätere persönliche oder globale Abschlüsse müssen vor früheren geöffnet
-  werden. Historische persönliche Abschlüsse ohne neue Monatsbuchung nutzen nur
-  ihre bestehende Tages-Rücknahmereferenz; der Gesamtabschluss erfindet keine neue.
-- Personensperre serialisiert Bestandsübernahme, Monats- und manuelle Buchungen.
-  Eindeutige Referenzen plus Datenbankindex erlauben nur eine aktive Monatsbuchung
-  pro Person/Monat. Neue manuelle Korrekturen (+/−) und Auszahlungen sind auch bei
-  persönlicher/globaler Sperre ihres Wirksamkeitsmonats möglich. Sie sind
-  eigenständige Kontobuchungen und ändern weder frühere Saldozeilen noch eingefrorene
-  Excel-Dateien oder Zeitmeldungen. Bestehende Rollenrechte bleiben unverändert.
+## Vereinfachte Bestandsübernahme im September 2026
 
-Die Excel-Felder „Kontostand alt/neu“ stammen aus dem bei Buchung verfügbaren
-aktuellen Bestand, bereinigt um ersetzte Monatsautomatik. Sie sind ausdrücklich
-keine Rekonstruktion eines historischen Monatsanfangs. Unbekannte Salden bleiben
-leer; Büro- und mobile Kontoansicht zeigen „Kontostand offen“.
+Der Nutzer hat ausdrücklich festgelegt, die aktuell geführten Stundenkonten als
+korrekt zu übernehmen. Bei Kollisionen mit alten Wochenprüfungen hat die neue
+Monatsregel Vorrang. Ein einmalig falscher Übergangsbetrag wird akzeptiert und bei
+Bedarf manuell im September korrigiert.
+
+Deshalb werden alte Tages-/Wochenbuchungen weder neu auf Monate aufgeteilt noch
+vom neuen Monatsergebnis abgezogen. Auch unvollständige KW-Referenzen und Wochen
+über Monatsgrenzen blockieren die Fortschreibung nicht mehr. Alte Ereignisse,
+Saldo-Snapshots und gespeicherte Exceldateien bleiben erhalten. Die Übernahme
+speichert die enthaltenen Buchungs-IDs und Beträge; Monatsbuchungen nennen diese
+Referenzen unter `accepted_legacy_entry_ids`. Es erfolgt keine direkte Löschung
+oder Änderung alter Wochenbuchungen.
+
+Vorhandene aktive Monatszeilen mit den bisherigen Klärungsgründen „Altbuchung KW“,
+„Alte Wochenbuchung“ oder „Alte Tagesbuchung“ verbergen den übernommenen numerischen
+Bestand nicht mehr. Die nächste Monatsbuchung dokumentiert diese übergangenen
+Konflikte. Sie bucht deren alte Monatsdifferenz nicht nachträglich. Ein normaler
+Monatsabschluss wird genau einmal für seinen eigenen Monat ausgeführt.
+
+Ein reguläres leeres Konto beginnt bei null. Der genaue frühere Fehlerfall der
+leeren Null-Übernahme aus `8c77461` wird weiterhin als null gelesen. Tatsächlich
+fehlende Vertragsstunden oder ein explizit unbekannter Ausgangsbetrag werden
+nicht in eine behauptete Auszahlung umgewandelt: Sie bleiben separat offen.
+Das ist von einer bloßen alten Wochenkollision zu unterscheiden.
+
+## Buchung, Export und Rücknahme
+
+Der persönliche Monatsabschluss verwendet einen gemeinsamen Rechenkern für das
+rohe Monatsergebnis und den Excel-Stundennachweis. Die Kontoaufteilung wird genau
+einmal ausgeführt und als `monthly_100h_v1` mit folgenden Angaben gespeichert:
+
+- `movement_minutes`: volle Monatsdifferenz;
+- `booked_minutes`: tatsächlich dem Konto gutgeschriebener/abgezogener Betrag;
+- `payout_minutes`: zur Auszahlung bestimmte Zeitstunden, in Minuten;
+- `payout_surcharge_percent`: 25;
+- Anfangs-/Endbestand, Kontogrenze und Übergangsreferenzen.
+
+Das Excel liest diese gespeicherte Aufteilung. D47 enthält ausschließlich die
+Auszahlungsstunden. Im bestehenden Bemerkungsblock stehen Monatsdifferenz,
+Kontobuchung und die Kontogrenze. K50/K51 enthalten die für diesen Abschluss
+verwendeten Bestände. Im Konto erscheint die Auszahlung nur im Hinweistext der
+Monatszeile; der Buchungsbetrag dieser Zeile enthält ausschließlich die
+Kontoveränderung. Auch eine vollständig ausgezahlte Mehrarbeit hat damit eine
+Monatszeile mit null Kontowirkung und einem nachvollziehbaren Auszahlungshinweis.
+
+Der einmalig übernommene Bestand ist ausdrücklich keine rekonstruierte
+historische Monatseröffnung. Nach der Übernahme werden zusätzliche Bewegungen
+für einen Monatsabschluss anhand ihres Wirksamkeitsdatums bis zum Monatsende
+berücksichtigt. Eine danach erfasste Septemberkorrektur verändert deshalb nicht
+die Aufteilung eines wieder geöffneten Augusts. Der aktuelle Kontostand enthält
+weiterhin alle gebuchten Bewegungen. Vor der Übernahme schon enthaltene Beträge
+werden entsprechend der akzeptierten Übergangsvereinfachung nicht rückwirkend
+auseinandergerechnet.
+
+Freigaben erfolgen zeitlich aufsteigend je Monteur. Ein schon später freigegebener
+Monat muss vor einer früheren neuen Freigabe oder Wiederöffnung zurückgenommen
+werden. Wiederholung derselben Freigabe bucht nicht erneut. Die Rücknahme hängt
+die exakte Gegenbuchung der tatsächlichen Kontowirkung an und hebt den zugehörigen
+Auszahlungshinweis auf. Sie bucht keine zusätzliche negative Auszahlung. Bei einer
+neuen Freigabe entsteht eine neue Excelversion, während die alte erhalten bleibt.
+
+Die bestehende Personenkontosperre und der eindeutige aktive Monatsindex gelten
+weiter. Ein Exportfehler nimmt die vollständige Freigabetransaktion einschließlich
+Bestandsübernahme und Monatsbuchung zurück. Manuelle Korrekturen und Entnahmen
+bleiben auch bei gesperrten Abrechnungsmonaten eigenständige Buchungen; alte
+Abrechnungsdateien ändern sich dadurch nicht.
+
+Bereits gespeicherte persönliche oder globale Abschlüsse werden beim Download
+nicht neu berechnet. Soll ein vorhandenes August-Excel nach der neuen Regel
+ausgegeben werden, wird der betreffende Abschluss einmal begründet wieder geöffnet
+und erneut freigegeben. Bei späteren Abschlüssen gilt die umgekehrte Reihenfolge
+für das Wiederöffnen. Die neue Septemberabrechnung kann auf dem akzeptierten
+Altbestand aufsetzen, ohne alte abgeschlossene Monate automatisch neu zu buchen.
 
 ## Wochenfreigabe und monteursweiser Monatsablauf
 
@@ -78,29 +123,24 @@ oder globale Sperre. Fehlende/ungültige aktuelle Einzeldateien führen zum Fehl
 nicht zum Rückgriff auf ältere oder ungeprüfte Daten. Historisch global gesperrte
 Monate behalten Snapshotdownloads und die bestehende begründete Wiederöffnung.
 
-## Migration und Prüfgrenzen
+## Prüfung und Auslieferung
 
-Migration `20260905_0112` macht absolute Salden und Snapshotbeträge nullable und
-ergänzt den aktiven Monatsindex. Sie ändert keine bestehenden Daten. Eine
-verlustbehaftete Rückmigration bei vorhandener Monatskontohistorie wird abgewiesen.
-Die Migration muss bei einer später separat freigegebenen Auslieferung vor dem
-neuen Backend laufen. Sie wurde hier nur in einer isolierten Testdatenbank geprüft.
+Die Änderung verwendet die vorhandenen Kontobuchungen und JSON-Payloads. Eine
+zusätzliche Datenbankmigration ist dafür nicht erforderlich. Die bereits
+vorhandenen Migrationen `20260905_0112` und `20260905_0113` bleiben Voraussetzung
+für nullable Salden, eindeutige aktive Monatsbuchungen und unabhängige manuelle
+Buchungen unter PostgreSQL-Sperren.
 
-Folgemigration `20260905_0113` ergänzt ausschließlich eine PostgreSQL-Trigger-
-Ausnahme für neue aktive `daily`-Inserts der Typen `manual_adjustment`/`payout`
-mit passender Quelle und ohne Payroll-/Wochenreferenz. Diese Inserts verwenden
-dieselbe Personenkontosperre. UPDATE/DELETE vorhandener Buchungen und alle
-gewöhnlichen Payroll-/Zeitänderungen unterliegen weiter den bisherigen Sperren.
-Keine Datenmigration oder Umschreibung bestehender Historie ist damit verbunden.
-Die echten PostgreSQL-Fälle (Erlaubnis plus unveränderte Negativfälle) sind als
-isolierte Integrationstests hinterlegt; ohne `PAYROLL_POSTGRES_TEST_URL` werden sie
-ausdrücklich übersprungen und nicht als ausgeführt gezählt.
+Die automatisierten Tests prüfen Grenzbeträge auf eine Minute genau, negative und
+oberhalb der Grenze übernommene Bestände, unbekannte Werte, alte Grenzwochen,
+Septemberkorrekturen, Wiederholung und Rücknahme, die echte 48-Stunden-Abrechnung,
+Sammeldownload und unveränderte historische Dateien. Der vollständige lokale
+Backend-Testlauf und die Frontend-Tests sowie der Frontend-Build wurden ausgeführt.
+Die erzeugten Excel-Kontoblöcke für 90, 97 und 100 Stunden Anfangsbestand wurden
+gerendert und visuell geprüft. An den Frontend-Komponenten wurden keine Änderungen
+vorgenommen.
 
-SQLite-Integration prüft echte Standard-Excel-Dateien, Einzel-/Gesamtabschluss,
-Retry, Reopen/Reapprove, Altbuchungen, beide Monatsreihenfolgen, unbekannte Salden,
-Export-Rollback und einen simulierten Schreibschutz historischer Kontoeinträge.
-Eine isolierte PostgreSQL-Instanz ist lokal nicht verfügbar; echte PostgreSQL-
-Konkurrenz- und Triggerprüfung bleibt eine Grenze. Die vorhandene Safari-Sitzung
-zeigt den produktiven Altstand; keine Navigation, Anmeldung, Sitzung oder
-Produktivdaten wurden geändert. Responsive Quelltests und Build sind geprüft,
-die lokale UI-Änderung wurde nicht als im Live-Browser visuell geprüft behauptet.
+Die PostgreSQL-Integrationstests benötigen weiterhin eine ausdrücklich isolierte
+Datenbank in `PAYROLL_POSTGRES_TEST_URL`; ohne sie werden diese Tests übersprungen.
+Es werden keine Produktivdaten durch die Tests geändert. Auslieferung und Push
+erfolgen nur nach dem dafür geltenden separaten Nutzerauftrag.

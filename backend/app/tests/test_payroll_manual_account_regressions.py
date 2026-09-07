@@ -88,7 +88,7 @@ def test_manual_adjustment_and_payout_in_locked_month_are_independent_of_payroll
                                      note="Independent -0.5", current_user=user)
     result = account.create_payout(person_id=person.id, hours=1, effective_date=date(2026, 8, 31),
                                   note="Independent payout", current_user=user)
-    assert result.current_balance_minutes == 6150  # 6000 + monthly120 + manual120 - 30 - payout60.
+    assert result.current_balance_minutes == 6030  # Monthly surplus is paid; manual +120 -30 -60 remains.
     assert [(db.get(Entry, identifier).id, db.get(Entry, identifier).minutes_delta,
              db.get(Entry, identifier).balance_after_minutes, db.get(Entry, identifier).is_active,
              db.get(Entry, identifier).note) for identifier, *_ in entries_before] == entries_before
@@ -108,7 +108,7 @@ def test_manual_adjustment_and_payout_in_locked_month_are_independent_of_payroll
     approve(close, person, user)
     if global_close:
         close.lock_month(year=2026, month=8, confirmed=True, current_user=user)
-    assert account.get_account(person_id=person.id).current_balance_minutes == 6210
+    assert account.get_account(person_id=person.id).current_balance_minutes == 6030
     assert bytes(artifact.content) == retained
     manual_rows = list(db.scalars(select(Entry).where(Entry.ledger_system == "daily",
                                                     Entry.entry_type.in_(["manual_adjustment", "payout"]))))

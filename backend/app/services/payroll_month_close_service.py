@@ -504,6 +504,8 @@ class PayrollMonthCloseService:
             if approval.status == PAYROLL_PERSON_MONTH_APPROVED:
                 self.db.commit()
                 return self.get_status(year=year, month=month, current_user=current_user)
+            if self._has_later_person_approval(year, month, person_id):
+                raise HTTPException(409, "Spätere Monteurmonate müssen zuerst wieder geöffnet werden.")
             blockers = self._person_blockers(
                 self._readiness_blockers(year, month, current_user),
                 person_id,
@@ -1333,6 +1335,7 @@ class PayrollMonthCloseService:
             source=export_source, person_id=person.id,
             opening_balance_minutes=balances.get("opening_balance_minutes"),
             closing_balance_minutes=balances.get("closing_balance_minutes"),
+            account_settlement=balances,
         )
         return {
             "artifact_key": f"worker:{person.id}:approval:{version}",

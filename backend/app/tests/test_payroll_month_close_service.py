@@ -514,7 +514,7 @@ def test_person_month_reopen_requires_reason_and_reverses_exact_monthly_posting(
     assert reversal is not None
     assert reversal.minutes_delta == -original_delta
     assert reversal.source_reference_id == original.source_reference_id
-    assert reversal.source_payload == {"reversed_entry_id": original.id}
+    assert reversal.source_payload == {"reversed_entry_id": original.id, "reversed_payout_minutes": 0}
     assert list(db.scalars(select(PayrollMonthAudit.action).order_by(PayrollMonthAudit.id))) == [
         "PERSON_MONTH_APPROVED",
         "PERSON_MONTH_REOPENED",

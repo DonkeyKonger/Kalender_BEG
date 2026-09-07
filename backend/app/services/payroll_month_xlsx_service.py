@@ -176,6 +176,7 @@ class PayrollMonthSheet:
     work_days: Sequence[PersonWorkDay] = ()
     opening_balance_minutes: int | None = None
     closing_balance_minutes: int | None = None
+    account_settlement: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -203,6 +204,7 @@ def build_payroll_month_xlsx(
     work_days: Sequence[PersonWorkDay] = (),
     opening_balance_minutes: int | None = None,
     closing_balance_minutes: int | None = None,
+    account_settlement: dict | None = None,
 ) -> PayrollMonthWorkbook:
     """Erstellt eine neue Monatsdatei, ohne Vorlage oder Quelldaten zu verändern."""
     template = load_payroll_monthly_template()
@@ -232,6 +234,7 @@ def build_payroll_month_xlsx(
             work_days=work_days,
             opening_balance_minutes=opening_balance_minutes,
             closing_balance_minutes=closing_balance_minutes,
+            account_settlement=account_settlement,
         )
         filled_sheet = ET.tostring(
             sheet_root,
@@ -339,6 +342,7 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
                     work_days=sheet.work_days,
                     opening_balance_minutes=sheet.opening_balance_minutes,
                     closing_balance_minutes=sheet.closing_balance_minutes,
+                    account_settlement=sheet.account_settlement,
                 )
             )
             filled_sheet = _preserve_ignorable_namespaces(
@@ -370,6 +374,7 @@ def fill_payroll_month_sheet(
     work_days: Sequence[PersonWorkDay] = (),
     opening_balance_minutes: int | None = None,
     closing_balance_minutes: int | None = None,
+    account_settlement: dict | None = None,
 ) -> PayrollMonthPlan:
     """Befüllt genau ein Monatsblatt mit den freigegebenen Tagesfeldern."""
     plan = build_payroll_month_plan(
@@ -405,6 +410,8 @@ def fill_payroll_month_sheet(
         month=month,
         non_working_dates=non_working_dates,
     )
+    if account_settlement is not None:
+        _write_month_account_settlement(sheet, account_settlement)
     return plan
 
 
@@ -1042,6 +1049,32 @@ def _write_month_totals(
             else overtime_minutes / 1440
         ),
     )
+
+
+def _write_month_account_settlement(sheet: ET.Element, settlement: dict) -> None:
+    """Export the approved split; never recalculate account credits or payouts."""
+    payout = settlement.get("payout_minutes")
+    ref = PAYROLL_MONTH_TEMPLATE_LAYOUT.overtime_hours_cell
+    if payout is None:
+        _set_cell_string(sheet, ref, "–")
+    else:
+        _set_cell_number(sheet, ref, payout / 1440)
+    movement = settlement.get("movement_minutes")
+    booked = settlement.get("booked_minutes")
+    pending = settlement.get("pending_reason")
+
+    def label(minutes: int | None) -> str:
+        if minutes is None:
+            return "offen"
+        sign = "-" if minutes < 0 else "+" if minutes > 0 else ""
+        return sign + _format_duration(abs(minutes))
+
+    _set_cell_string(sheet, "I46", f"Monatsdifferenz: {label(movement)}")
+    _set_cell_string(sheet, "I47", f"Stundenkonto: {label(booked) if not pending else 'offen'}")
+    _set_cell_string(sheet, "I48", "Auszahlung offen" if pending else "Auszahlung siehe Überstunden 25 %")
+    _set_cell_string(sheet, "I49", "Kontogrenze: 100:00 Std.")
+    _set_cell_string(sheet, "I50", "Kontostand alt:")
+    _set_cell_string(sheet, "I51", "Kontostand neu:")
 
 
 def _write_account_balances(

@@ -33,7 +33,7 @@ def post(service, person, delta=480, month=8, version=1):
 
 
 @pytest.mark.parametrize("old_automatic", [0, 300])
-def test_transition_nets_old_automatic_and_reopen_only_reverses_actual_booking(old_automatic):
+def test_transition_accepts_old_automatic_and_reopen_only_reverses_actual_booking(old_automatic):
     db = db_session()
     person, user, _ = configured_worker(db, [480] * 5 + [0, 0], opening_minutes=6000 - old_automatic)
     old = legacy(db, person, old_automatic, entry_type="daily_balance", effective=date(2026, 8, 3))
@@ -42,9 +42,11 @@ def test_transition_nets_old_automatic_and_reopen_only_reverses_actual_booking(o
     original = post(service, person)
     assert service.transition(person.id).balance_after_minutes == 6000
     assert original.source_payload["movement_minutes"] == 480
-    assert original.minutes_delta == 480 - old_automatic
-    assert original.source_payload["replaced_entry_ids"] == [old.id]
-    assert service.current_balance(person.id) == 6480 - old_automatic
+    assert original.minutes_delta == 0
+    assert original.source_payload["payout_minutes"] == 480
+    assert original.source_payload["replaced_entry_ids"] == []
+    assert original.source_payload["accepted_legacy_entry_ids"] == [old.id]
+    assert service.current_balance(person.id) == 6000
     assert post(service, person).id == original.id
     manual = PersonHoursAccountService(db)
     manual.create_manual_adjustment(person_id=person.id, hours_delta=2, effective_date=date(2026, 9, 5),
@@ -55,54 +57,46 @@ def test_transition_nets_old_automatic_and_reopen_only_reverses_actual_booking(o
     assert service.reverse(original.source_reference_id, user_id=user.id)
     assert service.current_balance(person.id) == 6060
     changed = post(service, person, delta=600, version=2)
-    assert service.current_balance(person.id) == 6660 - old_automatic
-    assert changed.minutes_delta == 600 - old_automatic
+    assert service.current_balance(person.id) == 6060
+    assert changed.minutes_delta == 0
+    assert changed.source_payload["payout_minutes"] == 600
     assert original.balance_after_minutes == retained
     assert old.is_active and excluded_legacy.is_active
     assert old.note == excluded_legacy.note == "Retained original"
     assert len(list(db.scalars(select(Entry).where(Entry.entry_type == REVERSAL)))) == 1
 
 
-@pytest.mark.parametrize("months", [(8, 9), (9, 8)])
+@pytest.mark.parametrize("week", [31, 32, 36, None])
 @pytest.mark.parametrize("reversed_old", [False, True])
-def test_cross_month_legacy_never_split_and_reversals_are_netted(months, reversed_old):
+def test_legacy_weeks_are_accepted_without_allocation_or_new_offset(week, reversed_old):
     db = db_session()
     person = Person(first_name="Legacy", last_name="Test", display_name="Legacy", short_code="LEG", weekly_hours=40)
     db.add(person)
     db.flush()
-    legacy(db, person, 6000, entry_type="manual_adjustment", week=None)
-    legacy(db, person, 300, week=36)  # 31 August–6 September; no daily allocation exists.
+    legacy(db, person, 5520, entry_type="manual_adjustment", week=None)
+    old = legacy(db, person, 300, week=week)
     if reversed_old:
-        legacy(db, person, -300, week=36)
+        legacy(db, person, -300, week=week)
     service = PayrollMonthAccountService(db)
-    rows = [post(service, person, month=month) for month in months]
-    assert all(row.source_payload["movement_minutes"] == 480 for row in rows)
-    if reversed_old:
-        assert [row.minutes_delta for row in rows] == [480, 480]
-        assert service.current_balance(person.id) == 6960
-        assert not service.notices(person.id)
-    else:
-        assert [row.minutes_delta for row in rows] == [0, 0]
-        assert all("Monatsgrenze" in row.source_payload["pending_reason"] for row in rows)
-        assert service.current_balance(person.id) is None
-        assert len(service.notices(person.id)) == 2
+    rows = [post(service, person, month=month) for month in (8, 9)]
+    assert service.transition(person.id).balance_after_minutes == (5520 if reversed_old else 5820)
+    assert [row.minutes_delta for row in rows] == ([480, 0] if reversed_old else [180, 0])
+    assert [row.source_payload["payout_minutes"] for row in rows] == ([0, 480] if reversed_old else [300, 480])
+    assert all(row.source_payload["replaced_entry_ids"] == [] for row in rows)
+    assert all(row.source_payload["pending_reason"] is None for row in rows)
+    assert service.current_balance(person.id) == 6000
+    assert not service.notices(person.id)
+    assert old.is_active and old.minutes_delta == 300
 
 
-@pytest.mark.parametrize("months", [(8, 9), (9, 8)])
-def test_identifiable_legacy_weeks_replaced_once_independent_of_month_order(months):
+def test_later_month_must_be_reopened_before_earlier_month_can_be_booked():
     db = db_session()
-    person = Person(first_name="Legacy", last_name="Test", display_name="Legacy", short_code="LEG", weekly_hours=40)
-    db.add(person)
-    db.flush()
-    legacy(db, person, 6000, entry_type="manual_adjustment", week=None)
-    august = legacy(db, person, 300, week=32)
-    september = legacy(db, person, 120, week=37)
+    person, _, _ = configured_worker(db, [480] * 5 + [0, 0])
     service = PayrollMonthAccountService(db)
-    rows = [post(service, person, month=month) for month in months]
-    assert service.current_balance(person.id) == 6960
-    assert sorted(row.minutes_delta for row in rows) == [180, 360]
-    assert {identifier for row in rows for identifier in row.source_payload["replaced_entry_ids"]} == {august.id, september.id}
-    assert len([identifier for row in rows for identifier in row.source_payload["replaced_entry_ids"]]) == 2
+    post(service, person, month=9)
+    with pytest.raises(HTTPException, match="Spätere Monteurmonate"):
+        post(service, person, month=8)
+    assert len(list(db.scalars(select(Entry).where(Entry.entry_type == MONTHLY)))) == 1
 
 
 @pytest.mark.parametrize("known_zero", [False, True])
@@ -120,7 +114,7 @@ def test_explicit_zero_is_known_but_missing_start_remains_null_in_schema(known_z
     service = PayrollMonthAccountService(db)
     row = post(service, person)
     account = PersonHoursAccountService(db).get_account(person_id=person.id)
-    assert row.minutes_delta == 480
+    assert row.minutes_delta == (480 if known_zero else 0)
     assert account.current_balance_minutes == (480 if known_zero else None)
     assert row.balance_after_minutes == (480 if known_zero else None)
     assert bool(account.notices) is not known_zero
@@ -163,8 +157,9 @@ def test_reopened_old_daily_posting_adjusts_captured_authority_without_rewriting
     db.flush()
     assert ledger_service.recalculate_balance_history(person.id) == 6000
     row = post(service, person)
-    assert row.minutes_delta == 480
-    assert service.current_balance(person.id) == 6480
+    assert row.minutes_delta == 0
+    assert row.source_payload["payout_minutes"] == 480
+    assert service.current_balance(person.id) == 6000
     assert transition.balance_after_minutes == 6300
     assert old.balance_after_minutes == 300
 
@@ -185,4 +180,5 @@ def test_manual_movements_with_missing_start_remain_independent_without_inventin
     assert result.current_balance_minutes is None
     assert result.entries[0].minutes_delta == 120
     row = post(PayrollMonthAccountService(db), person)
-    assert row.minutes_delta == 480 and row.balance_after_minutes is None
+    assert row.minutes_delta == 0 and row.balance_after_minutes is None
+    assert row.source_payload["payout_minutes"] is None
