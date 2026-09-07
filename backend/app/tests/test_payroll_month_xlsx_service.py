@@ -444,6 +444,11 @@ def test_snapshot_balances_fill_k50_and_k51_without_negative_excel_times(
 
     assert float(cell_text(sheet, "K50")) == pytest.approx(opening_expected)
     assert cell_number_format(sheet, styles, "K50") == "[h]:mm"
+    cell_xfs = styles.find("main:cellXfs", NS)
+    font_ids = [cell_xfs[int(sheet.find(f'.//main:c[@r="{ref}"]', NS).get("s"))].get("fontId")
+                for ref in ("K50", "K51")]
+    assert font_ids[0] == font_ids[1]
+    assert styles.find("main:fonts", NS)[int(font_ids[1])].find("main:sz", NS).get("val") == "10"
     if isinstance(closing_expected, str):
         assert cell_text(sheet, "K51") == closing_expected
         assert sheet.find('.//main:c[@r="K51"]', NS).attrib["t"] == "inlineStr"

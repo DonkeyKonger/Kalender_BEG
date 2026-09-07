@@ -69,10 +69,13 @@ einmal ausgeführt und als `monthly_100h_v1` mit folgenden Angaben gespeichert:
 - Anfangs-/Endbestand, Kontogrenze und Übergangsreferenzen.
 
 Das Excel liest diese gespeicherte Aufteilung. D47 enthält ausschließlich die
-Auszahlungsstunden. Im bestehenden Bemerkungsblock stehen Monatsdifferenz,
-Kontobuchung und die Kontogrenze. K50/K51 enthalten die für diesen Abschluss
-verwendeten Bestände. Im Konto erscheint die Auszahlung nur im Hinweistext der
-Monatszeile; der Buchungsbetrag dieser Zeile enthält ausschließlich die
+Auszahlungsstunden. Der Bemerkungsblock I46:L49 bleibt für manuelle Einträge frei.
+K50/K51 enthalten die für diesen Abschluss verwendeten Bestände in gleicher
+Schriftgröße. Beim Download älterer Abschlussdateien werden die bekannten
+automatischen Bemerkungen entfernt und die Schrift angeglichen. Gespeicherte
+Artefakte, Freigaben, Formeln und Abrechnungswerte bleiben dabei unverändert.
+Im Konto erscheint die Auszahlung nur im Hinweistext der Monatszeile;
+der Buchungsbetrag dieser Zeile enthält ausschließlich die
 Kontoveränderung. Auch eine vollständig ausgezahlte Mehrarbeit hat damit eine
 Monatszeile mit null Kontowirkung und einem nachvollziehbaren Auszahlungshinweis.
 

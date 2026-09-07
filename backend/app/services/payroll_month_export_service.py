@@ -35,6 +35,7 @@ from app.services.payroll_month_xlsx_service import (
 )
 from app.services.time_entry_service import TimeEntryService
 from app.services.payroll_approved_workbook_merge import merge_approved_payroll_workbooks
+from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
 
 
 class PayrollMonthExportService:
@@ -66,17 +67,19 @@ class PayrollMonthExportService:
             )
         )
         if period is None or period.status != PAYROLL_MONTH_LOCKED:
-            return self._approved_person_month_artifact(
+            artifact = self._approved_person_month_artifact(
                 person_id=person_id,
                 year=year,
                 month=month,
-            ).content
-        return self._locked_artifact(
+            )
+            return prepare_payroll_workbook_download(artifact.content)
+        artifact = self._locked_artifact(
             year=year,
             month=month,
             artifact_key=f"worker:{person_id}",
             version=version,
-        ).content
+        )
+        return prepare_payroll_workbook_download(artifact.content)
 
     def _approved_person_month_artifact(
         self,
@@ -273,12 +276,13 @@ class PayrollMonthExportService:
         if month_status != PAYROLL_MONTH_LOCKED and version is None:
             return self._approved_workers_export(year=year, month=month)
         # Existing locked snapshots/versioned links retain their exact semantics.
-        return self._locked_artifact(
+        artifact = self._locked_artifact(
             year=year,
             month=month,
             artifact_key="all_workers",
             version=version,
-        ).content
+        )
+        return prepare_payroll_workbook_download(artifact.content)
 
     def _approved_workers_export(self, *, year: int, month: int) -> bytes:
         """Package existing individual approvals without closing or booking a month."""
@@ -326,7 +330,7 @@ class PayrollMonthExportService:
                     "approval_version": approval.approval_version,
                     "message": "Eine gespeicherte Einzelabrechnung ist beschädigt und wird nicht ausgeliefert.",
                 })
-            workbooks.append((person.display_name, artifact.content))
+            workbooks.append((person.display_name, prepare_payroll_workbook_download(artifact.content)))
         try:
             return merge_approved_payroll_workbooks(workbooks)
         except ValueError as error:

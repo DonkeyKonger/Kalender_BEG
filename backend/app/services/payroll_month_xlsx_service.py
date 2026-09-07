@@ -1059,20 +1059,7 @@ def _write_month_account_settlement(sheet: ET.Element, settlement: dict) -> None
         _set_cell_string(sheet, ref, "–")
     else:
         _set_cell_number(sheet, ref, payout / 1440)
-    movement = settlement.get("movement_minutes")
-    booked = settlement.get("booked_minutes")
-    pending = settlement.get("pending_reason")
-
-    def label(minutes: int | None) -> str:
-        if minutes is None:
-            return "offen"
-        sign = "-" if minutes < 0 else "+" if minutes > 0 else ""
-        return sign + _format_duration(abs(minutes))
-
-    _set_cell_string(sheet, "I46", f"Monatsdifferenz: {label(movement)}")
-    _set_cell_string(sheet, "I47", f"Stundenkonto: {label(booked) if not pending else 'offen'}")
-    _set_cell_string(sheet, "I48", "Auszahlung offen" if pending else "Auszahlung siehe Überstunden 25 %")
-    _set_cell_string(sheet, "I49", "Kontogrenze: 100:00 Std.")
+    # I46:L49 is reserved for manually entered remarks.
     _set_cell_string(sheet, "I50", "Kontostand alt:")
     _set_cell_string(sheet, "I51", "Kontostand neu:")
 
@@ -1151,6 +1138,10 @@ def _append_duration_styles(styles: ET.Element, sheet: ET.Element) -> dict[int, 
             numFmtId=duration_format.attrib["numFmtId"], applyNumberFormat="1",
             applyAlignment="1",
         )
+        if ref == PAYROLL_MONTH_TEMPLATE_LAYOUT.closing_balance_cell:
+            opening_cell = _find_cell(sheet, PAYROLL_MONTH_TEMPLATE_LAYOUT.opening_balance_cell)
+            opening_style = cell_xfs[int(opening_cell.attrib.get("s", "0"))]
+            cloned_style.attrib.update(fontId=opening_style.attrib["fontId"], applyFont="1")
         alignment = cloned_style.find(_qname("alignment"))
         if alignment is None:
             alignment = ET.Element(_qname("alignment"))

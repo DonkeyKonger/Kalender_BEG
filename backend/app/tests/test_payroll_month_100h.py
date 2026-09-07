@@ -132,9 +132,7 @@ def test_real_48_hour_month_exports_only_surplus_and_preserves_approved_workbook
     assert float(cell_text(sheet,'D47')) * 1440 == pytest.approx(payout)
     assert float(cell_text(sheet,'K50')) * 1440 == pytest.approx(opening)
     assert float(cell_text(sheet,'K51')) * 1440 == pytest.approx(closing)
-    assert cell_text(sheet,'I46') == 'Monatsdifferenz: +8:09'
-    if opening == 5820:
-        assert cell_text(sheet,'I47') == 'Stundenkonto: +3:00'
+    assert all(cell_text(sheet, f'I{row}') == '' for row in range(46, 50))
     combined = PayrollMonthExportService(db).all_workers_export(year=2026,month=8,current_user=user)
     assert cell_text(workbook_sheet(combined),'D47') == cell_text(sheet,'D47')
     before_ids = list(db.scalars(select(Entry.id)))
@@ -158,5 +156,5 @@ def test_negative_month_debits_account_but_never_exports_negative_paid_overtime(
     artifact = db.scalar(select(PayrollMonthPersonApprovalArtifact))
     sheet = workbook_sheet(artifact.content)
     assert float(cell_text(sheet,'D47')) == 0
-    assert cell_text(sheet,'I46') == 'Monatsdifferenz: -31:36'
+    assert all(cell_text(sheet, f'I{row}') == '' for row in range(46, 50))
     assert float(cell_text(sheet,'K51')) * 1440 == pytest.approx(4104)
