@@ -1583,7 +1583,7 @@ export function TimeEntriesPage() {
       return null;
     }
     const lock = payrollWorkDateLock(reviewWeekPayrollMonthStatuses, workDate, selectedReviewWorker?.personId ?? null);
-    return lock === "month" ? "Monat abgeschlossen" : lock === "person" ? "Monteurmonat abgeschlossen" : null;
+    return lock === "month" ? "Monat abgeschlossen" : lock === "person" ? "Monat abgeschlossen" : null;
   }
 
   function isReviewWeekWorkDateReadOnly(workDate: string, personId: number | null = selectedReviewWorker?.personId ?? null): boolean {

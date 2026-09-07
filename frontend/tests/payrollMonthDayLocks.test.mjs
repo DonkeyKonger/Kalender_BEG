@@ -23,7 +23,7 @@ test("a cross-month payroll week loads no more than its two affected month statu
 });
 
 test("locked days are labelled and every day-level mutation is protected", () => {
-  assert.match(page, /lock === "month" \? "Monat abgeschlossen" : lock === "person" \? "Monteurmonat abgeschlossen"/);
+  assert.match(page, /lock === "month" \? "Monat abgeschlossen" : lock === "person" \? "Monat abgeschlossen"/);
   assert.match(page, /const isLockedPayrollDay = payrollDayLockLabel !== null/);
   assert.match(page, /\{payrollDayLockLabel\}/);
   assert.match(page, /editable=\{canManageTimeEntries && !selectedReviewWorker\.isReviewed && !isReadOnlyPayrollDay\}/);

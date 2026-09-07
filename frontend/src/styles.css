@@ -21526,14 +21526,15 @@ body.mobile-modal-scroll-locked {
   min-width: 0;
   align-items: center;
   gap: 4px;
-  border: 1px solid #b9c5d3;
-  background: #ffffff;
-  color: #475569;
-  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: #5f6b7a;
+  padding: 0;
   font-size: 0.66rem;
-  font-weight: 850;
+  font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;
+  cursor: default;
 }
 
 .time-evaluation-day-group-label {
