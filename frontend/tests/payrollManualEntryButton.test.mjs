@@ -24,7 +24,7 @@ test("manual payroll entry action opens the explicit create mode", () => {
   assert.match(source, /options=\{payrollManualDateOptions\}/);
   assert.match(source, /buildPayrollManualEntryPayload\(/);
   assert.match(source, /await api\.createTimeEntry\(result\.payload\)/);
-  assert.match(source, /refreshSelectedReviewPayrollWeekSummary\(\)/);
+  assert.match(source, /refreshAfterPayrollMutation\(mutationContext, \[createdEntry\.work_date\]\)/);
   assert.match(source, /closeTimeReviewDiagnostic\(\)/);
 });
 

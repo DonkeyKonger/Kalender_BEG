@@ -1,5 +1,5 @@
 import { AlertTriangle, ArrowRight, CalendarPlus, CarFront, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, LockKeyhole, MoreHorizontal, Search, Trash2, Wrench, X } from "lucide-react";
-import { type FormEvent, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
@@ -49,6 +49,18 @@ import {
   formatVerboseMinutes as formatMinutes,
 } from "../lib/formatters";
 import { applyOvernightStatusToWorkDate, summarizeOvernightStatuses } from "../lib/overnightStatus";
+import {
+  arePayrollReviewSourcesReady,
+  isoReviewYearsForWorkDates,
+  isPayrollPersonBlockersChangedError,
+  isPayrollReviewRangeAffected,
+  isSamePayrollReviewDataContext,
+  payrollMonthSelectionsForReviewImpact,
+  replaceWeeklyReviewYear,
+  upsertWeeklyReview,
+  weeklyReviewsForSelection,
+  type PayrollReviewDataContext,
+} from "../lib/payrollReviewFreshness";
 import {
   payrollWeekPersonsById,
   payrollWeekTotalMinutes,
@@ -194,6 +206,10 @@ type TimeReviewPerfState = {
 };
 type PayrollMonthDialog = "reopen" | null;
 type PayrollPersonMonthDialog = "approve" | "reopen" | null;
+type WeeklyReviewYearLoadStatus = {
+  state: "idle" | "loading" | "ready" | "error";
+  error: string | null;
+};
 const GPS_TIME_TOLERANCE_MINUTES = 15;
 const GPS_NOT_CHECKABLE_NOTICE = "GPS nicht eindeutig prüfbar";
 const TIME_REVIEW_PERF_STORAGE_KEY = "beg_time_review_perf";
@@ -202,6 +218,7 @@ const TIME_REVIEW_API_ABSENCES = "absences";
 const TIME_REVIEW_API_PAYROLL_WEEK = "payroll week";
 const TIME_REVIEW_API_WEEKLY_REVIEWS = "weekly reviews";
 const TIME_REVIEW_API_MONTH_LOCKS = "month locks";
+const WEEKLY_REVIEW_CACHE_TTL_MS = 60_000;
 const EMPTY_REVIEW_ENTRIES: TimeEntry[] = [];
 const EMPTY_REVIEW_ABSENCES: Absence[] = [];
 const timeSubtabs: { key: TimeSubtab; label: string }[] = [
@@ -221,17 +238,22 @@ export function TimeEntriesPage() {
   const [reviewAllEntriesRangeKey, setReviewAllEntriesRangeKey] = useState<string | null>(null);
   const [reviewAbsencesRangeKey, setReviewAbsencesRangeKey] = useState<string | null>(null);
   const [reviewPayrollWeek, setReviewPayrollWeek] = useState<TimeEntryPayrollWeek | null>(null);
-  const [reviewWeeklyReviews, setReviewWeeklyReviews] = useState<TimeEntryWeeklyReview[]>([]);
+  const [reviewPayrollWeekRangeKey, setReviewPayrollWeekRangeKey] = useState<string | null>(null);
   const [reviewWeekCompletionReviews, setReviewWeekCompletionReviews] = useState<TimeEntryWeeklyReview[]>([]);
+  const [weeklyReviewYearStatuses, setWeeklyReviewYearStatuses] = useState<Record<number, WeeklyReviewYearLoadStatus>>({});
   const [sites, setSites] = useState<SiteSummary[]>([]);
   const [isLoadingSites, setIsLoadingSites] = useState(true);
   const [sitesError, setSitesError] = useState<string | null>(null);
   const [isLoadingPeople, setIsLoadingPeople] = useState(true);
   const [isLoadingReviewEntries, setIsLoadingReviewEntries] = useState(false);
   const [isLoadingReviewAllEntries, setIsLoadingReviewAllEntries] = useState(false);
+  const [isLoadingReviewAbsences, setIsLoadingReviewAbsences] = useState(false);
+  const [isLoadingReviewPayrollWeek, setIsLoadingReviewPayrollWeek] = useState(false);
+  const [reviewDataReloadKey, setReviewDataReloadKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [reviewEntriesError, setReviewEntriesError] = useState<string | null>(null);
   const [reviewAllEntriesError, setReviewAllEntriesError] = useState<string | null>(null);
+  const [reviewAbsencesError, setReviewAbsencesError] = useState<string | null>(null);
   const [reviewPayrollWeekError, setReviewPayrollWeekError] = useState<string | null>(null);
   const [reviewActionError, setReviewActionError] = useState<string | null>(null);
   const [payrollDatePicker, setPayrollDatePicker] = useState<PayrollDatePickerState | null>(null);
@@ -283,8 +305,11 @@ export function TimeEntriesPage() {
   const [isDownloadingPayrollMonthXlsx, setIsDownloadingPayrollMonthXlsx] = useState(false);
   const [payrollMonthDownloadError, setPayrollMonthDownloadError] = useState<string | null>(null);
   const [payrollMonthPeriod, setPayrollMonthPeriod] = useState<PayrollMonthPeriod | null>(null);
+  const [payrollMonthPeriodKey, setPayrollMonthPeriodKey] = useState<string | null>(null);
+  const [payrollMonthReloadKey, setPayrollMonthReloadKey] = useState(0);
   const [isLoadingPayrollMonthPeriod, setIsLoadingPayrollMonthPeriod] = useState(false);
   const [payrollMonthPeriodError, setPayrollMonthPeriodError] = useState<string | null>(null);
+  const [payrollMonthActionError, setPayrollMonthActionError] = useState<string | null>(null);
   const [payrollMonthDialog, setPayrollMonthDialog] = useState<PayrollMonthDialog>(null);
   const [payrollPersonMonthDialog, setPayrollPersonMonthDialog] = useState<PayrollPersonMonthDialog>(null);
   const [payrollRemarksOpen, setPayrollRemarksOpen] = useState(false);
@@ -328,7 +353,76 @@ export function TimeEntriesPage() {
   const lastAlignedReviewWeekKeyRef = useRef<string | null>(null);
   const timeReviewPerfRef = useRef<TimeReviewPerfState | null>(null);
   const timeReviewRenderCountRef = useRef(0);
+  const weeklyReviewYearCacheRef = useRef(new Map<number, TimeEntryWeeklyReview[]>());
+  const weeklyReviewYearLoadedAtRef = useRef(new Map<number, number>());
+  const weeklyReviewYearLoadsRef = useRef(new Map<number, { controller: AbortController; promise: Promise<void> }>());
+  const peopleRequestIdRef = useRef(0);
+  const activeTimeSubtabRef = useRef<TimeSubtab>(activeTimeSubtab);
+  const selectedEvaluationMonthRef = useRef<CalendarMonthSelection>(selectedEvaluationMonth);
+  const payrollMonthRequestIdsRef = useRef(new Map<string, number>());
   timeReviewRenderCountRef.current += 1;
+  activeTimeSubtabRef.current = activeTimeSubtab;
+  selectedEvaluationMonthRef.current = selectedEvaluationMonth;
+
+  const loadWeeklyReviewYear = useCallback(async (isoYear: number, force = false): Promise<void> => {
+    if (!canManageTimeEntries) {
+      return;
+    }
+    const loadedAt = weeklyReviewYearLoadedAtRef.current.get(isoYear) ?? 0;
+    if (
+      !force
+      && weeklyReviewYearCacheRef.current.has(isoYear)
+      && Date.now() - loadedAt < WEEKLY_REVIEW_CACHE_TTL_MS
+    ) {
+      setWeeklyReviewYearStatuses((current) => ({
+        ...current,
+        [isoYear]: { state: "ready", error: null },
+      }));
+      return;
+    }
+    const pendingLoad = weeklyReviewYearLoadsRef.current.get(isoYear);
+    if (pendingLoad && !force) {
+      return pendingLoad.promise;
+    }
+    pendingLoad?.controller.abort();
+    const controller = new AbortController();
+    setWeeklyReviewYearStatuses((current) => ({
+      ...current,
+      [isoYear]: { state: "loading", error: null },
+    }));
+    const promise = api.timeEntryWeeklyReviews({ isoYear, signal: controller.signal })
+      .then((reviews) => {
+        if (controller.signal.aborted || weeklyReviewYearLoadsRef.current.get(isoYear)?.controller !== controller) {
+          return;
+        }
+        weeklyReviewYearCacheRef.current.set(isoYear, reviews);
+        weeklyReviewYearLoadedAtRef.current.set(isoYear, Date.now());
+        setReviewWeekCompletionReviews((current) => replaceWeeklyReviewYear(current, isoYear, reviews));
+        setWeeklyReviewYearStatuses((current) => ({
+          ...current,
+          [isoYear]: { state: "ready", error: null },
+        }));
+      })
+      .catch((requestError) => {
+        if (controller.signal.aborted || weeklyReviewYearLoadsRef.current.get(isoYear)?.controller !== controller) {
+          return;
+        }
+        setWeeklyReviewYearStatuses((current) => ({
+          ...current,
+          [isoYear]: {
+            state: "error",
+            error: readApiError(requestError, `Wochenprüfstatus ${isoYear} konnte nicht geladen werden.`),
+          },
+        }));
+      })
+      .finally(() => {
+        if (weeklyReviewYearLoadsRef.current.get(isoYear)?.controller === controller) {
+          weeklyReviewYearLoadsRef.current.delete(isoYear);
+        }
+      });
+    weeklyReviewYearLoadsRef.current.set(isoYear, { controller, promise });
+    return promise;
+  }, [canManageTimeEntries]);
 
   useEffect(() => {
     if (reviewWeekStatusMenuPersonId === null) {
@@ -470,22 +564,42 @@ export function TimeEntriesPage() {
     setReviewWeekStatusMenuPosition(null);
     setIsReviewWeekActionsMenuOpen(false);
     setReviewWeekActionsMenuPosition(null);
-  }, [selectedReviewPersonId, selectedReviewWeek.week, selectedReviewWeek.year]);
+  }, [
+    activeEvaluationSubtab,
+    activeTimeSubtab,
+    selectedEvaluationMonth.month,
+    selectedEvaluationMonth.year,
+    selectedEvaluationPersonId,
+    selectedReviewPersonId,
+    selectedReviewWeek.week,
+    selectedReviewWeek.year,
+  ]);
 
   useEffect(() => {
     void loadPeople();
+    return () => {
+      peopleRequestIdRef.current += 1;
+    };
   }, []);
 
   async function loadPeople() {
+    const requestId = peopleRequestIdRef.current + 1;
+    peopleRequestIdRef.current = requestId;
     setIsLoadingPeople(true);
     setError(null);
     try {
       const personData = await api.persons({ isActive: true });
-      setPeople(personData.sort(comparePeople));
+      if (peopleRequestIdRef.current === requestId) {
+        setPeople(personData.sort(comparePeople));
+      }
     } catch (requestError) {
-      setError(readApiError(requestError, "Monteure konnten nicht geladen werden."));
+      if (peopleRequestIdRef.current === requestId) {
+        setError(readApiError(requestError, "Monteure konnten nicht geladen werden."));
+      }
     } finally {
-      setIsLoadingPeople(false);
+      if (peopleRequestIdRef.current === requestId) {
+        setIsLoadingPeople(false);
+      }
     }
   }
 
@@ -552,6 +666,72 @@ export function TimeEntriesPage() {
     [siteOptions],
   );
   const payrollManualTimeCalculation = calculatePayrollTime(payrollCorrectionForm);
+  const selectedReviewYearStatus = weeklyReviewYearStatuses[selectedReviewWeek.year];
+  const needsWeeklyReviewYear = canManageTimeEntries && payrollReviewWorkerIds.length > 0;
+  const reviewWeeklyReviewsError = needsWeeklyReviewYear && selectedReviewYearStatus?.state === "error"
+    ? selectedReviewYearStatus.error
+    : null;
+  const reviewWeeklyReviewsRangeKey = !needsWeeklyReviewYear || selectedReviewYearStatus?.state === "ready"
+    ? reviewWeekKey(selectedReviewWeek)
+    : null;
+  const reviewWeeklyReviews = useMemo(
+    () => weeklyReviewsForSelection(reviewWeekCompletionReviews, selectedReviewWeek),
+    [reviewWeekCompletionReviews, selectedReviewWeek],
+  );
+  const areReviewWeekPayrollMonthStatusesReady = reviewWeekPayrollMonthStatusRangeKey === reviewWeekRangeKey
+    && !isLoadingReviewWeekPayrollMonthStatuses
+    && reviewWeekPayrollMonthStatusError === null;
+  const isReviewWeekDataReady = activeTimeSubtab === "review" && arePayrollReviewSourcesReady([
+    {
+      expectedKey: "people",
+      loadedKey: !isLoadingPeople && error === null ? "people" : null,
+      isLoading: isLoadingPeople,
+      error,
+    },
+    {
+      expectedKey: reviewWeekRangeKey,
+      loadedKey: reviewAllEntriesRangeKey,
+      isLoading: isLoadingReviewEntries || isLoadingReviewAllEntries,
+      error: reviewEntriesError ?? reviewAllEntriesError,
+    },
+    {
+      expectedKey: reviewWeekRangeKey,
+      loadedKey: reviewAbsencesRangeKey,
+      isLoading: isLoadingReviewAbsences,
+      error: reviewAbsencesError,
+    },
+    {
+      expectedKey: reviewWeekKey(selectedReviewWeek),
+      loadedKey: reviewPayrollWeekRangeKey,
+      isLoading: isLoadingReviewPayrollWeek,
+      error: reviewPayrollWeekError,
+    },
+    {
+      expectedKey: reviewWeekKey(selectedReviewWeek),
+      loadedKey: reviewWeeklyReviewsRangeKey,
+      isLoading: needsWeeklyReviewYear && selectedReviewYearStatus?.state === "loading",
+      error: reviewWeeklyReviewsError,
+    },
+    {
+      expectedKey: reviewWeekRangeKey,
+      loadedKey: reviewWeekPayrollMonthStatusRangeKey,
+      isLoading: isLoadingReviewWeekPayrollMonthStatuses,
+      error: reviewWeekPayrollMonthStatusError,
+    },
+  ]);
+  const reviewDataErrors = [
+    error,
+    reviewEntriesError,
+    reviewAllEntriesError,
+    reviewAbsencesError,
+    reviewPayrollWeekError,
+    reviewWeeklyReviewsError,
+    reviewWeekPayrollMonthStatusError,
+  ].filter((message): message is string => Boolean(message));
+  const reviewDataErrorMessage = [...new Set(reviewDataErrors)].join(" ");
+  const readyReviewEntries = isReviewWeekDataReady ? reviewEntries : EMPTY_REVIEW_ENTRIES;
+  const readyReviewAllEntries = isReviewWeekDataReady ? reviewAllEntries : EMPTY_REVIEW_ENTRIES;
+  const readyReviewAbsences = isReviewWeekDataReady ? reviewAbsences : EMPTY_REVIEW_ABSENCES;
   const reviewedWorkerIds = useMemo(
     () => new Set(reviewWeeklyReviews.filter(isWeeklyReviewReviewed).map((review) => review.person_id)),
     [reviewWeeklyReviews],
@@ -561,25 +741,25 @@ export function TimeEntriesPage() {
     [reviewWeeklyReviews],
   );
   const payrollWeekPersons = useMemo(
-    () => payrollWeekPersonsById(reviewPayrollWeek?.persons ?? []),
-    [reviewPayrollWeek],
+    () => payrollWeekPersonsById(isReviewWeekDataReady ? reviewPayrollWeek?.persons ?? [] : []),
+    [isReviewWeekDataReady, reviewPayrollWeek],
   );
   const timeReviewWorkers = useMemo(() => {
     const perfStart = timeReviewPerfNow();
     const result = buildTimeReviewWorkerSummaries(
       people,
-      reviewAllEntries,
-      reviewEntries,
-      reviewAbsences,
+      readyReviewAllEntries,
+      readyReviewEntries,
+      readyReviewAbsences,
       reviewedWorkerIds,
       resetWorkerIds,
       payrollWeekPersons,
     );
     recordTimeReviewPerfCalculation(timeReviewPerfRef, "worker summaries", perfStart, {
-      details: `${people.length} Personen · ${reviewAllEntries.length} Einträge · ${reviewAbsences.length} Abwesenheiten · ${result.length} Monteure`,
+      details: `${people.length} Personen · ${readyReviewAllEntries.length} Einträge · ${readyReviewAbsences.length} Abwesenheiten · ${result.length} Monteure`,
     });
     return result;
-  }, [payrollWeekPersons, people, reviewAbsences, reviewAllEntries, reviewEntries, resetWorkerIds, reviewedWorkerIds]);
+  }, [payrollWeekPersons, people, readyReviewAbsences, readyReviewAllEntries, readyReviewEntries, resetWorkerIds, reviewedWorkerIds]);
   const reviewWorkerFilterCounts = useMemo(
     () => countTimeReviewWorkersByFilter(timeReviewWorkers),
     [timeReviewWorkers],
@@ -596,23 +776,20 @@ export function TimeEntriesPage() {
     const perfStart = timeReviewPerfNow();
     const result = buildTimeReviewWeekDays(
       selectedReviewWorker?.entries ?? [],
-      reviewAbsences,
+      readyReviewAbsences,
       selectedReviewWorker?.personId ?? null,
       reviewWeekRange.start,
       selectedReviewWorker ? payrollWeekPersons.get(selectedReviewWorker.personId) : null,
     );
     recordTimeReviewPerfCalculation(timeReviewPerfRef, "selected worker week rows", perfStart, {
-      details: `${selectedReviewWorker?.entries.length ?? 0} Einträge · ${reviewAbsences.length} Abwesenheiten`,
+      details: `${selectedReviewWorker?.entries.length ?? 0} Einträge · ${readyReviewAbsences.length} Abwesenheiten`,
     });
     return result;
-  }, [payrollWeekPersons, reviewAbsences, reviewWeekRange.start, selectedReviewWorker]);
+  }, [payrollWeekPersons, readyReviewAbsences, reviewWeekRange.start, selectedReviewWorker]);
   const selectedReviewWeekDayOptions = useMemo(
     () => buildReviewWeekDayOptions(reviewWeekRange.start),
     [reviewWeekRange.start],
   );
-  const areReviewWeekPayrollMonthStatusesReady = reviewWeekPayrollMonthStatusRangeKey === reviewWeekRangeKey
-    && !isLoadingReviewWeekPayrollMonthStatuses
-    && reviewWeekPayrollMonthStatusError === null;
   const writableReviewWeekDayOptions = useMemo(
     () => areReviewWeekPayrollMonthStatusesReady
       ? selectedReviewWeekDayOptions.filter((option) => {
@@ -636,24 +813,38 @@ export function TimeEntriesPage() {
   const isEvaluationDataReady = activeTimeSubtab === "evaluation"
     && activeEvaluationSubtab === "workers"
     && reviewAllEntriesRangeKey === evaluationRangeKey
-    && reviewAbsencesRangeKey === evaluationRangeKey;
+    && reviewAbsencesRangeKey === evaluationRangeKey
+    && !isLoadingPeople
+    && !isLoadingReviewAllEntries
+    && !isLoadingReviewAbsences
+    && error === null
+    && reviewAllEntriesError === null
+    && reviewAbsencesError === null;
   const evaluationEntries = isEvaluationDataReady ? reviewAllEntries : EMPTY_REVIEW_ENTRIES;
   const evaluationAbsences = isEvaluationDataReady ? reviewAbsences : EMPTY_REVIEW_ABSENCES;
+  const selectedPayrollMonthKey = payrollMonthKey(selectedEvaluationMonth);
+  const isPayrollMonthPeriodReady = activeTimeSubtab === "evaluation"
+    && payrollMonthPeriodKey === selectedPayrollMonthKey
+    && payrollMonthPeriod !== null
+    && !isLoadingPayrollMonthPeriod
+    && payrollMonthPeriodError === null;
+  const readyPayrollMonthPeriod = isPayrollMonthPeriodReady ? payrollMonthPeriod : null;
   const evaluationReviewedWorkerIds = useMemo(
-    () => payrollApprovedPersonIds(payrollMonthPeriod),
-    [payrollMonthPeriod],
+    () => payrollApprovedPersonIds(readyPayrollMonthPeriod),
+    [readyPayrollMonthPeriod],
   );
   const evaluationWorkers = useMemo(
     () => buildTimeReviewWorkerSummaries(
-      people,
+      [],
       evaluationEntries,
       evaluationEntries.filter((entry) => entry.payroll_reviewed_at === null),
       evaluationAbsences,
       evaluationReviewedWorkerIds,
       new Set<number>(),
       new Map<number, TimeEntryPayrollWeekPerson>(),
+      readyPayrollMonthPeriod?.person_approvals ?? [],
     ),
-    [evaluationAbsences, evaluationEntries, evaluationReviewedWorkerIds, people],
+    [evaluationAbsences, evaluationEntries, evaluationReviewedWorkerIds, readyPayrollMonthPeriod?.person_approvals],
   );
   const evaluationWorkerFilterCounts = useMemo(
     () => countTimeReviewWorkersByFilter(evaluationWorkers),
@@ -683,25 +874,35 @@ export function TimeEntriesPage() {
   );
   const isEvaluationWorkerReview = activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers";
   const activeReviewWorker = isEvaluationWorkerReview ? selectedEvaluationWorker : selectedReviewWorker;
+  const activeReviewContext: PayrollReviewDataContext = {
+    mode: isEvaluationWorkerReview ? "month" : "week",
+    rangeKey: isEvaluationWorkerReview ? evaluationRangeKey : reviewWeekRangeKey,
+    personId: isEvaluationWorkerReview ? selectedEvaluationPersonId : selectedReviewPersonId,
+  };
+  const activeReviewContextRef = useRef<PayrollReviewDataContext>(activeReviewContext);
+  activeReviewContextRef.current = activeReviewContext;
   const activeReviewDays = isEvaluationWorkerReview ? selectedEvaluationMonthDays : selectedReviewWeekDays;
   const activeReviewDayOptions = isEvaluationWorkerReview ? evaluationMonthDayOptions : selectedReviewWeekDayOptions;
   const activePayrollDatePickerEntry = useMemo(
     () => payrollDatePicker ? findEntryInReviewWeekDays(activeReviewDays, payrollDatePicker.entryId) : null,
     [activeReviewDays, payrollDatePicker],
   );
-  const isPayrollMonthLocked = payrollMonthPeriod?.status === "LOCKED";
-  const payrollMonthVersion = payrollSnapshotVersion(payrollMonthPeriod);
-  const arePayrollMonthExportsAvailable = payrollAllWorkersExportAvailable(payrollMonthPeriod);
+  const isPayrollMonthLocked = readyPayrollMonthPeriod?.status === "LOCKED";
+  const payrollMonthVersion = payrollSnapshotVersion(readyPayrollMonthPeriod);
+  const arePayrollMonthExportsAvailable = payrollAllWorkersExportAvailable(readyPayrollMonthPeriod);
   const selectedPayrollPersonApproval = useMemo(
-    () => selectedEvaluationWorker && payrollMonthPeriod
-      ? payrollMonthPeriod.person_approvals.find((item) => item.person_id === selectedEvaluationWorker.personId) ?? null
+    () => selectedEvaluationWorker && readyPayrollMonthPeriod
+      ? readyPayrollMonthPeriod.person_approvals.find((item) => item.person_id === selectedEvaluationWorker.personId) ?? null
       : null,
-    [payrollMonthPeriod, selectedEvaluationWorker],
+    [readyPayrollMonthPeriod, selectedEvaluationWorker],
   );
   const isSelectedPayrollPersonApproved = selectedPayrollPersonApproval?.status === "APPROVED";
   useEffect(() => {
     setPayrollRemarksOpen(false);
   }, [selectedEvaluationWorker?.personId, selectedEvaluationMonth.year, selectedEvaluationMonth.month, activeTimeSubtab]);
+  useEffect(() => {
+    setHasAcknowledgedPayrollPersonBlockers(false);
+  }, [selectedPayrollPersonApproval?.blocker_fingerprint]);
   const selectedPayrollPersonBlockers = isSelectedPayrollPersonApproved
     ? []
     : selectedPayrollPersonApproval?.blockers ?? [];
@@ -723,7 +924,7 @@ export function TimeEntriesPage() {
         ? "Der Monteurmonat wird gerade verarbeitet."
         : !canManagePayrollClose
           ? "Für den Monatsabschluss fehlt die allgemeine Lohnprüfungsberechtigung."
-          : !payrollMonthPeriod || !selectedPayrollPersonApproval
+          : !readyPayrollMonthPeriod || !selectedPayrollPersonApproval
             ? "Der Status dieses Monteurmonats ist derzeit nicht verfügbar."
             : isPayrollMonthLocked
               ? "Der Gesamtmonat ist bereits abgeschlossen. Öffne ihn zuerst wieder."
@@ -732,7 +933,8 @@ export function TimeEntriesPage() {
                 : !isSelectedPayrollPersonApproved && !selectedPayrollPersonApproval.can_approve
                   ? "Dieser Monteurmonat kann im aktuellen Stand nicht abgeschlossen werden."
                   : null;
-  const payrollPersonApprovalSummary = payrollMonthPeriod?.person_approval_summary ?? null;
+  const payrollPersonApprovalSummary = readyPayrollMonthPeriod?.person_approval_summary ?? null;
+  const evaluationDataError = error ?? reviewAllEntriesError ?? reviewAbsencesError ?? payrollMonthPeriodError;
   useEffect(() => {
     let ignore = false;
     setIsLoadingSites(true);
@@ -768,13 +970,13 @@ export function TimeEntriesPage() {
   }, [selectedReviewPersonId, timeReviewWorkers]);
 
   useEffect(() => {
-    if (!isEvaluationDataReady) {
+    if (!isEvaluationDataReady || !isPayrollMonthPeriodReady) {
       return;
     }
     if (selectedEvaluationPersonId !== null && !evaluationWorkers.some((worker) => worker.personId === selectedEvaluationPersonId)) {
       setSelectedEvaluationPersonId(null);
     }
-  }, [evaluationWorkers, isEvaluationDataReady, selectedEvaluationPersonId]);
+  }, [evaluationWorkers, isEvaluationDataReady, isPayrollMonthPeriodReady, selectedEvaluationPersonId]);
 
   useEffect(() => {
     setExpandedEvaluationDayKeys(new Set());
@@ -786,6 +988,7 @@ export function TimeEntriesPage() {
     setPayrollMonthReopenReason("");
     setPayrollPersonMonthReopenReason("");
     setPayrollMonthDownloadError(null);
+    setPayrollMonthActionError(null);
   }, [selectedEvaluationMonth.month, selectedEvaluationMonth.year]);
 
   useEffect(() => {
@@ -793,6 +996,7 @@ export function TimeEntriesPage() {
     setPayrollPersonMonthReopenReason("");
     setIsPayrollPersonLogExpanded(false);
     setPayrollMonthPeriodError(null);
+    setPayrollMonthActionError(null);
   }, [selectedEvaluationMonth.month, selectedEvaluationMonth.year, selectedEvaluationPersonId]);
 
   useEffect(() => {
@@ -980,38 +1184,40 @@ export function TimeEntriesPage() {
       return;
     }
 
-    let ignore = false;
+    const controller = new AbortController();
     const perfStart = timeReviewPerfNow();
     let perfRows: number | undefined;
     let perfOk = false;
     setIsLoadingReviewEntries(true);
     setIsLoadingReviewAllEntries(true);
+    setReviewAllEntriesRangeKey(null);
     setReviewEntriesError(null);
     setReviewAllEntriesError(null);
 
     api.timeEntryReviewWeek({
       dateFrom: reviewDataRange.start,
       dateTo: reviewDataRange.end,
+      signal: controller.signal,
     })
       .then((reviewWeek) => {
         perfRows = reviewWeek.entries.length;
         perfOk = true;
-        if (!ignore) {
+        if (!controller.signal.aborted) {
           setReviewEntries(reviewWeek.open_entries);
           setReviewAllEntries(reviewWeek.entries);
           setReviewAllEntriesRangeKey(reviewDataRangeKey(reviewDataRange));
         }
       })
       .catch((requestError) => {
-        if (!ignore) {
+        if (!controller.signal.aborted) {
           setReviewEntries([]);
           setReviewAllEntries([]);
-          setReviewAllEntriesRangeKey(reviewDataRangeKey(reviewDataRange));
+          setReviewAllEntriesRangeKey(null);
           setReviewEntriesError(readApiError(requestError, "Stundenpruefung konnte nicht geladen werden."));
         }
       })
       .finally(() => {
-        if (!ignore) {
+        if (!controller.signal.aborted) {
           setIsLoadingReviewEntries(false);
           setIsLoadingReviewAllEntries(false);
           recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_REVIEW_WEEK, perfStart, {
@@ -1023,9 +1229,9 @@ export function TimeEntriesPage() {
       });
 
     return () => {
-      ignore = true;
+      controller.abort();
     };
-  }, [activeTimeSubtab, reviewDataRange]);
+  }, [activeTimeSubtab, reviewDataRange, reviewDataReloadKey]);
 
   useLayoutEffect(() => {
     if (activeTimeSubtab !== "review") {
@@ -1158,30 +1364,37 @@ export function TimeEntriesPage() {
     if (!needsDetailedEntries) {
       setReviewAbsences([]);
       setReviewAbsencesRangeKey(null);
+      setIsLoadingReviewAbsences(false);
+      setReviewAbsencesError(null);
       return;
     }
 
-    let ignore = false;
+    const controller = new AbortController();
     const perfStart = timeReviewPerfNow();
     let perfRows: number | undefined;
     let perfOk = false;
-    api.absences({ start: reviewDataRange.start, end: reviewDataRange.end })
+    setIsLoadingReviewAbsences(true);
+    setReviewAbsencesRangeKey(null);
+    setReviewAbsencesError(null);
+    api.absences({ start: reviewDataRange.start, end: reviewDataRange.end, signal: controller.signal })
       .then((absenceData) => {
         perfRows = absenceData.length;
         perfOk = true;
-        if (!ignore) {
+        if (!controller.signal.aborted) {
           setReviewAbsences(absenceData);
           setReviewAbsencesRangeKey(reviewDataRangeKey(reviewDataRange));
         }
       })
-      .catch(() => {
-        if (!ignore) {
+      .catch((requestError) => {
+        if (!controller.signal.aborted) {
           setReviewAbsences([]);
-          setReviewAbsencesRangeKey(reviewDataRangeKey(reviewDataRange));
+          setReviewAbsencesRangeKey(null);
+          setReviewAbsencesError(readApiError(requestError, "Abwesenheiten konnten nicht geladen werden."));
         }
       })
       .finally(() => {
-        if (!ignore) {
+        if (!controller.signal.aborted) {
+          setIsLoadingReviewAbsences(false);
           recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_ABSENCES, perfStart, {
             details: `${reviewDataRange.start} bis ${reviewDataRange.end}`,
             ok: perfOk,
@@ -1191,37 +1404,44 @@ export function TimeEntriesPage() {
       });
 
     return () => {
-      ignore = true;
+      controller.abort();
     };
-  }, [activeEvaluationSubtab, activeTimeSubtab, reviewDataRange]);
+  }, [activeEvaluationSubtab, activeTimeSubtab, reviewDataRange, reviewDataReloadKey]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review") {
       setReviewPayrollWeek(null);
+      setReviewPayrollWeekRangeKey(null);
+      setIsLoadingReviewPayrollWeek(false);
       setReviewPayrollWeekError(null);
       return;
     }
 
-    let ignore = false;
+    const controller = new AbortController();
     const perfStart = timeReviewPerfNow();
     let perfRows: number | undefined;
     let perfOk = false;
+    setIsLoadingReviewPayrollWeek(true);
     setReviewPayrollWeek(null);
+    setReviewPayrollWeekRangeKey(null);
     setReviewPayrollWeekError(null);
     api.timeEntryPayrollWeek({
       isoYear: selectedReviewWeek.year,
       isoWeek: selectedReviewWeek.week,
+      signal: controller.signal,
     })
       .then((payrollWeek) => {
         perfRows = payrollWeek.persons.length;
         perfOk = true;
-        if (!ignore) {
+        if (!controller.signal.aborted) {
           setReviewPayrollWeek(payrollWeek);
+          setReviewPayrollWeekRangeKey(reviewWeekKey(selectedReviewWeek));
         }
       })
       .catch((requestError) => {
-        if (!ignore) {
+        if (!controller.signal.aborted) {
           setReviewPayrollWeek(null);
+          setReviewPayrollWeekRangeKey(null);
           setReviewPayrollWeekError(readApiError(
             requestError,
             "Urlaubsstunden konnten nicht geladen werden.",
@@ -1229,7 +1449,8 @@ export function TimeEntriesPage() {
         }
       })
       .finally(() => {
-        if (!ignore) {
+        if (!controller.signal.aborted) {
+          setIsLoadingReviewPayrollWeek(false);
           recordTimeReviewPerfApiCall(
             timeReviewPerfRef,
             timeReviewRenderCountRef,
@@ -1245,112 +1466,98 @@ export function TimeEntriesPage() {
       });
 
     return () => {
-      ignore = true;
+      controller.abort();
     };
-  }, [activeTimeSubtab, selectedReviewWeek.week, selectedReviewWeek.year]);
-
-  useEffect(() => {
-    if (activeTimeSubtab !== "review" || !canManageTimeEntries) {
-      setReviewWeeklyReviews([]);
-      return;
-    }
-
-    let ignore = false;
-    const perfStart = timeReviewPerfNow();
-    let perfRows: number | undefined;
-    let perfOk = false;
-    setReviewWeeklyReviews([]);
-    api.timeEntryWeeklyReviews({
-      isoYear: selectedReviewWeek.year,
-      isoWeek: selectedReviewWeek.week,
-    })
-      .then((weeklyReviews) => {
-        perfRows = weeklyReviews.length;
-        perfOk = true;
-        if (!ignore) {
-          setReviewWeeklyReviews(weeklyReviews);
-        }
-      })
-      .catch((requestError) => {
-        if (!ignore) {
-          setReviewWeeklyReviews([]);
-          setReviewActionError(readApiError(requestError, "Wochenpruefstatus konnte nicht geladen werden."));
-        }
-      })
-      .finally(() => {
-        if (!ignore) {
-          recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_WEEKLY_REVIEWS, perfStart, {
-            details: `KW ${selectedReviewWeek.week}/${selectedReviewWeek.year}`,
-            ok: perfOk,
-            rows: perfRows,
-          });
-        }
-      });
-
-    return () => {
-      ignore = true;
-    };
-  }, [activeTimeSubtab, canManageTimeEntries, selectedReviewWeek.week, selectedReviewWeek.year]);
+  }, [activeTimeSubtab, reviewDataReloadKey, selectedReviewWeek, selectedReviewWeek.week, selectedReviewWeek.year]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review" || !canManageTimeEntries || payrollReviewWorkerIds.length === 0) {
-      setReviewWeekCompletionReviews([]);
       return;
     }
-
-    let ignore = false;
     const years = Array.from(new Set(reviewWeekOptions.map((option) => option.year)));
-    Promise.all(years.map((isoYear) => api.timeEntryWeeklyReviews({ isoYear })))
-      .then((reviewsByYear) => {
-        if (!ignore) {
-          setReviewWeekCompletionReviews(reviewsByYear.flat());
-        }
-      })
-      .catch(() => {
-        if (!ignore) {
-          setReviewWeekCompletionReviews([]);
-        }
+    const perfStart = timeReviewPerfNow();
+    void Promise.all(years.map((isoYear) => loadWeeklyReviewYear(isoYear)))
+      .finally(() => {
+        recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_WEEKLY_REVIEWS, perfStart, {
+          details: `${years.length} Prüfjahre, Sitzungscache`,
+          ok: years.every((isoYear) => weeklyReviewYearCacheRef.current.has(isoYear)),
+          rows: years.reduce((sum, isoYear) => sum + (weeklyReviewYearCacheRef.current.get(isoYear)?.length ?? 0), 0),
+        });
       });
+  }, [activeTimeSubtab, canManageTimeEntries, loadWeeklyReviewYear, payrollReviewWorkerIds.length, reviewWeekOptions]);
 
-    return () => {
-      ignore = true;
+  useEffect(() => {
+    if (activeTimeSubtab !== "review" || !canManageTimeEntries || payrollReviewWorkerIds.length === 0) {
+      return;
+    }
+    void loadWeeklyReviewYear(selectedReviewWeek.year);
+  }, [
+    activeTimeSubtab,
+    canManageTimeEntries,
+    loadWeeklyReviewYear,
+    payrollReviewWorkerIds.length,
+    selectedReviewWeek.week,
+    selectedReviewWeek.year,
+  ]);
+
+  useEffect(() => () => {
+    weeklyReviewYearLoadsRef.current.forEach((load) => load.controller.abort());
+    weeklyReviewYearLoadsRef.current.clear();
+  }, []);
+
+  useEffect(() => {
+    if (activeTimeSubtab !== "review" || !canManageTimeEntries) {
+      return;
+    }
+    const refreshReviewYearOnFocus = () => {
+      if (document.visibilityState === "visible") {
+        void loadWeeklyReviewYear(selectedReviewWeek.year);
+      }
     };
-  }, [activeTimeSubtab, canManageTimeEntries, payrollReviewWorkerIds.length, reviewWeekOptions]);
+    window.addEventListener("focus", refreshReviewYearOnFocus);
+    document.addEventListener("visibilitychange", refreshReviewYearOnFocus);
+    return () => {
+      window.removeEventListener("focus", refreshReviewYearOnFocus);
+      document.removeEventListener("visibilitychange", refreshReviewYearOnFocus);
+    };
+  }, [activeTimeSubtab, canManageTimeEntries, loadWeeklyReviewYear, selectedReviewWeek.year]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "evaluation" || activeEvaluationSubtab !== "workers") {
       return;
     }
 
-    let ignore = false;
+    const controller = new AbortController();
     const perfStart = timeReviewPerfNow();
     let perfRows: number | undefined;
     let perfOk = false;
     setIsLoadingReviewAllEntries(true);
+    setReviewAllEntriesRangeKey(null);
     setReviewAllEntriesError(null);
 
     api.timeEntries({
       dateFrom: reviewDataRange.start,
       dateTo: reviewDataRange.end,
       includeGpsStatus: true,
+      signal: controller.signal,
     })
       .then((entryData) => {
         perfRows = entryData.length;
         perfOk = true;
-        if (!ignore) {
+        if (!controller.signal.aborted) {
           setReviewAllEntries(entryData);
           setReviewAllEntriesRangeKey(reviewDataRangeKey(reviewDataRange));
         }
       })
       .catch((requestError) => {
-        if (!ignore) {
+        if (!controller.signal.aborted) {
           setReviewAllEntries([]);
-          setReviewAllEntriesRangeKey(reviewDataRangeKey(reviewDataRange));
+          setReviewAllEntriesRangeKey(null);
           setReviewAllEntriesError(readApiError(requestError, "Auswertung konnte nicht geladen werden."));
         }
       })
       .finally(() => {
-        if (!ignore) {
+        if (!controller.signal.aborted) {
           setIsLoadingReviewAllEntries(false);
           recordTimeReviewPerfApiCall(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_REVIEW_WEEK, perfStart, {
             details: `${reviewDataRange.start} bis ${reviewDataRange.end}`,
@@ -1361,9 +1568,9 @@ export function TimeEntriesPage() {
       });
 
     return () => {
-      ignore = true;
+      controller.abort();
     };
-  }, [activeEvaluationSubtab, activeTimeSubtab, reviewDataRange]);
+  }, [activeEvaluationSubtab, activeTimeSubtab, reviewDataRange, reviewDataReloadKey]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "review") {
@@ -1408,38 +1615,58 @@ export function TimeEntriesPage() {
     return () => {
       ignore = true;
     };
-  }, [activeTimeSubtab, reviewWeekRange.end, reviewWeekRange.start, reviewWeekRangeKey]);
+  }, [activeTimeSubtab, reviewDataReloadKey, reviewWeekRange.end, reviewWeekRange.start, reviewWeekRangeKey]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "evaluation") {
       return;
     }
 
-    let ignore = false;
+    const selection = selectedEvaluationMonth;
+    const selectionKey = payrollMonthKey(selection);
+    const controller = new AbortController();
+    const requestId = (payrollMonthRequestIdsRef.current.get(selectionKey) ?? 0) + 1;
+    payrollMonthRequestIdsRef.current.set(selectionKey, requestId);
     setIsLoadingPayrollMonthPeriod(true);
     setPayrollMonthPeriod(null);
+    setPayrollMonthPeriodKey(null);
     setPayrollMonthPeriodError(null);
-    api.payrollMonthPeriod(selectedEvaluationMonth)
+    api.payrollMonthPeriod({ ...selection, signal: controller.signal })
       .then((period) => {
-        if (!ignore) {
+        if (
+          !controller.signal.aborted
+          && payrollMonthRequestIdsRef.current.get(selectionKey) === requestId
+          && payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey
+        ) {
           setPayrollMonthPeriod(period);
+          setPayrollMonthPeriodKey(selectionKey);
         }
       })
       .catch((requestError) => {
-        if (!ignore) {
+        if (
+          !controller.signal.aborted
+          && payrollMonthRequestIdsRef.current.get(selectionKey) === requestId
+          && payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey
+        ) {
+          setPayrollMonthPeriod(null);
+          setPayrollMonthPeriodKey(null);
           setPayrollMonthPeriodError(readApiError(requestError, "Monatsstatus konnte nicht geladen werden."));
         }
       })
       .finally(() => {
-        if (!ignore) {
+        if (
+          !controller.signal.aborted
+          && payrollMonthRequestIdsRef.current.get(selectionKey) === requestId
+          && payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey
+        ) {
           setIsLoadingPayrollMonthPeriod(false);
         }
       });
 
     return () => {
-      ignore = true;
+      controller.abort();
     };
-  }, [activeTimeSubtab, selectedEvaluationMonth]);
+  }, [activeTimeSubtab, payrollMonthReloadKey, selectedEvaluationMonth]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "evaluation" || activeEvaluationSubtab !== "sites") {
@@ -1481,13 +1708,147 @@ export function TimeEntriesPage() {
     payrollSiteCockpitRefreshKey,
   ]);
 
-  function applyUpdatedTimeEntry(updatedEntry: TimeEntry): void {
+  function isCurrentReviewMutationContext(context: PayrollReviewDataContext): boolean {
+    return isSamePayrollReviewDataContext(context, activeReviewContextRef.current);
+  }
+
+  function retryReviewData(): void {
+    if (error) {
+      void loadPeople();
+    }
+    setReviewDataReloadKey((current) => current + 1);
+    if (activeTimeSubtabRef.current === "review" && canManageTimeEntries) {
+      void loadWeeklyReviewYear(selectedReviewWeek.year, true);
+    }
+  }
+
+  function retryEvaluationData(): void {
+    if (error) {
+      void loadPeople();
+    }
+    setReviewDataReloadKey((current) => current + 1);
+    setPayrollMonthReloadKey((current) => current + 1);
+  }
+
+  async function refreshAffectedPayrollMonths(workDates: string[]): Promise<PayrollMonthPeriod[]> {
+    const selections = payrollMonthSelectionsForReviewImpact(workDates);
+    const refreshedPeriods = await Promise.all(selections.map(async (selection): Promise<PayrollMonthPeriod | null> => {
+      const selectionKey = payrollMonthKey(selection);
+      const requestId = (payrollMonthRequestIdsRef.current.get(selectionKey) ?? 0) + 1;
+      payrollMonthRequestIdsRef.current.set(selectionKey, requestId);
+      const isVisibleAtStart = activeTimeSubtabRef.current === "evaluation"
+        && payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey;
+      if (!isVisibleAtStart) {
+        return null;
+      }
+      setIsLoadingPayrollMonthPeriod(true);
+      setPayrollMonthPeriodKey(null);
+      setPayrollMonthPeriodError(null);
+      try {
+        const period = await api.payrollMonthPeriod(selection);
+        if (
+          payrollMonthRequestIdsRef.current.get(selectionKey) === requestId
+          && activeTimeSubtabRef.current === "evaluation"
+          && payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey
+        ) {
+          setPayrollMonthPeriod(period);
+          setPayrollMonthPeriodKey(selectionKey);
+          setPayrollMonthPeriodError(null);
+        }
+        return period;
+      } catch (requestError) {
+        if (
+          payrollMonthRequestIdsRef.current.get(selectionKey) === requestId
+          && activeTimeSubtabRef.current === "evaluation"
+          && payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey
+        ) {
+          setPayrollMonthPeriod(null);
+          setPayrollMonthPeriodKey(null);
+          setPayrollMonthPeriodError(readApiError(requestError, "Monatsstatus konnte nicht aktualisiert werden."));
+        }
+        return null;
+      } finally {
+        if (
+          payrollMonthRequestIdsRef.current.get(selectionKey) === requestId
+          && activeTimeSubtabRef.current === "evaluation"
+          && payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey
+        ) {
+          setIsLoadingPayrollMonthPeriod(false);
+        }
+      }
+    }));
+    return refreshedPeriods.filter((period): period is PayrollMonthPeriod => period !== null);
+  }
+
+  async function invalidateWeeklyReviewYearsForMutation(workDates: string[]): Promise<void> {
+    const years = isoReviewYearsForWorkDates(workDates);
+    years.forEach((isoYear) => {
+      weeklyReviewYearLoadsRef.current.get(isoYear)?.controller.abort();
+      weeklyReviewYearLoadsRef.current.delete(isoYear);
+      weeklyReviewYearCacheRef.current.delete(isoYear);
+      weeklyReviewYearLoadedAtRef.current.delete(isoYear);
+    });
+    if (years.length) {
+      const invalidatedYears = new Set(years);
+      setReviewWeekCompletionReviews((current) => current.filter((review) => !invalidatedYears.has(review.iso_year)));
+      setWeeklyReviewYearStatuses((current) => {
+        const next = { ...current };
+        years.forEach((isoYear) => {
+          next[isoYear] = { state: "idle", error: null };
+        });
+        return next;
+      });
+    }
+    if (activeTimeSubtabRef.current === "review" && canManageTimeEntries) {
+      await Promise.all(years.map((isoYear) => loadWeeklyReviewYear(isoYear, true)));
+    }
+  }
+
+  function patchWeeklyReviewSessionCache(review: TimeEntryWeeklyReview): void {
+    weeklyReviewYearLoadsRef.current.get(review.iso_year)?.controller.abort();
+    weeklyReviewYearLoadsRef.current.delete(review.iso_year);
+    const cachedYear = weeklyReviewYearCacheRef.current.get(review.iso_year) ?? [];
+    weeklyReviewYearCacheRef.current.set(review.iso_year, upsertWeeklyReview(cachedYear, review));
+    weeklyReviewYearLoadedAtRef.current.set(review.iso_year, Date.now());
+    setReviewWeekCompletionReviews((current) => upsertWeeklyReview(current, review));
+    setWeeklyReviewYearStatuses((current) => ({
+      ...current,
+      [review.iso_year]: { state: "ready", error: null },
+    }));
+  }
+
+  async function refreshAfterPayrollMutation(
+    context: PayrollReviewDataContext,
+    workDates: string[],
+  ): Promise<void> {
+    if (isPayrollReviewRangeAffected(context, activeReviewContextRef.current, workDates)) {
+      setReviewAllEntriesRangeKey(null);
+      setReviewAbsencesRangeKey(null);
+      setReviewDataReloadKey((current) => current + 1);
+    }
+    await Promise.all([
+      refreshAffectedPayrollMonths(workDates),
+      invalidateWeeklyReviewYearsForMutation(workDates),
+    ]);
+  }
+
+  function applyUpdatedTimeEntry(updatedEntry: TimeEntry, context: PayrollReviewDataContext): void {
+    if (!isCurrentReviewMutationContext(context)) {
+      return;
+    }
     setReviewEntries((current) => replaceTimeEntryInList(current, updatedEntry));
     setReviewAllEntries((current) => replaceTimeEntryInList(current, updatedEntry));
   }
 
-  function applyCreatedTimeEntryFromMissingDay(missingEntry: TimeEntry, createdEntry: TimeEntry): TimeEntry {
+  function applyCreatedTimeEntryFromMissingDay(
+    missingEntry: TimeEntry,
+    createdEntry: TimeEntry,
+    context: PayrollReviewDataContext,
+  ): TimeEntry {
     const hydratedEntry = mergeTimeEntryReviewUpdate(missingEntry, createdEntry);
+    if (!isCurrentReviewMutationContext(context)) {
+      return hydratedEntry;
+    }
     const shouldRemainInOpenReview = timeReviewIssue(hydratedEntry) !== null;
     setReviewEntries((current) => {
       const withoutMissingEntry = current.filter((entry) => entry.id !== missingEntry.id);
@@ -1603,6 +1964,9 @@ export function TimeEntriesPage() {
     if (activeTimeSubtab !== "review") {
       return false;
     }
+    if (!isReviewWeekDataReady) {
+      return true;
+    }
     if (!areReviewWeekPayrollMonthStatusesReady) {
       return true;
     }
@@ -1618,13 +1982,17 @@ export function TimeEntriesPage() {
     ) {
       return;
     }
+    const mutationContext = activeReviewContextRef.current;
     setPayrollReviewActionEntryId(entry.id);
     setReviewActionError(null);
     try {
       const updatedEntry = await api.setTimeEntryPayrollReview(entry.id, entry.payroll_reviewed_at === null);
-      applyUpdatedTimeEntry(updatedEntry);
+      applyUpdatedTimeEntry(updatedEntry, mutationContext);
+      await refreshAfterPayrollMutation(mutationContext, [entry.work_date]);
     } catch (requestError) {
-      setReviewActionError(readApiError(requestError, "Zeilenprüfung konnte nicht gespeichert werden."));
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setReviewActionError(readApiError(requestError, "Zeilenprüfung konnte nicht gespeichert werden."));
+      }
     } finally {
       setPayrollReviewActionEntryId(null);
     }
@@ -1646,7 +2014,11 @@ export function TimeEntriesPage() {
   }
 
   function openManualTimeEntryDialog(): void {
-    if (!canManageTimeEntries || !activeReviewWorker || (!isEvaluationWorkerReview && activeReviewWorker.isReviewed)) {
+    if (
+      !canManageTimeEntries
+      || !activeReviewWorker
+      || (!isEvaluationWorkerReview && (!isReviewWeekDataReady || activeReviewWorker.isReviewed))
+    ) {
       return;
     }
     const writableDays = isEvaluationWorkerReview
@@ -1748,7 +2120,11 @@ export function TimeEntriesPage() {
     }
   }
 
-  async function createTimeEntryForMissingDay(missingEntry: TimeEntry, siteId: number): Promise<TimeEntry> {
+  async function createTimeEntryForMissingDay(
+    missingEntry: TimeEntry,
+    siteId: number,
+    mutationContext: PayrollReviewDataContext,
+  ): Promise<TimeEntry> {
     if (missingEntry.person_id <= 0) {
       throw new Error("Monteur fehlt für die Büroprüfung.");
     }
@@ -1761,7 +2137,7 @@ export function TimeEntriesPage() {
       travel_minutes: 0,
       note: OFFICE_ONLY_TIME_ENTRY_NOTE,
     });
-    return applyCreatedTimeEntryFromMissingDay(missingEntry, createdEntry);
+    return applyCreatedTimeEntryFromMissingDay(missingEntry, createdEntry, mutationContext);
   }
 
   function togglePayrollDatePicker(entry: TimeEntry, button: HTMLButtonElement): void {
@@ -1826,22 +2202,27 @@ export function TimeEntriesPage() {
     ) {
       return;
     }
+    const mutationContext = activeReviewContextRef.current;
+    const deletedEntry = payrollDeleteDialog.entry;
     setIsDeletingPayrollEntry(true);
     setPayrollDeleteError(null);
     try {
       const result = await api.deleteTimeEntryFromPayrollReview(payrollDeleteDialog.entry.id);
-      setReviewEntries((current) => current.filter((entry) => entry.id !== result.entry_id));
-      setReviewAllEntries((current) => current.filter((entry) => entry.id !== result.entry_id));
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setReviewEntries((current) => current.filter((entry) => entry.id !== result.entry_id));
+        setReviewAllEntries((current) => current.filter((entry) => entry.id !== result.entry_id));
+      }
       if (result.weekly_review_reset) {
-        setReviewWeeklyReviews((current) => resetMatchingWeeklyReview(current, result));
         setReviewWeekCompletionReviews((current) => resetMatchingWeeklyReview(current, result));
       }
-      if (!isEvaluationWorkerReview) {
-        await refreshSelectedReviewPayrollWeekSummary();
+      await refreshAfterPayrollMutation(mutationContext, [deletedEntry.work_date]);
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setPayrollDeleteDialog(null);
       }
-      setPayrollDeleteDialog(null);
     } catch (requestError) {
-      setPayrollDeleteError(readApiError(requestError, "Zeiteintrag konnte nicht gelöscht werden."));
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setPayrollDeleteError(readApiError(requestError, "Zeiteintrag konnte nicht gelöscht werden."));
+      }
     } finally {
       setIsDeletingPayrollEntry(false);
     }
@@ -1857,6 +2238,7 @@ export function TimeEntriesPage() {
     ) {
       return;
     }
+    const mutationContext = activeReviewContextRef.current;
     if (entry.work_date === targetWorkDate) {
       closePayrollDatePicker();
       return;
@@ -1866,9 +2248,12 @@ export function TimeEntriesPage() {
     setPayrollDateError(null);
     try {
       const updatedEntry = await api.setTimeEntryPayrollDateCorrection(entry.id, { work_date: targetWorkDate });
-      applyUpdatedTimeEntry(updatedEntry);
+      applyUpdatedTimeEntry(updatedEntry, mutationContext);
+      await refreshAfterPayrollMutation(mutationContext, [entry.work_date, updatedEntry.work_date]);
     } catch (requestError) {
-      setPayrollDateError(readApiError(requestError, "Tag konnte nicht geändert werden."));
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setPayrollDateError(readApiError(requestError, "Tag konnte nicht geändert werden."));
+      }
     } finally {
       setPayrollDateActionEntryId(null);
     }
@@ -1889,6 +2274,7 @@ export function TimeEntriesPage() {
     ) {
       return;
     }
+    const mutationContext = activeReviewContextRef.current;
     setPayrollOvernightSavingKey(dayKey);
     setReviewActionError(null);
     try {
@@ -1897,23 +2283,16 @@ export function TimeEntriesPage() {
         workDate,
         overnightStatus,
       });
-      setReviewEntries((current) => applyOvernightStatusToWorkDate(current, savedDay));
-      setReviewAllEntries((current) => applyOvernightStatusToWorkDate(current, savedDay));
-    } catch (requestError) {
-      setReviewActionError(readApiError(requestError, "Übernachtungsstatus konnte nicht gespeichert werden."));
-      const [dayStatusResult, weeklyReviewsResult] = await Promise.allSettled([
-        api.timeEntryDayStatus({ personId, workDate }),
-        ...(isEvaluationWorkerReview ? [] : [api.timeEntryWeeklyReviews({
-          isoYear: selectedReviewWeek.year,
-          isoWeek: selectedReviewWeek.week,
-        })]),
-      ]);
-      if (dayStatusResult.status === "fulfilled") {
-        setReviewEntries((current) => applyOvernightStatusToWorkDate(current, dayStatusResult.value));
-        setReviewAllEntries((current) => applyOvernightStatusToWorkDate(current, dayStatusResult.value));
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setReviewEntries((current) => applyOvernightStatusToWorkDate(current, savedDay));
+        setReviewAllEntries((current) => applyOvernightStatusToWorkDate(current, savedDay));
       }
-      if (weeklyReviewsResult?.status === "fulfilled") {
-        setReviewWeeklyReviews(weeklyReviewsResult.value);
+      await refreshAfterPayrollMutation(mutationContext, [workDate]);
+    } catch (requestError) {
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setReviewActionError(readApiError(requestError, "Übernachtungsstatus konnte nicht gespeichert werden."));
+        setReviewAllEntriesRangeKey(null);
+        setReviewDataReloadKey((current) => current + 1);
       }
     } finally {
       setPayrollOvernightSavingKey(null);
@@ -1939,21 +2318,24 @@ export function TimeEntriesPage() {
       return;
     }
 
+    const mutationContext = activeReviewContextRef.current;
     setIsSavingPayrollCorrection(true);
     setPayrollCorrectionError(null);
     try {
       const updatedEntry = await api.setTimeEntryPayrollCorrection(timeReviewDiagnosticEntry.id, payload.payload);
-      applyUpdatedTimeEntry(updatedEntry);
-      if (!isEvaluationWorkerReview) {
-        void refreshSelectedReviewPayrollWeekSummary();
+      applyUpdatedTimeEntry(updatedEntry, mutationContext);
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setTimeReviewDiagnosticEntry((currentEntry) => (
+          currentEntry?.id === timeReviewDiagnosticEntry.id || currentEntry?.id === updatedEntry.id
+            ? mergeTimeEntryReviewUpdate(timeReviewDiagnosticEntry, updatedEntry)
+            : currentEntry
+        ));
       }
-      setTimeReviewDiagnosticEntry((currentEntry) => (
-        currentEntry?.id === timeReviewDiagnosticEntry.id || currentEntry?.id === updatedEntry.id
-          ? mergeTimeEntryReviewUpdate(timeReviewDiagnosticEntry, updatedEntry)
-          : currentEntry
-      ));
+      await refreshAfterPayrollMutation(mutationContext, [timeReviewDiagnosticEntry.work_date, updatedEntry.work_date]);
     } catch (requestError) {
-      setPayrollCorrectionError(readApiError(requestError, "Bürozeit konnte nicht gespeichert werden."));
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setPayrollCorrectionError(readApiError(requestError, "Bürozeit konnte nicht gespeichert werden."));
+      }
     } finally {
       setIsSavingPayrollCorrection(false);
     }
@@ -1983,16 +2365,21 @@ export function TimeEntriesPage() {
       return;
     }
 
+    const mutationContext = activeReviewContextRef.current;
     setIsSavingPayrollCorrection(true);
     setPayrollManualSiteError(null);
     setPayrollCorrectionError(null);
     try {
       const createdEntry = await api.createTimeEntry(result.payload);
-      applyCreatedTimeEntryFromMissingDay(missingEntry, createdEntry);
-      await refreshSelectedReviewPayrollWeekSummary();
-      closeTimeReviewDiagnostic();
+      applyCreatedTimeEntryFromMissingDay(missingEntry, createdEntry, mutationContext);
+      await refreshAfterPayrollMutation(mutationContext, [createdEntry.work_date]);
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        closeTimeReviewDiagnostic();
+      }
     } catch (requestError) {
-      setPayrollCorrectionError(readApiError(requestError, "Zeiteintrag konnte nicht gespeichert werden."));
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setPayrollCorrectionError(readApiError(requestError, "Zeiteintrag konnte nicht gespeichert werden."));
+      }
     } finally {
       setIsSavingPayrollCorrection(false);
     }
@@ -2001,19 +2388,6 @@ export function TimeEntriesPage() {
   function updatePayrollTimeBasis(field: PayrollTimeBasisField, value: string): void {
     setPayrollCorrectionError(null);
     setPayrollCorrectionForm((current) => applyPayrollTimeBasisChange(current, field, value));
-  }
-
-  async function refreshSelectedReviewPayrollWeekSummary(): Promise<void> {
-    try {
-      const payrollWeek = await api.timeEntryPayrollWeek({
-        isoYear: selectedReviewWeek.year,
-        isoWeek: selectedReviewWeek.week,
-      });
-      setReviewPayrollWeek(payrollWeek);
-      setReviewPayrollWeekError(null);
-    } catch (requestError) {
-      setReviewPayrollWeekError(readApiError(requestError, "Wochensumme konnte nicht aktualisiert werden."));
-    }
   }
 
   async function saveLocationReviewSite(): Promise<void> {
@@ -2026,6 +2400,7 @@ export function TimeEntriesPage() {
       return;
     }
 
+    const mutationContext = activeReviewContextRef.current;
     const parsedSiteId = Number(locationReviewSiteId);
     if (!Number.isInteger(parsedSiteId) || parsedSiteId <= 0) {
       setLocationReviewError("Bitte eine gültige Baustelle auswählen.");
@@ -2036,7 +2411,7 @@ export function TimeEntriesPage() {
     setLocationReviewError(null);
     try {
       const targetEntry = locationReviewDiagnosticEntry.id < 0
-        ? await createTimeEntryForMissingDay(locationReviewDiagnosticEntry, parsedSiteId)
+        ? await createTimeEntryForMissingDay(locationReviewDiagnosticEntry, parsedSiteId, mutationContext)
         : locationReviewDiagnosticEntry;
       const updatedEntry = await api.decideTimeEntryReview(targetEntry.id, {
         decision: "assign_site",
@@ -2052,23 +2427,28 @@ export function TimeEntriesPage() {
             site_number: selectedSite.site_number,
           }
         : updatedEntry;
-      applyUpdatedTimeEntry(hydratedEntry);
-      setLocationReviewDiagnosticEntry((currentEntry) => (
-        currentEntry?.id === locationReviewDiagnosticEntry.id || currentEntry?.id === hydratedEntry.id
-          ? mergeTimeEntryReviewUpdate(targetEntry, hydratedEntry)
-          : currentEntry
-      ));
-      setLocationReviewSiteId(String(parsedSiteId));
-      setHasLocationReviewSitePreview(false);
+      applyUpdatedTimeEntry(hydratedEntry, mutationContext);
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setLocationReviewDiagnosticEntry((currentEntry) => (
+          currentEntry?.id === locationReviewDiagnosticEntry.id || currentEntry?.id === hydratedEntry.id
+            ? mergeTimeEntryReviewUpdate(targetEntry, hydratedEntry)
+            : currentEntry
+        ));
+        setLocationReviewSiteId(String(parsedSiteId));
+        setHasLocationReviewSitePreview(false);
+      }
+      await refreshAfterPayrollMutation(mutationContext, [hydratedEntry.work_date]);
     } catch (requestError) {
-      setLocationReviewError(readApiError(requestError, "Ort konnte nicht gespeichert werden."));
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setLocationReviewError(readApiError(requestError, "Ort konnte nicht gespeichert werden."));
+      }
     } finally {
       setIsSavingLocationReview(false);
     }
   }
 
   async function downloadAllReviewWeekXlsx(): Promise<void> {
-    if (isDownloadingAllReviewWeekXlsx) {
+    if (!isReviewWeekDataReady || isDownloadingAllReviewWeekXlsx) {
       return;
     }
     setIsDownloadingAllReviewWeekXlsx(true);
@@ -2087,7 +2467,7 @@ export function TimeEntriesPage() {
   }
 
   async function downloadSelectedReviewWeekXlsx(): Promise<void> {
-    if (!selectedReviewWorker || !selectedReviewWorker.isReviewed || isDownloadingReviewWeekXlsx) {
+    if (!isReviewWeekDataReady || !selectedReviewWorker || !selectedReviewWorker.isReviewed || isDownloadingReviewWeekXlsx) {
       return;
     }
     setIsDownloadingReviewWeekXlsx(true);
@@ -2112,7 +2492,7 @@ export function TimeEntriesPage() {
   }
 
   async function downloadAllPayrollMonthXlsx(): Promise<void> {
-    if (!payrollMonthPeriod || !arePayrollMonthExportsAvailable || isDownloadingAllPayrollMonthXlsx) {
+    if (!readyPayrollMonthPeriod || !arePayrollMonthExportsAvailable || isDownloadingAllPayrollMonthXlsx) {
       return;
     }
     setIsDownloadingAllPayrollMonthXlsx(true);
@@ -2126,7 +2506,7 @@ export function TimeEntriesPage() {
         blob,
         payrollMonthFilename(
           `Lohnabrechnung_${selectedEvaluationMonth.year}_${String(selectedEvaluationMonth.month).padStart(2, "0")}_Alle_Monteure`,
-          payrollMonthPeriod,
+          readyPayrollMonthPeriod,
         ),
       );
     } catch (requestError) {
@@ -2137,7 +2517,7 @@ export function TimeEntriesPage() {
   }
 
   async function downloadSelectedPayrollMonthXlsx(): Promise<void> {
-    if (!payrollMonthPeriod || !isSelectedPayrollPersonApproved || !selectedEvaluationWorker || isDownloadingPayrollMonthXlsx) {
+    if (!readyPayrollMonthPeriod || !isSelectedPayrollPersonApproved || !selectedEvaluationWorker || isDownloadingPayrollMonthXlsx) {
       return;
     }
     setIsDownloadingPayrollMonthXlsx(true);
@@ -2152,7 +2532,7 @@ export function TimeEntriesPage() {
         blob,
         payrollMonthFilename(
           `Lohnabrechnung_${selectedEvaluationMonth.year}_${String(selectedEvaluationMonth.month).padStart(2, "0")}_${sanitizeFilenamePart(selectedEvaluationWorker.personName)}`,
-          payrollMonthPeriod,
+          readyPayrollMonthPeriod,
         ),
       );
     } catch (requestError) {
@@ -2164,44 +2544,93 @@ export function TimeEntriesPage() {
 
   async function confirmPayrollMonthReopen(): Promise<void> {
     const reason = payrollMonthReopenReason.trim();
-    if (!canManagePayrollClose || !payrollMonthPeriod || payrollMonthPeriod.status !== "LOCKED" || !payrollMonthPeriod.can_reopen || !reason || isUpdatingPayrollMonth) {
+    if (!canManagePayrollClose || !readyPayrollMonthPeriod || readyPayrollMonthPeriod.status !== "LOCKED" || !readyPayrollMonthPeriod.can_reopen || !reason || isUpdatingPayrollMonth) {
       return;
     }
+    const selection = selectedEvaluationMonth;
+    const selectionKey = payrollMonthKey(selection);
+    const affectedRange = calendarMonthRange(selection);
     setIsUpdatingPayrollMonth(true);
-    setPayrollMonthPeriodError(null);
+    setPayrollMonthActionError(null);
     try {
       const updatedPeriod = await api.reopenPayrollMonth({
-        ...selectedEvaluationMonth,
+        ...selection,
         reason,
       });
-      setPayrollMonthPeriod(updatedPeriod);
-      setPayrollMonthDialog(null);
-      setPayrollMonthReopenReason("");
+      if (payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey) {
+        setPayrollMonthPeriod(updatedPeriod);
+        setPayrollMonthPeriodKey(selectionKey);
+        setPayrollMonthActionError(null);
+        setPayrollMonthDialog(null);
+        setPayrollMonthReopenReason("");
+      }
+      await invalidateWeeklyReviewYearsForMutation([affectedRange.start, affectedRange.end]);
     } catch (requestError) {
-      setPayrollMonthPeriodError(readApiError(requestError, "Monat konnte nicht wieder geöffnet werden."));
+      if (payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey) {
+        setPayrollMonthActionError(readApiError(requestError, "Monat konnte nicht wieder geöffnet werden."));
+      }
     } finally {
       setIsUpdatingPayrollMonth(false);
     }
   }
 
   async function confirmPayrollPersonMonthApproval(): Promise<void> {
-    if (!selectedEvaluationWorker || !canApproveSelectedPayrollPerson) {
+    if (!selectedEvaluationWorker || !selectedPayrollPersonApproval || !canApproveSelectedPayrollPerson) {
       return;
     }
+    const selection = selectedEvaluationMonth;
+    const selectionKey = payrollMonthKey(selection);
+    const personId = selectedEvaluationWorker.personId;
+    const affectedRange = calendarMonthRange(selection);
     setIsUpdatingPayrollPersonMonth(true);
-    setPayrollMonthPeriodError(null);
+    setPayrollMonthActionError(null);
     try {
       const updatedPeriod = await api.approvePayrollPersonMonth({
-        ...selectedEvaluationMonth,
-        personId: selectedEvaluationWorker.personId,
+        ...selection,
+        personId,
         acknowledgedBlockerCount: selectedPayrollPersonBlockers.length,
+        acknowledgedBlockerFingerprint: selectedPayrollPersonApproval.blocker_fingerprint,
       });
-      setPayrollMonthPeriod(updatedPeriod);
-      setPayrollPersonMonthDialog(null);
-      setHasAcknowledgedPayrollPersonBlockers(false);
-      setIsPayrollPersonLogExpanded(false);
+      const isStillSelectedMonth = payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey;
+      if (isStillSelectedMonth) {
+        setPayrollMonthPeriod(updatedPeriod);
+        setPayrollMonthPeriodKey(selectionKey);
+      }
+      if (isStillSelectedMonth && activeReviewContextRef.current.personId === personId) {
+        setPayrollMonthActionError(null);
+        setPayrollPersonMonthDialog(null);
+        setHasAcknowledgedPayrollPersonBlockers(false);
+        setIsPayrollPersonLogExpanded(false);
+      }
+      await invalidateWeeklyReviewYearsForMutation([affectedRange.start, affectedRange.end]);
     } catch (requestError) {
-      setPayrollMonthPeriodError(readApiError(requestError, "Monteurmonat konnte nicht abgeschlossen werden."));
+      if (isPayrollPersonBlockersChangedError(requestError)) {
+        const isSamePersonBeforeRefresh = payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey
+          && activeReviewContextRef.current.personId === personId;
+        if (isSamePersonBeforeRefresh) {
+          setHasAcknowledgedPayrollPersonBlockers(false);
+        }
+        const refreshedPeriods = await refreshAffectedPayrollMonths([affectedRange.start, affectedRange.end]);
+        const refreshedApproval = refreshedPeriods
+          .find((period) => payrollMonthKey(period) === selectionKey)
+          ?.person_approvals.find((approval) => approval.person_id === personId);
+        if (
+          payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey
+          && activeReviewContextRef.current.personId === personId
+        ) {
+          if (refreshedApproval) {
+            setPayrollMonthActionError("Die Prüfpunkte haben sich geändert. Bitte den aktualisierten Stand erneut bestätigen.");
+            setPayrollPersonMonthDialog("approve");
+          } else {
+            setPayrollPersonMonthDialog(null);
+          }
+        }
+      } else if (
+        payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey
+        && activeReviewContextRef.current.personId === personId
+      ) {
+        setPayrollMonthActionError(readApiError(requestError, "Monteurmonat konnte nicht abgeschlossen werden."));
+      }
     } finally {
       setIsUpdatingPayrollPersonMonth(false);
     }
@@ -2212,29 +2641,48 @@ export function TimeEntriesPage() {
     if (!selectedEvaluationWorker || !canReopenSelectedPayrollPerson || !reason) {
       return;
     }
+    const selection = selectedEvaluationMonth;
+    const selectionKey = payrollMonthKey(selection);
+    const personId = selectedEvaluationWorker.personId;
+    const affectedRange = calendarMonthRange(selection);
     setIsUpdatingPayrollPersonMonth(true);
-    setPayrollMonthPeriodError(null);
+    setPayrollMonthActionError(null);
     try {
       const updatedPeriod = await api.reopenPayrollPersonMonth({
-        ...selectedEvaluationMonth,
-        personId: selectedEvaluationWorker.personId,
+        ...selection,
+        personId,
         reason,
       });
-      setPayrollMonthPeriod(updatedPeriod);
-      setPayrollPersonMonthDialog(null);
-      setPayrollPersonMonthReopenReason("");
-      setIsPayrollPersonLogExpanded(false);
+      const isStillSelectedMonth = payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey;
+      if (isStillSelectedMonth) {
+        setPayrollMonthPeriod(updatedPeriod);
+        setPayrollMonthPeriodKey(selectionKey);
+      }
+      if (isStillSelectedMonth && activeReviewContextRef.current.personId === personId) {
+        setPayrollMonthActionError(null);
+        setPayrollPersonMonthDialog(null);
+        setPayrollPersonMonthReopenReason("");
+        setIsPayrollPersonLogExpanded(false);
+      }
+      await invalidateWeeklyReviewYearsForMutation([affectedRange.start, affectedRange.end]);
     } catch (requestError) {
-      setPayrollMonthPeriodError(readApiError(requestError, "Monteurmonat konnte nicht wieder geöffnet werden."));
+      if (
+        payrollMonthKey(selectedEvaluationMonthRef.current) === selectionKey
+        && activeReviewContextRef.current.personId === personId
+      ) {
+        setPayrollMonthActionError(readApiError(requestError, "Monteurmonat konnte nicht wieder geöffnet werden."));
+      }
     } finally {
       setIsUpdatingPayrollPersonMonth(false);
     }
   }
 
   async function markSelectedReviewWeekReviewed(): Promise<void> {
-    if (!canManageTimeEntries || !selectedReviewWorker || markingReviewWeekPersonId !== null || selectedReviewWorker.isReviewed) {
+    if (!isReviewWeekDataReady || !canManageTimeEntries || !selectedReviewWorker || markingReviewWeekPersonId !== null || selectedReviewWorker.isReviewed) {
       return;
     }
+    const mutationContext = activeReviewContextRef.current;
+    const mutationRange = reviewWeekRange;
     setMarkingReviewWeekPersonId(selectedReviewWorker.personId);
     setReviewActionError(null);
     try {
@@ -2243,23 +2691,23 @@ export function TimeEntriesPage() {
         isoYear: selectedReviewWeek.year,
         isoWeek: selectedReviewWeek.week,
       });
-      setReviewWeeklyReviews((current) => {
-        return upsertWeeklyReview(current, weeklyReview);
-      });
-      setReviewWeekCompletionReviews((current) => {
-        return upsertWeeklyReview(current, weeklyReview);
-      });
+      patchWeeklyReviewSessionCache(weeklyReview);
+      await refreshAffectedPayrollMonths([mutationRange.start, mutationRange.end]);
     } catch (requestError) {
-      setReviewActionError(readApiError(requestError, "Monteurwoche konnte nicht als geprüft markiert werden."));
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setReviewActionError(readApiError(requestError, "Monteurwoche konnte nicht als geprüft markiert werden."));
+      }
     } finally {
       setMarkingReviewWeekPersonId(null);
     }
   }
 
   async function resetSelectedReviewWeekReview(): Promise<void> {
-    if (!canManageTimeEntries || !selectedReviewWorker || !selectedReviewWorker.isReviewed || markingReviewWeekPersonId !== null) {
+    if (!isReviewWeekDataReady || !canManageTimeEntries || !selectedReviewWorker || !selectedReviewWorker.isReviewed || markingReviewWeekPersonId !== null) {
       return;
     }
+    const mutationContext = activeReviewContextRef.current;
+    const mutationRange = reviewWeekRange;
     setReviewWeekStatusMenuPersonId(null);
     setReviewWeekStatusMenuPosition(null);
     setMarkingReviewWeekPersonId(selectedReviewWorker.personId);
@@ -2270,10 +2718,12 @@ export function TimeEntriesPage() {
         isoYear: selectedReviewWeek.year,
         isoWeek: selectedReviewWeek.week,
       });
-      setReviewWeeklyReviews((current) => upsertWeeklyReview(current, weeklyReview));
-      setReviewWeekCompletionReviews((current) => upsertWeeklyReview(current, weeklyReview));
+      patchWeeklyReviewSessionCache(weeklyReview);
+      await refreshAffectedPayrollMonths([mutationRange.start, mutationRange.end]);
     } catch (requestError) {
-      setReviewActionError(readApiError(requestError, "Monteurwoche konnte nicht zurückgesetzt werden."));
+      if (isCurrentReviewMutationContext(mutationContext)) {
+        setReviewActionError(readApiError(requestError, "Monteurwoche konnte nicht zurückgesetzt werden."));
+      }
     } finally {
       setMarkingReviewWeekPersonId(null);
     }
@@ -2295,7 +2745,7 @@ export function TimeEntriesPage() {
         {isPayrollMonthLocked && canManagePayrollClose && (
           <button
             className="time-evaluation-monthly-download-button"
-            disabled={isLoadingPayrollMonthPeriod || isUpdatingPayrollMonth || !payrollMonthPeriod?.can_reopen}
+            disabled={isLoadingPayrollMonthPeriod || isUpdatingPayrollMonth || !readyPayrollMonthPeriod?.can_reopen}
             title="Historisch abgeschlossenen Gesamtmonat mit Begründung wieder öffnen"
             type="button"
             onClick={() => setPayrollMonthDialog("reopen")}
@@ -2317,7 +2767,9 @@ export function TimeEntriesPage() {
           <span>{isDownloadingAllPayrollMonthXlsx ? "Wird erstellt..." : "Alle Monteure"}</span>
         </button>
       </div>
-      {payrollMonthPeriodError && <p className="payroll-month-status-error" role="alert">{payrollMonthPeriodError}</p>}
+      {(payrollMonthActionError ?? payrollMonthPeriodError) && (
+        <p className="payroll-month-status-error" role="alert">{payrollMonthActionError ?? payrollMonthPeriodError}</p>
+      )}
       <span aria-live="polite" className="sr-only" id="time-evaluation-monthly-download-status">
         {isDownloadingAllPayrollMonthXlsx || isDownloadingPayrollMonthXlsx
           ? "Die Excel-Monatsabrechnung wird erstellt."
@@ -2516,7 +2968,7 @@ export function TimeEntriesPage() {
                     onClick={() => setReviewWorkerFilter(filter)}
                   >
                     <span>{label}</span>
-                    <small>{reviewWorkerFilterCounts[filter]}</small>
+                    <small>{isReviewWeekDataReady ? reviewWorkerFilterCounts[filter] : "–"}</small>
                   </button>
                 ))}
               </div>
@@ -2526,21 +2978,21 @@ export function TimeEntriesPage() {
                   <span>Std. erfasst</span>
                   <span>Status</span>
                 </div>
-                {isLoadingPeople && timeReviewWorkers.length === 0 && (
-                  <div className="time-review-queue-state">Monteure werden geladen...</div>
-                )}
-                {!isLoadingPeople && (isLoadingReviewEntries || isLoadingReviewAllEntries) && timeReviewWorkers.length === 0 && (
+                {!isReviewWeekDataReady && !reviewDataErrorMessage && (
                   <div className="time-review-queue-state">Stundenprüfung wird geladen...</div>
                 )}
-                {!isLoadingReviewEntries && reviewEntriesError && <div className="time-review-queue-state is-error">{reviewEntriesError}</div>}
-                {!isLoadingReviewAllEntries && reviewAllEntriesError && <div className="time-review-queue-state is-error">{reviewAllEntriesError}</div>}
-                {!isLoadingPeople && !isLoadingReviewEntries && !isLoadingReviewAllEntries && !reviewEntriesError && !reviewAllEntriesError && timeReviewWorkers.length === 0 && (
+                {reviewDataErrorMessage && (
+                  <div className="time-review-queue-state is-error" role="alert">
+                    <span>Daten nicht verfügbar.</span>
+                  </div>
+                )}
+                {isReviewWeekDataReady && timeReviewWorkers.length === 0 && (
                   <div className="time-review-queue-state">Keine aktiven internen Monteure gefunden.</div>
                 )}
-                {timeReviewWorkers.length > 0 && filteredTimeReviewWorkers.length === 0 && (
+                {isReviewWeekDataReady && timeReviewWorkers.length > 0 && filteredTimeReviewWorkers.length === 0 && (
                   <div className="time-review-queue-state">Keine Monteure für diesen Filter.</div>
                 )}
-                {filteredTimeReviewWorkers.map((worker) => {
+                {isReviewWeekDataReady && filteredTimeReviewWorkers.map((worker) => {
                   const workerStatus = timeReviewWorkerStatus(worker);
                   return (
                     <button
@@ -2570,7 +3022,7 @@ export function TimeEntriesPage() {
                 })}
               </div>
               <div className="time-review-queue-footer">
-                <span>{filteredTimeReviewWorkers.length} von {timeReviewWorkers.length} Monteuren</span>
+                <span>{isReviewWeekDataReady ? `${filteredTimeReviewWorkers.length} von ${timeReviewWorkers.length} Monteuren` : "–"}</span>
               </div>
             </aside>
 
@@ -2585,7 +3037,39 @@ export function TimeEntriesPage() {
                 <p className="time-table-note" role="alert">{reviewWeekPayrollMonthStatusError}</p>
               )}
 
-            {selectedReviewWorker ? (
+            {!isReviewWeekDataReady ? (
+              <div className="time-review-worker-detail">
+                <div className="time-review-worker-detail-head">
+                  <div className="time-review-worker-identity">
+                    <h3>{selectedReviewWorker?.personName ?? "Wochenprüfung"}</h3>
+                  </div>
+                  <div className="time-review-worker-detail-actions">
+                    <div className="time-review-week-review-control">
+                      <button
+                        aria-label="Monteurwoche als geprüft markieren"
+                        className="time-review-week-review-button"
+                        disabled
+                        title="Die Daten für diese Woche sind noch nicht vollständig geladen."
+                        type="button"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="time-review-worker-empty-detail" role={reviewDataErrorMessage ? "alert" : "status"}>
+                  <span>{reviewDataErrorMessage || "Stundenprüfung wird geladen..."}</span>
+                  {reviewDataErrorMessage && (
+                    <button
+                      className="icon-button secondary"
+                      style={{ alignSelf: "center", marginTop: 10 }}
+                      type="button"
+                      onClick={retryReviewData}
+                    >
+                      Erneut versuchen
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : selectedReviewWorker ? (
               <div className={`time-review-worker-detail${selectedReviewWorker.isReviewed ? " is-reviewed" : ""}`}>
                 <div className="time-review-worker-detail-head">
                   <div className="time-review-worker-identity">
@@ -2744,7 +3228,7 @@ export function TimeEntriesPage() {
                               ? "Monteurwoche geprüft – klicken, um den Status zu ändern"
                               : "Monteurwoche als geprüft markieren"}
                             type="button"
-                            disabled={!canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId}
+                            disabled={!isReviewWeekDataReady || !canManageTimeEntries || markingReviewWeekPersonId === selectedReviewWorker.personId}
                             ref={reviewWeekStatusMenuTriggerRef}
                             onClick={(event) => {
                               if (selectedReviewWorker.isReviewed) {
@@ -3062,14 +3546,16 @@ export function TimeEntriesPage() {
                 filteredWorkers={filteredEvaluationWorkers}
                 filter={evaluationWorkerFilter}
                 filterCounts={evaluationWorkerFilterCounts}
-                isLoading={isLoadingPeople || isLoadingReviewAllEntries || !isEvaluationDataReady || isLoadingPayrollMonthPeriod}
-                isReady={isEvaluationDataReady && !isLoadingPayrollMonthPeriod && payrollMonthPeriod !== null}
+                error={evaluationDataError}
+                isLoading={isLoadingPeople || isLoadingReviewAllEntries || isLoadingReviewAbsences || isLoadingPayrollMonthPeriod}
+                isReady={isEvaluationDataReady && isPayrollMonthPeriodReady}
                 canManageTimeEntries={canManageTimeEntries && !isPayrollMonthLocked && !isSelectedPayrollPersonApproved}
                 onChangeFilter={setEvaluationWorkerFilter}
                 onChangeSearch={setEvaluationWorkerSearch}
                 onOpenLocationDiagnostic={openLocationReviewDiagnostic}
                 onOpenEntryActions={togglePayrollDatePicker}
                 onOpenTimeDiagnostic={openTimeReviewDiagnostic}
+                onRetry={retryEvaluationData}
                 onUpdateOvernight={(personId, workDate, status) => updatePayrollOvernightStatus(personId, workDate, status)}
                 onSelectWorker={setSelectedEvaluationPersonId}
                 onToggleDay={toggleEvaluationDay}
@@ -3477,7 +3963,9 @@ export function TimeEntriesPage() {
                 </>
               )}
             </div>
-            {payrollMonthPeriodError && <p className="payroll-month-dialog-error" role="alert">{payrollMonthPeriodError}</p>}
+            {(payrollMonthActionError ?? payrollMonthPeriodError) && (
+              <p className="payroll-month-dialog-error" role="alert">{payrollMonthActionError ?? payrollMonthPeriodError}</p>
+            )}
             <footer>
               <button
                 className="secondary"
@@ -3511,7 +3999,7 @@ export function TimeEntriesPage() {
         </div>
       )}
 
-      {payrollMonthDialog && payrollMonthPeriod && (
+      {payrollMonthDialog && readyPayrollMonthPeriod && (
         <div
           className="payroll-month-dialog-backdrop"
           role="presentation"
@@ -3546,7 +4034,9 @@ export function TimeEntriesPage() {
                 />
               </label>
             </div>
-            {payrollMonthPeriodError && <p className="payroll-month-dialog-error" role="alert">{payrollMonthPeriodError}</p>}
+            {(payrollMonthActionError ?? payrollMonthPeriodError) && (
+              <p className="payroll-month-dialog-error" role="alert">{payrollMonthActionError ?? payrollMonthPeriodError}</p>
+            )}
             <footer>
               <button
                 className="secondary"
@@ -4157,6 +4647,7 @@ function MonthlyPayrollWorkerWorkspace({
   monthClosePanel,
   canManageTimeEntries,
   days,
+  error,
   expandedDayKeys,
   filteredWorkers,
   filter,
@@ -4168,6 +4659,7 @@ function MonthlyPayrollWorkerWorkspace({
   onOpenEntryActions,
   onOpenLocationDiagnostic,
   onOpenTimeDiagnostic,
+  onRetry,
   onUpdateOvernight,
   onSelectWorker,
   onToggleDay,
@@ -4179,6 +4671,7 @@ function MonthlyPayrollWorkerWorkspace({
   monthClosePanel: ReactNode;
   canManageTimeEntries: boolean;
   days: TimeReviewWeekDay[];
+  error: string | null;
   expandedDayKeys: Set<string>;
   filteredWorkers: TimeReviewWorkerSummary[];
   filter: TimeReviewWorkerFilter;
@@ -4190,6 +4683,7 @@ function MonthlyPayrollWorkerWorkspace({
   onOpenEntryActions: (entry: TimeEntry, button: HTMLButtonElement) => void;
   onOpenLocationDiagnostic: (entry: TimeEntry) => void;
   onOpenTimeDiagnostic: (entry: TimeEntry) => void;
+  onRetry: () => void;
   onUpdateOvernight: (personId: number, workDate: string, status: OvernightStatus) => Promise<void>;
   onSelectWorker: (personId: number) => void;
   onToggleDay: (date: string) => void;
@@ -4203,7 +4697,14 @@ function MonthlyPayrollWorkerWorkspace({
         <div className="time-evaluation-worker-list">{overallStatus}</div>
         <div className="time-evaluation-worker-detail">
           {monthClosePanel}
-          <div className="time-evaluation-workspace-loading" role="status">Monatsauswertung wird geladen...</div>
+          {error ? (
+            <div className="time-evaluation-workspace-loading" role="alert">
+              <span>{error}</span>
+              <button className="icon-button secondary" style={{ marginTop: 10 }} type="button" onClick={onRetry}>Erneut versuchen</button>
+            </div>
+          ) : (
+            <div className="time-evaluation-workspace-loading" role="status">Monatsauswertung wird geladen...</div>
+          )}
         </div>
       </div>
     );
@@ -4371,15 +4872,6 @@ function isWeeklyReviewReviewed(review: TimeEntryWeeklyReview): boolean {
 
 function isWeeklyReviewReset(review: TimeEntryWeeklyReview): boolean {
   return review.status === "reset";
-}
-
-function upsertWeeklyReview(current: TimeEntryWeeklyReview[], next: TimeEntryWeeklyReview): TimeEntryWeeklyReview[] {
-  const withoutCurrent = current.filter((review) => !(
-    review.person_id === next.person_id
-    && review.iso_year === next.iso_year
-    && review.iso_week === next.iso_week
-  ));
-  return [...withoutCurrent, next];
 }
 
 function reviewWeekKey(selection: CalendarWeekSelection): string {
@@ -4609,6 +5101,7 @@ function buildTimeReviewWorkerSummaries(
   reviewedWorkerIds: Set<number>,
   resetWorkerIds: Set<number>,
   payrollWeekPersons: Map<number, TimeEntryPayrollWeekPerson>,
+  payrollPeople: Array<Pick<PayrollMonthPersonApproval, "person_id" | "person_name">> = [],
 ): TimeReviewWorkerSummary[] {
   const openEntryIds = new Set(openEntries.map((entry) => entry.id));
   const summaries = new Map<number, TimeReviewWorkerSummary>();
@@ -4632,6 +5125,28 @@ function buildTimeReviewWorkerSummaries(
         entries: [],
       });
     });
+
+  payrollPeople.forEach((person) => {
+    const existing = summaries.get(person.person_id);
+    if (existing) {
+      existing.personName = person.person_name;
+      return;
+    }
+    summaries.set(person.person_id, {
+      personId: person.person_id,
+      personName: person.person_name,
+      entryCount: 0,
+      dayCount: 0,
+      openIssueCount: 0,
+      reviewedEntryCount: 0,
+      totalMinutes: 0,
+      submittedMinutes: 0,
+      absenceType: absenceTypeByPersonId.get(person.person_id) ?? null,
+      isReviewed: false,
+      isReset: false,
+      entries: [],
+    });
+  });
 
   allEntries.forEach((entry) => {
     const existing = summaries.get(entry.person_id);

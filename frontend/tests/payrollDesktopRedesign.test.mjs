@@ -111,7 +111,8 @@ test("manual week navigation advances one full tile and is not reset by renders"
 });
 
 test("worker detail keeps captured hours beside the name without a redundant status badge", () => {
-  const identityStart = pageSource.indexOf('<div className="time-review-worker-identity">');
+  const readyDetailStart = pageSource.indexOf(') : selectedReviewWorker ? (');
+  const identityStart = pageSource.indexOf('<div className="time-review-worker-identity">', readyDetailStart);
   const identityEnd = pageSource.indexOf("</div>", identityStart);
   const identitySource = pageSource.slice(identityStart, identityEnd);
 

@@ -48,6 +48,7 @@ export type PayrollMonthPersonApproval = {
   reopened_by_name: string | null;
   reopen_reason: string | null;
   blocker_count: number;
+  blocker_fingerprint: string;
   blockers: PayrollMonthBlocker[];
   has_blocking_technical_error: boolean;
   export_ready: boolean;
@@ -70,38 +71,9 @@ export type PayrollWeeklyPlan = {
   note: string | null;
 };
 
-export type PayrollOpeningBalance = {
-  minutes: number | null;
-  is_confirmed: boolean;
-  confirmed_by_name: string | null;
-  confirmed_at: string | null;
-};
-
-export type PayrollSetupWorker = {
-  person_id: number;
-  person_name: string;
-  weekly_hours: number | null;
-  plan: PayrollWeeklyPlan | null;
-  opening_balance: PayrollOpeningBalance | null;
-  historical_balance_minutes: number;
-};
-
-export type PayrollSetup = {
-  effective_date: string;
-  is_ready: boolean;
-  workers: PayrollSetupWorker[];
-};
-
 export type PayrollWeeklyPlanUpdate = {
   valid_from: string;
   weekday_minutes: number[];
-  note?: string | null;
-  confirm: true;
-};
-
-export type PayrollOpeningBalanceUpdate = {
-  effective_date: string;
-  minutes: number;
   note?: string | null;
   confirm: true;
 };

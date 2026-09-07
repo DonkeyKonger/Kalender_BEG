@@ -196,15 +196,14 @@ test("a saved payroll day status updates every same-person same-day row", () => 
 });
 
 
-test("the payroll day API is dedicated, permission-backed and reloads canonical state after failures", () => {
+test("the payroll day API is dedicated, permission-backed and refreshes all affected review sources", () => {
   assert.match(apiSource, /setTimeEntryDayOvernightStatus/);
   assert.match(apiSource, /request<PersonWorkDay>\(`\/time-entries\/day-status\?\$\{search\.toString\(\)\}`/);
   assert.match(apiSource, /method: "PATCH"/);
   assert.match(pageSource, /api\.setTimeEntryDayOvernightStatus/);
-  assert.match(pageSource, /Promise\.allSettled\(\[/);
-  assert.match(pageSource, /api\.timeEntryDayStatus\(\{ personId, workDate \}\)/);
-  assert.match(pageSource, /api\.timeEntryWeeklyReviews\(/);
-  assert.match(pageSource, /setReviewWeeklyReviews\(weeklyReviewsResult\.value\)/);
+  assert.match(pageSource, /await refreshAfterPayrollMutation\(mutationContext, \[workDate\]\)/);
+  assert.match(pageSource, /setReviewAllEntriesRangeKey\(null\)/);
+  assert.match(pageSource, /invalidateWeeklyReviewYearsForMutation\(workDates\)/);
 });
 
 

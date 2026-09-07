@@ -30,7 +30,7 @@ test("Baustellen-Auswertung lädt weder Monatsdetails mit GPS noch Abwesenheiten
 
 test("weekly lock requests skip full month status while evaluation retains full validation", () => {
   const effectStart = pageSource.indexOf("const monthSelections = payrollMonthSelectionsForDateRange");
-  const effectEnd = pageSource.indexOf("}, [activeTimeSubtab, reviewWeekRange.end", effectStart);
+  const effectEnd = pageSource.indexOf("}, [activeTimeSubtab, reviewDataReloadKey", effectStart);
   const effect = pageSource.slice(effectStart, effectEnd);
   assert.match(effect, /api\.payrollMonthLockStatus\(selection\)/);
   assert.doesNotMatch(effect, /api\.payrollMonthPeriod\(/);
@@ -39,14 +39,15 @@ test("weekly lock requests skip full month status while evaluation retains full 
   assert.match(effect, /\.catch\(\(\) => \{\s*if \(!ignore\)/);
   assert.match(effect, /return \(\) => \{\s*ignore = true/);
   assert.match(apiSource, /payrollMonthLockStatus[\s\S]*?\/lock-status`.*cache: "no-store"/);
-  assert.match(pageSource, /api\.payrollMonthPeriod\(selectedEvaluationMonth\)/);
+  assert.match(pageSource, /api\.payrollMonthPeriod\(\{ \.\.\.selection, signal: controller\.signal \}\)/);
 });
 
 test("week performance completion includes the entire month-lock batch", () => {
   assert.match(pageSource, /expectedApiCalls: \[[\s\S]*?TIME_REVIEW_API_MONTH_LOCKS[\s\S]*?\],/);
+  const effectStart = pageSource.indexOf("const monthSelections = payrollMonthSelectionsForDateRange");
   const effect = pageSource.slice(
-    pageSource.indexOf("const monthSelections = payrollMonthSelectionsForDateRange"),
-    pageSource.indexOf("}, [activeTimeSubtab, reviewWeekRange.end"),
+    effectStart,
+    pageSource.indexOf("}, [activeTimeSubtab, reviewDataReloadKey", effectStart),
   );
   assert.match(effect, /Promise\.all\(/);
   assert.match(effect, /\.finally\(\(\) => \{\s*if \(!ignore\) \{\s*setIsLoadingReviewWeekPayrollMonthStatuses\(false\);\s*recordTimeReviewPerfApiCall\(timeReviewPerfRef, timeReviewRenderCountRef, TIME_REVIEW_API_MONTH_LOCKS/);

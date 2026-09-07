@@ -24,7 +24,7 @@ const period = (approvedCount = 3) => ({
 test("monthly queue and total status use personal month approvals, not row checks", () => {
   assert.deepEqual([...payrollApprovedPersonIds(period())], [1, 2, 3]);
   assert.equal(payrollApprovedPersonIds(null).size, 0);
-  assert.match(source, /evaluationReviewedWorkerIds = useMemo\(\s*\(\) => payrollApprovedPersonIds\(payrollMonthPeriod\)/);
+  assert.match(source, /evaluationReviewedWorkerIds = useMemo\(\s*\(\) => payrollApprovedPersonIds\(readyPayrollMonthPeriod\)/);
   assert.doesNotMatch(source, /reviewedWorkersWithAllEntriesReviewed/);
   assert.match(source, /evaluationWorkers = useMemo\([\s\S]*?buildTimeReviewWorkerSummaries\([\s\S]*?evaluationReviewedWorkerIds/s);
   assert.match(source, /evaluationWorkerFilterCounts = useMemo\(\s*\(\) => countTimeReviewWorkersByFilter\(evaluationWorkers\)/);
@@ -71,10 +71,10 @@ function renderToolbar(month) {
     isLoadingPayrollMonthPeriod: false,
     payrollPersonApprovalSummary: month.person_approval_summary,
     isPayrollMonthLocked: month.status === "LOCKED", canManagePayrollClose: true,
-    isUpdatingPayrollMonth: false, payrollMonthPeriod: month, setPayrollMonthDialog() {},
+    isUpdatingPayrollMonth: false, payrollMonthPeriod: month, readyPayrollMonthPeriod: month, setPayrollMonthDialog() {},
     arePayrollMonthExportsAvailable: payrollAllWorkersExportAvailable(month),
     isDownloadingAllPayrollMonthXlsx: false, downloadAllPayrollMonthXlsx() {},
-    payrollMonthPeriodError: null, isDownloadingPayrollMonthXlsx: false,
+    payrollMonthPeriodError: null, payrollMonthActionError: null, isDownloadingPayrollMonthXlsx: false,
   };
   const code = ts.transpileModule(`function Toolbar() { return (${toolbar.getText(ast)}); }`, {
     compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },

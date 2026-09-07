@@ -21,7 +21,7 @@ test("month lock is server controlled and reopening requires a reason", () => {
 });
 
 test("locked months disable editing and exports use the immutable snapshot version", () => {
-  assert.match(page, /arePayrollMonthExportsAvailable = payrollAllWorkersExportAvailable\(payrollMonthPeriod\)/);
+  assert.match(page, /arePayrollMonthExportsAvailable = payrollAllWorkersExportAvailable\(readyPayrollMonthPeriod\)/);
   assert.match(page, /canManageTimeEntries=\{canManageTimeEntries && !isPayrollMonthLocked && !isSelectedPayrollPersonApproved\}/);
   assert.match(page, /version: payrollMonthVersion/);
   assert.match(page, /Monteurmonat geprüft/);

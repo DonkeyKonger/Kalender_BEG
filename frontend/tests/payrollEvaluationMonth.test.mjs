@@ -239,6 +239,6 @@ test("Monatsworkspace rendert nur Daten des aktuell geladenen Bereichs", () => {
   assert.match(pageSource, /const evaluationAbsences = isEvaluationDataReady \? reviewAbsences : EMPTY_REVIEW_ABSENCES;/);
   assert.match(pageSource, /setReviewAllEntriesRangeKey\(reviewDataRangeKey\(reviewDataRange\)\)/);
   assert.match(pageSource, /setReviewAbsencesRangeKey\(reviewDataRangeKey\(reviewDataRange\)\)/);
-  assert.match(pageSource, /if \(!isEvaluationDataReady\) \{\s*return;\s*\}[\s\S]*?setSelectedEvaluationPersonId\(null\)/);
+  assert.match(pageSource, /if \(!isEvaluationDataReady \|\| !isPayrollMonthPeriodReady\) \{\s*return;\s*\}[\s\S]*?setSelectedEvaluationPersonId\(null\)/);
   assert.match(pageSource, /if \(!isReady\) \{[\s\S]*?aria-busy="true"[\s\S]*?Monatsauswertung wird geladen/);
 });

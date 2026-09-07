@@ -79,7 +79,7 @@ test("year crossing keeps personal locks in their own month and reopening is imm
 test("the mixed week keeps its week-level approval independent from locked days", () => {
   assert.match(
     page,
-    /className=\{`time-review-week-review-button[\s\S]*?disabled=\{!canManageTimeEntries \|\| markingReviewWeekPersonId === selectedReviewWorker\.personId\}/s,
+    /className=\{`time-review-week-review-button[\s\S]*?disabled=\{!isReviewWeekDataReady \|\| !canManageTimeEntries \|\| markingReviewWeekPersonId === selectedReviewWorker\.personId\}/s,
   );
 });
 
