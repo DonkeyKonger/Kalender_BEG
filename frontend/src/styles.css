@@ -17613,6 +17613,10 @@ body.mobile-modal-scroll-locked {
 }
 
 .payroll-remarks-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   padding: 8px 10px;
   border: 1px solid #b4c8e4;
   background: #ffffff;
@@ -17626,6 +17630,20 @@ body.mobile-modal-scroll-locked {
 .payroll-remarks-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.payroll-remarks-button.has-remarks {
+  border-color: #91c7a1;
+  background: #e7f5eb;
+  color: #166534;
+}
+
+.payroll-remarks-button.has-remarks:disabled {
+  opacity: 1;
+}
+
+.payroll-remarks-button svg {
+  flex: 0 0 auto;
 }
 
 .payroll-remarks-dialog {

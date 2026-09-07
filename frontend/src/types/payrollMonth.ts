@@ -51,6 +51,7 @@ export type PayrollMonthPersonApproval = {
   blocker_fingerprint: string;
   blockers: PayrollMonthBlocker[];
   has_blocking_technical_error: boolean;
+  has_remarks: boolean;
   export_ready: boolean;
   export_status: "READY" | "UNAVAILABLE";
   export_message: string | null;

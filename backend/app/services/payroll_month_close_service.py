@@ -1048,6 +1048,7 @@ class PayrollMonthCloseService:
                     blockers=display_blockers,
                     blocker_fingerprint=_blocker_fingerprint(display_blockers),
                     has_blocking_technical_error=has_technical_blocker,
+                    has_remarks=bool(approval and (approval.remarks or "").strip()),
                     export_ready=export_ready,
                     export_status="READY" if export_ready else "UNAVAILABLE",
                     export_message=(

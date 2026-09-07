@@ -83,6 +83,24 @@ def test_remarks_are_persisted_per_person_month_and_can_be_edited_and_cleared(ca
     assert case.db.scalar(select(PayrollMonthPersonApproval)).status == "OPEN"
 
 
+def test_month_status_reports_saved_remarks_and_clearing_them(case):
+    def has_remarks(month=8):
+        status = case.service.get_status(year=2026, month=month, current_user=case.admin)
+        return next(item.has_remarks for item in status.person_approvals if item.person_id == case.worker.id)
+
+    assert not has_remarks()
+    case.service.save_person_remarks(**case.args, remarks="Bitte Zulage beachten.")
+    case.db.expire_all()
+    assert has_remarks()
+    assert not has_remarks(month=9)
+    with pytest.raises(HTTPException):
+        case.service.save_person_remarks(**case.args, remarks="W" * 61)
+    assert has_remarks()
+    case.service.save_person_remarks(**case.args, remarks=" \n ")
+    case.db.expire_all()
+    assert not has_remarks()
+
+
 @pytest.mark.parametrize("text", ["W" * 61, "1\n2\n3\n4\n5", "a" * 513, "Text\x00"])
 def test_overflow_and_xml_controls_are_rejected_without_changing_saved_remarks(case, text):
     case.service.save_person_remarks(**case.args, remarks="Original")
@@ -125,6 +143,7 @@ def test_approved_single_and_combined_exports_retain_all_four_lines(case):
         acknowledged_blocker_count=0,
         acknowledged_blocker_fingerprint=_blocker_fingerprint([]),
     )
+    assert case.service.get_status(year=2026, month=8, current_user=case.admin).person_approvals[0].has_remarks
     export = PayrollMonthExportService(case.db)
     before = export.worker_export(**case.args)
     assert _printed_lines(before) == text.split("\n")
@@ -134,6 +153,7 @@ def test_approved_single_and_combined_exports_retain_all_four_lines(case):
         case.service.save_person_remarks(**case.args, remarks="Verbotene Änderung")
     assert export.worker_export(**case.args) == before
     case.service.reopen_person_month(**case.args, reason="Korrektur nötig")
+    assert case.service.get_status(year=2026, month=8, current_user=case.admin).person_approvals[0].has_remarks
     assert case.service.get_person_remarks(**case.args).remarks == text
     case.service.save_person_remarks(**case.args, remarks="Korrigiert")
     case.service.approve_person_month(

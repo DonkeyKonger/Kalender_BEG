@@ -33,6 +33,7 @@ class PayrollMonthPersonApprovalRead(BaseModel):
     blockers: list[PayrollMonthBlocker] = Field(default_factory=list)
     blocker_fingerprint: str = Field(min_length=64, max_length=64, pattern="^[0-9a-f]{64}$")
     has_blocking_technical_error: bool
+    has_remarks: bool = False
     export_ready: bool
     export_status: str
     export_message: str | None = None

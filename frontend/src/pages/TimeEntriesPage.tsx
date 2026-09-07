@@ -3900,6 +3900,18 @@ export function TimeEntriesPage() {
           year={selectedEvaluationMonth.year} month={selectedEvaluationMonth.month}
           personId={selectedEvaluationWorker.personId}
           canEdit={canApproveSelectedPayrollPerson && !isPayrollMonthLocked}
+          onSaved={(result) => setPayrollMonthPeriod((current) => {
+            if (!current || current.year !== selectedEvaluationMonth.year
+              || current.month !== selectedEvaluationMonth.month) return current;
+            return {
+              ...current,
+              person_approvals: current.person_approvals.map((person) => (
+                person.person_id === selectedEvaluationWorker.personId
+                  ? { ...person, has_remarks: result.remarks.trim().length > 0 }
+                  : person
+              )),
+            };
+          })}
           onClose={() => setPayrollRemarksOpen(false)}
         />
       )}
@@ -4462,6 +4474,7 @@ function PayrollPersonMonthClosePanel({
   selectedWorker: TimeReviewWorkerSummary | null;
 }) {
   const isApproved = approval?.status === "APPROVED";
+  const hasRemarks = approval?.has_remarks === true;
   const canToggleApproval = selectedWorker !== null && (isApproved ? canReopen : canApprove);
   const statusClass = isApproved ? "is-approved" : blockers.length > 0 ? "is-warning" : selectedWorker ? "is-ready" : "is-neutral";
   const statusText = selectedWorker
@@ -4521,9 +4534,12 @@ function PayrollPersonMonthClosePanel({
         </div>
         <div className="payroll-person-month-remarks">
           <span title={isApproved ? "Die Eingabe ist nach der Monatsprüfung gesperrt." : "Bemerkungen können nur vor der Monatsprüfung eingetragen werden."}>
-            <button className="payroll-remarks-button" type="button"
+            <button className={`payroll-remarks-button${hasRemarks ? " has-remarks" : ""}`} type="button"
               disabled={!selectedWorker || !canApprove || isApproved || isLoading || isUpdating}
-              onClick={onOpenRemarks}>Bemerkungen hinzufügen</button>
+              onClick={onOpenRemarks}>
+              {hasRemarks && <Check aria-hidden="true" size={13} />}
+              {hasRemarks ? "Bemerkung hinterlegt" : "Bemerkungen hinzufügen"}
+            </button>
           </span>
         </div>
         <div className="payroll-person-month-actions">

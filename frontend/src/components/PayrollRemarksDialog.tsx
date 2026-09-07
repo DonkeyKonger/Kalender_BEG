@@ -10,8 +10,9 @@ function errorMessage(error: unknown): string {
   return "Bemerkungen konnten nicht geladen oder gespeichert werden. Bitte erneut versuchen.";
 }
 
-export function PayrollRemarksDialog({ year, month, personId, canEdit, onClose }: {
+export function PayrollRemarksDialog({ year, month, personId, canEdit, onClose, onSaved }: {
   year: number; month: number; personId: number; canEdit: boolean; onClose: () => void;
+  onSaved: (result: PayrollRemarks) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -43,7 +44,8 @@ export function PayrollRemarksDialog({ year, month, personId, canEdit, onClose }
     setSaving(true);
     setError(null);
     try {
-      await api.savePayrollRemarks({ year, month, personId, remarks: draft });
+      const result = await api.savePayrollRemarks({ year, month, personId, remarks: draft });
+      onSaved(result);
       onClose();
     } catch (failure) {
       setError(errorMessage(failure));
