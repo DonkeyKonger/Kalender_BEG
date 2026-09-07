@@ -56,9 +56,10 @@ import {
 } from "../lib/payrollWeek";
 import { resolveViewportPopoverPosition, type ViewportPopoverPosition } from "../lib/viewportPopover";
 import {
-  centeredWeekWindowStart,
   clampWeekWindowStart,
+  isoWeeksInYear,
   PAYROLL_WEEK_VISIBLE_COUNT,
+  trailingWeekWindowStart,
 } from "../lib/weekStrip";
 import type { Absence } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
@@ -1045,7 +1046,7 @@ export function TimeEntriesPage() {
           reviewWeekOptions,
           selectedReviewWeek,
           {
-            alignment: isInitialAlignment ? "center" : "nearest",
+            alignment: isInitialAlignment ? "end" : "nearest",
             visibleCount: PAYROLL_WEEK_VISIBLE_COUNT,
           },
         );
@@ -1072,14 +1073,14 @@ export function TimeEntriesPage() {
 
     let renderFrameId: number | null = null;
     let layoutFrameId: number | null = null;
-    function realignReviewWeekStripAfterPageShow(): void {
+    function realignReviewWeekStripAfterPageShow(event: PageTransitionEvent): void {
       renderFrameId = window.requestAnimationFrame(() => {
         layoutFrameId = window.requestAnimationFrame(() => {
           if (scrollWeekStripToSelection(
             reviewWeekStripRef.current,
             reviewWeekOptions,
             selectedReviewWeek,
-            { alignment: "center", visibleCount: PAYROLL_WEEK_VISIBLE_COUNT },
+            { alignment: event.persisted ? "nearest" : "end", visibleCount: PAYROLL_WEEK_VISIBLE_COUNT },
           )) {
             updateReviewWeekScrollState();
             hasAutoScrolledVisibleReviewWeekRef.current = true;
@@ -4331,8 +4332,11 @@ function buildCalendarWeekOptions(currentWeek: CalendarWeekSelection): CalendarW
     };
   };
 
+  const previousYearWeeks = isoWeeksInYear(currentWeek.year - 1);
   return [
-    ...numberRange(1, 54).map((week) => optionForWeek(currentWeek.year, week)),
+    ...numberRange(previousYearWeeks - PAYROLL_WEEK_VISIBLE_COUNT + 2, previousYearWeeks)
+      .map((week) => optionForWeek(currentWeek.year - 1, week)),
+    ...numberRange(1, isoWeeksInYear(currentWeek.year)).map((week) => optionForWeek(currentWeek.year, week)),
     ...numberRange(1, 5).map((week) => optionForWeek(currentWeek.year + 1, week)),
   ];
 }
@@ -4428,7 +4432,7 @@ function scrollWeekStripToSelection(
   container: HTMLDivElement | null,
   options: CalendarWeekOption[],
   selection: CalendarWeekSelection,
-  settings: { alignment?: "center" | "nearest"; visibleCount?: number } = {},
+  settings: { alignment?: "end" | "nearest"; visibleCount?: number } = {},
 ): boolean {
   if (!container) {
     return false;
@@ -4462,7 +4466,7 @@ function scrollWeekStripToSelection(
     ? selectedStart < container.scrollLeft
       ? selectedWeekIndex
       : selectedWeekIndex - visibleCount + 1
-    : centeredWeekWindowStart(selectedWeekIndex, options.length, visibleCount);
+    : trailingWeekWindowStart(selectedWeekIndex, options.length, visibleCount);
   const firstVisibleIndex = clampWeekWindowStart(requestedStart, options.length, visibleCount);
   const targetButton = buttons[firstVisibleIndex];
   if (!targetButton) {

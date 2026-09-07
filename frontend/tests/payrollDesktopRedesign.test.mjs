@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  centeredWeekWindowStart,
+  trailingWeekWindowStart,
+  isoWeeksInYear,
   clampWeekWindowStart,
   PAYROLL_WEEK_VISIBLE_COUNT,
 } from "../src/lib/weekStrip.ts";
@@ -65,37 +66,37 @@ test("current review week remains identifiable when another week is selected", (
 
 test("review week navigation realigns its selected week after browser scroll restoration", () => {
   assert.match(pageSource, /window\.addEventListener\("pageshow", realignReviewWeekStripAfterPageShow\)/);
-  assert.match(pageSource, /function realignReviewWeekStripAfterPageShow\(\): void \{[\s\S]*?renderFrameId = window\.requestAnimationFrame\(\(\) => \{[\s\S]*?layoutFrameId = window\.requestAnimationFrame\(\(\) => \{[\s\S]*?alignment: "center", visibleCount: PAYROLL_WEEK_VISIBLE_COUNT/s);
+  assert.match(pageSource, /function realignReviewWeekStripAfterPageShow\(event: PageTransitionEvent\): void \{[\s\S]*?renderFrameId = window\.requestAnimationFrame\(\(\) => \{[\s\S]*?layoutFrameId = window\.requestAnimationFrame\(\(\) => \{[\s\S]*?alignment: event\.persisted \? "nearest" : "end", visibleCount: PAYROLL_WEEK_VISIBLE_COUNT/s);
   assert.match(pageSource, /window\.removeEventListener\("pageshow", realignReviewWeekStripAfterPageShow\)/);
 });
 
-test("reload centers the selected current week in a stable four-week window", () => {
+test("reload places the selected current week last in a stable four-week window", () => {
   const weekNumbers = [30, 31, 32, 33, 34, 35, 36, 37, 38, 39];
-  const selectedIndex = weekNumbers.indexOf(35);
-  const start = centeredWeekWindowStart(selectedIndex, weekNumbers.length);
+  const selectedIndex = weekNumbers.indexOf(37);
+  const start = trailingWeekWindowStart(selectedIndex, weekNumbers.length);
   const visibleWeeks = weekNumbers.slice(start, start + PAYROLL_WEEK_VISIBLE_COUNT);
 
   assert.deepEqual(visibleWeeks, [34, 35, 36, 37]);
-  assert.ok(visibleWeeks.includes(35));
+  assert.equal(visibleWeeks.at(-1), 37);
   assert.notDeepEqual(visibleWeeks, [30, 31, 32, 33]);
   assert.doesNotMatch(pageSource, /selectedWeekIndex\s*-\s*5/);
-  assert.match(pageSource, /alignment: isInitialAlignment \? "center" : "nearest"/);
+  assert.match(pageSource, /alignment: isInitialAlignment \? "end" : "nearest"/);
   assert.match(pageSource, /behavior:\s*"auto"/);
 });
 
-test("four-week window clamps at list and year boundaries", () => {
-  const crossingYear = ["2026-51", "2026-52", "2027-01", "2027-02", "2027-03"];
-  const start = centeredWeekWindowStart(2, crossingYear.length);
-
+test("four-week window looks back across ISO years and clamps at list boundaries", () => {
+  const crossingYear = ["2026-50", "2026-51", "2026-52", "2026-53", "2027-01", "2027-02"];
+  const start = trailingWeekWindowStart(4, crossingYear.length);
   assert.deepEqual(crossingYear.slice(start, start + PAYROLL_WEEK_VISIBLE_COUNT), [
-    "2026-52",
-    "2027-01",
-    "2027-02",
-    "2027-03",
+    "2026-51", "2026-52", "2026-53", "2027-01",
   ]);
-  assert.equal(centeredWeekWindowStart(0, crossingYear.length), 0);
-  assert.equal(centeredWeekWindowStart(crossingYear.length - 1, crossingYear.length), 1);
-  assert.equal(clampWeekWindowStart(99, crossingYear.length), 1);
+  assert.equal(trailingWeekWindowStart(0, crossingYear.length), 0);
+  assert.equal(trailingWeekWindowStart(crossingYear.length - 1, crossingYear.length), 2);
+  assert.equal(clampWeekWindowStart(99, crossingYear.length), 2);
+  assert.equal(isoWeeksInYear(2025), 52);
+  assert.equal(isoWeeksInYear(2026), 53);
+  assert.equal(isoWeeksInYear(2027), 52);
+  assert.equal(isoWeeksInYear(2020), 53);
 });
 
 test("manual week navigation advances one full tile and is not reset by renders", () => {
