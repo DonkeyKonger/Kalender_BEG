@@ -46,6 +46,51 @@ class PayrollPeriodGuard:
             return True
         return person_id is not None and self._approved_person_period_for_date(person_id, work_date) is not None
 
+    def locked_month_keys(
+        self,
+        *work_dates: date,
+        person_id: int | None = None,
+    ) -> set[tuple[int, int]]:
+        """Return locked month keys with one period query per lock scope."""
+        if not self._supports_queries() or not hasattr(self.db, "scalars"):
+            return set()
+        month_keys = sorted({(work_date.year, work_date.month) for work_date in work_dates})
+        if not month_keys:
+            return set()
+        for year, month in month_keys:
+            self.acquire_month_lock(year, month)
+        period_clauses = [
+            (PayrollMonthPeriod.year == year) & (PayrollMonthPeriod.month == month)
+            for year, month in month_keys
+        ]
+        locked = {
+            (period.year, period.month)
+            for period in self.db.scalars(
+                select(PayrollMonthPeriod).where(
+                    PayrollMonthPeriod.status == PAYROLL_MONTH_LOCKED,
+                    or_(*period_clauses),
+                )
+            )
+        }
+        if person_id is None:
+            return locked
+        approval_clauses = [
+            (PayrollMonthPersonApproval.year == year)
+            & (PayrollMonthPersonApproval.month == month)
+            for year, month in month_keys
+        ]
+        locked.update(
+            (approval.year, approval.month)
+            for approval in self.db.scalars(
+                select(PayrollMonthPersonApproval).where(
+                    PayrollMonthPersonApproval.person_id == person_id,
+                    PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+                    or_(*approval_clauses),
+                )
+            )
+        )
+        return locked
+
     def _locked_period_for_date(self, work_date: date) -> PayrollMonthPeriod | None:
         self.acquire_month_lock(work_date.year, work_date.month)
         return self.db.scalar(

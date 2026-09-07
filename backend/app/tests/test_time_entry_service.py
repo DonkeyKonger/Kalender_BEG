@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from app.models.enums import AbsenceStatus, AbsenceType, OvernightStatus, Person
 from app.models.person import Person
 from app.models.person_hours_account import PersonHoursAccountEntry
 from app.models.person_work_day import PersonWorkDay
+from app.models.payroll_month import PAYROLL_MONTH_LOCKED, PayrollMonthPeriod
 from app.models.site import Site
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
@@ -102,7 +103,7 @@ def test_overlap_guard_returns_structured_conflict():
     assert error.value.detail["conflicts"][0]["site_label"] == "1010 - Firma BEG"
 
 
-def test_create_time_entry_rejects_reviewed_week_and_allows_reset_week():
+def test_create_time_entry_resets_reviewed_week_for_office_and_regular_entries():
     db = db_session()
     person = Person(
         first_name="Max",
@@ -135,23 +136,23 @@ def test_create_time_entry_rejects_reviewed_week_and_allows_reset_week():
     )
     item = TimeEntryService(db)
 
-    with pytest.raises(HTTPException) as error:
-        item.create_entry(payload, user)
+    office_entry = item.create_entry(payload, user)
 
-    assert error.value.status_code == 409
-    assert error.value.detail == "Geprüfte Woche zuerst zurücksetzen."
+    assert office_entry.person_id == person.id
+    db.refresh(review)
+    assert review.status == "reset"
 
-    regular_entry = item.create_entry(payload.model_copy(update={"note": None}), user)
+    review.status = "reviewed"
+    db.commit()
+    regular_entry = item.create_entry(payload.model_copy(update={
+        "work_date": payload.work_date + timedelta(days=1),
+        "note": None,
+    }), user)
 
     assert regular_entry.person_id == person.id
-
-    review.status = "reset"
-    db.commit()
-
-    entry = item.create_entry(payload, user)
-
-    assert entry.person_id == person.id
-    assert entry.work_date == payload.work_date
+    assert regular_entry.work_date == payload.work_date + timedelta(days=1)
+    db.refresh(review)
+    assert review.status == "reset"
 
 
 def test_office_manual_time_entry_requires_existing_non_deleted_site():
@@ -467,7 +468,7 @@ def test_payroll_can_update_daily_overnight_status_in_open_week(
     assert work_days[0].overnight_status == updated_status.value
 
 
-def test_payroll_cannot_update_overnight_status_in_reviewed_week():
+def test_payroll_overnight_update_resets_reviewed_week():
     db = db_session()
     person = Person(
         first_name="Geprüfte",
@@ -498,19 +499,20 @@ def test_payroll_cannot_update_overnight_status_in_reviewed_week():
     ])
     db.commit()
 
-    with pytest.raises(HTTPException) as error:
-        TimeEntryService(db).set_payroll_overnight_status(
-            current_user=user,
-            person_id=person.id,
-            work_date=work_date,
-            overnight_status=OvernightStatus.BEG_PAID,
-        )
+    result = TimeEntryService(db).set_payroll_overnight_status(
+        current_user=user,
+        person_id=person.id,
+        work_date=work_date,
+        overnight_status=OvernightStatus.BEG_PAID,
+    )
 
-    assert error.value.status_code == 409
-    assert error.value.detail == "Geprüfte Woche zuerst zurücksetzen."
+    assert result == OvernightStatus.BEG_PAID
     work_day = db.scalar(select(PersonWorkDay))
     assert work_day is not None
-    assert work_day.overnight_status == OvernightStatus.SELF_PAID.value
+    assert work_day.overnight_status == OvernightStatus.BEG_PAID.value
+    review = db.scalar(select(TimeEntryWeeklyReview))
+    assert review is not None
+    assert review.status == "reset"
 
 
 def test_payroll_overnight_update_remains_one_daily_status_for_multiple_entries():
@@ -2577,3 +2579,380 @@ def test_project_mounting_context_multiplies_external_workers_without_absence():
     assert context["work_minutes"] == 900
     assert context["break_minutes"] == 60
     assert context["travel_minutes"] == 30
+
+
+def test_open_part_of_cross_month_week_can_change_and_resets_review_without_touching_history():
+    db = db_session()
+    person = Person(
+        first_name="Monats",
+        last_name="Grenze",
+        display_name="Monats Grenze",
+        short_code="MG",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="cross-month-change", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    site = Site(site_number="9700", name="September", status=SiteStatus.ACTIVE)
+    db.add_all([person, user, site])
+    db.flush()
+    review = TimeEntryWeeklyReview(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=36,
+        status="reviewed",
+        reviewed_by_user_id=user.id,
+        reviewed_at=datetime(2026, 8, 31, 12, 0),
+        daily_ledger_reference_id="historical:week-36",
+    )
+    historical_entry = PersonHoursAccountEntry(
+        person_id=person.id,
+        entry_type="daily_balance",
+        minutes_delta=30,
+        balance_after_minutes=30,
+        note="Historischer Stand",
+        ledger_system="daily",
+        effective_date=date(2026, 8, 31),
+        source_type="month_close",
+        source_reference_id="2026-08-v1",
+        is_active=True,
+    )
+    db.add_all([
+        review,
+        historical_entry,
+        PayrollMonthPeriod(year=2026, month=8, status=PAYROLL_MONTH_LOCKED),
+    ])
+    db.commit()
+
+    created = TimeEntryService(db).create_entry(TimeEntryCreate(
+        person_id=person.id,
+        site_id=site.id,
+        work_date=date(2026, 9, 1),
+        work_minutes=60,
+    ), user)
+
+    assert created.work_date == date(2026, 9, 1)
+    db.refresh(review)
+    assert review.status == "reset"
+    assert review.daily_ledger_reference_id == "historical:week-36"
+    assert [item.id for item in db.scalars(select(PersonHoursAccountEntry))] == [historical_entry.id]
+
+
+def test_update_entry_invalidates_old_and_new_person_weeks_and_day_reviews():
+    db = db_session()
+    old_person = Person(
+        first_name="Alt",
+        last_name="Monteur",
+        display_name="Alt Monteur",
+        short_code="AM",
+        person_type=PersonType.INTERNAL,
+    )
+    new_person = Person(
+        first_name="Neu",
+        last_name="Monteur",
+        display_name="Neu Monteur",
+        short_code="NM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="move-time-entry", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    old_date = date.fromisocalendar(2026, 37, 1)
+    new_date = date.fromisocalendar(2026, 38, 1)
+    db.add_all([old_person, new_person, user])
+    db.flush()
+    moved = WorkTimeEntry(
+        person_id=old_person.id,
+        work_date=old_date,
+        work_minutes=60,
+        break_minutes=0,
+        travel_minutes=0,
+        payroll_reviewed_by_user_id=user.id,
+        payroll_reviewed_at=datetime(2026, 9, 10, 12, 0),
+    )
+    old_day_entry = WorkTimeEntry(
+        person_id=old_person.id,
+        work_date=old_date,
+        work_minutes=60,
+        break_minutes=0,
+        travel_minutes=0,
+        payroll_reviewed_by_user_id=user.id,
+        payroll_reviewed_at=datetime(2026, 9, 10, 12, 0),
+    )
+    new_day_entry = WorkTimeEntry(
+        person_id=new_person.id,
+        work_date=new_date,
+        work_minutes=60,
+        break_minutes=0,
+        travel_minutes=0,
+        payroll_reviewed_by_user_id=user.id,
+        payroll_reviewed_at=datetime(2026, 9, 17, 12, 0),
+    )
+    reviews = [
+        TimeEntryWeeklyReview(
+            person_id=person_id,
+            iso_year=2026,
+            iso_week=iso_week,
+            status="reviewed",
+            reviewed_by_user_id=user.id,
+            reviewed_at=datetime(2026, 9, 20, 12, 0),
+        )
+        for person_id, iso_week in ((old_person.id, 37), (new_person.id, 38))
+    ]
+    db.add_all([moved, old_day_entry, new_day_entry, *reviews])
+    db.commit()
+
+    updated = TimeEntryService(db).update_entry(
+        moved.id,
+        TimeEntryUpdate(person_id=new_person.id, work_date=new_date, work_minutes=90),
+        user,
+    )
+
+    assert (updated.person_id, updated.work_date, updated.work_minutes) == (new_person.id, new_date, 90)
+    assert {review.status for review in reviews} == {"reset"}
+    for entry in (moved, old_day_entry, new_day_entry):
+        db.refresh(entry)
+        assert entry.payroll_reviewed_by_user_id is None
+        assert entry.payroll_reviewed_at is None
+
+
+def test_regular_delete_invalidates_week_and_remaining_day_review():
+    db = db_session()
+    person = Person(
+        first_name="Löschen",
+        last_name="Monteur",
+        display_name="Löschen Monteur",
+        short_code="LM",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="delete-day-invalidation",
+        display_name="Monteur",
+        password_hash="x",
+        role=UserRole.MONTEUR,
+        person=person,
+    )
+    work_date = date.fromisocalendar(2026, 37, 2)
+    target = WorkTimeEntry(
+        person=person,
+        work_date=work_date,
+        work_minutes=60,
+        break_minutes=0,
+        travel_minutes=0,
+        status="submitted",
+        time_review_status="open",
+    )
+    remaining = WorkTimeEntry(
+        person=person,
+        work_date=work_date,
+        work_minutes=60,
+        break_minutes=0,
+        travel_minutes=0,
+        payroll_reviewed_by=user,
+        payroll_reviewed_at=datetime(2026, 9, 8, 18, 0),
+    )
+    review = TimeEntryWeeklyReview(
+        person=person,
+        iso_year=2026,
+        iso_week=37,
+        status="reviewed",
+        reviewed_by=user,
+        reviewed_at=datetime(2026, 9, 11, 12, 0),
+    )
+    db.add_all([person, user, target, remaining, review])
+    db.commit()
+
+    TimeEntryService(db).delete_entry(target.id, user)
+
+    assert db.get(WorkTimeEntry, target.id) is None
+    db.refresh(remaining)
+    db.refresh(review)
+    assert review.status == "reset"
+    assert remaining.payroll_reviewed_by_user_id is None
+    assert remaining.payroll_reviewed_at is None
+
+
+@pytest.mark.parametrize(
+    "operation",
+    ["approve", "payroll_time", "payroll_date", "correct", "decision"],
+)
+def test_entry_review_and_correction_mutations_invalidate_prior_review_state(operation: str):
+    db = db_session()
+    person = Person(
+        first_name="Review",
+        last_name=operation,
+        display_name=f"Review {operation}",
+        short_code=f"R-{operation[:4]}",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username=f"review-{operation}", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    work_date = date(2026, 9, 14)
+    db.add_all([person, user])
+    db.flush()
+    entry = WorkTimeEntry(
+        person_id=person.id,
+        work_date=work_date,
+        work_minutes=480,
+        break_minutes=0,
+        travel_minutes=0,
+        payroll_reviewed_by_user_id=user.id,
+        payroll_reviewed_at=datetime(2026, 9, 14, 18, 0),
+    )
+    review = TimeEntryWeeklyReview(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=38,
+        status="reviewed",
+        reviewed_by_user_id=user.id,
+        reviewed_at=datetime(2026, 9, 18, 12, 0),
+    )
+    db.add_all([entry, review])
+    db.commit()
+    time_entries = TimeEntryService(db)
+
+    if operation == "approve":
+        time_entries.approve_time_review(entry.id, user)
+    elif operation == "payroll_time":
+        time_entries.set_payroll_time_correction(
+            entry.id,
+            start_time=None,
+            end_time=None,
+            work_minutes=450,
+            current_user=user,
+        )
+    elif operation == "payroll_date":
+        time_entries.set_payroll_date_correction(
+            entry.id,
+            work_date=work_date + timedelta(days=1),
+            current_user=user,
+        )
+    elif operation == "correct":
+        time_entries.correct_time_review(entry.id, 450, user)
+    else:
+        time_entries.apply_time_review_decision(
+            entry.id,
+            decision="accept_manual",
+            current_user=user,
+        )
+
+    db.refresh(entry)
+    db.refresh(review)
+    assert review.status == "reset"
+    assert entry.payroll_reviewed_by_user_id is None
+    assert entry.payroll_reviewed_at is None
+
+
+def test_row_review_toggle_resets_week_but_preserves_selected_row_review():
+    db = db_session()
+    person = Person(
+        first_name="Zeile",
+        last_name="Review",
+        display_name="Zeile Review",
+        short_code="ZR",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="row-review-week", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    work_date = date(2026, 9, 14)
+    db.add_all([person, user])
+    db.flush()
+    entry = WorkTimeEntry(
+        person_id=person.id,
+        work_date=work_date,
+        work_minutes=480,
+        break_minutes=0,
+        travel_minutes=0,
+    )
+    review = TimeEntryWeeklyReview(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=38,
+        status="reviewed",
+        reviewed_by_user_id=user.id,
+        reviewed_at=datetime(2026, 9, 18, 12, 0),
+    )
+    db.add_all([entry, review])
+    db.commit()
+
+    updated = TimeEntryService(db).set_payroll_row_review(
+        entry.id,
+        reviewed=True,
+        current_user=user,
+    )
+
+    db.refresh(review)
+    assert review.status == "reset"
+    assert updated.payroll_reviewed_by_user_id == user.id
+    assert updated.payroll_reviewed_at is not None
+
+
+def test_locked_write_rejection_does_not_invalidate_existing_reviews():
+    db = db_session()
+    person = Person(
+        first_name="Gesperrt",
+        last_name="Unverändert",
+        display_name="Gesperrt Unverändert",
+        short_code="GU",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(username="locked-invalidation", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    work_date = date(2026, 8, 18)
+    db.add_all([person, user])
+    db.flush()
+    review = TimeEntryWeeklyReview(
+        person_id=person.id,
+        iso_year=2026,
+        iso_week=34,
+        status="reviewed",
+        reviewed_by_user_id=user.id,
+        reviewed_at=datetime(2026, 8, 21, 12, 0),
+    )
+    db.add_all([
+        review,
+        PayrollMonthPeriod(year=2026, month=8, status=PAYROLL_MONTH_LOCKED),
+    ])
+    db.commit()
+
+    with pytest.raises(HTTPException) as caught:
+        TimeEntryService(db).set_payroll_overnight_status(
+            current_user=user,
+            person_id=person.id,
+            work_date=work_date,
+            overnight_status=OvernightStatus.BEG_PAID,
+        )
+
+    assert caught.value.status_code == 409
+    db.refresh(review)
+    assert review.status == "reviewed"
+    assert db.scalar(select(PersonWorkDay)) is None
+
+
+def test_cross_month_week_lock_state_is_batched_into_two_selects():
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = Session(engine)
+    person = Person(
+        first_name="Query",
+        last_name="Count",
+        display_name="Query Count",
+        short_code="QC",
+        person_type=PersonType.INTERNAL,
+    )
+    db.add(person)
+    db.flush()
+    person_id = person.id
+    db.add(PayrollMonthPeriod(year=2026, month=8, status=PAYROLL_MONTH_LOCKED))
+    db.commit()
+    statements: list[str] = []
+
+    def count_selects(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", count_selects)
+    try:
+        segments = TimeEntryService(db)._mutable_week_segments(
+            date(2026, 8, 31),
+            date(2026, 9, 6),
+            person_id=person_id,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", count_selects)
+
+    assert segments == [(date(2026, 9, 1), date(2026, 9, 6))]
+    assert len(statements) == 2

@@ -15,6 +15,10 @@ from app.repositories.person_repository import PersonRepository
 from app.schemas.absence import AbsenceCreate, AbsenceUpdate
 from app.services.audit_service import AuditService
 from app.services.payroll_period_guard import PayrollPeriodGuard
+from app.services.payroll_review_invalidation_service import (
+    PayrollReviewInvalidationService,
+    PayrollReviewRange,
+)
 
 
 class AbsenceService:
@@ -141,6 +145,13 @@ class AbsenceService:
             old_value=None,
             new_value=absence_snapshot(absence),
         )
+        self._invalidate_payroll_reviews(
+            PayrollReviewRange(
+                person_id=absence.person_id,
+                start_date=absence.start_date,
+                end_date=absence.end_date,
+            )
+        )
         self.db.commit()
         self.db.refresh(absence)
         return absence
@@ -150,6 +161,11 @@ class AbsenceService:
         if absence is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Abwesenheit nicht gefunden.")
 
+        old_range = PayrollReviewRange(
+            person_id=absence.person_id,
+            start_date=absence.start_date,
+            end_date=absence.end_date,
+        )
         old_value = absence_snapshot(absence)
         values = clean_absence_values(payload.model_dump(exclude_unset=True))
         person_id = values.get("person_id", absence.person_id)
@@ -173,6 +189,15 @@ class AbsenceService:
             old_value=old_value,
             new_value=absence_snapshot(absence),
         )
+        if values:
+            self._invalidate_payroll_reviews(
+                old_range,
+                PayrollReviewRange(
+                    person_id=absence.person_id,
+                    start_date=absence.start_date,
+                    end_date=absence.end_date,
+                ),
+            )
         self.db.commit()
         self.db.refresh(absence)
         return absence
@@ -196,7 +221,20 @@ class AbsenceService:
             old_value=old_value,
             new_value=None,
         )
+        self._invalidate_payroll_reviews(
+            PayrollReviewRange(
+                person_id=absence.person_id,
+                start_date=absence.start_date,
+                end_date=absence.end_date,
+            )
+        )
         self.db.commit()
+
+    def _invalidate_payroll_reviews(self, *affected_ranges: PayrollReviewRange) -> None:
+        PayrollReviewInvalidationService(self.db).invalidate(
+            *affected_ranges,
+            clear_row_reviews=True,
+        )
 
     def _ensure_person_exists(self, person_id: int) -> None:
         if self.people.get(person_id) is None:

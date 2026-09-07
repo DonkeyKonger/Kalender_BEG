@@ -19,6 +19,13 @@ from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
 from app.services.person_hours_account_service import OFFICE_ONLY_TIME_ENTRY_NOTE
 from app.services.payroll_period_guard import PayrollPeriodGuard
+from app.services.payroll_review_invalidation_service import (
+    WEEKLY_REVIEW_STATUS_RESET,
+    WEEKLY_REVIEW_STATUS_REVIEWED,
+    PayrollReviewInvalidation,
+    PayrollReviewInvalidationService,
+    PayrollReviewRange,
+)
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 
 GPS_TIME_REVIEW_TOLERANCE_MINUTES = 15
@@ -30,8 +37,6 @@ TERMINAL_TIME_REVIEW_STATUSES = {
     "clarification",
     "auto_closed_by_deadline",
 }
-WEEKLY_REVIEW_STATUS_REVIEWED = "reviewed"
-WEEKLY_REVIEW_STATUS_RESET = "reset"
 
 
 @dataclass(frozen=True)
@@ -86,7 +91,6 @@ class TimeEntryService:
         self._ensure_person_exists(payload.person_id)
         if payload.note == OFFICE_ONLY_TIME_ENTRY_NOTE:
             self._ensure_can_review_time(current_user)
-            self._ensure_week_is_open(payload.person_id, payload.work_date)
             self._ensure_office_manual_entry(payload)
         self._ensure_site_exists(payload.site_id)
         self._ensure_assignment_matches(payload.assignment_id, payload.person_id, payload.site_id)
@@ -125,14 +129,21 @@ class TimeEntryService:
                 work_date=payload.work_date,
                 overnight_status=overnight_status,
             )
+        self._invalidate_payroll_reviews_for_dates(
+            (payload.person_id, payload.work_date),
+            clear_row_reviews=True,
+        )
         self.db.commit()
         return self._load_entry_for_read(entry.id)
 
     def update_entry(self, entry_id: int, payload: TimeEntryUpdate, current_user: User) -> WorkTimeEntry:
         entry = self._get_entry(entry_id)
         self._ensure_can_write_person(current_user, entry.person_id)
+        old_person_id = entry.person_id
+        old_work_date = entry.work_date
         values = payload.model_dump(exclude_unset=True)
         overnight_status = values.pop("overnight_status", None)
+        has_changes = bool(values) or overnight_status is not None
         next_person_id = values.get("person_id", entry.person_id)
         next_site_id = values.get("site_id", entry.site_id)
         if "person_id" in values:
@@ -192,6 +203,13 @@ class TimeEntryService:
                 overnight_status=overnight_status,
             )
 
+        if has_changes:
+            self._invalidate_payroll_reviews_for_dates(
+                (old_person_id, old_work_date),
+                (next_person_id, next_work_date),
+                clear_row_reviews=True,
+            )
+
         self.db.commit()
         return self._load_entry_for_read(entry.id)
 
@@ -203,6 +221,10 @@ class TimeEntryService:
         )
         self._ensure_can_write_person(current_user, entry.person_id)
         self._ensure_entry_can_be_deleted(entry)
+        self._invalidate_payroll_reviews_for_dates(
+            (entry.person_id, getattr(entry, "work_date", None)),
+            clear_row_reviews=True,
+        )
         self.db.delete(entry)
         self.db.commit()
 
@@ -215,14 +237,11 @@ class TimeEntryService:
         )
         self._ensure_can_write_person(current_user, entry.person_id)
         iso_year, iso_week, _ = entry.work_date.isocalendar()
-        review = self._get_weekly_review(
-            person_id=entry.person_id,
-            iso_year=iso_year,
-            iso_week=iso_week,
+        invalidation = self._invalidate_payroll_reviews_for_dates(
+            (entry.person_id, entry.work_date),
+            clear_row_reviews=True,
         )
-        weekly_review_reset = bool(review is not None and review.status == WEEKLY_REVIEW_STATUS_REVIEWED)
-        if weekly_review_reset and review is not None:
-            self._reset_weekly_review_state(review, current_user=current_user)
+        weekly_review_reset = (entry.person_id, iso_year, iso_week) in invalidation.reset_week_keys
         result = PayrollTimeEntryDeletion(
             entry_id=entry.id,
             person_id=entry.person_id,
@@ -247,6 +266,10 @@ class TimeEntryService:
             method="manual_confirmed",
             current_user=current_user,
         )
+        self._invalidate_payroll_reviews_for_dates(
+            (getattr(entry, "person_id", None), getattr(entry, "work_date", None)),
+            clear_row_reviews=True,
+        )
         self.db.commit()
         self.db.refresh(entry)
         return entry
@@ -262,6 +285,10 @@ class TimeEntryService:
         else:
             entry.payroll_reviewed_by_user_id = None
             entry.payroll_reviewed_at = None
+        self._invalidate_payroll_reviews_for_dates(
+            (getattr(entry, "person_id", None), getattr(entry, "work_date", None)),
+            clear_row_reviews=False,
+        )
         self.db.commit()
         self.db.refresh(entry)
         return entry
@@ -306,6 +333,10 @@ class TimeEntryService:
         entry.payroll_corrected_end_time = end_time
         entry.payroll_corrected_break_minutes = break_minutes
         entry.payroll_corrected_work_minutes = work_minutes
+        self._invalidate_payroll_reviews_for_dates(
+            (getattr(entry, "person_id", None), getattr(entry, "work_date", None)),
+            clear_row_reviews=True,
+        )
         self.db.commit()
         self.db.refresh(entry)
         return entry
@@ -337,7 +368,13 @@ class TimeEntryService:
         )
         if entry.original_work_date is None:
             entry.original_work_date = entry.work_date
+        old_work_date = entry.work_date
         entry.work_date = work_date
+        self._invalidate_payroll_reviews_for_dates(
+            (entry.person_id, old_work_date),
+            (entry.person_id, work_date),
+            clear_row_reviews=True,
+        )
         self.db.commit()
         self.db.refresh(entry)
         return entry
@@ -358,6 +395,10 @@ class TimeEntryService:
             status_value="corrected",
             method="manual_correction",
             current_user=current_user,
+        )
+        self._invalidate_payroll_reviews_for_dates(
+            (getattr(entry, "person_id", None), getattr(entry, "work_date", None)),
+            clear_row_reviews=True,
         )
         self.db.commit()
         self.db.refresh(entry)
@@ -428,6 +469,10 @@ class TimeEntryService:
         else:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Review-Entscheidung ist nicht erlaubt.")
 
+        self._invalidate_payroll_reviews_for_dates(
+            (getattr(entry, "person_id", None), getattr(entry, "work_date", None)),
+            clear_row_reviews=True,
+        )
         self.db.commit()
         self.db.refresh(entry)
         return entry
@@ -603,11 +648,17 @@ class TimeEntryService:
         person_id: int | None = None,
     ) -> list[tuple[date, date]]:
         guard = PayrollPeriodGuard(self.db)
+        week_dates: list[date] = []
+        cursor = week_start
+        while cursor <= week_end:
+            week_dates.append(cursor)
+            cursor += timedelta(days=1)
+        locked_month_keys = guard.locked_month_keys(*week_dates, person_id=person_id)
         segments: list[tuple[date, date]] = []
         segment_start: date | None = None
         cursor = week_start
         while cursor <= week_end:
-            if guard.is_date_locked(cursor, person_id=person_id):
+            if (cursor.year, cursor.month) in locked_month_keys:
                 if segment_start is not None:
                     segments.append((segment_start, cursor - timedelta(days=1)))
                     segment_start = None
@@ -832,11 +883,14 @@ class TimeEntryService:
         self._ensure_can_review_time(current_user)
         PayrollPeriodGuard(self.db).assert_date_mutable(work_date, person_id=person_id)
         self._ensure_person_exists(person_id)
-        self._ensure_week_is_open(person_id, work_date)
         self._set_overnight_status(
             person_id=person_id,
             work_date=work_date,
             overnight_status=overnight_status,
+        )
+        self._invalidate_payroll_reviews_for_dates(
+            (person_id, work_date),
+            clear_row_reviews=True,
         )
         self.db.commit()
         return overnight_status
@@ -978,20 +1032,23 @@ class TimeEntryService:
         if self.db.get(Person, person_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Person nicht gefunden.")
 
-    def _ensure_week_is_open(self, person_id: int, work_date: date) -> None:
-        iso_year, iso_week, _ = work_date.isocalendar()
-        review = self.db.scalar(
-            select(TimeEntryWeeklyReview)
-            .where(TimeEntryWeeklyReview.person_id == person_id)
-            .where(TimeEntryWeeklyReview.iso_year == iso_year)
-            .where(TimeEntryWeeklyReview.iso_week == iso_week)
-            .where(TimeEntryWeeklyReview.status == WEEKLY_REVIEW_STATUS_REVIEWED)
+    def _invalidate_payroll_reviews_for_dates(
+        self,
+        *person_dates: tuple[int | None, date | None],
+        clear_row_reviews: bool,
+    ) -> PayrollReviewInvalidation:
+        return PayrollReviewInvalidationService(self.db).invalidate(
+            *(
+                PayrollReviewRange(
+                    person_id=person_id,
+                    start_date=work_date,
+                    end_date=work_date,
+                )
+                for person_id, work_date in person_dates
+                if person_id is not None and work_date is not None
+            ),
+            clear_row_reviews=clear_row_reviews,
         )
-        if review is not None:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Geprüfte Woche zuerst zurücksetzen.",
-            )
 
     def _ensure_site_exists(self, site_id: int | None) -> None:
         if site_id is None:
