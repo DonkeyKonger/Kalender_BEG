@@ -234,6 +234,28 @@ def test_open_person_month_worker_export_requires_approval_and_uses_stored_artif
 
 
 @pytest.mark.parametrize("all_workers", [False, True])
+def test_versioned_legacy_export_requires_locked_snapshot(all_workers):
+    db = database()
+    service = PayrollMonthExportService(db)
+    args = {
+        "year": 2026,
+        "month": 7,
+        "version": 1,
+        "current_user": SimpleNamespace(role=UserRole.ADMIN, person_id=None),
+    }
+
+    with pytest.raises(Exception) as versioned_legacy_month:
+        if all_workers:
+            service.all_workers_export(**args)
+        else:
+            service.worker_export(person_id=1, **args)
+
+    assert getattr(versioned_legacy_month.value, "detail", {}).get("code") == (
+        "payroll_month_not_locked"
+    )
+
+
+@pytest.mark.parametrize("all_workers", [False, True])
 def test_downloads_load_calendar_absences_even_without_time_entries(all_workers):
     db = database()
     anna = person(1, "Anna", "Bau")

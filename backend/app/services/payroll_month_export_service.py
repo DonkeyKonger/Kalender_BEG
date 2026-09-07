@@ -53,6 +53,14 @@ class PayrollMonthExportService:
         current_user: User,
         version: int | None = None,
     ) -> bytes:
+        if version is not None:
+            artifact = self._locked_artifact(
+                year=year,
+                month=month,
+                artifact_key=f"worker:{person_id}",
+                version=version,
+            )
+            return prepare_payroll_workbook_download(artifact.content)
         if _is_legacy_month(year, month):
             return self.build_worker_export_from_live_data(
                 person_id=person_id,
@@ -62,14 +70,6 @@ class PayrollMonthExportService:
                 opening_balance_minutes=None,
                 closing_balance_minutes=None,
             )
-        if version is not None:
-            artifact = self._locked_artifact(
-                year=year,
-                month=month,
-                artifact_key=f"worker:{person_id}",
-                version=version,
-            )
-            return prepare_payroll_workbook_download(artifact.content)
         period = self.db.scalar(
             select(PayrollMonthPeriod).where(
                 PayrollMonthPeriod.year == year,
@@ -271,6 +271,14 @@ class PayrollMonthExportService:
         current_user: User,
         version: int | None = None,
     ) -> bytes:
+        if version is not None:
+            artifact = self._locked_artifact(
+                year=year,
+                month=month,
+                artifact_key="all_workers",
+                version=version,
+            )
+            return prepare_payroll_workbook_download(artifact.content)
         if _is_legacy_month(year, month):
             source = self.load_live_source(
                 year=year,
@@ -284,14 +292,13 @@ class PayrollMonthExportService:
         month_status = self.db.scalar(select(PayrollMonthPeriod.status).where(
             PayrollMonthPeriod.year == year, PayrollMonthPeriod.month == month,
         ))
-        if month_status != PAYROLL_MONTH_LOCKED and version is None:
+        if month_status != PAYROLL_MONTH_LOCKED:
             return self._approved_workers_export(year=year, month=month)
-        # Existing locked snapshots/versioned links retain their exact semantics.
+        # Existing locked snapshots retain their exact semantics.
         artifact = self._locked_artifact(
             year=year,
             month=month,
             artifact_key="all_workers",
-            version=version,
         )
         return prepare_payroll_workbook_download(artifact.content)
 
