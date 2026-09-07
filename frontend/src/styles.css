@@ -21584,10 +21584,45 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-evaluation-day-status {
+  --time-review-overnight-symbol-width: 23px;
   display: flex;
   flex: 0 0 var(--time-review-overnight-status-width);
   width: var(--time-review-overnight-status-width);
+  min-height: 22px;
   align-items: center;
+}
+
+.time-evaluation-day-status .time-review-overnight-trigger,
+.time-evaluation-day-status .time-review-overnight-indicator,
+.time-evaluation-day-status .time-review-overnight-marker,
+.time-evaluation-day-status .time-review-overnight-bed {
+  height: 22px;
+}
+
+.time-evaluation-day-status .time-review-overnight-trigger > span {
+  display: flex;
+}
+
+.time-evaluation-day-status .time-review-overnight-bed > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.time-evaluation-day-status .time-review-overnight-payer-strip {
+  height: 9px;
+  font-size: 0.44rem;
+}
+
+.time-evaluation-day-status .time-review-overnight-no-stay-mark,
+.time-evaluation-day-status .time-review-overnight-no-stay-mark svg {
+  width: 8px;
+  height: 8px;
+}
+
+.time-evaluation-day-status .time-review-absence-badge {
+  min-height: 22px;
+  padding-block: 2px;
+  line-height: 1;
 }
 
 .time-evaluation-day-toggle-label > span {
