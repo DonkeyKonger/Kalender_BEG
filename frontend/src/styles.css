@@ -22330,6 +22330,61 @@ body.mobile-modal-scroll-locked {
   .time-evaluation-worker-workspace { min-height: 360px; }
 }
 
+/* Share the remarks button's right edge across the monthly action rows. */
+.time-entries-page.is-figma-times-workspace.is-payroll-month-workspace {
+  --payroll-month-action-inset: 18px;
+}
+
+.time-entries-page.is-figma-times-workspace.is-payroll-month-workspace > .page-header,
+.time-entries-page.is-figma-times-workspace.is-payroll-month-workspace > .time-payroll-navigation-row {
+  padding-right: calc(var(--payroll-header-inline) + var(--payroll-month-action-inset) + 1px);
+}
+
+.time-entries-page.is-figma-times-workspace.is-payroll-month-workspace .page-header .time-evaluation-subtabs {
+  margin-left: auto;
+}
+
+.is-payroll-month-workspace .time-evaluation-period-controls {
+  justify-content: flex-end;
+}
+
+.is-payroll-month-workspace .time-evaluation-year-navigation {
+  justify-self: end;
+}
+
+.is-payroll-month-workspace .payroll-person-month-close-main {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-right: var(--payroll-month-action-inset);
+}
+
+.is-payroll-month-workspace .payroll-person-month-remarks {
+  justify-content: flex-end;
+}
+
+.is-payroll-month-workspace .payroll-person-month-actions {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  padding: 10px 0 0;
+  border-left: 0;
+  border-top: 1px solid var(--time-border);
+}
+
+.is-payroll-month-workspace .payroll-person-month-download-button {
+  margin-left: auto;
+}
+
+@container payroll-month-detail (max-width: 520px) {
+  .is-payroll-month-workspace .payroll-person-month-close-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .time-entries-page.is-figma-times-workspace.is-payroll-month-workspace {
+    --payroll-month-action-inset: 14px;
+  }
+}
+
 /* Aggregated payroll-site cockpit; detailed payroll/GPS rows stay in the worker workspace. */
 .payroll-site-cockpit {
   --payroll-site-navy: var(--time-week-active-blue);

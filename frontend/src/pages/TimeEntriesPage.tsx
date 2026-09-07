@@ -2330,7 +2330,7 @@ export function TimeEntriesPage() {
   );
 
   return (
-    <section className={`time-entries-page is-figma-times-workspace${activeTimeSubtab === "review" || (activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers") ? " is-payroll-review-workspace" : ""}`}>
+    <section className={`time-entries-page is-figma-times-workspace${activeTimeSubtab === "review" || (activeTimeSubtab === "evaluation" && activeEvaluationSubtab === "workers") ? " is-payroll-review-workspace" : ""}${isEvaluationWorkerReview ? " is-payroll-month-workspace" : ""}`}>
       <div className="page-header entity-page-header">
         <div>
           <h1>Lohnprüfung</h1>
