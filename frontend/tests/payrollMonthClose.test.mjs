@@ -11,7 +11,6 @@ import {
 } from "../src/lib/payrollMonth.ts";
 
 const page = readFileSync(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
-const setup = readFileSync(new URL("../src/components/PayrollSetupDialog.tsx", import.meta.url), "utf8");
 const personsPage = readFileSync(new URL("../src/pages/PersonsPage.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
@@ -55,9 +54,6 @@ test("setup suggestion stays editable and must match weekly hours before confirm
   assert.deepEqual(suggestWeekdayMinutes(40, [1, 2, 3, 4]), [0, 600, 600, 600, 600, 0, 0]);
   assert.deepEqual(suggestWeekdayMinutes(37.5, [0, 2, 4, 6]), [563, 0, 563, 0, 562, 0, 562]);
   assert.equal(sumWeekdayMinutes([600, 600, 600, 600, 0, 0, 0]), 2400);
-  assert.match(setup, /Vorausgefüllter Vorschlag – noch nicht verbindlich/);
-  assert.match(setup, /weeklySumMatches[\s\S]*?Wochenplan bestätigen/s);
-  assert.match(setup, /worker\.plan\?\.is_confirmed[\s\S]*?disabled/s);
 });
 
 test("employee details omit the regular working time editor but preserve independent weekly hours", () => {
@@ -81,10 +77,10 @@ test("person approval explicitly acknowledges current hints and always enables i
 });
 
 test("normal payroll no longer requires or mounts an account setup dialog", () => {
-  assert.doesNotMatch(page, /Stundenkonto einrichten|PayrollSetupDialog|isPayrollSetupOpen|payrollMonthPeriodRefreshKey/);
+  assert.doesNotMatch(page, /Stundenkonto einrichten|PayrollSetupDialog|isPayrollSetupOpen/);
   assert.match(page, /Monteurmonat geprüft/);
-  // Existing optional schedule/setup code remains intact, not deleted or migrated.
-  assert.match(setup, /Wochenpläne ab 01\.08\.2026 und Eröffnungssalden zum 31\.07\.2026/);
+  assert.doesNotMatch(api, /async (payrollSetup|confirmPayrollWeeklyPlan|confirmPayrollOpeningBalance|payrollSiteHistory)\(/);
+  assert.doesNotMatch(styles, /\.payroll-setup-/);
 });
 
 test("positive and negative opening balances roundtrip as integer minutes", () => {
@@ -94,14 +90,11 @@ test("positive and negative opening balances roundtrip as integer minutes", () =
   assert.equal(parseSignedHoursMinutes("1:75"), null);
   assert.equal(formatSignedHoursMinutes(1110), "+18:30");
   assert.equal(formatSignedHoursMinutes(-90), "−01:30");
-  assert.match(setup, /effective_date: PAYROLL_OPENING_BALANCE_DATE[\s\S]*?minutes,[\s\S]*?confirm: true/s);
 });
 
-test("month close and setup geometry remains locally scoped and square", () => {
+test("month close geometry remains locally scoped and square", () => {
   assert.doesNotMatch(styles, /\.payroll-month-lock-(?:box|toggle)/);
   assert.match(styles, /\.payroll-month-dialog\s*\{[^}]*border-radius:\s*0;/s);
-  assert.match(styles, /\.payroll-setup-dialog\s*\{[^}]*border-radius:\s*0;/s);
-  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.payroll-setup-worker\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
 });
 
 test("person month close heads the selected worker table and grows for long names and hints", () => {

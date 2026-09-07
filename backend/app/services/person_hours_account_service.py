@@ -79,9 +79,9 @@ class PersonHoursAccountService:
         )
         entries = self._list_entries(person_id)
         monthly = PayrollMonthAccountService(self.db)
-        transition = monthly.transition(person_id)
-        balance = monthly.current_balance(person_id, transition) if transition is not None else monthly.accepted_balance(opening, entries)
-        notices = monthly.notices(person_id)
+        transition = monthly.transition(person_id, entries=entries)
+        balance = monthly.current_balance(person_id, transition, entries=entries) if transition is not None else monthly.accepted_balance(opening, entries)
+        notices = monthly.notices(person_id, entries=entries)
         if balance is None and not notices:
             notices = ["Anfangsbestand ungeklärt; der absolute Kontostand bleibt offen."]
         return PersonHoursAccountRead(

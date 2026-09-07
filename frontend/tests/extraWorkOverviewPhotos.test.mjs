@@ -206,7 +206,7 @@ test("the modal exposes loading and failure states and rejects stale original re
   assert.match(modalSource, /window\.URL\.revokeObjectURL\(objectUrl\)/);
   assert.match(pageSource, /<ExtraWorkOverviewPhotoModal[\s\S]*key=\{ticket\.id\}[\s\S]*initialPhotoId=\{selectedPhoto\.id\}/);
   assert.match(apiSource, /requestBlob\(path: string, signal\?: AbortSignal\)/);
-  assert.match(apiSource, /fetch\(`\$\{API_BASE_URL\}\$\{path\}`, \{ headers, signal \}\)/);
+  assert.match(apiSource, /authenticatedFetch\(path, \{ headers: \{ Accept: "\*\/\*" \}, signal \}\)/);
 });
 
 test("the large view stays a centered, bounded popup and grows responsively on phones", () => {

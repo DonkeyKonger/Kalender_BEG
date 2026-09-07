@@ -48,7 +48,9 @@ class PayrollMonthAccountService:
         # Call after period locks. Manual writers use this same row lock.
         self.db.execute(select(Person.id).where(Person.id == person_id).with_for_update()).scalar_one()
 
-    def transition(self, person_id: int) -> Entry | None:
+    def transition(self, person_id: int, *, entries: list[Entry] | None = None) -> Entry | None:
+        if entries is not None:
+            return next((row for row in entries if row.idempotency_key == f"monthly-transition:{person_id}"), None)
         return self.db.scalar(select(Entry).where(Entry.idempotency_key == f"monthly-transition:{person_id}"))
 
     def _entries(self, person_id: int) -> list[Entry]:
@@ -108,12 +110,12 @@ class PayrollMonthAccountService:
         return row
 
     def current_balance(self, person_id: int, transition: Entry | None = None,
-                        *, through: date | None = None) -> int | None:
-        transition = transition or self.transition(person_id)
+                        *, through: date | None = None, entries: list[Entry] | None = None) -> int | None:
+        transition = transition or self.transition(person_id, entries=entries)
         if transition is None:
             raise ValueError("Monthly account transition has not been captured.")
         baseline = self._transition_baseline(transition)
-        entries = self._entries(person_id)
+        entries = self._entries(person_id) if entries is None else entries
         def in_period(row: Entry) -> bool:
             return through is None or row.effective_date is None or row.effective_date <= through
 
@@ -132,14 +134,15 @@ class PayrollMonthAccountService:
                               and in_period(row)
                               and (row.is_active or row.entry_type in (MONTHLY, REVERSAL)))
 
-    def notices(self, person_id: int) -> list[str]:
-        transition = self.transition(person_id)
+    def notices(self, person_id: int, *, entries: list[Entry] | None = None) -> list[str]:
+        transition = self.transition(person_id, entries=entries)
         if transition is None:
             return []
         notices = []
         if self._transition_baseline(transition) is None:
             notices.append("Anfangsbestand ungeklärt; der absolute Kontostand bleibt offen.")
-        notices.extend(row.note for row in self._entries(person_id)
+        entries = self._entries(person_id) if entries is None else sorted(entries, key=lambda row: row.id)
+        notices.extend(row.note for row in entries
                        if row.entry_type == MONTHLY and row.is_active
                        and (row.source_payload or {}).get("pending_reason") and not _legacy_conflict(row))
         return notices

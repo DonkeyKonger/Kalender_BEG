@@ -9,12 +9,14 @@ import type { Person, PersonCreate, PersonGeocodeSearchResult, PersonHoursAccoun
 import type { CustomerSignaturePayload, ExtraWorkCustomerSignaturePayload, ExtraWorkTicketDocumentRead, ExtraWorkTicketDocumentUpdate, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementAreaRowPayload, MeasurementBase, MeasurementBaseUpdate, MeasurementDashboardSubmission, MeasurementEntry, MeasurementEntryPayload, MeasurementImportOptions, MeasurementImportResponse, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketDetailsUpdate, MobileExtraWorkTicketEntry, MobileExtraWorkTicketEntryPayload, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteEmailRecipientsResponse, SiteEmailRecipientsUpdate, SiteGeocodeSearchResult, SiteMapResponse, SiteRemovePlan, SiteRemoveResponse, SiteSummary, SiteUpdate, WorkerSignaturePayload } from "../types/site";
 import type { ExtraWorkManualStatus, MeasurementManualStatus } from "./projectRecordStatuses";
 import type { MobileAssignment, MobileAssignmentSiteHistoryResponse, MobileAssignmentSitesResponse, MobileAssignmentsResponse, MobilePersonalFile, MobilePersonalFileAbsenceResponse, MobilePersonalFileAbsenceType, MobilePersonalFileTool, MobileSite, MobileToolIssueReason, MobileToolIssueReport } from "../types/mobile";
-import type { OvernightStatus, PayrollSiteCockpit, PayrollSiteHistory, PersonWorkDay, TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryReviewDecisionPayload, TimeEntryReviewWeek, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
-import type { PayrollMonthLockStatus, PayrollMonthPeriod, PayrollOpeningBalanceUpdate, PayrollSetup, PayrollWeeklyPlan, PayrollWeeklyPlanUpdate } from "../types/payrollMonth";
+import type { OvernightStatus, PayrollSiteCockpit, PersonWorkDay, TimeEntry, TimeEntryCorrection, TimeEntryCreate, TimeEntryPayrollCorrection, TimeEntryPayrollDateCorrection, TimeEntryPayrollDeleteResult, TimeEntryPayrollWeek, TimeEntryReviewDecisionPayload, TimeEntryReviewWeek, TimeEntryUpdate, TimeEntryWeeklyReview } from "../types/timeEntry";
+import type { PayrollMonthLockStatus, PayrollMonthPeriod, PayrollWeeklyPlan, PayrollWeeklyPlanUpdate } from "../types/payrollMonth";
 import type { ToolMaterialFilterOption, ToolMaterialFilterOptions, ToolMaterialItem, ToolMaterialItemCreate, ToolMaterialItemUpdate, ToolMaterialPage, ToolMaterialResponsibility, ToolResponsibleUser } from "../types/toolMaterial";
 import type { WeatherSummary } from "../types/weather";
 import type { VehicleDatabaseItem, VehicleDatabaseOptions, VehicleDatabasePayload, VehicleDatabaseSortDirection, VehicleDatabaseSortField } from "../types/vehicleDatabase";
 import { buildToolMaterialSearchParams, type ToolMaterialListParams } from "./toolMaterialFilters";
+
+import { fetchWithAuthRefresh } from "./authenticatedFetch";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 const AUTH_REFRESH_PATH = "/auth/refresh";
@@ -321,20 +323,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function requestBlob(path: string, signal?: AbortSignal): Promise<Blob> {
-  const token = localStorage.getItem("kb_access_token");
-  const headers = new Headers();
-  headers.set("Accept", "*/*");
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const response = await fetch(`${API_BASE_URL}${path}`, { headers, signal });
+  const response = await authenticatedFetch(path, { headers: { Accept: "*/*" }, signal });
   if (!response.ok) {
     const contentType = response.headers.get("content-type") ?? "";
     const payload = contentType.includes("application/json")
       ? await response.json()
       : await response.text();
-    const detail = payload.detail ?? payload;
+    const detail = getApiErrorDetail(payload);
     console.error("API blob request failed", {
       method: "GET",
       url: `${API_BASE_URL}${path}`,
@@ -347,19 +342,7 @@ async function requestBlob(path: string, signal?: AbortSignal): Promise<Blob> {
 }
 
 async function request<T>(path: string, options: RequestInit = {}, retryOnUnauthorized = true): Promise<T> {
-  const { response, payload } = await sendRequest(path, options);
-
-  if (
-    response.status === 401
-    && retryOnUnauthorized
-    && path !== AUTH_REFRESH_PATH
-    && getAccessToken()
-  ) {
-    const refreshedToken = await refreshAccessToken();
-    if (refreshedToken) {
-      return request<T>(path, options, false);
-    }
-  }
+  const { response, payload } = await sendRequest(path, options, retryOnUnauthorized);
 
   if (response.status === 204) {
     return undefined as T;
@@ -380,22 +363,21 @@ async function request<T>(path: string, options: RequestInit = {}, retryOnUnauth
   return payload as T;
 }
 
-async function sendRequest(path: string, options: RequestInit = {}): Promise<{ response: Response; payload: unknown }> {
-  const token = localStorage.getItem("kb_access_token");
+function authenticatedFetch(path: string, options: RequestInit, retryOnUnauthorized = true): Promise<Response> {
+  return fetchWithAuthRefresh(`${API_BASE_URL}${path}`, options, {
+    getToken: getAccessToken,
+    refreshToken: refreshAccessToken,
+  }, retryOnUnauthorized && path !== AUTH_REFRESH_PATH);
+}
+
+async function sendRequest(path: string, options: RequestInit = {}, retryOnUnauthorized = true): Promise<{ response: Response; payload: unknown }> {
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   if (options.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const response = await authenticatedFetch(path, { ...options, headers }, retryOnUnauthorized);
 
   if (response.status === 204) {
     return { response, payload: undefined };
@@ -417,7 +399,8 @@ function getApiErrorDetail(payload: unknown): unknown {
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  if (!getAccessToken()) {
+  const requestedToken = getAccessToken();
+  if (!requestedToken) {
     return null;
   }
   refreshAccessTokenPromise ??= request<LoginResponse>(
@@ -426,6 +409,9 @@ async function refreshAccessToken(): Promise<string | null> {
     false,
   )
     .then((token) => {
+      if (getAccessToken() !== requestedToken) {
+        return getAccessToken();
+      }
       localStorage.setItem("kb_access_token", token.access_token);
       return token.access_token;
     })
@@ -797,18 +783,6 @@ export const api = {
     return request<void>(`/persons/${personId}`, { method: "DELETE" });
   },
 
-  async payrollSetup(effectiveDate: string): Promise<PayrollSetup> {
-    const search = new URLSearchParams({ effective_date: effectiveDate });
-    return request<PayrollSetup>(`/payroll-setup?${search.toString()}`);
-  },
-
-  async confirmPayrollWeeklyPlan(personId: number, payload: PayrollWeeklyPlanUpdate): Promise<PayrollSetup> {
-    return request<PayrollSetup>(`/payroll-setup/workers/${personId}/weekly-plan`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
-  },
-
   async personRegularWorkingTime(personId: number): Promise<PayrollWeeklyPlan[]> {
     return request<PayrollWeeklyPlan[]>(`/persons/${personId}/regular-working-time`);
   },
@@ -818,13 +792,6 @@ export const api = {
     payload: PayrollWeeklyPlanUpdate,
   ): Promise<PayrollWeeklyPlan> {
     return request<PayrollWeeklyPlan>(`/persons/${personId}/regular-working-time`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
-  },
-
-  async confirmPayrollOpeningBalance(personId: number, payload: PayrollOpeningBalanceUpdate): Promise<PayrollSetup> {
-    return request<PayrollSetup>(`/payroll-setup/workers/${personId}/opening-balance`, {
       method: "PUT",
       body: JSON.stringify(payload),
     });
@@ -894,6 +861,7 @@ export const api = {
     includeGpsStatus?: boolean;
     reviewOpenOnly?: boolean;
     projectMountingOnly?: boolean;
+    signal?: AbortSignal;
   } = {}): Promise<TimeEntry[]> {
     const search = new URLSearchParams();
     if (params.personId !== undefined) {
@@ -918,15 +886,15 @@ export const api = {
       search.set("project_mounting_only", "true");
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
-    return request<TimeEntry[]>(`/time-entries${suffix}`);
+    return request<TimeEntry[]>(`/time-entries${suffix}`, { signal: params.signal });
   },
 
-  async timeEntryReviewWeek(params: { dateFrom: string; dateTo: string }): Promise<TimeEntryReviewWeek> {
+  async timeEntryReviewWeek(params: { dateFrom: string; dateTo: string; signal?: AbortSignal }): Promise<TimeEntryReviewWeek> {
     const search = new URLSearchParams({
       date_from: params.dateFrom,
       date_to: params.dateTo,
     });
-    return request<TimeEntryReviewWeek>(`/time-entries/review-week?${search.toString()}`);
+    return request<TimeEntryReviewWeek>(`/time-entries/review-week?${search.toString()}`, { signal: params.signal });
   },
 
   async payrollSiteCockpit(params: {
@@ -940,18 +908,6 @@ export const api = {
     });
     return request<PayrollSiteCockpit>(
       `/time-entries/payroll-site-cockpit?${search.toString()}`,
-      { signal: params.signal },
-    );
-  },
-
-  async payrollSiteHistory(params: {
-    siteId: number;
-    dateTo: string;
-    signal?: AbortSignal;
-  }): Promise<PayrollSiteHistory> {
-    const search = new URLSearchParams({ date_to: params.dateTo });
-    return request<PayrollSiteHistory>(
-      `/time-entries/payroll-site-cockpit/${encodeURIComponent(String(params.siteId))}/history?${search.toString()}`,
       { signal: params.signal },
     );
   },
@@ -1040,30 +996,30 @@ export const api = {
     });
   },
 
-  async timeEntryWeeklyReviews(params: { isoYear: number; isoWeek?: number }): Promise<TimeEntryWeeklyReview[]> {
+  async timeEntryWeeklyReviews(params: { isoYear: number; isoWeek?: number; signal?: AbortSignal }): Promise<TimeEntryWeeklyReview[]> {
     const search = new URLSearchParams({
       iso_year: String(params.isoYear),
     });
     if (params.isoWeek !== undefined) {
       search.set("iso_week", String(params.isoWeek));
     }
-    return request<TimeEntryWeeklyReview[]>(`/time-entries/weekly-reviews?${search.toString()}`);
+    return request<TimeEntryWeeklyReview[]>(`/time-entries/weekly-reviews?${search.toString()}`, { signal: params.signal });
   },
 
-  async timeEntryPayrollWeek(params: { isoYear: number; isoWeek: number }): Promise<TimeEntryPayrollWeek> {
+  async timeEntryPayrollWeek(params: { isoYear: number; isoWeek: number; signal?: AbortSignal }): Promise<TimeEntryPayrollWeek> {
     const search = new URLSearchParams({
       iso_year: String(params.isoYear),
       iso_week: String(params.isoWeek),
     });
-    return request<TimeEntryPayrollWeek>(`/time-entries/payroll-week?${search.toString()}`);
+    return request<TimeEntryPayrollWeek>(`/time-entries/payroll-week?${search.toString()}`, { signal: params.signal });
   },
 
-  async payrollMonthPeriod(params: { year: number; month: number }): Promise<PayrollMonthPeriod> {
-    return request<PayrollMonthPeriod>(`/payroll-months/${params.year}/${params.month}`);
+  async payrollMonthPeriod(params: { year: number; month: number; signal?: AbortSignal }): Promise<PayrollMonthPeriod> {
+    return request<PayrollMonthPeriod>(`/payroll-months/${params.year}/${params.month}`, { signal: params.signal, cache: "no-store" });
   },
 
-  async payrollMonthLockStatus(params: { year: number; month: number }): Promise<PayrollMonthLockStatus> {
-    return request<PayrollMonthLockStatus>(`/payroll-months/${params.year}/${params.month}/lock-status`, { cache: "no-store" });
+  async payrollMonthLockStatus(params: { year: number; month: number; signal?: AbortSignal }): Promise<PayrollMonthLockStatus> {
+    return request<PayrollMonthLockStatus>(`/payroll-months/${params.year}/${params.month}/lock-status`, { cache: "no-store", signal: params.signal });
   },
 
   async lockPayrollMonth(params: { year: number; month: number }): Promise<PayrollMonthPeriod> {
@@ -1080,10 +1036,10 @@ export const api = {
     });
   },
 
-  async approvePayrollPersonMonth(params: { year: number; month: number; personId: number; acknowledgedBlockerCount: number }): Promise<PayrollMonthPeriod> {
+  async approvePayrollPersonMonth(params: { year: number; month: number; personId: number; acknowledgedBlockerCount: number; acknowledgedBlockerFingerprint: string }): Promise<PayrollMonthPeriod> {
     return request<PayrollMonthPeriod>(`/payroll-months/${params.year}/${params.month}/people/${params.personId}/approve`, {
       method: "POST",
-      body: JSON.stringify({ confirmed: true, acknowledged_blocker_count: params.acknowledgedBlockerCount }),
+      body: JSON.stringify({ confirmed: true, acknowledged_blocker_count: params.acknowledgedBlockerCount, acknowledged_blocker_fingerprint: params.acknowledgedBlockerFingerprint }),
     });
   },
 
@@ -1672,7 +1628,7 @@ export const api = {
     return request<SiteRemoveResponse>(`/sites/${siteId}`, { method: "DELETE" });
   },
 
-  async absences(params: { start?: string; end?: string; personId?: number | null } = {}): Promise<Absence[]> {
+  async absences(params: { start?: string; end?: string; personId?: number | null; signal?: AbortSignal } = {}): Promise<Absence[]> {
     const search = new URLSearchParams();
     if (params.start) {
       search.set("start", params.start);
@@ -1684,7 +1640,7 @@ export const api = {
       search.set("person_id", String(params.personId));
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
-    return request<Absence[]>(`/absences${suffix}`);
+    return request<Absence[]>(`/absences${suffix}`, { signal: params.signal });
   },
 
   async vacationCarryover(params: { personId: number; year: number }): Promise<VacationCarryover> {

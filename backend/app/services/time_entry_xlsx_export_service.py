@@ -153,7 +153,7 @@ class TimeEntryXlsxExportService:
             date_to=date_to,
         )
         gps_service = GpsPresenceService(self.db)
-        gps_evaluations = {entry.id: gps_service.evaluate_time_entry(entry) for entry in entries}
+        gps_evaluations = gps_service.evaluate_time_entries(entries)
         rows = [
             self._export_row(entry, gps_evaluations.get(entry.id))
             for entry in entries
@@ -177,7 +177,7 @@ class TimeEntryXlsxExportService:
         entries = [entry for entry in entries if entry.source != "gps_suggestion"]
         entries.sort(key=lambda entry: (entry.work_date, site_number(entry), site_name(entry), entry.id))
         gps_service = GpsPresenceService(self.db)
-        gps_evaluations = {entry.id: gps_service.evaluate_time_entry(entry) for entry in entries}
+        gps_evaluations = gps_service.evaluate_time_entries(entries)
 
         iso_week = start.isocalendar()
         rows = weekly_worker_rows(start, end, entries, gps_evaluations)
@@ -221,7 +221,7 @@ class TimeEntryXlsxExportService:
             )
 
         gps_service = GpsPresenceService(self.db)
-        gps_evaluations = {entry.id: gps_service.evaluate_time_entry(entry) for entry in entries}
+        gps_evaluations = gps_service.evaluate_time_entries(entries)
         iso_week = start.isocalendar()
         grouped_entries = sorted(
             entries_by_person.values(),

@@ -231,24 +231,3 @@ export type PayrollSiteCockpit = {
   sites: PayrollSiteCockpitSite[];
   action_items: PayrollSiteActionItem[];
 };
-
-export type PayrollSiteHistoryPoint = {
-  date: string;
-  actual_minutes: number;
-  forecast_minutes: number | null;
-};
-
-export type PayrollSiteHistory = {
-  site_id: number;
-  site_number: string | null;
-  site_name: string;
-  date_from: string;
-  date_to: string;
-  effective_as_of: string;
-  offer_budget_basis: PayrollSiteOfferBudgetBasis;
-  offer_budget_as_of: string;
-  offer_minutes: number | null;
-  forecast_minutes: number | null;
-  forecast_reason: string | null;
-  points: PayrollSiteHistoryPoint[];
-};
