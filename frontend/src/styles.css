@@ -18632,9 +18632,20 @@ body.mobile-modal-scroll-locked {
 
 .time-evaluation-month-strip-shell {
   display: grid;
+  position: relative;
   grid-template-columns: 34px minmax(0, 1fr) 34px;
   align-items: center;
   gap: 8px;
+}
+
+.time-evaluation-month-strip-shell::after {
+  content: "";
+  position: absolute;
+  grid-area: 1 / 2;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: #d7e1ee;
+  pointer-events: none;
 }
 
 .time-evaluation-month-strip {
@@ -18666,10 +18677,6 @@ body.mobile-modal-scroll-locked {
   font-weight: 850;
   scroll-snap-align: start;
   scroll-snap-stop: always;
-}
-
-.time-evaluation-month-strip button:first-child {
-  border-left-width: 1px;
 }
 
 .time-evaluation-month-strip button:hover,
