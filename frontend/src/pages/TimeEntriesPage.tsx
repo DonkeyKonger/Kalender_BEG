@@ -204,8 +204,8 @@ const TIME_REVIEW_API_MONTH_LOCKS = "month locks";
 const EMPTY_REVIEW_ENTRIES: TimeEntry[] = [];
 const EMPTY_REVIEW_ABSENCES: Absence[] = [];
 const timeSubtabs: { key: TimeSubtab; label: string }[] = [
-  { key: "review", label: "Stundenprüfung" },
-  { key: "evaluation", label: "Auswertung" },
+  { key: "review", label: "Wochenprüfung" },
+  { key: "evaluation", label: "Monatsprüfung" },
 ];
 
 export function TimeEntriesPage() {
