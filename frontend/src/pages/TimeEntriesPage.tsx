@@ -4215,21 +4215,23 @@ function MonthlyPayrollWorkerWorkspace({
       <div className="time-evaluation-worker-list">
         {overallStatus}
         <aside className="time-review-queue-panel" aria-label="Monteursliste für die Monatsauswertung">
-          <label className="time-review-queue-search">
-            <Search aria-hidden="true" size={15} />
-            <input type="search" value={search} placeholder="Monteur suchen..." aria-label="Monteur suchen" onChange={(event) => onChangeSearch(event.currentTarget.value)} />
-          </label>
-          <div className="time-review-queue-filters" role="group" aria-label="Statusfilter">
-            {([
-              ["all", "Alle"],
-              ["open", "Offen"],
-              ["missing", "Keine Meldung"],
-              ["reviewed", "Geprüft"],
-            ] as const).map(([nextFilter, label]) => (
-              <button className={filter === nextFilter ? "is-active" : ""} key={nextFilter} type="button" aria-pressed={filter === nextFilter} onClick={() => onChangeFilter(nextFilter)}>
-                <span>{label}</span><small>{filterCounts[nextFilter]}</small>
-              </button>
-            ))}
+          <div className="time-evaluation-queue-controls">
+            <label className="time-review-queue-search">
+              <Search aria-hidden="true" size={15} />
+              <input type="search" value={search} placeholder="Monteur suchen..." aria-label="Monteur suchen" onChange={(event) => onChangeSearch(event.currentTarget.value)} />
+            </label>
+            <div className="time-review-queue-filters" role="group" aria-label="Statusfilter">
+              {([
+                ["all", "Alle"],
+                ["open", "Offen"],
+                ["missing", "Keine Meldung"],
+                ["reviewed", "Geprüft"],
+              ] as const).map(([nextFilter, label]) => (
+                <button className={filter === nextFilter ? "is-active" : ""} key={nextFilter} type="button" aria-pressed={filter === nextFilter} onClick={() => onChangeFilter(nextFilter)}>
+                  <span>{label}</span><small>{filterCounts[nextFilter]}</small>
+                </button>
+              ))}
+            </div>
           </div>
           <div className="time-review-queue-list" role="listbox" aria-label="Monteure für die Monatsauswertung">
             <div className="time-review-queue-columns" aria-hidden="true"><span>Monteur</span><span>Std. erfasst</span><span>Status</span></div>
