@@ -30,6 +30,20 @@ und Pakete; das laufende Backend und die Datenbank haben keine externe Netzwerkv
 
 ## Anmeldung und Bedienung
 
+### Excel-Vorlage beim Monatsabschluss
+
+Der lokale Image-Build setzt Leserechte auf die mitgelieferten Vorlagen und
+prüft die Lohn-Excel anschließend als Laufzeitbenutzer `tester`. So bleiben
+auch Vorlagen lesbar, die auf dem Mac nur Besitzer-/Gruppenrechte haben.
+Ohne diese Normalisierung konnte der Monteurabschluss mit `PermissionError`
+beim Lesen von `Lohn_Monatszettel_Master.xlsx` abbrechen.
+
+Die Korrektur wurde mit einer Vorlage im Modus `0660`, dem Docker-Build,
+72 Backend-Tests und 16 lokalen Verwaltungstests geprüft. Der betroffene
+September-Abschluss einschließlich Excel-Export wurde gegen die lokale
+Datenkopie erfolgreich durchlaufen und anschließend vollständig als
+Datenbanktransaktion zurückgerollt; der Monteurmonat blieb offen.
+
 Ein separater lokaler Benutzer `local-test-admin` wird angelegt. Das zufällige
 Passwort steht ausschließlich in `.local-calendar/Zugang.txt` (Dateimodus 0600).
 Die Datei über folgenden Befehl öffnen, nicht in Chats oder Git kopieren:

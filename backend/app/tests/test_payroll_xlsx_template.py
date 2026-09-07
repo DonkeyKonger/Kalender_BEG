@@ -61,3 +61,20 @@ def test_payroll_monthly_template_reports_damaged_workbook(monkeypatch):
 
     with pytest.raises(PayrollXlsxTemplateError, match="beschädigt"):
         load_payroll_monthly_template()
+
+
+@pytest.mark.parametrize("error, message", [
+    (PermissionError("denied"), "Dateiberechtigungen"),
+    (OSError("read failed"), "kann nicht gelesen werden"),
+])
+def test_unreadable_template_is_not_reported_as_missing(monkeypatch, error, message):
+    class UnreadableResource:
+        def joinpath(self, _resource):
+            return self
+
+        def read_bytes(self):
+            raise error
+
+    monkeypatch.setattr(payroll_xlsx_template.resources, "files", lambda _: UnreadableResource())
+    with pytest.raises(PayrollXlsxTemplateError, match=message):
+        load_payroll_monthly_template()

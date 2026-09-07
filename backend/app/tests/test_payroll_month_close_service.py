@@ -364,13 +364,17 @@ def test_open_predecessor_is_not_added_to_person_month_hints(monkeypatch):
     assert approved.person_approvals[0].blockers == []
 
 
-def test_person_month_standard_export_failure_rolls_back_account_and_approval(monkeypatch):
+@pytest.mark.parametrize("template_unavailable", [False, True])
+def test_person_month_standard_export_failure_rolls_back_account_and_approval(monkeypatch, template_unavailable):
     db = database()
     admin, worker = payroll_users(db)
     service = PayrollMonthCloseService(db)
     fallback_called = False
 
     def fail_standard_export(_export_service, **_values):
+        if template_unavailable:
+            from app.services.payroll_xlsx_template import PayrollXlsxTemplateError
+            raise PayrollXlsxTemplateError("Excel-Mastervorlage kann nicht gelesen werden.")
         raise RuntimeError("Standardexport fehlgeschlagen")
 
     def forbidden_fallback(*_args, **_kwargs):
@@ -391,7 +395,7 @@ def test_person_month_standard_export_failure_rolls_back_account_and_approval(mo
     )
     monkeypatch.setattr(AuditService, "record", lambda *_args, **_kwargs: None)
 
-    with pytest.raises(RuntimeError, match="Standardexport fehlgeschlagen"):
+    with pytest.raises(HTTPException if template_unavailable else RuntimeError) as caught:
         service.approve_person_month(
             year=2026,
             month=8,
@@ -400,6 +404,13 @@ def test_person_month_standard_export_failure_rolls_back_account_and_approval(mo
             acknowledged_blocker_count=0,
             current_user=admin,
         )
+
+    if template_unavailable:
+        assert caught.value.status_code == 503
+        assert caught.value.detail["code"] == "payroll_template_unavailable"
+        assert "Excel-Mastervorlage" in caught.value.detail["message"]
+    else:
+        assert str(caught.value) == "Standardexport fehlgeschlagen"
 
     assert fallback_called is False
     assert db.scalar(select(PayrollMonthPersonApproval.id)) is None

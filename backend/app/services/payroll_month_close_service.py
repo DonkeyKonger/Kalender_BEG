@@ -1615,6 +1615,11 @@ class PayrollMonthCloseService:
 
     @staticmethod
     def _raise_ledger_validation(error: Exception) -> None:
+        if isinstance(error, PayrollXlsxTemplateError):
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                {"code": "payroll_template_unavailable", "message": str(error)},
+            ) from error
         from app.services.payroll_daily_ledger_service import PayrollLedgerValidationError
 
         if isinstance(error, PayrollLedgerValidationError):

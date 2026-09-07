@@ -22,9 +22,18 @@ def load_payroll_monthly_template() -> BytesIO:
     """Lädt die unveränderte Mastervorlage in einen neuen, unabhängigen Puffer."""
     try:
         content = resources.files("app").joinpath(PAYROLL_MONTHLY_TEMPLATE_RESOURCE).read_bytes()
-    except (FileNotFoundError, ModuleNotFoundError, OSError) as exc:
+    except PermissionError as exc:
+        raise PayrollXlsxTemplateError(
+            "Die Excel-Mastervorlage für die Monatsabrechnung kann nicht gelesen werden. "
+            "Bitte die Dateiberechtigungen des Servers prüfen."
+        ) from exc
+    except (FileNotFoundError, ModuleNotFoundError) as exc:
         raise PayrollXlsxTemplateError(
             "Die Excel-Mastervorlage für die Monatsabrechnung fehlt."
+        ) from exc
+    except OSError as exc:
+        raise PayrollXlsxTemplateError(
+            "Die Excel-Mastervorlage für die Monatsabrechnung kann nicht gelesen werden."
         ) from exc
 
     _validate_payroll_monthly_template(content)
