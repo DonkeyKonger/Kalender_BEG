@@ -2268,6 +2268,25 @@ export function TimeEntriesPage() {
           <h1>Lohnprüfung</h1>
           <p className="page-subtitle">Arbeitszeiten der Monteure prüfen</p>
         </div>
+        {activeTimeSubtab === "evaluation" && (
+          <div className="project-record-subtabs time-evaluation-subtabs" role="tablist" aria-label="Monatsauswertung Bereiche">
+            {([
+              ["workers", "Monteure"],
+              ["sites", "Baustellen (Beta)"],
+            ] as const).map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeEvaluationSubtab === tab}
+                className={activeEvaluationSubtab === tab ? "is-active" : ""}
+                onClick={() => setActiveEvaluationSubtab(tab)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && <p className="form-error">{error}</p>}
@@ -2287,23 +2306,54 @@ export function TimeEntriesPage() {
             </button>
           ))}
         </div>
+
         {activeTimeSubtab === "evaluation" && (
-          <div className="project-record-subtabs time-evaluation-subtabs" role="tablist" aria-label="Monatsauswertung Bereiche">
-            {([
-              ["workers", "Monteure"],
-              ["sites", "Baustellen (Beta)"],
-            ] as const).map(([tab, label]) => (
+          <div className="time-evaluation-period-actions is-compact" role="group" aria-labelledby="time-evaluation-export-heading">
+            <div className="payroll-month-total-status" role="status">
+              <span>Gesamtstatus</span>
+              <strong>
+                {isLoadingPayrollMonthPeriod
+                  ? "Monatsstatus wird geladen..."
+                  : payrollPersonApprovalSummary
+                    ? `${payrollPersonApprovalSummary.approved_count} von ${payrollPersonApprovalSummary.total_count} Monteuren geprüft`
+                    : "Monatsstatus nicht verfügbar"}
+              </strong>
+            </div>
+            <div className="payroll-month-compact-actions">
+              {isPayrollMonthLocked && canManagePayrollClose && (
+                <button
+                  className="time-evaluation-monthly-download-button"
+                  disabled={isLoadingPayrollMonthPeriod || isUpdatingPayrollMonth || !payrollMonthPeriod?.can_reopen}
+                  title="Historisch abgeschlossenen Gesamtmonat mit Begründung wieder öffnen"
+                  type="button"
+                  onClick={() => setPayrollMonthDialog("reopen")}
+                >
+                  Monat wieder öffnen
+                </button>
+              )}
               <button
-                key={tab}
+                aria-describedby="time-evaluation-monthly-download-status"
+                className="time-evaluation-monthly-download-button"
+                disabled={!arePayrollMonthExportsAvailable || isDownloadingAllPayrollMonthXlsx}
+                title={arePayrollMonthExportsAvailable
+                  ? "Einzeln freigegebene Monatsabrechnungen aller Monteure herunterladen"
+                  : "Der Download ist verfügbar, sobald alle Monteure einzeln geprüft und ihre Excel-Dateien bereit sind."}
                 type="button"
-                role="tab"
-                aria-selected={activeEvaluationSubtab === tab}
-                className={activeEvaluationSubtab === tab ? "is-active" : ""}
-                onClick={() => setActiveEvaluationSubtab(tab)}
+                onClick={() => void downloadAllPayrollMonthXlsx()}
               >
-                {label}
+                <Download aria-hidden="true" size={14} />
+                <span>{isDownloadingAllPayrollMonthXlsx ? "Wird erstellt..." : "Alle Monteure"}</span>
               </button>
-            ))}
+            </div>
+            {payrollMonthPeriodError && <p className="payroll-month-status-error" role="alert">{payrollMonthPeriodError}</p>}
+            <span aria-live="polite" className="sr-only" id="time-evaluation-monthly-download-status">
+              {isDownloadingAllPayrollMonthXlsx || isDownloadingPayrollMonthXlsx
+                ? "Die Excel-Monatsabrechnung wird erstellt."
+                : arePayrollMonthExportsAvailable
+                  ? "Die freigegebenen Excel-Monatsabrechnungen aller Monteure sind zum Download verfügbar."
+                  : "Der Gesamtdownload wartet auf die einzelnen Monteurfreigaben und deren Excel-Dateien."}
+            </span>
+            <h3 className="sr-only" id="time-evaluation-export-heading">Monatsabrechnung</h3>
           </div>
         )}
       </div>
@@ -2899,30 +2949,6 @@ export function TimeEntriesPage() {
 
       {activeTimeSubtab === "evaluation" && (
         <div className={`time-entries-main time-review-main time-evaluation-main${activeEvaluationSubtab === "workers" ? " has-person-month-close" : ""}`}>
-          {activeEvaluationSubtab === "workers" && (
-            <PayrollPersonMonthClosePanel
-              approval={selectedPayrollPersonApproval}
-              blockers={selectedPayrollPersonBlockers}
-              canApprove={canApproveSelectedPayrollPerson}
-              canReopen={canReopenSelectedPayrollPerson}
-              disabledReason={payrollPersonApprovalDisabledReason}
-              isDownloadingWorkerExport={isDownloadingPayrollMonthXlsx}
-              isExportAvailable={Boolean(selectedPayrollPersonApproval?.export_ready)}
-              isLoading={isLoadingPayrollMonthPeriod}
-              isLogExpanded={isPayrollPersonLogExpanded}
-              isUpdating={isUpdatingPayrollPersonMonth}
-              month={selectedEvaluationMonth}
-              selectedWorker={selectedEvaluationWorker}
-              onDownloadWorkerExport={() => void downloadSelectedPayrollMonthXlsx()}
-              onOpenApprove={() => {
-                setHasAcknowledgedPayrollPersonBlockers(false);
-                setPayrollPersonMonthDialog("approve");
-              }}
-              onOpenReopen={() => setPayrollPersonMonthDialog("reopen")}
-              onOpenWorkingTime={(personId) => navigate(`/persons?workingTimePersonId=${personId}`)}
-              onToggleLog={() => setIsPayrollPersonLogExpanded((current) => !current)}
-            />
-          )}
           <div className="time-week-nav-panel time-evaluation-month-nav" aria-label="Monat für die Auswertung auswählen">
             <div className="time-evaluation-period-controls">
               <div className="time-evaluation-period-selection">
@@ -2976,55 +3002,32 @@ export function TimeEntriesPage() {
                   </button>
                 </div>
               </div>
-              <div className="time-evaluation-period-actions is-compact" role="group" aria-labelledby="time-evaluation-export-heading">
-                <div className="payroll-month-total-status" role="status">
-                  <span>Gesamtstatus</span>
-                  <strong>
-                    {isLoadingPayrollMonthPeriod
-                      ? "Monatsstatus wird geladen..."
-                      : payrollPersonApprovalSummary
-                        ? `${payrollPersonApprovalSummary.approved_count} von ${payrollPersonApprovalSummary.total_count} Monteuren geprüft`
-                        : "Monatsstatus nicht verfügbar"}
-                  </strong>
-                </div>
-                <div className="payroll-month-compact-actions">
-                  {isPayrollMonthLocked && canManagePayrollClose && (
-                    <button
-                      className="time-evaluation-monthly-download-button"
-                      disabled={isLoadingPayrollMonthPeriod || isUpdatingPayrollMonth || !payrollMonthPeriod?.can_reopen}
-                      title="Historisch abgeschlossenen Gesamtmonat mit Begründung wieder öffnen"
-                      type="button"
-                      onClick={() => setPayrollMonthDialog("reopen")}
-                    >
-                      Monat wieder öffnen
-                    </button>
-                  )}
-                  <button
-                    aria-describedby="time-evaluation-monthly-download-status"
-                    className="time-evaluation-monthly-download-button"
-                    disabled={!arePayrollMonthExportsAvailable || isDownloadingAllPayrollMonthXlsx}
-                    title={arePayrollMonthExportsAvailable
-                      ? "Einzeln freigegebene Monatsabrechnungen aller Monteure herunterladen"
-                      : "Der Download ist verfügbar, sobald alle Monteure einzeln geprüft und ihre Excel-Dateien bereit sind."}
-                    type="button"
-                    onClick={() => void downloadAllPayrollMonthXlsx()}
-                  >
-                    <Download aria-hidden="true" size={14} />
-                    <span>{isDownloadingAllPayrollMonthXlsx ? "Wird erstellt..." : "Alle Monteure"}</span>
-                  </button>
-                </div>
-                {payrollMonthPeriodError && <p className="payroll-month-status-error" role="alert">{payrollMonthPeriodError}</p>}
-                <span aria-live="polite" className="sr-only" id="time-evaluation-monthly-download-status">
-                  {isDownloadingAllPayrollMonthXlsx || isDownloadingPayrollMonthXlsx
-                    ? "Die Excel-Monatsabrechnung wird erstellt."
-                    : arePayrollMonthExportsAvailable
-                      ? "Die freigegebenen Excel-Monatsabrechnungen aller Monteure sind zum Download verfügbar."
-                      : "Der Gesamtdownload wartet auf die einzelnen Monteurfreigaben und deren Excel-Dateien."}
-                </span>
-                <h3 className="sr-only" id="time-evaluation-export-heading">Monatsabrechnung</h3>
-              </div>
             </div>
           </div>
+          {activeEvaluationSubtab === "workers" && (
+            <PayrollPersonMonthClosePanel
+              approval={selectedPayrollPersonApproval}
+              blockers={selectedPayrollPersonBlockers}
+              canApprove={canApproveSelectedPayrollPerson}
+              canReopen={canReopenSelectedPayrollPerson}
+              disabledReason={payrollPersonApprovalDisabledReason}
+              isDownloadingWorkerExport={isDownloadingPayrollMonthXlsx}
+              isExportAvailable={Boolean(selectedPayrollPersonApproval?.export_ready)}
+              isLoading={isLoadingPayrollMonthPeriod}
+              isLogExpanded={isPayrollPersonLogExpanded}
+              isUpdating={isUpdatingPayrollPersonMonth}
+              month={selectedEvaluationMonth}
+              selectedWorker={selectedEvaluationWorker}
+              onDownloadWorkerExport={() => void downloadSelectedPayrollMonthXlsx()}
+              onOpenApprove={() => {
+                setHasAcknowledgedPayrollPersonBlockers(false);
+                setPayrollPersonMonthDialog("approve");
+              }}
+              onOpenReopen={() => setPayrollPersonMonthDialog("reopen")}
+              onOpenWorkingTime={(personId) => navigate(`/persons?workingTimePersonId=${personId}`)}
+              onToggleLog={() => setIsPayrollPersonLogExpanded((current) => !current)}
+            />
+          )}
           {activeEvaluationSubtab === "workers" ? (
             <>
               <MonthlyPayrollWorkerWorkspace
@@ -3983,8 +3986,10 @@ function PayrollPersonMonthClosePanel({
               : "Wähle links einen Monteur aus, um den Monatsabschluss zu prüfen."}
           </p>
         </div>
-        <div className={`payroll-person-month-status ${statusClass}`} role="status">
-          {statusText}
+        <div className="payroll-person-month-status-group">
+          <div className={`payroll-person-month-status ${statusClass}`} role="status">
+            {statusText}
+          </div>
         </div>
         <div className="payroll-person-month-actions">
           <label

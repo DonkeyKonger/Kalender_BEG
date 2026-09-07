@@ -73,14 +73,14 @@ test("Auswertung lädt den gewählten Monatsbereich über die vorhandene Datumsb
   assert.match(pageSource, /time-review-week-nav/);
 });
 
-test("Monatsnavigation zeigt zwei Monate und die Jahressteuerung vor der Exportgruppe", () => {
+test("Monatsnavigation zeigt weiterhin zwei Monate und eine separate Jahressteuerung", () => {
   assert.match(pageSource, /time-evaluation-month-strip-shell[\s\S]*?Monate nach links scrollen[\s\S]*?time-evaluation-month-strip[\s\S]*?data-month=\{option\.month\}[\s\S]*?Monate nach rechts scrollen/s);
   assert.match(pageSource, /scrollEvaluationMonths\(-1\)[\s\S]*?scrollEvaluationMonths\(1\)/s);
   assert.match(pageSource, /function evaluationMonthVisibleButtonCount[\s\S]*?Math\.floor\(\(container\.clientWidth - firstButton\.offsetWidth\) \/ step\) \+ 1/s);
   assert.match(pageSource, /function scrollEvaluationMonths[\s\S]*?targetIndex[\s\S]*?container\.scrollTo\(\{ left: buttons\[targetIndex\]\?\.offsetLeft/s);
   assert.match(pageSource, /alignEvaluationMonthsToSelection\(container, selectedEvaluationMonth\)/);
   assert.match(styles, /\.time-evaluation-month-strip\s*\{[^}]*display:\s*flex;[^}]*position:\s*relative;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/s);
-  assert.match(pageSource, /time-evaluation-period-controls[\s\S]*?time-evaluation-period-selection[\s\S]*?time-evaluation-month-strip-shell[\s\S]*?time-evaluation-year-navigation[\s\S]*?time-evaluation-period-actions/s);
+  assert.match(pageSource, /time-evaluation-period-controls[\s\S]*?time-evaluation-period-selection[\s\S]*?time-evaluation-month-strip-shell[\s\S]*?time-evaluation-year-navigation[\s\S]*?<PayrollPersonMonthClosePanel/s);
   assert.match(pageSource, /className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr"[\s\S]*?Vorheriges Jahr auswählen[\s\S]*?\{selectedEvaluationMonth\.year\}[\s\S]*?Nächstes Jahr auswählen/s);
   assert.doesNotMatch(pageSource, /time-evaluation-year-select|time-evaluation-month-controls/);
   assert.match(styles, /\.time-evaluation-period-controls\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*gap:\s*24px;/s);
@@ -142,18 +142,23 @@ test("Baustellen-Untertab verwendet die eigenständige monatliche Realisierungsa
   assert.match(pageSource, /activeEvaluationSubtab === "workers" \? \([\s\S]*?<MonthlyPayrollWorkerWorkspace/s);
 });
 
-test("Auswertungs-Untertabs teilen die kompakte Headerzeile mit der Hauptnavigation", () => {
+test("Ansichtsumschaltung steht im Titel, Gesamtstatus und Export neben den Haupttabs", () => {
+  const titleStart = pageSource.indexOf('className="page-header entity-page-header"');
   const navigationStart = pageSource.indexOf('className="time-payroll-navigation-row"');
   const evaluationMainStart = pageSource.indexOf('time-entries-main time-review-main time-evaluation-main');
 
-  assert.ok(navigationStart >= 0);
+  assert.ok(titleStart >= 0 && navigationStart > titleStart);
+  assert.match(pageSource.slice(titleStart, navigationStart), /Lohnprüfung[\s\S]*?activeTimeSubtab === "evaluation"[\s\S]*?time-evaluation-subtabs/s);
+  assert.equal(pageSource.match(/className="payroll-month-total-status"/g).length, 1);
+  assert.equal(pageSource.match(/className="time-evaluation-period-actions is-compact"/g).length, 1);
   assert.ok(evaluationMainStart > navigationStart);
-  assert.match(pageSource.slice(navigationStart, evaluationMainStart), /time-main-subtabs[\s\S]*?activeTimeSubtab === "evaluation"[\s\S]*?time-evaluation-subtabs/s);
+  assert.match(pageSource.slice(navigationStart, evaluationMainStart), /time-main-subtabs[\s\S]*?activeTimeSubtab === "evaluation"[\s\S]*?time-evaluation-period-actions[\s\S]*?payroll-month-total-status/s);
+  assert.doesNotMatch(pageSource.slice(navigationStart, evaluationMainStart), /time-evaluation-subtabs/);
   assert.match(styles, /\.time-payroll-navigation-row\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*space-between;[^}]*border-bottom:\s*1px solid #d1d9e6;/s);
-  assert.match(styles, /\.time-payroll-navigation-row\s*\{[^}]*min-height:\s*48px;[^}]*gap:\s*24px;[^}]*padding:\s*0 24px;/s);
+  assert.match(styles, /\.time-payroll-navigation-row\s*\{[^}]*min-height:\s*48px;[^}]*gap:\s*24px;[^}]*padding:\s*0 var\(--payroll-header-inline\);/s);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.page-header h1\s*\{[^}]*font-size:\s*1\.18rem;/s);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.page-subtitle\s*\{[^}]*font-size:\s*0\.86rem;/s);
-  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-evaluation-month-nav\s*\{[^}]*padding:\s*8px 24px;/s);
+  assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-evaluation-month-nav\s*\{[^}]*padding:\s*12px var\(--payroll-header-inline\) 8px;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/s);
   assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/s);
   assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2, minmax\(96px, 1fr\)\);[^}]*margin:\s*0 0 0 auto;[^}]*border:\s*0;[^}]*border-radius:\s*0;/s);
