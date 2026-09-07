@@ -250,7 +250,7 @@ def test_four_day_distribution_starts_at_exactly_36_weekly_hours():
     plan = month_plan(entries)
 
     assert len(plan.days) == 5
-    assert all(day.net_work_minutes == 7 * 60 + 12 for day in plan.days)
+    assert [day.net_work_minutes for day in plan.days] == [480] * 4 + [240]
     assert sum(day.net_work_minutes for day in plan.days) == 36 * 60
 
 
@@ -261,7 +261,7 @@ def test_four_day_distribution_matches_the_review_rounding_before_distribution()
 
     plan = month_plan(entries)
 
-    assert [day.net_work_minutes for day in plan.days] == [432] * 5
+    assert [day.net_work_minutes for day in plan.days] == [480] * 4 + [240]
     assert sum(day.net_work_minutes for day in plan.days) == 36 * 60
 
 
@@ -319,13 +319,13 @@ def test_non_working_date_such_as_public_holiday_prevents_distribution():
     assert not any(day.is_derived for day in plan.days)
 
 
-def test_work_above_40_hours_is_evenly_distributed_without_changing_the_total():
+def test_work_above_40_hours_uses_whole_hours_and_preserves_the_total():
     entries = long_week_entries([1, 2, 3, 4], end="18:00")
 
     plan = month_plan(entries)
 
     assert sum(day.net_work_minutes for day in plan.days) == 44 * 60
-    assert all(day.net_work_minutes == 8 * 60 + 48 for day in plan.days)
+    assert [day.net_work_minutes for day in plan.days] == [540] * 4 + [480]
     assert plan.overtime_remainders == ()
 
 

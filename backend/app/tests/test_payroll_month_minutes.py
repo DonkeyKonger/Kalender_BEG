@@ -59,10 +59,47 @@ def test_screenshot_weeks_preserve_recorded_hours_despite_conflicting_time_spans
                      break_minutes=60, work_minutes=minutes)
                for i, (day, minutes) in enumerate(zip(dates, recorded), start=1)]
     result = build_payroll_month_xlsx(person=PERSON, year=2026, month=8, entries=entries)
-    assert [day.net_work_minutes for day in result.plan.days] == [525] * 5 + [519] * 5
+    assert [day.net_work_minutes for day in result.plan.days] == [540] * 4 + [465] + [540] * 4 + [435]
     assert sum(day.net_work_minutes for day in result.plan.days) == 87 * 60
     assert sum(day.net_work_minutes for day in result.plan.days if day.work_date.isocalendar().week == 32) == 2625
     assert sum(day.net_work_minutes for day in result.plan.days if day.work_date.isocalendar().week == 33) == 2595
+    combined = build_payroll_months_xlsx([PayrollMonthSheet(PERSON, "Test", 2026, 8, entries)])
+    for content in (result.content, combined.content):
+        with ZipFile(BytesIO(content)) as workbook:
+            sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
+        assert [round(number(sheet, f"E{row}") * 1440) for row in range(12, 17)] == [540] * 4 + [465]
+        assert number(sheet, "E41") * 1440 == pytest.approx(87 * 60)
+
+
+@pytest.mark.parametrize("missing_weekday", range(5))
+@pytest.mark.parametrize("weekly_minutes, monday_thursday, friday", [
+    (2160, 480, 240),  # Exactly 36 hours: 4 × 8 h + 4 h.
+    (2385, 480, 465),  # Just below a whole-hour average.
+    (2400, 480, 480),  # Exactly 40 hours: no extra rounding.
+    (2415, 540, 255),  # Just above 40 hours: 4 × 9 h + 4:15 h.
+    (2535, 540, 375),  # Requested 42:15 example: Friday 6:15 h.
+    (2625, 540, 465),  # Screenshot 43:45 total: Friday 7:45 h.
+    (2700, 540, 540),
+    (2715, 600, 315),
+])
+def test_whole_hours_go_to_monday_thursday_and_remainder_to_friday(
+    missing_weekday, weekly_minutes, monday_thursday, friday,
+):
+    dates = [date(2026, 8, 3) + timedelta(days=offset)
+             for offset in range(5) if offset != missing_weekday]
+    entries = [entry(index + 1, day, start_time="06:00", end_time="18:00",
+                     work_minutes=540 if index < 3 else weekly_minutes - 3 * 540)
+               for index, day in enumerate(dates)]
+    before = [dict(item.__dict__) for item in entries]
+    plan = build_payroll_month_plan(person=PERSON, year=2026, month=8, entries=entries)
+    assert [day.net_work_minutes for day in plan.days] == [monday_thursday] * 4 + [friday]
+    assert sum(day.net_work_minutes for day in plan.days) == weekly_minutes
+    assert [day.work_date.weekday() for day in plan.days if day.is_derived] == [missing_weekday]
+    for day in plan.days:
+        assert day.break_minutes == 45
+        elapsed = (day.end_time.hour - day.start_time.hour) * 60 + day.end_time.minute - day.start_time.minute
+        assert elapsed == day.net_work_minutes + day.break_minutes
+    assert [dict(item.__dict__) for item in entries] == before
 
 
 @pytest.mark.parametrize("year", [2026, 2027, 2028])

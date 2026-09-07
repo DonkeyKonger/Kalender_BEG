@@ -491,14 +491,18 @@ def build_payroll_month_plan(
             continue
 
         actual_days.sort(key=lambda day: day.work_date)
-        base_daily_minutes, remainder_minutes = divmod(
-            actual_week_minutes,
-            DISTRIBUTED_WORK_DAYS,
-        )
+        # Round the five-day average up to a whole hour for Monday–Thursday.
+        # Friday carries the exact remainder, even when another weekday is derived.
+        minutes_per_week_hour = DISTRIBUTED_WORK_DAYS * 60
+        rounded_daily_minutes = (
+            (actual_week_minutes + minutes_per_week_hour - 1) // minutes_per_week_hour
+        ) * 60
         distributed_minutes = {
-            work_date: base_daily_minutes + (index < remainder_minutes)
-            for index, work_date in enumerate(weekdays)
+            work_date: rounded_daily_minutes for work_date in weekdays[:-1]
         }
+        distributed_minutes[weekdays[-1]] = actual_week_minutes - (
+            DISTRIBUTED_WORK_DAYS - 1
+        ) * rounded_daily_minutes
         for day in actual_days:
             days_by_date[day.work_date] = _distributed_actual_day(
                 day,

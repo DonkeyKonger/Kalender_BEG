@@ -90,7 +90,7 @@ def test_merge_preserves_two_real_normal_exports_byte_for_byte_per_sheet():
         ]
     )
 
-    assert [day.net_work_minutes for day in distributed_export.plans[0].days] == [432] * 5
+    assert [day.net_work_minutes for day in distributed_export.plans[0].days] == [480] * 4 + [240]
     assert sum(day.net_work_minutes for day in vacation_export.plans[0].days) == 1455
     combined = merge_approved_payroll_workbooks(
         [
@@ -156,7 +156,7 @@ def test_merge_preserves_two_real_normal_exports_byte_for_byte_per_sheet():
         assert float(cell_text(vacation_root, "E41")) * 24 == pytest.approx(24.25)
         assert float(cell_text(distributed_root, "E41")) * 24 == pytest.approx(36)
         assert cell_text(distributed_root, "B14") == "06:00"
-        assert cell_text(distributed_root, "C14") == "13:57"
+        assert cell_text(distributed_root, "C14") == "10:45"
 
 
 def test_merge_sanitizes_and_deduplicates_requested_sheet_names():
