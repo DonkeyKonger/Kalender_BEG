@@ -158,6 +158,8 @@ class StateTests(unittest.TestCase):
             manage.import_snapshot(source, self.config, "07.09.2026")
         changed = manage.initialize()
         self.assertNotEqual(changed["LOCAL_DB_NAME"], self.config["LOCAL_DB_NAME"])
+        self.assertNotEqual(changed["LOCAL_SECRET_KEY"], self.config["LOCAL_SECRET_KEY"])
+        self.assertEqual(changed["LOCAL_ADMIN_PASSWORD"], self.config["LOCAL_ADMIN_PASSWORD"])
         self.assertTrue(manage.DATABASE_RE.fullmatch(changed["LOCAL_DB_NAME"]))
         self.assertNotIn("dropdb", str(compose.call_args_list))
         self.assertNotIn("--clean", str(compose.call_args_list))

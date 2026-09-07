@@ -211,7 +211,13 @@ def import_snapshot(path, config, snapshot_date):
         compose("exec", "-T", "db", "pg_restore", "-U", "kalender_test", "--no-owner", "--no-acl", "--exit-on-error", "--single-transaction", "-d", database, stdin=stream)
     compose("run", "--rm", "--no-deps", "app", "python", "/app/local_calendar/runtime.py", "prepare", database=database)
     old_metadata = json.loads((STATE / "metadata.json").read_text())
-    new_config = {**config, "LOCAL_DB_NAME": database}
+    # IDs can belong to different users in the restored copy. Invalidate old
+    # local sessions instead of silently assigning them to another account.
+    new_config = {
+        **config,
+        "LOCAL_DB_NAME": database,
+        "LOCAL_SECRET_KEY": secrets.token_hex(32),
+    }
     # Stop only this app; existing local development DBs/containers are unrelated.
     compose("stop", "app")
     try:

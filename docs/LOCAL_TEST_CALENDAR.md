@@ -66,6 +66,10 @@ Ein vollständiger Dump enthält sensible Mitarbeiter-, Lohn- und Zugangsdaten.
 Nur vertrauenswürdige Backups verwenden, verschlüsselt transportieren/ablegen,
 auf dem Mac FileVault und restriktive Zugriffsrechte verwenden. Externe
 SharePoint-Dateien sind nicht automatisch in der Datenbankkopie enthalten.
+Sicherungen außerhalb synchronisierter Ordner ablegen, beispielsweise unter
+`~/Library/Application Support/BEG Testkalender/Backups/` (Ordner 0700,
+Dateien 0600). Auch „Downloads“ und „Dokumente“ können mit iCloud verbunden sein;
+den tatsächlichen Speicherort vor dem Browser-Download kontrollieren.
 
 ```sh
 python3 tools/local_calendar/manage.py import /absoluter/pfad/kalender.dump \
@@ -78,7 +82,11 @@ führt Migrationen sowie die lokale Kontoanlage aus. Erst danach wird die
 Testanwendung umgeschaltet. Die vorige lokale Datenbank bleibt erhalten; bei
 fehlerhafter Wiederherstellung bleibt der bisherige Teststand aktiv. Fehlerhafte
 Importdatenbanken werden ebenfalls nicht automatisch gelöscht. Laufende
-Browser-Tabs danach neu laden (lokale Anmeldung gegebenenfalls erneuern).
+Browser-Tabs danach neu laden und lokal erneut anmelden. Der lokale
+Sitzungsschlüssel wird beim erfolgreichen Import erneuert, damit alte Sitzungen
+nicht versehentlich einer anderen Benutzer-ID aus der Kopie zugeordnet werden.
+Das Passwort für `local-test-admin` bleibt gleich. Ein fehlgeschlagener Wechsel
+stellt auch die vorherige lokale Sitzungskonfiguration wieder her.
 
 Keine Daten werden in die Cloud zurückgespielt. Noch fehlende Cloud-Exporte oder
 Dokumentkopien sind ein separater Schritt, kein Grund die Isolation aufzuheben.
@@ -121,3 +129,33 @@ Der Hinweis bleibt wahrheitsgemäß „noch keine Cloud-Daten“.
 - Keine Cloud-Daten importiert; keine produktive Sitzung verändert. In Projekt,
   Downloads und Desktop kein vorhandener PostgreSQL-Dump gefunden. FileVault-
   Status war per CLI nicht bestimmbar und ist vor sensiblen Kopien noch zu prüfen.
+
+### Erste Azure-Datenkopie am 07.09.2026
+
+- Quellstand: **07.09.2026, 13:24 Uhr Europe/Berlin**, Datenbank
+  `baustellenplaner` auf `kalender-beg-staging-db`, PostgreSQL 16.14.
+  Export über die vorhandene Azure-Sitzung mit geprüfter TLS-Verbindung und
+  schreibgeschützter Datenbanksitzung. Keine Cloud-Konfiguration, Firewall,
+  Benutzerkennwörter oder produktiven Daten geändert.
+- Custom-Dump `beg-kalender-20260907T112435Z.dump`, 4.903.170 Bytes;
+  SHA-256 vor und nach der Übertragung identisch:
+  `8668413836b92cdba7075cd8cce0c0c526effb8bbbca563e5a19be40fef74585`.
+  FileVault wurde als aktiv bestätigt. Die Sicherung liegt im oben genannten
+  privaten Library-Ordner, nicht im Projekt oder Git. Safari hatte sie zunächst
+  im iCloud-Downloadordner gespeichert; sie wurde daraus verschoben. Eine
+  bereits erfolgte iCloud-Synchronisierung oder deren Verlauf ist nicht geprüft.
+- Wiederherstellung und Migration erfolgreich; Schema `20260905_0113`, keine
+  unvalidierten Constraints. Übernommen: 79 Personen, 125 Baustellen,
+  586 Zuordnungen, 618 Zeiteinträge und 627 Abwesenheiten. Die vorherige lokale
+  Testdatenbank bleibt erhalten. Der lokale Anmeldeschlüssel wurde erneuert;
+  das separate Testadministrator-Passwort bleibt unverändert.
+- Lokale Passwortanmeldung, Kalender-Matrix, Lohnprüfungs-/Wochenendpunkte und
+  Monats-Sperrstatus mit der Kopie erfolgreich geprüft. In Safari sind die
+  übernommenen Lohnprüfungsdaten und der orange Hinweis auf den Quellstand
+  sichtbar. Keine vollständige fachliche Abnahme sämtlicher importierter Daten.
+- Erneut 16 Verwaltungs-/Sicherheitstests, 584 Frontend-Tests, Produktions-Build,
+  Ruff und `git diff --check` erfolgreich. Netzwerk-/HTTP-Sicherheitstest mit
+  aktiver Datenkopie erfolgreich: nur Loopback-Webport, Backend/DB ohne
+  veröffentlichte Ports, direkte Internetverbindung des Backends gesperrt.
+- Einmalige Datenkopie, keine laufende Synchronisierung und kein Zurückschreiben
+  nach Azure. Externe Dokumente/Fotos wurden nicht mitkopiert.
