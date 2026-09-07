@@ -17,6 +17,7 @@ from app.models.work_time_entry import WorkTimeEntry
 from app.services.payroll_month_account_service import PayrollMonthAccountService, MONTHLY
 from app.services.payroll_month_close_service import PayrollMonthCloseService
 from app.services.payroll_month_export_service import PayrollMonthExportService
+from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
 from app.services.person_hours_account_service import PersonHoursAccountService
 from app.tests.test_payroll_daily_ledger_service import db_session
 from app.tests.test_payroll_month_xlsx_service import cell_text
@@ -85,7 +86,7 @@ def test_real_month_approval_without_day_setup_matches_excel_and_global_does_not
     assert result.status == "LOCKED"
     assert list(db.scalars(select(Entry.id).order_by(Entry.id))) == before_ids
     worker_export = PayrollMonthExportService(db).worker_export(person_id=person.id, year=2026, month=8, current_user=user)
-    assert worker_export == original_bytes
+    assert worker_export == prepare_payroll_workbook_download(original_bytes)
     snapshot = db.scalar(select(PayrollMonthSnapshot))
     row = db.scalar(select(PayrollMonthPersonSnapshot))
     assert row.movement_minutes == 120
@@ -186,7 +187,7 @@ def test_historical_daily_person_approval_global_close_and_reopen_do_not_infer_n
                                                           effective_date=date(2026, 9, 5), note="Independent", current_user=user)
     service.lock_month(year=2026, month=8, confirmed=True, current_user=user)
     assert db.scalar(select(Entry).where(Entry.entry_type == MONTHLY)) is None
-    assert export.worker_export(person_id=person.id, year=2026, month=8, current_user=user) == content
+    assert export.worker_export(person_id=person.id, year=2026, month=8, current_user=user) == prepare_payroll_workbook_download(content)
     assert PayrollMonthAccountService(db).current_balance(person.id) == 6360
     service.reopen_month(year=2026, month=8, reason="Correct old approval", current_user=user)
     assert not old_daily.is_active

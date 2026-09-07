@@ -15,6 +15,7 @@ from app.models.payroll_month import (
 )
 from app.models.person_hours_account import PersonHoursAccountEntry
 from app.services.payroll_month_export_service import PayrollMonthExportService
+from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
 from app.tests.test_payroll_month_export_service import database, person, entry
 
 
@@ -72,7 +73,7 @@ def test_all_individual_approvals_enable_combined_download_without_global_close(
     combined = case.service.all_workers_export(**case.args)
     with ZipFile(BytesIO(combined)) as merged:
         for index, content in enumerate(case.workbooks, 1):
-            with ZipFile(BytesIO(content)) as single:
+            with ZipFile(BytesIO(prepare_payroll_workbook_download(content))) as single:
                 assert merged.read(f"xl/worksheets/sheet{index}.xml") == single.read("xl/worksheets/sheet1.xml")
     assert case.service.all_workers_export(**case.args)  # repeat: no account/global side effect
     for model in (PayrollMonthPeriod, PayrollMonthSnapshot, PayrollMonthAudit, PersonHoursAccountEntry):

@@ -89,11 +89,13 @@ def test_retained_and_new_approvals_download_together_without_changing_stored_da
         after = ET.fromstring(changed.read("xl/worksheets/sheet1.xml"))
         for cell in before.findall(".//main:c", NS):
             if cell.get("r") not in {"I46", "I47", "I48", "I49"}:
-                assert ET.tostring(cell) == ET.tostring(
-                    after.find(f'.//main:c[@r="{cell.get("r")}"]', NS)
-                )
+                corrected = after.find(f'.//main:c[@r="{cell.get("r")}"]', NS)
+                cell.attrib.pop("s", None)
+                corrected.attrib.pop("s", None)
+                assert ET.tostring(cell) == ET.tostring(corrected)
     assert prepare_payroll_workbook_download(single) == single
-    assert prepare_payroll_workbook_download(case.workbooks[1]) == case.workbooks[1]
+    current = prepare_payroll_workbook_download(case.workbooks[1])
+    assert prepare_payroll_workbook_download(current) == current
     assert artifact.content == old
     assert artifact.content_sha256 == hashlib.sha256(old).hexdigest()
     assert [(row.status, row.approval_version) for row in case.approvals] == [("APPROVED", 1)] * 2
@@ -107,7 +109,14 @@ def test_manual_remarks_are_preserved(approved_workers, remark):
     original = legacy_presentation(approved_workers.workbooks[0], manual_remark=remark)
     corrected = prepare_payroll_workbook_download(original)
     with ZipFile(BytesIO(original)) as before, ZipFile(BytesIO(corrected)) as after:
-        assert before.read("xl/worksheets/sheet1.xml") == after.read("xl/worksheets/sheet1.xml")
+        old_sheet = ET.fromstring(before.read("xl/worksheets/sheet1.xml"))
+        new_sheet = ET.fromstring(after.read("xl/worksheets/sheet1.xml"))
+        for cell in old_sheet.findall(".//main:c", NS):
+            changed = new_sheet.find(f'.//main:c[@r="{cell.get("r")}"]', NS)
+            cell.attrib.pop("s", None)
+            changed.attrib.pop("s", None)
+            assert ET.tostring(cell) == ET.tostring(changed)
+        assert cell_text(new_sheet, "I46") == remark
 
 
 def test_locked_download_uses_presentation_copy_without_rebuilding(approved_workers, monkeypatch):
@@ -142,3 +151,44 @@ def test_unsupported_xml_keeps_the_existing_combined_export_error(approved_worke
         case.service.all_workers_export(**case.args)
     assert caught.value.status_code == 409
     assert caught.value.detail["code"] == "payroll_approved_workbooks_incompatible"
+
+
+def test_download_layout_preserves_calculations_and_unrelated_styles(approved_workers):
+    original = approved_workers.workbooks[0]
+    corrected = prepare_payroll_workbook_download(original)
+    with ZipFile(BytesIO(original)) as before, ZipFile(BytesIO(corrected)) as after:
+        old_sheet = ET.fromstring(before.read("xl/worksheets/sheet1.xml"))
+        sheet = ET.fromstring(after.read("xl/worksheets/sheet1.xml"))
+        old_styles = ET.fromstring(before.read("xl/styles.xml"))
+        styles = ET.fromstring(after.read("xl/styles.xml"))
+
+    def style(root, definitions, ref):
+        cell = root.find(f'.//main:c[@r="{ref}"]', NS)
+        return definitions.find("main:cellXfs", NS)[int(cell.get("s", "0"))]
+
+    merges = {merge.get("ref") for merge in sheet.find("main:mergeCells", NS)}
+    old_merges = {merge.get("ref") for merge in old_sheet.find("main:mergeCells", NS)}
+    assert merges == old_merges - {"C2:E2"} | {"C2:F2"}
+    for ref in ("C2", "C4"):
+        assert style(sheet, styles, ref).find("main:alignment", NS).get("horizontal") == "right"
+    assert style(sheet, styles, "F2").get("borderId") == style(old_sheet, old_styles, "E2").get("borderId")
+    travel = {f"{column}{row}" for row in range(10, 41) for column in "IJKL"}
+    gray = {"E41", "D46", "E46", "D47", "E47", "D48", "E48", "G48"}
+    gray |= {f"{column}{row}" for row in range(49, 53) for column in "EG"}
+    gray |= {f"{column}{row}" for row in range(46, 50) for column in "IJKL"}
+    gray |= {f"{column}{row}" for row in (50, 51) for column in "KL"}
+    for ref in travel:
+        alignment = style(sheet, styles, ref).find("main:alignment", NS)
+        assert alignment.get("horizontal") == alignment.get("vertical") == "center"
+    for ref in gray:
+        fill = styles.find("main:fills", NS)[int(style(sheet, styles, ref).get("fillId"))]
+        assert fill.find("main:patternFill/main:fgColor", NS).get("rgb") == "FFF2F2F2"
+    for old_cell in old_sheet.findall(".//main:c", NS):
+        ref = old_cell.get("r")
+        new_cell = sheet.find(f'.//main:c[@r="{ref}"]', NS)
+        if ref not in travel | gray | {"C2", "C4", "F2"}:
+            assert ET.tostring(style(sheet, styles, ref)) == ET.tostring(style(old_sheet, old_styles, ref))
+        old_cell.attrib.pop("s", None)
+        new_cell.attrib.pop("s", None)
+        assert ET.tostring(old_cell) == ET.tostring(new_cell)
+    assert prepare_payroll_workbook_download(corrected) == corrected

@@ -35,6 +35,7 @@ from app.services.audit_service import AuditService
 from app.services.payroll_month_account_service import MONTHLY, REVERSAL, TRANSITION
 from app.services.payroll_month_close_service import PayrollMonthCloseService
 from app.services.payroll_month_export_service import PayrollMonthExportService
+from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
 from app.services.payroll_period_guard import PayrollPeriodGuard
 
 
@@ -730,7 +731,7 @@ def test_lock_reopen_and_relock_retain_person_workbooks_without_double_posting(m
             version=2,
             current_user=admin,
         )
-        == second_person_artifact.content
+        == prepare_payroll_workbook_download(second_person_artifact.content)
     )
     with pytest.raises(HTTPException) as stale:
         export_service.worker_export(
