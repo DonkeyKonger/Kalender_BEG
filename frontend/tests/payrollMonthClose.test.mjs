@@ -104,15 +104,16 @@ test("month close and setup geometry remains locally scoped and square", () => {
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.payroll-setup-worker\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
 });
 
-test("person month close follows period navigation and grows for long names and hints", () => {
+test("person month close heads the selected worker table and grows for long names and hints", () => {
   assert.match(page, /time-evaluation-main\$\{activeEvaluationSubtab === "workers" \? " has-person-month-close" : ""\}/);
-  assert.match(page, /time-evaluation-month-nav[\s\S]*?<PayrollPersonMonthClosePanel[\s\S]*?<MonthlyPayrollWorkerWorkspace/s);
+  assert.match(page, /<MonthlyPayrollWorkerWorkspace[\s\S]*?monthClosePanel=\{[\s\S]*?<PayrollPersonMonthClosePanel/s);
+  assert.match(page, /className="time-evaluation-worker-detail">\s*\{monthClosePanel\}\s*<div className="time-review-detail-shell">/s);
   const panelStyles = styles.match(/\.payroll-person-month-close\s*\{([^}]*)\}/s)[1];
   assert.doesNotMatch(panelStyles, /(?:^|;)\s*height:/);
   assert.match(panelStyles, /grid-template-rows:\s*auto auto;/);
   assert.match(styles, /\.payroll-person-month-log-summary span\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*white-space:\s*normal;/s);
-  assert.match(styles, /@media \(max-width: 980px\), \(max-height: 760px\)[\s\S]*?\.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*max-content minmax\(540px, 1fr\);[^}]*overflow-y:\s*auto;/s);
-  assert.match(styles, /\.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/s);
+  assert.match(styles, /@media \(max-width: 980px\)[\s\S]*?\.time-evaluation-main\.has-person-month-close\s*\{[^}]*display:\s*block;[^}]*overflow-y:\s*auto;/s);
+  assert.match(styles, /\.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);/s);
   assert.match(styles, /@media \(max-width: 980px\)[\s\S]*?\.payroll-person-month-close\s*\{[^}]*height:\s*auto;[^}]*grid-template-rows:\s*auto auto;/s);
 });
 

@@ -17568,13 +17568,16 @@ body.mobile-modal-scroll-locked {
 }
 
 .payroll-person-month-close {
+  --payroll-sand-surface: #f7f3e9;
+  --payroll-sand-border: #e8dfce;
+  --payroll-sand-text: #796a46;
   display: grid;
   position: relative;
   z-index: 20;
   box-sizing: border-box;
   min-height: 112px;
   grid-template-rows: auto auto;
-  margin: 2px var(--payroll-header-inline) 12px;
+  margin: 0;
   border: 1px solid var(--time-border);
   border-radius: 0;
   background: #eff5ff;
@@ -17583,10 +17586,10 @@ body.mobile-modal-scroll-locked {
 
 .payroll-person-month-close-main {
   display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) minmax(max-content, 0.7fr) minmax(max-content, 1.2fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(340px, 0.95fr);
   align-items: center;
-  padding: 14px 24px;
-  column-gap: 24px;
+  padding: 14px 20px;
+  column-gap: 20px;
   row-gap: 12px;
 }
 
@@ -17598,9 +17601,20 @@ body.mobile-modal-scroll-locked {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 10px 16px;
   min-width: 0;
+}
+
+.payroll-person-month-name-actions > .payroll-person-month-identity {
+  flex: 0 1 auto;
+}
+
+.payroll-person-month-remarks {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  padding-left: 20px;
+  border-left: 1px solid var(--time-border);
 }
 
 .payroll-remarks-button {
@@ -17680,7 +17694,7 @@ body.mobile-modal-scroll-locked {
   overflow-wrap: anywhere;
   margin: 4px 0 1px;
   color: #14233b;
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 900;
   line-height: 1.2;
 }
@@ -17696,11 +17710,7 @@ body.mobile-modal-scroll-locked {
 .payroll-person-month-status-group {
   display: flex;
   min-width: 0;
-  align-self: stretch;
   align-items: center;
-  justify-content: center;
-  padding-left: 24px;
-  border-left: 1px solid var(--time-border);
 }
 
 .payroll-person-month-status {
@@ -17715,9 +17725,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .payroll-person-month-status.is-warning {
-  border-color: #f0c979;
-  background: #fff8e8;
-  color: #9a5b00;
+  border-color: var(--payroll-sand-border);
+  background: var(--payroll-sand-surface);
+  color: var(--payroll-sand-text);
 }
 
 .payroll-person-month-status.is-neutral {
@@ -17853,9 +17863,9 @@ body.mobile-modal-scroll-locked {
 }
 
 .payroll-person-month-log.is-warning {
-  border-top-color: #f0c979;
-  background: #fff8e8;
-  color: #744800;
+  border-top-color: var(--payroll-sand-border);
+  background: var(--payroll-sand-surface);
+  color: var(--payroll-sand-text);
 }
 
 .payroll-person-month-log.is-approved,
@@ -17915,7 +17925,7 @@ body.mobile-modal-scroll-locked {
   top: 100%;
   right: -1px;
   left: -1px;
-  border: 1px solid #d9b967;
+  border: 1px solid var(--payroll-sand-border);
   background: #fffdf7;
   box-shadow: 0 12px 26px rgb(15 23 42 / 18%);
 }
@@ -17926,9 +17936,9 @@ body.mobile-modal-scroll-locked {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-bottom: 1px solid #ead59c;
-  background: #fff8e8;
-  color: #5f430c;
+  border-bottom: 1px solid var(--payroll-sand-border);
+  background: var(--payroll-sand-surface);
+  color: var(--payroll-sand-text);
   padding: 6px 10px 6px 16px;
   font-size: 0.74rem;
 }
@@ -20533,7 +20543,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-evaluation-main.has-person-month-close {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .time-entries-page.is-figma-times-workspace .time-entries-toolbar,
@@ -20839,7 +20849,7 @@ body.mobile-modal-scroll-locked {
 
 .time-evaluation-header-controls {
   display: flex;
-  flex: 1 1 780px;
+  flex: 0 1 660px;
   min-width: 0;
   max-width: 1000px;
   align-items: center;
@@ -22033,9 +22043,76 @@ body.mobile-modal-scroll-locked {
 
 }
 
-/* Payroll header: period first, selected worker in focus. */
-.time-evaluation-header-controls > .time-evaluation-period-actions .payroll-month-status-error {
+/* Keep period navigation above the two payroll columns. */
+.time-entries-page.is-figma-times-workspace .time-evaluation-main {
+  --time-review-queue-track: minmax(330px, 350px);
+  padding-top: 24px;
+}
+
+.time-evaluation-worker-workspace {
+  margin-top: 0;
+}
+
+.time-evaluation-worker-list,
+.time-evaluation-worker-detail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.time-evaluation-worker-detail {
+  container-type: inline-size;
+  container-name: payroll-month-detail;
+  gap: 10px;
+}
+
+.time-evaluation-worker-list > .time-evaluation-period-actions {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) auto;
+  justify-content: start;
+  align-content: center;
+  gap: 8px;
+  min-height: 84px;
+  margin: 0;
+  border: 1px solid var(--time-border);
+  border-bottom: 0;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.time-evaluation-worker-list .payroll-month-total-status {
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.time-evaluation-worker-list .payroll-month-total-status strong {
+  white-space: normal;
+}
+
+.time-evaluation-worker-list .payroll-month-compact-actions {
+  display: contents;
+}
+
+.time-evaluation-worker-list .time-evaluation-monthly-download-button {
+  grid-column: 1 / -1;
+  min-width: 0;
+  justify-self: start;
+  padding-inline: 8px;
+  font-size: 0.72rem;
+}
+
+.time-evaluation-worker-list [aria-describedby="time-evaluation-monthly-download-status"] {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.time-evaluation-period-actions .payroll-month-status-error {
+  grid-column: 1 / -1;
   flex-basis: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   margin: 0;
 }
 
@@ -22044,31 +22121,31 @@ body.mobile-modal-scroll-locked {
   margin-left: auto;
 }
 
-@media (max-width: 1280px) and (min-width: 981px) {
-  .payroll-person-month-close-main {
-    grid-template-columns: minmax(0, 1fr) minmax(max-content, 0.65fr) auto;
-    padding-inline: 18px;
-    column-gap: 16px;
-  }
-
-  .payroll-person-month-status-group,
-  .payroll-person-month-actions {
-    padding-left: 16px;
-  }
-
-  .payroll-person-month-actions {
-    column-gap: 12px;
-  }
+.payroll-remarks-button:focus-visible {
+  outline: 2px solid var(--time-week-active-blue);
+  outline-offset: 2px;
 }
 
-@media (max-width: 980px) {
-  .time-payroll-navigation-row {
-    flex-wrap: wrap;
-    gap: 0 16px;
+@container payroll-month-detail (max-width: 1000px) {
+  .payroll-person-month-close-main {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 12px 18px;
+    gap: 12px 16px;
   }
 
-  .time-evaluation-header-controls > .time-evaluation-period-actions {
-    padding-left: 16px;
+  .payroll-person-month-status-group {
+    padding: 0;
+    border: 0;
+    justify-content: flex-start;
+  }
+
+  .payroll-person-month-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: auto auto;
+    justify-content: space-between;
+    padding: 10px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--time-border);
   }
 
   .payroll-person-month-log {
@@ -22076,8 +22153,57 @@ body.mobile-modal-scroll-locked {
   }
 }
 
+@media (max-width: 980px) {
+  .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-evaluation-main.has-person-month-close {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-evaluation-worker-workspace {
+    grid-template-rows: auto auto;
+    overflow: visible;
+    gap: 16px;
+  }
+
+  .time-evaluation-worker-list {
+    grid-template-rows: auto 240px;
+  }
+
+  .time-evaluation-worker-detail {
+    grid-template-rows: auto minmax(360px, auto);
+  }
+
+  .time-evaluation-header-controls > .time-evaluation-period-actions {
+    padding-left: 16px;
+  }
+}
+
+@container payroll-month-detail (max-width: 520px) {
+  .payroll-person-month-close-main {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 14px;
+    gap: 12px;
+  }
+
+  .payroll-person-month-remarks {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .payroll-person-month-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+  }
+
+  .payroll-person-month-log {
+    padding-inline: 14px;
+  }
+}
+
 @media (max-width: 760px) {
-  .time-evaluation-header-controls {
+.time-evaluation-header-controls {
+    flex: 1 1 100%;
     flex-wrap: wrap;
     gap: 0;
     width: 100%;
@@ -22116,44 +22242,16 @@ body.mobile-modal-scroll-locked {
     margin-left: 0;
   }
 
-  .time-evaluation-period-selection {
-    width: 100%;
-  }
-
-  .time-evaluation-year-navigation {
-    justify-self: start;
-  }
-
-  .payroll-person-month-close-main {
-    grid-template-columns: minmax(0, 1fr);
-    padding-inline: 14px;
-    gap: 10px;
-  }
-
-  .payroll-person-month-status-group {
-    justify-content: start;
-    padding-left: 0;
-    border-left: 0;
-  }
-
-  .payroll-person-month-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 16px;
-  }
-
-  .payroll-person-month-log {
-    padding-inline: 14px;
-  }
+  .time-evaluation-period-selection { width: 100%; }
+  .time-evaluation-year-navigation { justify-self: start; }
 }
 
-/* Let a wrapped header scroll instead of squeezing the existing worker workspace. */
-@media (max-width: 980px), (max-height: 760px) {
+@media (max-height: 760px) and (min-width: 981px) {
   .time-entries-page.is-figma-times-workspace.is-payroll-review-workspace .time-evaluation-main.has-person-month-close {
-    grid-template-rows: max-content minmax(540px, 1fr);
     overflow-y: auto;
   }
+
+  .time-evaluation-worker-workspace { min-height: 360px; }
 }
 
 /* Aggregated payroll-site cockpit; detailed payroll/GPS rows stay in the worker workspace. */

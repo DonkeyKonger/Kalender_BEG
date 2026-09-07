@@ -142,7 +142,7 @@ test("Baustellen-Untertab verwendet die eigenständige monatliche Realisierungsa
   assert.match(pageSource, /activeEvaluationSubtab === "workers" \? \([\s\S]*?<MonthlyPayrollWorkerWorkspace/s);
 });
 
-test("Ansichtsumschaltung steht im Titel, Gesamtstatus und Export neben den Haupttabs", () => {
+test("Navigation bleibt oben, Gesamtstatus und Export gehören zur Monteurliste", () => {
   const titleStart = pageSource.indexOf('className="page-header entity-page-header"');
   const navigationStart = pageSource.indexOf('className="time-payroll-navigation-row"');
   const evaluationMainStart = pageSource.indexOf('time-entries-main time-review-main time-evaluation-main');
@@ -152,7 +152,9 @@ test("Ansichtsumschaltung steht im Titel, Gesamtstatus und Export neben den Haup
   assert.equal(pageSource.match(/className="payroll-month-total-status"/g).length, 1);
   assert.equal(pageSource.match(/className="time-evaluation-period-actions is-compact"/g).length, 1);
   assert.ok(evaluationMainStart > navigationStart);
-  assert.match(pageSource.slice(navigationStart, evaluationMainStart), /time-main-subtabs[\s\S]*?activeTimeSubtab === "evaluation"[\s\S]*?time-evaluation-period-actions[\s\S]*?payroll-month-total-status/s);
+  assert.match(pageSource.slice(navigationStart, evaluationMainStart), /time-main-subtabs[\s\S]*?activeTimeSubtab === "evaluation"[\s\S]*?time-evaluation-month-nav/s);
+  assert.match(pageSource, /overallStatus=\{payrollOverallStatus\}/);
+  assert.match(pageSource, /className="time-evaluation-worker-list">\s*\{overallStatus\}\s*<aside/s);
   assert.doesNotMatch(pageSource.slice(navigationStart, evaluationMainStart), /time-evaluation-subtabs/);
   assert.match(styles, /\.time-payroll-navigation-row\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*space-between;[^}]*border-bottom:\s*1px solid #d1d9e6;/s);
   assert.match(styles, /\.time-payroll-navigation-row\s*\{[^}]*min-height:\s*48px;[^}]*gap:\s*24px;[^}]*padding:\s*0 var\(--payroll-header-inline\);/s);
@@ -160,7 +162,7 @@ test("Ansichtsumschaltung steht im Titel, Gesamtstatus und Export neben den Haup
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.page-subtitle\s*\{[^}]*font-size:\s*0\.86rem;/s);
   assert.match(styles, /\.time-entries-page\.is-figma-times-workspace \.time-evaluation-month-nav\s*\{[^}]*padding:\s*7px 0;/s);
   assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);/s);
-  assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/s);
+  assert.match(styles, /is-payroll-review-workspace \.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);/s);
   assert.match(styles, /\.time-evaluation-subtabs\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2, minmax\(96px, 1fr\)\);[^}]*margin:\s*0 0 0 auto;[^}]*border:\s*0;[^}]*border-radius:\s*0;/s);
   assert.match(styles, /\.time-evaluation-subtabs button:focus-visible\s*\{[^}]*box-shadow:/s);
   assert.match(styles, /\.time-evaluation-subtabs button\s*\{[^}]*min-height:\s*34px;[^}]*border:\s*1px solid var\(--time-border\);[^}]*border-radius:\s*0;[^}]*background:\s*#ffffff;[^}]*color:\s*#243b5a;[^}]*font-size:\s*0\.78rem;/s);
