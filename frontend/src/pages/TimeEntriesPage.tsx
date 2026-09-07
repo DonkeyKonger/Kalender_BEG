@@ -2313,52 +2313,109 @@ export function TimeEntriesPage() {
         </div>
 
         {activeTimeSubtab === "evaluation" && (
-          <div className="time-evaluation-period-actions is-compact" role="group" aria-labelledby="time-evaluation-export-heading">
-            <div className="payroll-month-total-status" role="status">
-              <span>Gesamtstatus</span>
-              <strong>
-                {isLoadingPayrollMonthPeriod
-                  ? "Monatsstatus wird geladen..."
-                  : payrollPersonApprovalSummary
-                    ? `${payrollPersonApprovalSummary.approved_count} von ${payrollPersonApprovalSummary.total_count} Monteuren geprüft`
-                    : "Monatsstatus nicht verfügbar"}
-              </strong>
+          <div className="time-evaluation-header-controls">
+            <div className="time-week-nav-panel time-evaluation-month-nav" aria-label="Monat für die Auswertung auswählen">
+              <div className="time-evaluation-period-controls">
+                <div className="time-evaluation-period-selection">
+                  <div className="time-evaluation-month-strip-shell" role="group" aria-label={"Monat im Jahr " + selectedEvaluationMonth.year + " auswählen"}>
+                    <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollLeft} type="button" aria-label="Monate nach links scrollen" onClick={() => scrollEvaluationMonths(-1)}>
+                      <ChevronLeft aria-hidden="true" size={16} />
+                    </button>
+                    <div className="time-evaluation-month-strip" ref={evaluationMonthStripRef}>
+                      {evaluationMonthOptions.map((option) => (
+                        <button
+                          className={[
+                            option.year === selectedEvaluationMonth.year && option.month === selectedEvaluationMonth.month ? "is-active" : "",
+                            option.isCurrent ? "is-current" : "",
+                          ].filter(Boolean).join(" ")}
+                          data-month={option.month}
+                          data-year={option.year}
+                          key={`${option.year}-${option.month}`}
+                          title={`${option.label} ${option.year} · ${formatRangeLabel(calendarMonthRange(option).start, calendarMonthRange(option).end)}`}
+                          type="button"
+                          aria-current={option.isCurrent ? "date" : undefined}
+                          aria-pressed={option.year === selectedEvaluationMonth.year && option.month === selectedEvaluationMonth.month}
+                          onClick={() => selectEvaluationMonth(option)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollRight} type="button" aria-label="Monate nach rechts scrollen" onClick={() => scrollEvaluationMonths(1)}>
+                      <ChevronRight aria-hidden="true" size={16} />
+                    </button>
+                  </div>
+                  <div className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr">
+                    <button
+                      className="time-week-scroll-button"
+                      disabled={selectedEvaluationMonth.year <= 2000}
+                      type="button"
+                      aria-label="Vorheriges Jahr auswählen"
+                      onClick={() => selectEvaluationYear(selectedEvaluationMonth.year - 1)}
+                    >
+                      <ChevronLeft aria-hidden="true" size={16} />
+                    </button>
+                    <span aria-live="polite">{selectedEvaluationMonth.year}</span>
+                    <button
+                      className="time-week-scroll-button"
+                      disabled={selectedEvaluationMonth.year >= 2100}
+                      type="button"
+                      aria-label="Nächstes Jahr auswählen"
+                      onClick={() => selectEvaluationYear(selectedEvaluationMonth.year + 1)}
+                    >
+                      <ChevronRight aria-hidden="true" size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="payroll-month-compact-actions">
-              {isPayrollMonthLocked && canManagePayrollClose && (
+            <div className="time-evaluation-period-actions is-compact" role="group" aria-labelledby="time-evaluation-export-heading">
+              <div className="payroll-month-total-status" role="status">
+                <span>Gesamtstatus</span>
+                <strong>
+                  {isLoadingPayrollMonthPeriod
+                    ? "Monatsstatus wird geladen..."
+                    : payrollPersonApprovalSummary
+                      ? `${payrollPersonApprovalSummary.approved_count} von ${payrollPersonApprovalSummary.total_count} Monteuren geprüft`
+                      : "Monatsstatus nicht verfügbar"}
+                </strong>
+              </div>
+              <div className="payroll-month-compact-actions">
+                {isPayrollMonthLocked && canManagePayrollClose && (
+                  <button
+                    className="time-evaluation-monthly-download-button"
+                    disabled={isLoadingPayrollMonthPeriod || isUpdatingPayrollMonth || !payrollMonthPeriod?.can_reopen}
+                    title="Historisch abgeschlossenen Gesamtmonat mit Begründung wieder öffnen"
+                    type="button"
+                    onClick={() => setPayrollMonthDialog("reopen")}
+                  >
+                    Monat wieder öffnen
+                  </button>
+                )}
                 <button
+                  aria-describedby="time-evaluation-monthly-download-status"
                   className="time-evaluation-monthly-download-button"
-                  disabled={isLoadingPayrollMonthPeriod || isUpdatingPayrollMonth || !payrollMonthPeriod?.can_reopen}
-                  title="Historisch abgeschlossenen Gesamtmonat mit Begründung wieder öffnen"
+                  disabled={!arePayrollMonthExportsAvailable || isDownloadingAllPayrollMonthXlsx}
+                  title={arePayrollMonthExportsAvailable
+                    ? "Einzeln freigegebene Monatsabrechnungen aller Monteure herunterladen"
+                    : "Der Download ist verfügbar, sobald alle Monteure einzeln geprüft und ihre Excel-Dateien bereit sind."}
                   type="button"
-                  onClick={() => setPayrollMonthDialog("reopen")}
+                  onClick={() => void downloadAllPayrollMonthXlsx()}
                 >
-                  Monat wieder öffnen
+                  <Download aria-hidden="true" size={14} />
+                  <span>{isDownloadingAllPayrollMonthXlsx ? "Wird erstellt..." : "Alle Monteure"}</span>
                 </button>
-              )}
-              <button
-                aria-describedby="time-evaluation-monthly-download-status"
-                className="time-evaluation-monthly-download-button"
-                disabled={!arePayrollMonthExportsAvailable || isDownloadingAllPayrollMonthXlsx}
-                title={arePayrollMonthExportsAvailable
-                  ? "Einzeln freigegebene Monatsabrechnungen aller Monteure herunterladen"
-                  : "Der Download ist verfügbar, sobald alle Monteure einzeln geprüft und ihre Excel-Dateien bereit sind."}
-                type="button"
-                onClick={() => void downloadAllPayrollMonthXlsx()}
-              >
-                <Download aria-hidden="true" size={14} />
-                <span>{isDownloadingAllPayrollMonthXlsx ? "Wird erstellt..." : "Alle Monteure"}</span>
-              </button>
+              </div>
+              {payrollMonthPeriodError && <p className="payroll-month-status-error" role="alert">{payrollMonthPeriodError}</p>}
+              <span aria-live="polite" className="sr-only" id="time-evaluation-monthly-download-status">
+                {isDownloadingAllPayrollMonthXlsx || isDownloadingPayrollMonthXlsx
+                  ? "Die Excel-Monatsabrechnung wird erstellt."
+                  : arePayrollMonthExportsAvailable
+                    ? "Die freigegebenen Excel-Monatsabrechnungen aller Monteure sind zum Download verfügbar."
+                    : "Der Gesamtdownload wartet auf die einzelnen Monteurfreigaben und deren Excel-Dateien."}
+              </span>
+              <h3 className="sr-only" id="time-evaluation-export-heading">Monatsabrechnung</h3>
             </div>
-            {payrollMonthPeriodError && <p className="payroll-month-status-error" role="alert">{payrollMonthPeriodError}</p>}
-            <span aria-live="polite" className="sr-only" id="time-evaluation-monthly-download-status">
-              {isDownloadingAllPayrollMonthXlsx || isDownloadingPayrollMonthXlsx
-                ? "Die Excel-Monatsabrechnung wird erstellt."
-                : arePayrollMonthExportsAvailable
-                  ? "Die freigegebenen Excel-Monatsabrechnungen aller Monteure sind zum Download verfügbar."
-                  : "Der Gesamtdownload wartet auf die einzelnen Monteurfreigaben und deren Excel-Dateien."}
-            </span>
-            <h3 className="sr-only" id="time-evaluation-export-heading">Monatsabrechnung</h3>
           </div>
         )}
       </div>
@@ -2954,61 +3011,6 @@ export function TimeEntriesPage() {
 
       {activeTimeSubtab === "evaluation" && (
         <div className={`time-entries-main time-review-main time-evaluation-main${activeEvaluationSubtab === "workers" ? " has-person-month-close" : ""}`}>
-          <div className="time-week-nav-panel time-evaluation-month-nav" aria-label="Monat für die Auswertung auswählen">
-            <div className="time-evaluation-period-controls">
-              <div className="time-evaluation-period-selection">
-                <div className="time-evaluation-month-strip-shell" role="group" aria-label={"Monat im Jahr " + selectedEvaluationMonth.year + " auswählen"}>
-                  <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollLeft} type="button" aria-label="Monate nach links scrollen" onClick={() => scrollEvaluationMonths(-1)}>
-                    <ChevronLeft aria-hidden="true" size={16} />
-                  </button>
-                  <div className="time-evaluation-month-strip" ref={evaluationMonthStripRef}>
-                    {evaluationMonthOptions.map((option) => (
-                      <button
-                        className={[
-                          option.year === selectedEvaluationMonth.year && option.month === selectedEvaluationMonth.month ? "is-active" : "",
-                          option.isCurrent ? "is-current" : "",
-                        ].filter(Boolean).join(" ")}
-                        data-month={option.month}
-                        data-year={option.year}
-                        key={`${option.year}-${option.month}`}
-                        title={`${option.label} ${option.year} · ${formatRangeLabel(calendarMonthRange(option).start, calendarMonthRange(option).end)}`}
-                        type="button"
-                        aria-current={option.isCurrent ? "date" : undefined}
-                        aria-pressed={option.year === selectedEvaluationMonth.year && option.month === selectedEvaluationMonth.month}
-                        onClick={() => selectEvaluationMonth(option)}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                  <button className="time-week-scroll-button" disabled={!evaluationMonthScrollState.canScrollRight} type="button" aria-label="Monate nach rechts scrollen" onClick={() => scrollEvaluationMonths(1)}>
-                    <ChevronRight aria-hidden="true" size={16} />
-                  </button>
-                </div>
-                <div className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr">
-                  <button
-                    className="time-week-scroll-button"
-                    disabled={selectedEvaluationMonth.year <= 2000}
-                    type="button"
-                    aria-label="Vorheriges Jahr auswählen"
-                    onClick={() => selectEvaluationYear(selectedEvaluationMonth.year - 1)}
-                  >
-                    <ChevronLeft aria-hidden="true" size={16} />
-                  </button>
-                  <span aria-live="polite">{selectedEvaluationMonth.year}</span>
-                  <button
-                    className="time-week-scroll-button"
-                    disabled={selectedEvaluationMonth.year >= 2100}
-                    type="button"
-                    aria-label="Nächstes Jahr auswählen"
-                    onClick={() => selectEvaluationYear(selectedEvaluationMonth.year + 1)}
-                  >
-                    <ChevronRight aria-hidden="true" size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
           {activeEvaluationSubtab === "workers" && (
             <PayrollPersonMonthClosePanel
               approval={selectedPayrollPersonApproval}

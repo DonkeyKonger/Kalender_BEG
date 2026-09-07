@@ -111,8 +111,8 @@ test("person month close follows period navigation and grows for long names and 
   assert.doesNotMatch(panelStyles, /(?:^|;)\s*height:/);
   assert.match(panelStyles, /grid-template-rows:\s*auto auto;/);
   assert.match(styles, /\.payroll-person-month-log-summary span\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*white-space:\s*normal;/s);
-  assert.match(styles, /@media \(max-width: 980px\), \(max-height: 760px\)[\s\S]*?\.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*max-content max-content minmax\(540px, 1fr\);[^}]*overflow-y:\s*auto;/s);
-  assert.match(styles, /\.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/s);
+  assert.match(styles, /@media \(max-width: 980px\), \(max-height: 760px\)[\s\S]*?\.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*max-content minmax\(540px, 1fr\);[^}]*overflow-y:\s*auto;/s);
+  assert.match(styles, /\.time-evaluation-main\.has-person-month-close\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/s);
   assert.match(styles, /@media \(max-width: 980px\)[\s\S]*?\.payroll-person-month-close\s*\{[^}]*height:\s*auto;[^}]*grid-template-rows:\s*auto auto;/s);
 });
 
