@@ -243,6 +243,9 @@ export function TimeEntriesPage() {
   const [payrollOvernightSavingKey, setPayrollOvernightSavingKey] = useState<string | null>(null);
   const [selectedReviewWeek, setSelectedReviewWeek] = useState<CalendarWeekSelection>(() => currentIsoWeek());
   const [selectedEvaluationMonth, setSelectedEvaluationMonth] = useState<CalendarMonthSelection>(() => currentCalendarMonth());
+  const [evaluationMonthWindowYear, setEvaluationMonthWindowYear] = useState(selectedEvaluationMonth.year);
+  const evaluationMonthStartIndexRef = useRef(selectedEvaluationMonth.month - 1);
+  const evaluationMonthStripWidthRef = useRef(0);
   const [selectedReviewPersonId, setSelectedReviewPersonId] = useState<number | null>(null);
   const [selectedEvaluationPersonId, setSelectedEvaluationPersonId] = useState<number | null>(null);
   const [payrollSiteCockpit, setPayrollSiteCockpit] = useState<PayrollSiteCockpitData | null>(null);
@@ -504,8 +507,8 @@ export function TimeEntriesPage() {
     [currentReviewWeek],
   );
   const evaluationMonthOptions = useMemo(
-    () => buildCalendarMonthWindowOptions(selectedEvaluationMonth),
-    [selectedEvaluationMonth],
+    () => buildCalendarMonthWindowOptions({ year: evaluationMonthWindowYear, month: 1 }),
+    [evaluationMonthWindowYear],
   );
   const payrollReviewWorkerIds = useMemo(
     () => people.filter(isPayrollReviewWorker).map((person) => person.id),
@@ -1120,9 +1123,10 @@ export function TimeEntriesPage() {
       return;
     }
     const container = evaluationMonthStripRef.current;
-    alignEvaluationMonthsToSelection(container, selectedEvaluationMonth);
+    alignEvaluationMonthsToStartIndex(container, evaluationMonthStartIndexRef.current);
+    evaluationMonthStripWidthRef.current = container?.clientWidth ?? 0;
     updateEvaluationMonthScrollState();
-  }, [activeTimeSubtab, selectedEvaluationMonth.month, selectedEvaluationMonth.year]);
+  }, [activeTimeSubtab, evaluationMonthWindowYear]);
 
   useEffect(() => {
     if (activeTimeSubtab !== "evaluation") {
@@ -1134,16 +1138,18 @@ export function TimeEntriesPage() {
     }
     updateEvaluationMonthScrollState();
     const alignVisibleMonths = () => {
-      alignEvaluationMonthsToSelection(container, selectedEvaluationMonth, "auto");
+      alignEvaluationMonthsToStartIndex(container, evaluationMonthStartIndexRef.current);
+      evaluationMonthStripWidthRef.current = container.clientWidth;
       updateEvaluationMonthScrollState();
     };
+    const resizeObserver = new ResizeObserver(alignVisibleMonths);
+    resizeObserver.observe(container);
     container.addEventListener("scroll", updateEvaluationMonthScrollState, { passive: true });
-    window.addEventListener("resize", alignVisibleMonths);
     return () => {
+      resizeObserver.disconnect();
       container.removeEventListener("scroll", updateEvaluationMonthScrollState);
-      window.removeEventListener("resize", alignVisibleMonths);
     };
-  }, [activeTimeSubtab, selectedEvaluationMonth.month, selectedEvaluationMonth.year]);
+  }, [activeTimeSubtab, evaluationMonthWindowYear]);
 
   useEffect(() => {
     const needsDetailedEntries = activeTimeSubtab === "review"
@@ -1517,6 +1523,7 @@ export function TimeEntriesPage() {
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {
       return;
     }
+    setEvaluationMonthWindowYear((current) => current + year - selectedEvaluationMonth.year);
     selectEvaluationMonth({ year, month: selectedEvaluationMonth.month });
   }
 
@@ -1546,6 +1553,11 @@ export function TimeEntriesPage() {
     if (!container) {
       setEvaluationMonthScrollState({ canScrollLeft: false, canScrollRight: false });
       return;
+    }
+    // Keep the visible pair independent of the selected month, including across resize.
+    if (container.clientWidth === evaluationMonthStripWidthRef.current) {
+      const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button"));
+      evaluationMonthStartIndexRef.current = evaluationMonthStartIndex(container, buttons);
     }
     const maxScrollLeft = container.scrollWidth - container.clientWidth;
     setEvaluationMonthScrollState({
@@ -4395,25 +4407,18 @@ function evaluationMonthStartIndex(container: HTMLDivElement, buttons: HTMLButto
   return Math.max(0, Math.min(buttons.length - 1, Math.round(container.scrollLeft / step)));
 }
 
-function alignEvaluationMonthsToSelection(
+function alignEvaluationMonthsToStartIndex(
   container: HTMLDivElement | null,
-  selection: CalendarMonthSelection,
+  startIndex: number,
   behavior: ScrollBehavior = "auto",
 ): void {
   if (!container) {
     return;
   }
   const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button"));
-  const selectedIndex = buttons.findIndex((button) => (
-    Number(button.dataset.year) === selection.year
-    && Number(button.dataset.month) === selection.month
-  ));
-  if (selectedIndex < 0) {
-    return;
-  }
   const visibleCount = evaluationMonthVisibleButtonCount(container, buttons);
   const maxStartIndex = Math.max(0, buttons.length - visibleCount);
-  const targetIndex = Math.min(maxStartIndex, Math.max(0, selectedIndex - 1));
+  const targetIndex = Math.min(maxStartIndex, Math.max(0, startIndex));
   container.scrollTo({ left: buttons[targetIndex]?.offsetLeft ?? 0, behavior });
 }
 

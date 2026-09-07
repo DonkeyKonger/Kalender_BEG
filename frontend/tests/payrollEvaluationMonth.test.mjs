@@ -78,7 +78,7 @@ test("Monatsnavigation zeigt weiterhin zwei Monate und eine separate Jahressteue
   assert.match(pageSource, /scrollEvaluationMonths\(-1\)[\s\S]*?scrollEvaluationMonths\(1\)/s);
   assert.match(pageSource, /function evaluationMonthVisibleButtonCount[\s\S]*?Math\.floor\(\(container\.clientWidth - firstButton\.offsetWidth\) \/ step\) \+ 1/s);
   assert.match(pageSource, /function scrollEvaluationMonths[\s\S]*?targetIndex[\s\S]*?container\.scrollTo\(\{ left: buttons\[targetIndex\]\?\.offsetLeft/s);
-  assert.match(pageSource, /alignEvaluationMonthsToSelection\(container, selectedEvaluationMonth\)/);
+  assert.match(pageSource, /alignEvaluationMonthsToStartIndex\(container, evaluationMonthStartIndexRef\.current\)/);
   assert.match(styles, /\.time-evaluation-month-strip\s*\{[^}]*display:\s*flex;[^}]*position:\s*relative;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/s);
   assert.match(pageSource, /time-evaluation-period-controls[\s\S]*?time-evaluation-period-selection[\s\S]*?time-evaluation-month-strip-shell[\s\S]*?time-evaluation-year-navigation[\s\S]*?<PayrollPersonMonthClosePanel/s);
   assert.match(pageSource, /className="time-evaluation-year-navigation" role="group" aria-label="Auswertungsjahr"[\s\S]*?Vorheriges Jahr auswählen[\s\S]*?\{selectedEvaluationMonth\.year\}[\s\S]*?Nächstes Jahr auswählen/s);
@@ -89,7 +89,7 @@ test("Monatsnavigation zeigt weiterhin zwei Monate und eine separate Jahressteue
   assert.match(styles, /\.time-evaluation-year-navigation\s*\{[^}]*border:\s*1px solid var\(--time-border\);[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /\.time-evaluation-year-navigation \.time-week-scroll-button\s*\{[^}]*width:\s*34px;[^}]*height:\s*34px;[^}]*border:\s*0;[^}]*background:\s*#ffffff;/s);
   assert.match(styles, /@media \(max-width: 580px\)\s*\{[\s\S]*?\.time-evaluation-period-selection\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*8px;/s);
-  assert.match(pageSource, /const targetIndex = Math\.min\(maxStartIndex, Math\.max\(0, selectedIndex - 1\)\);/);
+  assert.match(pageSource, /const targetIndex = Math\.min\(maxStartIndex, Math\.max\(0, startIndex\)\);/);
   assert.match(styles, /@media \(max-width: 420px\)\s*\{[\s\S]*?\.time-evaluation-month-strip button\s*\{[^}]*min-width:\s*0;[^}]*font-size:\s*0\.78rem;/s);
   assert.match(styles, /\.time-evaluation-month-strip button\.is-active\s*\{[^}]*border-color:\s*#a9bed5;[^}]*background:\s*#dce7f2;/s);
   assert.doesNotMatch(styles, /\.time-evaluation-month-grid/);
