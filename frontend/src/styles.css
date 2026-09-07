@@ -22373,6 +22373,12 @@ body.mobile-modal-scroll-locked {
   margin-left: auto;
 }
 
+.is-payroll-month-workspace .payroll-remarks-button,
+.is-payroll-month-workspace .payroll-person-month-download-button {
+  box-sizing: border-box;
+  width: 180px;
+}
+
 @container payroll-month-detail (max-width: 520px) {
   .is-payroll-month-workspace .payroll-person-month-close-main {
     grid-template-columns: minmax(0, 1fr);
