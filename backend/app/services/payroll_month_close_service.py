@@ -1006,6 +1006,7 @@ class PayrollMonthCloseService:
         entries = [
             entry for entry in source.entries if month_start <= entry.work_date <= month_end
         ]
+        reviewed_days = self._reviewed_day_keys(entries)
         blockers.extend(self._time_entry_blockers(entries))
         blockers.extend(
             self._absence_blockers(
@@ -1092,13 +1093,13 @@ class PayrollMonthCloseService:
                     message=str(error),
                 )
             )
-        # A valid human week approval covers every subordinate day check, not
-        # just one kind of GPS diagnostic. Preserve source/history and the real
-        # export calculation; only unresolved month-readiness hints remain.
-        # Undated source/template/export failures cannot be covered by a week.
+        # Human week approval or review of every entry on a day covers its
+        # subordinate checks. Preserve diagnostics, history and export values.
+        # Day reviews never replace the separate week approval or cover undated
+        # source/template/export failures.
         return _deduplicate_blockers([
             item for item in blockers
-            if not self._covered_by_reviewed_weeks(item, reviewed_weeks)
+            if not self._covered_by_reviews(item, reviewed_weeks, reviewed_days)
         ])
 
     def _reviewed_week_keys(
@@ -1128,9 +1129,22 @@ class PayrollMonthCloseService:
         }
 
     @staticmethod
-    def _covered_by_reviewed_weeks(
+    def _reviewed_day_keys(entries) -> set[tuple[int, date]]:
+        reviewed: set[tuple[int, date]] = set()
+        open_days: set[tuple[int, date]] = set()
+        for entry in entries:
+            key = (entry.person_id, entry.work_date)
+            if entry.payroll_reviewed_at is not None:
+                reviewed.add(key)
+            else:
+                open_days.add(key)
+        return reviewed - open_days
+
+    @staticmethod
+    def _covered_by_reviews(
         blocker: PayrollMonthBlocker,
         reviewed_weeks: set[tuple[int, int, int]],
+        reviewed_days: set[tuple[int, date]] | None = None,
     ) -> bool:
         if blocker.person_id is None or blocker.work_date is None:
             return False
@@ -1140,7 +1154,13 @@ class PayrollMonthCloseService:
         day = blocker.work_date
         while day <= end:
             iso = day.isocalendar()
-            if (blocker.person_id, iso.year, iso.week) not in reviewed_weeks:
+            week_reviewed = (blocker.person_id, iso.year, iso.week) in reviewed_weeks
+            day_reviewed = (
+                blocker.code != "payroll_week_not_reviewed"
+                and reviewed_days is not None
+                and (blocker.person_id, day) in reviewed_days
+            )
+            if not week_reviewed and not day_reviewed:
                 return False
             day += timedelta(days=1)
         return True

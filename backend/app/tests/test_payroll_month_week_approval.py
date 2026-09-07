@@ -141,7 +141,7 @@ def test_range_hint_needs_every_affected_week_reviewed():
         code="future_subcheck", message="Across weeks", person_id=1,
         work_date=date(2026, 8, 23), work_date_end=date(2026, 8, 24),
     )
-    covered = PayrollMonthCloseService._covered_by_reviewed_weeks
+    covered = PayrollMonthCloseService._covered_by_reviews
     assert not covered(blocker, {(1, 2026, 35)})
     assert not covered(blocker, {(2, 2026, 34), (2, 2026, 35)})
     assert covered(blocker, {(1, 2026, 34), (1, 2026, 35)})
@@ -191,3 +191,90 @@ def test_person_approval_revalidates_the_same_week_aware_count(review_case):
     assert approved.person_approvals[0].status == "APPROVED"
     assert approved.person_approvals[0].blocker_count == 0
     assert approved.can_lock
+
+
+def test_individual_day_review_resolves_subchecks_and_reset_restores_them(review_case):
+    case = review_case
+    entry = case.add_day(date(2026, 8, 24))
+    before = case.service.get_status(year=2026, month=8, current_user=case.admin)
+    review_service = TimeEntryService(case.db)
+    review_service.set_payroll_row_review(entry.id, reviewed=True, current_user=case.admin)
+    after = case.service.get_status(year=2026, month=8, current_user=case.admin)
+    # Monday's separate week reminder must survive the individual day review.
+    assert {item.code for item in after.blockers if item.work_date == entry.work_date} == {
+        "payroll_week_not_reviewed",
+    }
+    assert after.person_approvals[0].blockers == after.blockers
+    assert after.person_approvals[0].blocker_count == len(after.blockers)
+    assert entry.time_review_status == "open"
+    assert list(case.db.scalars(select(PersonHoursAccountEntry))) == []
+    review_service.set_payroll_row_review(entry.id, reviewed=False, current_user=case.admin)
+    reopened = case.service.get_status(year=2026, month=8, current_user=case.admin)
+    assert reopened.blockers == before.blockers
+
+
+def test_day_review_requires_all_entries_and_does_not_cover_other_days_or_people(review_case):
+    case = review_case
+    first = case.add_day(date(2026, 8, 25))
+    second = case.add_day(first.work_date)
+    next_day = case.add_day(date(2026, 8, 26))
+    review_service = TimeEntryService(case.db)
+    review_service.set_payroll_row_review(first.id, reviewed=True, current_user=case.admin)
+    partial = case.service.get_status(year=2026, month=8, current_user=case.admin)
+    assert "open_time_or_gps_review" in {
+        item.code for item in partial.blockers if item.work_date == first.work_date
+    }
+    review_service.set_payroll_row_review(second.id, reviewed=True, current_user=case.admin)
+    complete = case.service.get_status(year=2026, month=8, current_user=case.admin)
+    assert not [item for item in complete.blockers if item.work_date == first.work_date]
+    assert [item for item in complete.blockers if item.work_date == next_day.work_date]
+    covered = PayrollMonthCloseService._covered_by_reviews
+    assert not covered(PayrollMonthBlocker(
+        code="open_time_or_gps_review", message="Other worker", person_id=999,
+        work_date=first.work_date,
+    ), set(), {(case.worker.id, first.work_date)})
+    assert PayrollMonthCloseService._reviewed_day_keys([]) == set()
+
+
+@pytest.mark.parametrize("work_date", [date(2026, 8, 1), date(2026, 8, 31), date(2027, 1, 1)])
+def test_individual_review_covers_partial_month_and_iso_year_boundaries(review_case, work_date):
+    case = review_case
+    entry = case.add_day(work_date)
+    TimeEntryService(case.db).set_payroll_row_review(entry.id, reviewed=True, current_user=case.admin)
+    status = case.service.get_status(year=work_date.year, month=work_date.month, current_user=case.admin)
+    assert not [item for item in status.blockers if item.work_date == work_date]
+
+
+def test_range_hints_need_full_day_or_week_coverage_and_undated_errors_remain():
+    covered = PayrollMonthCloseService._covered_by_reviews
+    blocker = PayrollMonthBlocker(
+        code="future_subcheck", message="Across weeks", person_id=1,
+        work_date=date(2026, 8, 23), work_date_end=date(2026, 8, 24),
+    )
+    assert not covered(blocker, set(), {(1, date(2026, 8, 23))})
+    assert covered(blocker, {(1, 2026, 35)}, {(1, date(2026, 8, 23))})
+    assert covered(blocker, set(), {(1, date(2026, 8, 23)), (1, date(2026, 8, 24))})
+    assert not covered(PayrollMonthBlocker(
+        code="payroll_template_invalid", message="Template error", person_id=1,
+    ), {(1, 2026, 35)}, {(1, date(2026, 8, 24))})
+
+
+def test_person_month_approval_revalidates_individual_day_review_counts(review_case):
+    case = review_case
+    entry = case.add_day(date(2026, 8, 24))
+    before = case.service.get_status(year=2026, month=8, current_user=case.admin)
+    TimeEntryService(case.db).set_payroll_row_review(entry.id, reviewed=True, current_user=case.admin)
+    after = case.service.get_status(year=2026, month=8, current_user=case.admin)
+    assert len(after.blockers) < len(before.blockers)
+    with pytest.raises(HTTPException) as caught:
+        case.service.approve_person_month(
+            year=2026, month=8, person_id=case.worker.id, confirmed=True,
+            acknowledged_blocker_count=len(before.blockers), current_user=case.admin,
+        )
+    assert caught.value.detail["expected_blocker_count"] == len(after.blockers)
+    approved = case.service.approve_person_month(
+        year=2026, month=8, person_id=case.worker.id, confirmed=True,
+        acknowledged_blocker_count=len(after.blockers), current_user=case.admin,
+    )
+    assert approved.person_approvals[0].status == "APPROVED"
+    assert approved.person_approvals[0].blocker_count == 0
