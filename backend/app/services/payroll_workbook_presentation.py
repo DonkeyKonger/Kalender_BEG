@@ -138,11 +138,31 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
 
     gray_fill_id = reuse_or_append(fills, gray_fill)
 
-    def format_cell(ref: str, *, horizontal: str | None = None, gray: bool = False):
+    def format_cell(
+        ref: str, *, horizontal: str | None = None, gray: bool = False,
+        number_format: str | None = None,
+    ):
         cell = _find_cell(sheet, ref)
         if cell is None:
             return
         style = deepcopy(cell_xfs[int(cell.get("s", "0"))])
+        if number_format is not None:
+            num_fmts = styles.find(_qname("numFmts"))
+            if num_fmts is None:
+                num_fmts = ET.Element(_qname("numFmts"))
+                styles.insert(0, num_fmts)
+            matching = next(
+                (item for item in num_fmts if item.get("formatCode") == number_format),
+                None,
+            )
+            if matching is None:
+                format_id = max([163, *(int(item.get("numFmtId")) for item in num_fmts)]) + 1
+                matching = ET.SubElement(
+                    num_fmts, _qname("numFmt"),
+                    numFmtId=str(format_id), formatCode=number_format,
+                )
+                num_fmts.set("count", str(len(num_fmts)))
+            style.attrib.update(numFmtId=matching.get("numFmtId"), applyNumberFormat="1")
         if horizontal is not None:
             alignment = style.find(_qname("alignment"))
             if alignment is None:
@@ -182,6 +202,7 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
     gray_fields += [f"{column}{row}" for row in (50, 51) for column in "KL"]
     for ref in gray_fields:
         format_cell(ref, gray=True)
+    format_cell("G48", horizontal="right", number_format='[h]:mm" h"')
     return ET.tostring(styles) != original_styles
 
 

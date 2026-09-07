@@ -12,7 +12,7 @@ from app.services.payroll_month_xlsx_service import (
 )
 from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
 from app.tests.test_payroll_individual_month_download import approved_workers as approved_workers
-from app.tests.test_payroll_month_xlsx_service import NS, cell_text
+from app.tests.test_payroll_month_xlsx_service import NS, cell_number_format, cell_text
 
 
 def legacy_presentation(content, *, manual_remark=None):
@@ -57,6 +57,9 @@ def assert_corrected_footer(content, *, sheet_path="xl/worksheets/sheet1.xml"):
         styles = ET.fromstring(package.read("xl/styles.xml"))
     assert all(cell_text(sheet, f"I{row}") == "" for row in range(46, 50))
     xfs = styles.find("main:cellXfs", NS)
+    sick = sheet.find('.//main:c[@r="G48"]', NS)
+    assert cell_number_format(sheet, styles, "G48") == '[h]:mm" h"'
+    assert xfs[int(sick.get("s"))].find("main:alignment", NS).get("horizontal") == "right"
     font_ids = [
         xfs[int(sheet.find(f'.//main:c[@r="{ref}"]', NS).get("s"))].get("fontId")
         for ref in ("K50", "K51")
