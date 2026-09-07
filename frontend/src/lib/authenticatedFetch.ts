@@ -1,6 +1,7 @@
 type AuthSession = {
   getToken: () => string | null;
   refreshToken: () => Promise<string | null>;
+  refreshedTokenFor: (previousToken: string) => string | null;
 };
 
 /** Share the same single retry for JSON and file downloads. */
@@ -24,7 +25,7 @@ export async function fetchWithAuthRefresh(
   options.signal?.throwIfAborted();
   // Another in-flight request may already have refreshed the same session.
   const refreshed = session.getToken() !== token
-    ? session.getToken()
+    ? session.refreshedTokenFor(token)
     : await session.refreshToken();
   options.signal?.throwIfAborted();
   return refreshed ? send(refreshed) : response;

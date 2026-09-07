@@ -21,6 +21,7 @@ import { fetchWithAuthRefresh } from "./authenticatedFetch";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 const AUTH_REFRESH_PATH = "/auth/refresh";
 let refreshAccessTokenPromise: Promise<string | null> | null = null;
+const refreshedTokens = new Map<string, string>();
 
 export function getApiBaseUrl(): string {
   return API_BASE_URL;
@@ -367,6 +368,7 @@ function authenticatedFetch(path: string, options: RequestInit, retryOnUnauthori
   return fetchWithAuthRefresh(`${API_BASE_URL}${path}`, options, {
     getToken: getAccessToken,
     refreshToken: refreshAccessToken,
+    refreshedTokenFor,
   }, retryOnUnauthorized && path !== AUTH_REFRESH_PATH);
 }
 
@@ -398,6 +400,16 @@ function getApiErrorDetail(payload: unknown): unknown {
   return payload;
 }
 
+function refreshedTokenFor(previousToken: string): string | null {
+  let token = previousToken;
+  const seen = new Set<string>();
+  while (refreshedTokens.has(token) && !seen.has(token)) {
+    seen.add(token);
+    token = refreshedTokens.get(token)!;
+  }
+  return seen.size > 0 && token === getAccessToken() ? token : null;
+}
+
 async function refreshAccessToken(): Promise<string | null> {
   const requestedToken = getAccessToken();
   if (!requestedToken) {
@@ -410,8 +422,10 @@ async function refreshAccessToken(): Promise<string | null> {
   )
     .then((token) => {
       if (getAccessToken() !== requestedToken) {
-        return getAccessToken();
+        return null;
       }
+      refreshedTokens.set(requestedToken, token.access_token);
+      if (refreshedTokens.size > 8) refreshedTokens.delete(refreshedTokens.keys().next().value!);
       localStorage.setItem("kb_access_token", token.access_token);
       return token.access_token;
     })

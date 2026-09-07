@@ -19,7 +19,7 @@ async function fixture(t, responder) {
   } });
   t.after(() => oldStorage ? Object.defineProperty(globalThis, 'localStorage', oldStorage) : delete globalThis.localStorage);
   const module = await import('data:text/javascript;base64,' + Buffer.from(bundled.outputFiles[0].text).toString('base64') + '#' + instance++);
-  return { ...module, logout: () => { token = null; } };
+  return { ...module, logout: () => { token = null; }, switchAccount: () => { token = "different-user"; } };
 }
 const json = (data, status = 200) => Response.json(data, { status });
 const download = api => api.projectPhotoAppendixPdf(1);
@@ -101,4 +101,17 @@ test('aborting a file request during shared refresh prevents its retry', async t
   const result = assert.rejects(api.siteExtraWorkTicketPhotoContent(1, 2, 3, { signal: controller.signal }), { name: 'AbortError' });
   await started; controller.abort(); release(); await result;
   assert.equal(downloadCount, 1);
+});
+
+
+test('a delayed unauthorized response is not replayed under a newly logged-in account', async t => {
+  let release, requestStarted, calls = 0;
+  const pending = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { requestStarted = resolve; });
+  const { api, switchAccount } = await fixture(t, async () => {
+    calls++; requestStarted(); await pending; return json({ detail: 'expired' }, 401);
+  });
+  const result = assert.rejects(download(api), { status: 401 });
+  await started; switchAccount(); release(); await result;
+  assert.equal(calls, 1);
 });
