@@ -1,8 +1,6 @@
 import type { PayrollMonthLockStatus, PayrollMonthPeriod } from "../types/payrollMonth";
 
 export const PAYROLL_CUTOVER_DATE = "2026-08-01";
-export const PAYROLL_OPENING_BALANCE_DATE = "2026-07-31";
-export const PAYROLL_WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"] as const;
 
 export type PayrollMonthSelection = {
   year: number;
@@ -94,50 +92,6 @@ export function formatPayrollMonthWorkDateContext(value: string | null | undefin
     year: "numeric",
   }).format(parsedDate);
   return `${dateLabel} · KW ${week}/${year}`;
-}
-
-export function suggestWeekdayMinutes(weeklyHours: number | null, selectedDayIndexes: number[] = []): number[] {
-  if (weeklyHours === null || !Number.isFinite(weeklyHours) || weeklyHours < 0) {
-    return [0, 0, 0, 0, 0, 0, 0];
-  }
-  const selectedDays = [...new Set(selectedDayIndexes)]
-    .filter((index) => Number.isInteger(index) && index >= 0 && index < 7)
-    .sort((left, right) => left - right);
-  if (!selectedDays.length) {
-    return [0, 0, 0, 0, 0, 0, 0];
-  }
-  const totalMinutes = Math.round(weeklyHours * 60);
-  const baseMinutes = Math.floor(totalMinutes / selectedDays.length);
-  const remainder = totalMinutes - baseMinutes * selectedDays.length;
-  const selectedPosition = new Map(selectedDays.map((dayIndex, position) => [dayIndex, position]));
-  return Array.from({ length: 7 }, (_, index) => {
-    const position = selectedPosition.get(index);
-    return position === undefined ? 0 : baseMinutes + (position < remainder ? 1 : 0);
-  });
-}
-
-export function sumWeekdayMinutes(minutes: number[]): number {
-  return minutes.reduce((sum, value) => sum + (Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0), 0);
-}
-
-export function formatSignedHoursMinutes(minutes: number | null | undefined): string {
-  if (minutes === null || minutes === undefined || !Number.isFinite(minutes)) {
-    return "–";
-  }
-  const roundedMinutes = Math.round(minutes);
-  const sign = roundedMinutes > 0 ? "+" : roundedMinutes < 0 ? "−" : "";
-  const absoluteMinutes = Math.abs(roundedMinutes);
-  return `${sign}${String(Math.floor(absoluteMinutes / 60)).padStart(2, "0")}:${String(absoluteMinutes % 60).padStart(2, "0")}`;
-}
-
-export function parseSignedHoursMinutes(value: string): number | null {
-  const normalized = value.trim().replace("−", "-");
-  const match = /^([+-])?(\d+):([0-5]\d)$/.exec(normalized);
-  if (!match) {
-    return null;
-  }
-  const minutes = Number(match[2]) * 60 + Number(match[3]);
-  return match[1] === "-" ? -minutes : minutes;
 }
 
 export function payrollSnapshotVersion(period: PayrollMonthPeriod | null): number | null {

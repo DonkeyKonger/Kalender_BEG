@@ -2,13 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import {
-  formatSignedHoursMinutes,
-  parseSignedHoursMinutes,
-  payrollMonthFilename,
-  suggestWeekdayMinutes,
-  sumWeekdayMinutes,
-} from "../src/lib/payrollMonth.ts";
+import { payrollMonthFilename } from "../src/lib/payrollMonth.ts";
 
 const page = readFileSync(new URL("../src/pages/TimeEntriesPage.tsx", import.meta.url), "utf8");
 const personsPage = readFileSync(new URL("../src/pages/PersonsPage.tsx", import.meta.url), "utf8");
@@ -49,12 +43,7 @@ test("locked months disable editing and exports use the immutable snapshot versi
   );
 });
 
-test("setup suggestion stays editable and must match weekly hours before confirmation", () => {
-  assert.deepEqual(suggestWeekdayMinutes(40), [0, 0, 0, 0, 0, 0, 0]);
-  assert.deepEqual(suggestWeekdayMinutes(40, [1, 2, 3, 4]), [0, 600, 600, 600, 600, 0, 0]);
-  assert.deepEqual(suggestWeekdayMinutes(37.5, [0, 2, 4, 6]), [563, 0, 563, 0, 562, 0, 562]);
-  assert.equal(sumWeekdayMinutes([600, 600, 600, 600, 0, 0, 0]), 2400);
-});
+
 
 test("employee details omit the regular working time editor but preserve independent weekly hours", () => {
   assert.doesNotMatch(personsPage, /PersonRegularWorkingTime|Arbeitszeitmodell|Regelmäßige Arbeitszeit|Arbeitszeit festlegen|person-regular-working-time/);
@@ -83,14 +72,7 @@ test("normal payroll no longer requires or mounts an account setup dialog", () =
   assert.doesNotMatch(styles, /\.payroll-setup-/);
 });
 
-test("positive and negative opening balances roundtrip as integer minutes", () => {
-  assert.equal(parseSignedHoursMinutes("+18:30"), 1110);
-  assert.equal(parseSignedHoursMinutes("-01:30"), -90);
-  assert.equal(parseSignedHoursMinutes("0:00"), 0);
-  assert.equal(parseSignedHoursMinutes("1:75"), null);
-  assert.equal(formatSignedHoursMinutes(1110), "+18:30");
-  assert.equal(formatSignedHoursMinutes(-90), "−01:30");
-});
+
 
 test("month close geometry remains locally scoped and square", () => {
   assert.doesNotMatch(styles, /\.payroll-month-lock-(?:box|toggle)/);
