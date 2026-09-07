@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, select, text
@@ -1121,6 +1122,7 @@ class PayrollMonthCloseService:
         blockers: list[PayrollMonthBlocker] = []
         month_start = date(year, month, 1)
         month_end = date(year, month, calendar.monthrange(year, month)[1])
+        today = _review_today()
         if source is None:
             export_service = PayrollMonthExportService(self.db)
             try:
@@ -1139,7 +1141,7 @@ class PayrollMonthCloseService:
 
         reviewed_weeks = self._reviewed_week_keys(source, month_start, month_end)
         blockers.extend(self._weekly_review_blockers(
-            source, month_start, month_end, reviewed_weeks=reviewed_weeks,
+            source, month_start, month_end, reviewed_weeks=reviewed_weeks, today=today,
         ))
         entries = [
             entry for entry in source.entries if month_start <= entry.work_date <= month_end
@@ -1160,7 +1162,11 @@ class PayrollMonthCloseService:
             evaluation = evaluations.get(entry.id)
             if evaluation is None:
                 continue
-            if (
+            # Full calendar weeks have one week reminder. Only boundary weeks
+            # need individual review reminders, and only from the following day.
+            if entry.work_date < today and not _week_is_within_month(
+                entry.work_date, month_start, month_end,
+            ) and (
                 TimeEntryService.is_open_time_review_case(entry, evaluation.work_minutes)
                 or evaluation.has_source_mismatch
                 or bool(evaluation.review_notices)
@@ -1448,13 +1454,15 @@ class PayrollMonthCloseService:
         month_end: date,
         *,
         reviewed_weeks: set[tuple[int, int, int]] | None = None,
+        today: date | None = None,
     ) -> list[PayrollMonthBlocker]:
+        today = today if today is not None else _review_today()
         full_weeks: list[tuple[int, int, date]] = []
         cursor = month_start
         while cursor <= month_end:
             monday = date.fromordinal(cursor.toordinal() - cursor.weekday())
             sunday = date.fromordinal(monday.toordinal() + 6)
-            if monday >= month_start and sunday <= month_end:
+            if monday >= month_start and sunday <= month_end and sunday < today:
                 iso = monday.isocalendar()
                 item = (iso.year, iso.week, monday)
                 if item not in full_weeks:
@@ -2088,6 +2096,15 @@ def _person_source_manifest(source: dict[str, Any], person_id: int) -> dict[str,
     result["absences"] = [item for item in source.get("absences", []) if item.get("person_id") == person_id]
     result["work_days"] = [item for item in source.get("work_days", []) if item.get("person_id") == person_id]
     return result
+
+
+def _review_today() -> date:
+    return datetime.now(ZoneInfo("Europe/Berlin")).date()
+
+
+def _week_is_within_month(work_date: date, month_start: date, month_end: date) -> bool:
+    monday = work_date - timedelta(days=work_date.weekday())
+    return monday >= month_start and monday + timedelta(days=6) <= month_end
 
 
 def _deduplicate_blockers(

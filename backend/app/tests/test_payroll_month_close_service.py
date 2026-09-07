@@ -185,6 +185,7 @@ def test_weekly_review_blockers_exclude_week_crossing_into_next_month():
         SimpleNamespace(people=(worker,)),
         date(2026, 8, 1),
         date(2026, 8, 31),
+        today=date(2026, 9, 1),
     )
 
     assert [item.work_date for item in blockers] == [

@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime, time, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -21,6 +21,7 @@ from app.tests.test_payroll_month_close_service import database, payroll_users
 
 @pytest.fixture
 def review_case(monkeypatch):
+    monkeypatch.setattr(month_module, "_review_today", lambda: date(2027, 2, 1))
     db = database()
     admin, worker = payroll_users(db)
     entries = []
@@ -66,7 +67,7 @@ def test_reviewed_week_resolves_all_month_subchecks_without_rewriting_diagnostic
     entry = case.add_day(date(2026, 8, 24))
     before = case.service.get_status(year=2026, month=8, current_user=case.admin)
     assert {item.code for item in before.blockers if item.work_date == entry.work_date} == {
-        "payroll_week_not_reviewed", "open_time_or_gps_review",
+        "payroll_week_not_reviewed",
         "unresolved_gps_time_entry", "travel_missing_overnight_status",
     }
     source_before = PayrollMonthExportService.source_manifest(
@@ -116,7 +117,7 @@ def test_mixed_month_uses_actual_week_and_person_status(review_case):
     case.review(2026, 35)
     status = case.service.get_status(year=2026, month=8, current_user=case.admin)
     assert {item.code for item in status.blockers if item.work_date == date(2026, 8, 17)} == {
-        "payroll_week_not_reviewed", "open_time_or_gps_review",
+        "payroll_week_not_reviewed",
         "unresolved_gps_time_entry", "travel_missing_overnight_status",
     }
     assert not [item for item in status.blockers if item.work_date == date(2026, 8, 24)]
@@ -131,7 +132,7 @@ def test_mixed_month_uses_actual_week_and_person_status(review_case):
     case.db.commit()
     status = case.service.get_status(year=2026, month=8, current_user=case.admin)
     assert {item.code for item in status.blockers if item.person_id == other.id} >= {
-        "payroll_week_not_reviewed", "open_time_or_gps_review",
+        "payroll_week_not_reviewed",
         "unresolved_gps_time_entry", "travel_missing_overnight_status",
     }
 
@@ -221,17 +222,17 @@ def test_individual_day_review_resolves_subchecks_and_reset_restores_them(review
 
 def test_day_review_requires_all_entries_and_does_not_cover_other_days_or_people(review_case):
     case = review_case
-    first = case.add_day(date(2026, 8, 25))
+    first = case.add_day(date(2026, 9, 1))
     second = case.add_day(first.work_date)
-    next_day = case.add_day(date(2026, 8, 26))
+    next_day = case.add_day(date(2026, 9, 2))
     review_service = TimeEntryService(case.db)
     review_service.set_payroll_row_review(first.id, reviewed=True, current_user=case.admin)
-    partial = case.service.get_status(year=2026, month=8, current_user=case.admin)
+    partial = case.service.get_status(year=2026, month=9, current_user=case.admin)
     assert "open_time_or_gps_review" in {
         item.code for item in partial.blockers if item.work_date == first.work_date
     }
     review_service.set_payroll_row_review(second.id, reviewed=True, current_user=case.admin)
-    complete = case.service.get_status(year=2026, month=8, current_user=case.admin)
+    complete = case.service.get_status(year=2026, month=9, current_user=case.admin)
     assert not [item for item in complete.blockers if item.work_date == first.work_date]
     assert [item for item in complete.blockers if item.work_date == next_day.work_date]
     covered = PayrollMonthCloseService._covered_by_reviews
@@ -290,3 +291,91 @@ def test_person_month_approval_revalidates_individual_day_review_counts(review_c
     )
     assert approved.person_approvals[0].status == "APPROVED"
     assert approved.person_approvals[0].blocker_count == 0
+
+
+def review_reminders(status):
+    return [item for item in status.blockers if item.code in {
+        "payroll_week_not_reviewed", "open_time_or_gps_review",
+    }]
+
+
+@pytest.mark.parametrize(("today", "week_starts"), [
+    (date(2026, 9, 7), []),   # Current and future weeks are not due.
+    (date(2026, 9, 11), []),  # Friday does not end the calendar week.
+    (date(2026, 9, 13), []),  # Sunday itself is still part of the week.
+    (date(2026, 9, 14), [date(2026, 9, 7)]),
+    (date(2026, 9, 21), [date(2026, 9, 7), date(2026, 9, 14)]),
+    (date(2026, 10, 1), [date(2026, 9, 7), date(2026, 9, 14), date(2026, 9, 21)]),
+])
+def test_full_weeks_have_only_one_review_reminder_after_sunday(review_case, monkeypatch, today, week_starts):
+    case = review_case
+    for day in (7, 8, 9, 10, 11):
+        case.add_day(date(2026, 9, day))
+    monkeypatch.setattr(month_module, "_review_today", lambda: today)
+    status = case.service.get_status(year=2026, month=9, current_user=case.admin)
+    assert [(item.code, item.work_date) for item in review_reminders(status)] == [
+        ("payroll_week_not_reviewed", monday) for monday in week_starts
+    ]
+    assert status.person_approvals[0].blocker_count == len(status.blockers)
+    # Concrete data problems are not missing-review reminders.
+    assert {item.code for item in status.blockers} >= {
+        "unresolved_gps_time_entry", "travel_missing_overnight_status",
+    }
+
+
+@pytest.mark.parametrize(("work_date", "today", "expected"), [
+    (date(2026, 9, 1), date(2026, 8, 31), False),
+    (date(2026, 9, 1), date(2026, 9, 1), False),
+    (date(2026, 9, 1), date(2026, 9, 2), True),
+    (date(2026, 9, 30), date(2026, 9, 29), False),
+    (date(2026, 9, 30), date(2026, 9, 30), False),
+    (date(2026, 9, 30), date(2026, 10, 1), True),
+    (date(2027, 1, 1), date(2027, 1, 1), False),
+    (date(2027, 1, 1), date(2027, 1, 2), True),
+    (date(2026, 8, 1), date(2026, 8, 2), True),  # Weekend boundary day.
+])
+def test_boundary_day_review_is_due_from_following_day(review_case, monkeypatch, work_date, today, expected):
+    case = review_case
+    case.add_day(work_date)
+    monkeypatch.setattr(month_module, "_review_today", lambda: today)
+    status = case.service.get_status(year=work_date.year, month=work_date.month, current_user=case.admin)
+    assert [item.work_date for item in review_reminders(status)
+            if item.code == "open_time_or_gps_review"] == ([work_date] if expected else [])
+    monday = work_date.fromordinal(work_date.toordinal() - work_date.weekday())
+    assert not [item for item in review_reminders(status)
+                if item.code == "payroll_week_not_reviewed" and item.work_date == monday]
+
+
+def test_newly_due_week_invalidates_stale_month_confirmation(review_case, monkeypatch):
+    case = review_case
+    monkeypatch.setattr(month_module, "_review_today", lambda: date(2026, 9, 13))
+    before = case.service.get_status(year=2026, month=9, current_user=case.admin)
+    monkeypatch.setattr(month_module, "_review_today", lambda: date(2026, 9, 14))
+    after = case.service.get_status(year=2026, month=9, current_user=case.admin)
+    old = before.person_approvals[0]
+    new = after.person_approvals[0]
+    assert new.blocker_count == old.blocker_count + 1
+    assert new.blocker_fingerprint != old.blocker_fingerprint
+    with pytest.raises(HTTPException) as caught:
+        case.service.approve_person_month(
+            year=2026, month=9, person_id=case.worker.id, confirmed=True,
+            acknowledged_blocker_count=old.blocker_count,
+            acknowledged_blocker_fingerprint=old.blocker_fingerprint,
+            current_user=case.admin,
+        )
+    assert caught.value.detail["code"] == "payroll_person_month_blockers_changed"
+    assert caught.value.detail["expected_blocker_count"] == new.blocker_count
+
+
+@pytest.mark.parametrize("instant", [
+    datetime(2026, 9, 13, 22, 1, tzinfo=timezone.utc),
+    datetime(2027, 1, 3, 23, 1, tzinfo=timezone.utc),
+])
+def test_review_clock_uses_berlin_date_after_local_midnight(monkeypatch, instant):
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return instant.astimezone(tz)
+
+    monkeypatch.setattr(month_module, "datetime", FixedDateTime)
+    assert month_module._review_today() == date.fromordinal(instant.date().toordinal() + 1)
