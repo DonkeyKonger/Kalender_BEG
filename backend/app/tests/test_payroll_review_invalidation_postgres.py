@@ -10,13 +10,15 @@ from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.time_entry import TimeEntryCreate
 from app.services.time_entry_service import TimeEntryService
-from app.tests.test_payroll_month_postgres import POSTGRES_URL, _payroll_users, pg_session  # noqa: F401
+from app.tests import test_payroll_month_postgres as postgres_tests
 
-pytestmark = pytest.mark.skipif(not POSTGRES_URL, reason='requires isolated migrated PostgreSQL')
+pg_session = postgres_tests.pg_session
+
+pytestmark = pytest.mark.skipif(not postgres_tests.POSTGRES_URL, reason='requires isolated migrated PostgreSQL')
 
 
 def reviewed_boundary_case(db):
-    admin, worker = _payroll_users(db)
+    admin, worker = postgres_tests._payroll_users(db)
     stamp = datetime.now(timezone.utc)
     august_entry = WorkTimeEntry(
         person_id=worker.id, work_date=date(2026, 8, 31), start_time=time(8), end_time=time(16),
