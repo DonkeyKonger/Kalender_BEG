@@ -180,13 +180,19 @@ def test_person_approval_revalidates_the_same_week_aware_count(review_case):
     with pytest.raises(HTTPException) as caught:
         case.service.approve_person_month(
             year=2026, month=8, person_id=case.worker.id, confirmed=True,
-            acknowledged_blocker_count=3, current_user=case.admin,
+            acknowledged_blocker_count=3,
+            acknowledged_blocker_fingerprint=(
+                current.person_approvals[0].blocker_fingerprint
+            ),
+            current_user=case.admin,
         )
     assert caught.value.detail["code"] == "payroll_person_month_blockers_changed"
     assert caught.value.detail["expected_blocker_count"] == 0
     approved = case.service.approve_person_month(
         year=2026, month=8, person_id=case.worker.id, confirmed=True,
-        acknowledged_blocker_count=0, current_user=case.admin,
+        acknowledged_blocker_count=0,
+        acknowledged_blocker_fingerprint=current.person_approvals[0].blocker_fingerprint,
+        current_user=case.admin,
     )
     assert approved.person_approvals[0].status == "APPROVED"
     assert approved.person_approvals[0].blocker_count == 0
@@ -269,12 +275,18 @@ def test_person_month_approval_revalidates_individual_day_review_counts(review_c
     with pytest.raises(HTTPException) as caught:
         case.service.approve_person_month(
             year=2026, month=8, person_id=case.worker.id, confirmed=True,
-            acknowledged_blocker_count=len(before.blockers), current_user=case.admin,
+            acknowledged_blocker_count=len(before.blockers),
+            acknowledged_blocker_fingerprint=(
+                before.person_approvals[0].blocker_fingerprint
+            ),
+            current_user=case.admin,
         )
     assert caught.value.detail["expected_blocker_count"] == len(after.blockers)
     approved = case.service.approve_person_month(
         year=2026, month=8, person_id=case.worker.id, confirmed=True,
-        acknowledged_blocker_count=len(after.blockers), current_user=case.admin,
+        acknowledged_blocker_count=len(after.blockers),
+        acknowledged_blocker_fingerprint=after.person_approvals[0].blocker_fingerprint,
+        current_user=case.admin,
     )
     assert approved.person_approvals[0].status == "APPROVED"
     assert approved.person_approvals[0].blocker_count == 0

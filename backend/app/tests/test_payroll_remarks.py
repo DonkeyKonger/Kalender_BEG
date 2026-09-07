@@ -19,7 +19,10 @@ from app.api.routes import payroll_months
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.models.payroll_month import PayrollMonthPeriod, PayrollMonthPersonApproval
-from app.services.payroll_month_close_service import PayrollMonthCloseService
+from app.services.payroll_month_close_service import (
+    PayrollMonthCloseService,
+    _blocker_fingerprint,
+)
 from app.services.payroll_month_export_service import PayrollMonthExportService
 from app.services.payroll_remarks import remarks_layout, validate_remarks, wrap_remarks
 from app.tests.test_payroll_month_close_service import database, payroll_users
@@ -116,7 +119,12 @@ def _printed_lines(content, index=1):
 def test_approved_single_and_combined_exports_retain_all_four_lines(case):
     text = "Bitte Reisekosten prüfen.\nZulage beachten.\nRückfrage im Büro.\nDanke."
     case.service.save_person_remarks(**case.args, remarks=text)
-    case.service.approve_person_month(**case.args, confirmed=True, acknowledged_blocker_count=0)
+    case.service.approve_person_month(
+        **case.args,
+        confirmed=True,
+        acknowledged_blocker_count=0,
+        acknowledged_blocker_fingerprint=_blocker_fingerprint([]),
+    )
     export = PayrollMonthExportService(case.db)
     before = export.worker_export(**case.args)
     assert _printed_lines(before) == text.split("\n")
@@ -128,7 +136,12 @@ def test_approved_single_and_combined_exports_retain_all_four_lines(case):
     case.service.reopen_person_month(**case.args, reason="Korrektur nötig")
     assert case.service.get_person_remarks(**case.args).remarks == text
     case.service.save_person_remarks(**case.args, remarks="Korrigiert")
-    case.service.approve_person_month(**case.args, confirmed=True, acknowledged_blocker_count=0)
+    case.service.approve_person_month(
+        **case.args,
+        confirmed=True,
+        acknowledged_blocker_count=0,
+        acknowledged_blocker_fingerprint=_blocker_fingerprint([]),
+    )
     assert _printed_lines(export.worker_export(**case.args)) == ["Korrigiert", "", "", ""]
 
 

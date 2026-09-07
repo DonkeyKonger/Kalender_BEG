@@ -53,7 +53,7 @@ def monthly_time_entries_xlsx(
         current_user=current_user,
     )
     filename = f"zeiten_export_{year}_{month:02d}.xlsx"
-    return xlsx_response(content, filename)
+    return xlsx_response(content, filename, no_store=True)
 
 
 @router.get("/time-entries/payroll-monthly-worker-xlsx")
@@ -73,7 +73,7 @@ def payroll_monthly_worker_xlsx(
         version=version,
     )
     filename = f"lohnabrechnung_{year}_{month:02d}_person_{person_id}.xlsx"
-    return xlsx_response(content, filename)
+    return xlsx_response(content, filename, no_store=version is None)
 
 
 @router.get("/time-entries/payroll-monthly-workers-xlsx")
@@ -91,7 +91,7 @@ def payroll_monthly_workers_xlsx(
         version=version,
     )
     filename = f"lohnabrechnung_{year}_{month:02d}_alle_monteure.xlsx"
-    return xlsx_response(content, filename)
+    return xlsx_response(content, filename, no_store=version is None)
 
 
 @router.get("/time-entries/weekly-worker-hours.pdf")
@@ -149,9 +149,12 @@ def pdf_response(content: bytes, filename: str) -> Response:
     )
 
 
-def xlsx_response(content: bytes, filename: str) -> Response:
+def xlsx_response(content: bytes, filename: str, *, no_store: bool = False) -> Response:
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if no_store:
+        headers["Cache-Control"] = "no-store"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=headers,
     )

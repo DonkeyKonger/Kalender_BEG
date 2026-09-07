@@ -10,11 +10,11 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from xml.sax.saxutils import escape
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select, union
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.absence import Absence
-from app.models.enums import PersonType, UserRole
+from app.models.enums import AbsenceStatus, PersonType, UserRole
 from app.models.person import Person
 from app.models.person_work_day import PersonWorkDay
 from app.models.payroll_daily_ledger import PAYROLL_LEDGER_CUTOVER_DATE
@@ -22,9 +22,11 @@ from app.models.payroll_month import (
     PAYROLL_MONTH_LOCKED,
     PAYROLL_PERSON_MONTH_APPROVED,
     PayrollMonthArtifact,
+    PayrollMonthAudit,
     PayrollMonthPeriod,
     PayrollMonthPersonApproval,
     PayrollMonthPersonApprovalArtifact,
+    PayrollMonthPersonSnapshot,
     PayrollMonthSnapshot,
 )
 from app.models.user import User
@@ -288,9 +290,9 @@ class PayrollMonthExportService:
 
     def _approved_workers_export(self, *, year: int, month: int) -> bytes:
         """Package existing individual approvals without closing or booking a month."""
-        people = self.payroll_people()
+        people = self.payroll_people(year=year, month=month)
         if not people:
-            raise HTTPException(404, "Keine aktiven Monteure gefunden.")
+            raise HTTPException(404, "Keine abrechenbaren Monteure gefunden.")
         # Read current approval versions and their artifacts together: never mix
         # a reopened approval with an older retained version or rebuild live data.
         rows = self.db.execute(
@@ -313,7 +315,14 @@ class PayrollMonthExportService:
                 "code": "payroll_person_month_not_approved",
                 "message": "Der Gesamtdownload ist verfügbar, sobald jeder Monteurmonat einzeln geprüft ist.",
             })
-        workbooks = []
+        period_id = self.db.scalar(
+            select(PayrollMonthPeriod.id).where(
+                PayrollMonthPeriod.year == year,
+                PayrollMonthPeriod.month == month,
+            )
+        )
+        approved_names = _approval_person_names(self.db, period_id=period_id)
+        workbooks: list[tuple[int, str, bytes]] = []
         for person in people:
             approval, artifact = approved[person.id]
             if artifact is None:
@@ -332,9 +341,27 @@ class PayrollMonthExportService:
                     "approval_version": approval.approval_version,
                     "message": "Eine gespeicherte Einzelabrechnung ist beschädigt und wird nicht ausgeliefert.",
                 })
-            workbooks.append((person.display_name, prepare_payroll_workbook_download(artifact.content)))
+            approved_name = approved_names.get(
+                (person.id, approval.approval_version),
+                person.display_name,
+            )
+            workbooks.append(
+                (
+                    person.id,
+                    approved_name,
+                    prepare_payroll_workbook_download(artifact.content),
+                )
+            )
         try:
-            return merge_approved_payroll_workbooks(workbooks)
+            return merge_approved_payroll_workbooks(
+                [
+                    (person_name, content)
+                    for _person_id, person_name, content in sorted(
+                        workbooks,
+                        key=lambda item: (item[1].casefold(), item[0]),
+                    )
+                ]
+            )
         except ValueError as error:
             raise HTTPException(409, {
                 "code": "payroll_approved_workbooks_incompatible",
@@ -403,9 +430,9 @@ class PayrollMonthExportService:
         month: int,
         current_user: User,
     ) -> "PayrollMonthSourceBundle":
-        people = self.payroll_people()
+        people = self.payroll_people(year=year, month=month)
         if not people:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Keine aktiven Monteure gefunden.")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Keine abrechenbaren Monteure gefunden.")
         period_start, period_end = payroll_month_source_range(year, month)
         entries = TimeEntryService(self.db).list_entries(
             current_user=current_user,
@@ -510,20 +537,100 @@ class PayrollMonthExportService:
             ],
         }
 
-    def payroll_people(self) -> list[Person]:
+    def payroll_people(
+        self,
+        *,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> list[Person]:
+        """Return today's payroll workers plus people retained by this period.
+
+        Archived people and people whose current role no longer qualifies remain
+        part of a month when an approval, snapshot, or actual period source row
+        references them. This does not recreate any historical approval data.
+        """
+        retained_state_person_ids: set[int] = set()
+        period_data_person_ids: set[int] = set()
+        if year is not None and month is not None:
+            month_start = date(year, month, 1)
+            month_end = date(year, month, calendar.monthrange(year, month)[1])
+            retained_state_person_ids = set(
+                self.db.scalars(
+                    union(
+                        select(PayrollMonthPersonApproval.person_id).where(
+                            PayrollMonthPersonApproval.year == year,
+                            PayrollMonthPersonApproval.month == month,
+                        ),
+                        select(PayrollMonthPersonSnapshot.person_id)
+                        .join(
+                            PayrollMonthSnapshot,
+                            PayrollMonthSnapshot.id
+                            == PayrollMonthPersonSnapshot.snapshot_id,
+                        )
+                        .join(
+                            PayrollMonthPeriod,
+                            PayrollMonthPeriod.id == PayrollMonthSnapshot.period_id,
+                        )
+                        .where(
+                            PayrollMonthPeriod.year == year,
+                            PayrollMonthPeriod.month == month,
+                        ),
+                    )
+                )
+            )
+            period_data_person_ids = set(
+                self.db.scalars(
+                    union(
+                        select(WorkTimeEntry.person_id).where(
+                            WorkTimeEntry.work_date >= month_start,
+                            WorkTimeEntry.work_date <= month_end,
+                        ),
+                        select(Absence.person_id).where(
+                            Absence.status == AbsenceStatus.ACTIVE,
+                            Absence.start_date <= month_end,
+                            Absence.end_date >= month_start,
+                        ),
+                        select(PersonWorkDay.person_id).where(
+                            PersonWorkDay.work_date >= month_start,
+                            PersonWorkDay.work_date <= month_end,
+                        ),
+                    )
+                )
+            )
+
+        current_person_condition = and_(
+            Person.is_active.is_(True),
+            Person.deleted_at.is_(None),
+            Person.person_type == PersonType.INTERNAL,
+        )
+        person_condition = current_person_condition
+        if retained_state_person_ids or period_data_person_ids:
+            person_condition = or_(
+                current_person_condition,
+                Person.id.in_(retained_state_person_ids),
+                and_(
+                    Person.person_type == PersonType.INTERNAL,
+                    Person.id.in_(period_data_person_ids),
+                ),
+            )
         people = list(
             self.db.scalars(
                 select(Person)
                 .options(selectinload(Person.users))
-                .where(
-                    Person.is_active.is_(True),
-                    Person.deleted_at.is_(None),
-                    Person.person_type == PersonType.INTERNAL,
-                )
+                .where(person_condition)
                 .order_by(Person.display_name.asc(), Person.id.asc())
             )
         )
-        return [person for person in people if is_payroll_review_person(person)]
+        return [
+            person
+            for person in people
+            if person.id in retained_state_person_ids
+            or (
+                person.person_type == PersonType.INTERNAL
+                and person.id in period_data_person_ids
+            )
+            or is_payroll_review_person(person)
+        ]
 
     def _locked_artifact(
         self,
@@ -624,6 +731,34 @@ class PayrollMonthExportService:
         elif person_ids is not None:
             statement = statement.where(Absence.person_id.in_(person_ids))
         return list(self.db.scalars(statement))
+
+
+def _approval_person_names(
+    db: Session,
+    *,
+    period_id: int | None,
+) -> dict[tuple[int, int], str]:
+    """Read only the immutable approval name fields, not full source snapshots."""
+    if period_id is None:
+        return {}
+    rows = db.execute(
+        select(
+            PayrollMonthAudit.details_json["person_id"].as_integer(),
+            PayrollMonthAudit.details_json["approval_version"].as_integer(),
+            PayrollMonthAudit.details_json["person_name"].as_string(),
+        )
+        .where(
+            PayrollMonthAudit.period_id == period_id,
+            PayrollMonthAudit.action == "PERSON_MONTH_APPROVED",
+        )
+        .order_by(PayrollMonthAudit.id.desc())
+    )
+    result: dict[tuple[int, int], str] = {}
+    for person_id, approval_version, person_name in rows:
+        if person_id is None or approval_version is None or not person_name:
+            continue
+        result.setdefault((int(person_id), int(approval_version)), str(person_name))
+    return result
 
 
 def is_payroll_review_person(person: Person) -> bool:

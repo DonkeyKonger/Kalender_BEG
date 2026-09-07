@@ -37,6 +37,7 @@ def test_all_workers_export_uses_active_payroll_workers_and_one_master_sheet_eac
     anna.weekly_hours = 40
     bernd.weekly_hours = 30
     office = person(3, "Olivia", "Büro")
+    office.person_type = PersonType.EXTERNAL
     db.add_all(
         [
             anna,

@@ -61,9 +61,11 @@ def get_payroll_month_lock_status(
 def get_payroll_month_status(
     year: int,
     month: int,
+    response: Response,
     current_user: User = Depends(CAN_READ),
     db: Session = Depends(get_db),
 ) -> PayrollMonthStatusRead:
+    response.headers["Cache-Control"] = "no-store"
     return PayrollMonthCloseService(db).get_status(
         year=year,
         month=month,
@@ -118,6 +120,7 @@ def approve_payroll_person_month(
         person_id=person_id,
         confirmed=payload.confirmed,
         acknowledged_blocker_count=payload.acknowledged_blocker_count,
+        acknowledged_blocker_fingerprint=payload.acknowledged_blocker_fingerprint,
         current_user=current_user,
     )
 

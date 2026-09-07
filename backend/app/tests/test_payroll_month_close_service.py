@@ -33,7 +33,10 @@ from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
 from app.models.user import User
 from app.services.audit_service import AuditService
 from app.services.payroll_month_account_service import MONTHLY, REVERSAL, TRANSITION
-from app.services.payroll_month_close_service import PayrollMonthCloseService
+from app.services.payroll_month_close_service import (
+    PayrollMonthCloseService,
+    _blocker_fingerprint,
+)
 from app.services.payroll_month_export_service import PayrollMonthExportService
 from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
 from app.services.payroll_period_guard import PayrollPeriodGuard
@@ -221,6 +224,7 @@ def test_person_month_approval_acknowledges_worker_blockers_and_allows_month_loc
         person_id=worker.id,
         confirmed=True,
         acknowledged_blocker_count=1,
+        acknowledged_blocker_fingerprint=_blocker_fingerprint([blocker]),
         current_user=admin,
     )
 
@@ -288,6 +292,7 @@ def test_person_month_approval_accepts_technical_blockers_and_keeps_export_avail
         person_id=worker.id,
         confirmed=True,
         acknowledged_blocker_count=1,
+        acknowledged_blocker_fingerprint=_blocker_fingerprint([blocker]),
         current_user=admin,
     )
 
@@ -358,6 +363,7 @@ def test_open_predecessor_is_not_added_to_person_month_hints(monkeypatch):
         person_id=worker.id,
         confirmed=True,
         acknowledged_blocker_count=7,
+        acknowledged_blocker_fingerprint=_blocker_fingerprint(blockers),
         current_user=office_user,
     )
 
@@ -403,6 +409,7 @@ def test_person_month_standard_export_failure_rolls_back_account_and_approval(mo
             person_id=worker.id,
             confirmed=True,
             acknowledged_blocker_count=0,
+            acknowledged_blocker_fingerprint=_blocker_fingerprint([]),
             current_user=admin,
         )
 
@@ -438,6 +445,7 @@ def test_missing_account_and_contract_hours_keep_normal_export_available():
         person_id=worker.id,
         confirmed=True,
         acknowledged_blocker_count=0,
+        acknowledged_blocker_fingerprint=_blocker_fingerprint([]),
         current_user=admin,
     )
 
@@ -484,6 +492,7 @@ def test_person_month_reopen_requires_reason_and_reverses_exact_monthly_posting(
         person_id=worker.id,
         confirmed=True,
         acknowledged_blocker_count=0,
+        acknowledged_blocker_fingerprint=_blocker_fingerprint([]),
         current_user=admin,
     )
     assert approved.person_approvals[0].status == PAYROLL_PERSON_MONTH_APPROVED
@@ -614,6 +623,7 @@ def test_lock_reopen_and_relock_retain_person_workbooks_without_double_posting(m
         person_id=worker.id,
         confirmed=True,
         acknowledged_blocker_count=0,
+        acknowledged_blocker_fingerprint=_blocker_fingerprint([]),
         current_user=admin,
     )
     first_person_artifact = db.scalar(
@@ -669,6 +679,7 @@ def test_lock_reopen_and_relock_retain_person_workbooks_without_double_posting(m
         person_id=worker.id,
         confirmed=True,
         acknowledged_blocker_count=0,
+        acknowledged_blocker_fingerprint=_blocker_fingerprint([]),
         current_user=admin,
     )
     second_person_artifact = db.scalar(
@@ -860,6 +871,7 @@ def test_project_manager_can_approve_and_reopen_person_month_without_assignment(
         person_id=worker.id,
         confirmed=True,
         acknowledged_blocker_count=0,
+        acknowledged_blocker_fingerprint=_blocker_fingerprint([]),
         current_user=project_manager,
     )
     reopened = service.reopen_person_month(

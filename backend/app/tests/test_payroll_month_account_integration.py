@@ -52,7 +52,9 @@ def approve(service, person, user, month=8):
     worker = next(item for item in status.person_approvals if item.person_id == person.id)
     assert not any(item.code.startswith(("schedule_", "opening_balance_", "previous_payroll")) for item in worker.blockers)
     return service.approve_person_month(year=2026, month=month, person_id=person.id, confirmed=True,
-                                        acknowledged_blocker_count=worker.blocker_count, current_user=user)
+                                        acknowledged_blocker_count=worker.blocker_count,
+                                        acknowledged_blocker_fingerprint=worker.blocker_fingerprint,
+                                        current_user=user)
 
 
 def workbook_sheet(content):

@@ -31,6 +31,7 @@ class PayrollMonthPersonApprovalRead(BaseModel):
     reopen_reason: str | None = None
     blocker_count: int
     blockers: list[PayrollMonthBlocker] = Field(default_factory=list)
+    blocker_fingerprint: str = Field(min_length=64, max_length=64, pattern="^[0-9a-f]{64}$")
     has_blocking_technical_error: bool
     export_ready: bool
     export_status: str
@@ -65,6 +66,11 @@ class PayrollMonthStatusRead(BaseModel):
 class PayrollMonthPersonApprovalRequest(BaseModel):
     confirmed: bool
     acknowledged_blocker_count: int = Field(ge=0)
+    acknowledged_blocker_fingerprint: str = Field(
+        min_length=64,
+        max_length=64,
+        pattern="^[0-9a-f]{64}$",
+    )
 
 
 class PayrollMonthRemarksRequest(BaseModel):
