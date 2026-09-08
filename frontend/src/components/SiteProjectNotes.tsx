@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { LockKeyhole, Plus } from "lucide-react";
 
 import { api } from "../lib/api";
@@ -8,19 +8,20 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : "Die Notiz konnte nicht gespeichert werden. Bitte erneut versuchen.";
 }
 
-export function SiteProjectNotes({ siteId }: { siteId: number }) {
+export function SiteProjectNotes({ siteId, canEdit, children }: { siteId: number; canEdit: boolean; children: ReactNode }) {
   const [notes, setNotes] = useState<SiteNotes | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
+    if (!canEdit) return;
     let active = true;
     api.siteNotes(siteId).then((value) => {
       if (active) { setNotes(value); setError(null); }
     }).catch((reason) => { if (active) setError(errorText(reason)); });
     return () => { active = false; };
-  }, [siteId, reload]);
+  }, [siteId, canEdit, reload]);
 
   async function createBlock() {
     if (creating) return;
@@ -36,30 +37,33 @@ export function SiteProjectNotes({ siteId }: { siteId: number }) {
     }
   }
 
-  if (!notes) return (
-    <section className="site-notes-section" aria-label="Weitere Projektnotizen">
-      {error ? <><p className="form-error" role="alert">{error}</p><button type="button" onClick={() => setReload((value) => value + 1)}>Erneut laden</button></> : <p role="status">Projektnotizen werden geladen…</p>}
-    </section>
-  );
-
   return (
-    <>
-      <InternalNotes siteId={siteId} initial={notes} />
-      <section className="site-notes-section site-versioned-notes" aria-labelledby="site-versioned-notes-heading">
-        <div className="site-notes-header">
-          <h2 id="site-versioned-notes-heading">Notizstände für Monteure</h2>
-          <button className="site-project-note-button" disabled={creating} type="button" onClick={() => void createBlock()}>
+    <section className="site-project-notes" aria-label="Projektnotizen">
+      {canEdit && (
+        <div className="site-project-notes-toolbar">
+          <div>
+            <h2>Projektnotizen</h2>
+            <p className="site-project-note-help">Notizstände für Monteure: Nur freigegebene Blöcke sind mobil sichtbar. Frühere Stände bleiben erhalten.</p>
+          </div>
+          <button className="site-project-note-button" disabled={creating || !notes} type="button" onClick={() => void createBlock()}>
             <Plus size={15} aria-hidden="true" />{creating ? "Wird angelegt…" : "Neuer Notizblock"}
           </button>
         </div>
-        <p className="site-project-note-help">Nur ausgewählte Blöcke sind für Monteure sichtbar. Frühere Stände bleiben erhalten; mehrere Blöcke können gleichzeitig sichtbar sein.</p>
-        {error && <p className="form-error" role="alert">{error}</p>}
-        {notes.blocks.length === 0 && <p>Noch keine Notizstände angelegt.</p>}
-        <div className="site-project-note-blocks">
-          {notes.blocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} />)}
+      )}
+      {canEdit && error && (
+        <div className="site-project-notes-error">
+          <p className="form-error" role="alert">{error}</p>
+          {!notes && <button type="button" onClick={() => setReload((value) => value + 1)}>Erneut laden</button>}
         </div>
-      </section>
-    </>
+      )}
+      <div className="site-project-notes-grid">
+        {children}
+        {canEdit && (notes ? <>
+          <InternalNotes siteId={siteId} initial={notes} />
+          {notes.blocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} />)}
+        </> : !error && <p role="status">Projektnotizen werden geladen…</p>)}
+      </div>
+    </section>
   );
 }
 

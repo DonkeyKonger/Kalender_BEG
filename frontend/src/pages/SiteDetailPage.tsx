@@ -2195,28 +2195,29 @@ function OverviewTab({
             </DetailSection>
           </div>
 
-          <section className="site-notes-section">
-            <div className="site-notes-header">
-              <h2>Allgemeine Notizen zum Projekt</h2>
-              {canEdit && notesSaveStatus !== "idle" ? (
-                <span className={`site-notes-save-status is-${notesSaveStatus}`}>{formatSiteNotesSaveStatus(notesSaveStatus)}</span>
-              ) : null}
-            </div>
-            <p className="site-project-note-help">Für Monteure sichtbar und in der Planmatrix rot hervorgehoben.</p>
-            <textarea
-              aria-label="Allgemeine Notizen zum Projekt"
-              className="site-notes-textarea"
-              disabled={!canEdit}
-              placeholder={canEdit ? "Baustellennotizen eintragen..." : "Keine Notizen hinterlegt."}
-              value={notesDraft}
-              onChange={(event) => {
-                setNotesDraft(event.target.value);
-                setNotesSaveStatus("idle");
-              }}
-              onBlur={handleNotesBlur}
-            />
-          </section>
-          {canEdit && <SiteProjectNotes key={site.id} siteId={site.id} />}
+          <SiteProjectNotes key={site.id} siteId={site.id} canEdit={canEdit}>
+            <section className="site-notes-section">
+              <div className="site-notes-header">
+                <h2>Allgemeine Notizen zum Projekt</h2>
+                {canEdit && notesSaveStatus !== "idle" ? (
+                  <span className={`site-notes-save-status is-${notesSaveStatus}`}>{formatSiteNotesSaveStatus(notesSaveStatus)}</span>
+                ) : null}
+              </div>
+              <p className="site-project-note-help">Für Monteure sichtbar und in der Planmatrix rot hervorgehoben.</p>
+              <textarea
+                aria-label="Allgemeine Notizen zum Projekt"
+                className="site-notes-textarea"
+                disabled={!canEdit}
+                placeholder={canEdit ? "Baustellennotizen eintragen..." : "Keine Notizen hinterlegt."}
+                value={notesDraft}
+                onChange={(event) => {
+                  setNotesDraft(event.target.value);
+                  setNotesSaveStatus("idle");
+                }}
+                onBlur={handleNotesBlur}
+              />
+            </section>
+          </SiteProjectNotes>
         </>
       )}
     </div>

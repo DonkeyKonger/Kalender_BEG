@@ -31802,8 +31802,10 @@ body.mobile-modal-scroll-locked {
   opacity: 0.58;
 }
 
-.site-detail-page.is-project-file-workspace .site-detail-grid {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+.site-detail-page.is-project-file-workspace .site-detail-grid,
+.site-detail-page.is-project-file-workspace .site-project-notes-grid {
+  /* Share up to four columns; keep empty note slots at the information-card width. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(260px, calc((100% - 36px) / 4))), 1fr));
   gap: 12px;
 }
 
@@ -34479,12 +34481,20 @@ button.supplementary-order-paper-signature-field.is-editable:focus-visible {
 }
 
 .site-project-note-visibility.is-visible { background: #e7f4eb; color: #216638; }
-.site-project-note-blocks { display: grid; gap: 12px; }
-.site-project-note-block { border: 1px solid #d4deeb; min-width: 0; }
-.site-project-note-block summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; background: #f5f7fa; cursor: pointer; }
+.site-project-notes { display: grid; gap: 12px; min-width: 0; }
+.site-project-notes-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.site-project-notes-toolbar h2 { margin: 0 0 4px; font-size: 0.94rem; }
+.site-project-notes-toolbar > button { flex-shrink: 0; }
+.site-project-notes-grid { display: grid; align-items: start; gap: 12px; }
+.site-project-notes-grid > .site-notes-section { min-width: 0; }
+.site-project-notes-grid .site-notes-header { flex-wrap: wrap; }
+.site-project-notes-grid .site-notes-textarea { min-height: 220px; }
+.site-project-note-block { border: 1px solid #d4deeb; background: #fff; min-width: 0; }
+.site-project-note-block summary { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 8px; padding: 12px; background: #f5f7fa; cursor: pointer; }
 .site-project-note-block summary::before { content: "›"; color: #64748b; font-size: 20px; }
 .site-project-note-block[open] summary::before { transform: rotate(90deg); }
 .site-project-note-block summary > span:first-of-type { display: grid; gap: 4px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.site-project-note-block summary > .site-project-note-visibility { grid-column: 2; justify-self: start; }
 .site-project-note-block summary small { color: #64748b; font-size: 0.75rem; }
 .site-project-note-editor { display: grid; gap: 10px; padding: 12px; }
 .site-project-note-editor > label { display: grid; gap: 6px; font-size: 0.82rem; font-weight: 600; }
@@ -34497,9 +34507,3 @@ button.supplementary-order-paper-signature-field.is-editable:focus-visible {
 .assignment-project-note { display: grid; gap: 6px; overflow-wrap: anywhere; }
 .assignment-project-note > small { font-size: 0.75rem; color: #64748b; }
 .assignment-project-note > p { margin: 0; white-space: pre-wrap; }
-
-@media (max-width: 760px) {
-  .site-versioned-notes > .site-notes-header { align-items: flex-start; flex-direction: column; }
-  .site-project-note-block summary { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; }
-  .site-project-note-block summary > .site-project-note-visibility { grid-column: 2; justify-self: start; }
-}
