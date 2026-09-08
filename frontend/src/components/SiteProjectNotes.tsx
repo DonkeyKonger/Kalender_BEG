@@ -29,6 +29,16 @@ export function SiteProjectNotes({ siteId, canEdit, children, renderInformation 
     return () => { active = false; };
   }, [siteId, canEdit, reload]);
 
+  const updateSavedBlock = useCallback((block: SiteNoteBlock) => {
+    setNotes((current) => current ? {
+      ...current,
+      blocks: current.blocks.map((existing) => existing.id === block.id ? block : existing),
+    } : current);
+  }, []);
+  const orderedBlocks = [...(notes?.blocks ?? [])].sort((a, b) =>
+    Number(b.visible_to_workers) - Number(a.visible_to_workers) || b.number - a.number
+  );
+
   async function createBlock() {
     if (creating) return;
     setCreating(true);
@@ -57,7 +67,7 @@ export function SiteProjectNotes({ siteId, canEdit, children, renderInformation 
         <div className="site-project-notes-grid">
           {children}
           {canEdit && (notes ? <>
-            {notes.blocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} autoFocus={block.id === createdBlockId} />)}
+            {orderedBlocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} autoFocus={block.id === createdBlockId} onSaved={updateSavedBlock} />)}
           </> : !error && <p role="status">Projektnotizen werden geladen…</p>)}
           {canEdit && <button className="site-project-note-create" type="button" aria-label="Neuer Notizblock"
             title="Neuen Notizblock anlegen" aria-busy={creating} disabled={creating || !notes}
@@ -140,7 +150,12 @@ function InternalNotes({ siteId, initial }: { siteId: number; initial: SiteNotes
   );
 }
 
-function NoteBlock({ siteId, initial, autoFocus }: { siteId: number; initial: SiteNoteBlock; autoFocus: boolean }) {
+function NoteBlock({ siteId, initial, autoFocus, onSaved }: {
+  siteId: number;
+  initial: SiteNoteBlock;
+  autoFocus: boolean;
+  onSaved: (block: SiteNoteBlock) => void;
+}) {
   const [saved, setSaved] = useState(initial);
   const [content, setContent] = useState(initial.content);
   const [saving, setSaving] = useState(false);
@@ -176,6 +191,7 @@ function NoteBlock({ siteId, initial, autoFocus }: { siteId: number; initial: Si
         });
         savedRef.current = value;
         setSaved(value);
+        onSaved(value);
       }
       setMessage("Gespeichert");
     } catch (reason) {
@@ -185,7 +201,7 @@ function NoteBlock({ siteId, initial, autoFocus }: { siteId: number; initial: Si
       savingRef.current = false;
       setSaving(false);
     }
-  }, [siteId]);
+  }, [siteId, onSaved]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void save(), 1000);
