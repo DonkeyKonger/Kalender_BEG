@@ -1546,17 +1546,14 @@ export function SiteDetailPage() {
         <span>Baustellen</span>
       </Link>
 
-      <div className="site-detail-header">
-        <span className="site-color large" style={{ backgroundColor: getSiteColorDisplayValue(site.color) }} />
-        <div>
-          <p className="eyebrow">Projektakte</p>
+      <div className="site-detail-header site-project-header">
+        <div className="site-project-header-title">
           <EditableSiteHeaderName
             name={site.name}
             canEdit={canEditSite}
             disabled={isSavingSite}
             onSave={(name) => saveSiteInline({ name })}
           />
-          <p>{[site.site_number, site.customer].filter(Boolean).join(" - ")}</p>
         </div>
         <div className="site-detail-header-actions">
           {canEditSite ? (
@@ -1570,6 +1567,16 @@ export function SiteDetailPage() {
             <SiteStatusBadge status={site.status} />
           )}
         </div>
+        <dl className="site-project-header-info">
+          <div className="site-project-header-info-group">
+            <dt>Baustelle</dt>
+            <dd>{site.site_number || "–"}</dd>
+          </div>
+          <div className="site-project-header-info-group">
+            <dt>Kunde</dt>
+            <dd>{site.customer || "–"}</dd>
+          </div>
+        </dl>
       </div>
 
       <ProjectRecordTabs activeTab={activeTab} onChange={changeProjectRecordTab} />
