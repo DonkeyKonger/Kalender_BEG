@@ -34735,7 +34735,8 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   gap: 10px;
   padding: 0 12px 8px;
   border-radius: 0;
-  background: var(--pf-surface);
+  --project-note-surface: #e7ebf0;
+  background: var(--project-note-surface);
   overflow: visible;
   container: none;
 }
@@ -34746,7 +34747,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   padding: 10px 12px;
   margin: 0 -12px;
   border-radius: 0;
-  background: var(--pf-surface-soft);
+  background: var(--project-note-surface);
 }
 .site-detail-page.is-project-overview .site-project-notes :is(h2, h3) {
   display: flex;
@@ -34777,7 +34778,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   line-height: 20px;
   font-weight: 400;
   color: var(--pf-text);
-  background: #fafbfc;
+  background: #ffffff;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   resize: none;
@@ -34790,7 +34791,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
 .site-project-note-meta time { color: var(--pf-muted); font-size: 12px; }
 .site-detail-page.is-project-overview .site-project-note-share { color: #526174; font-size: 12px; font-weight: 400; gap: 6px; }
 .site-detail-page.is-project-overview .site-project-note-share input:checked { background: var(--pf-active); border-color: var(--pf-active); }
-.site-detail-page.is-project-overview .site-project-note-visibility { font-weight: 400; border-radius: 0; }
+.site-detail-page.is-project-overview .site-project-note-visibility { font-weight: 400; border-radius: 0; background: transparent; }
 .site-detail-page.is-project-overview .site-project-notes [role="status"] {
   height: auto;
   min-height: 14px;
@@ -34798,8 +34799,8 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   line-height: 14px;
   font-weight: 400;
 }
-.site-detail-page.is-project-overview .site-project-note-block.is-unpublished { background: #f1f3f5; }
-.site-detail-page.is-project-overview .site-project-note-block.is-unpublished .site-notes-textarea { background: #f1f3f5; color: #526174; }
+.site-detail-page.is-project-overview .site-project-note-block.is-unpublished { --project-note-surface: #f1f3f5; background: var(--project-note-surface); }
+.site-detail-page.is-project-overview .site-project-note-block.is-unpublished .site-notes-textarea { background: #ffffff; color: #526174; }
 .site-detail-page.is-project-overview .site-project-note-block.is-unpublished .site-notes-textarea:focus { background: #fff; }
 .site-detail-page.is-project-overview button.site-project-note-create { min-height: 202px; height: auto; border-radius: 0; }
 @container project-notes (max-width: 900px) {
