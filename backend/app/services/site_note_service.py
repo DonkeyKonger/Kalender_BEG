@@ -83,3 +83,15 @@ class SiteNoteService:
         self.db.commit()
         self.db.refresh(block)
         return SiteNoteBlockRead.model_validate(block)
+
+    def delete_block(self, site_id: int, block_id: int, expected_revision: int, user_id: int) -> None:
+        self._lock_site(site_id)
+        block = self.db.scalar(select(SiteNoteBlock).where(
+            SiteNoteBlock.id == block_id, SiteNoteBlock.site_id == site_id,
+        ).execution_options(populate_existing=True))
+        if block is None:
+            raise HTTPException(404, "Notizblock nicht gefunden.")
+        self._check_revision(block.revision, expected_revision)
+        self._audit(site_id, user_id, "site.note_block.deleted", block.revision)
+        self.db.delete(block)
+        self.db.commit()

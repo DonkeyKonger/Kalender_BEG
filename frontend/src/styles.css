@@ -34832,3 +34832,24 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
 .site-detail-page.is-project-file-workspace :is(button, input, select, textarea, .site-color-swatch, .site-color-menu) {
   border-radius: 0;
 }
+
+.site-detail-page.is-project-overview .site-notes-header > :is(h2, h3) { flex: 1; }
+.site-project-note-header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.site-detail-page.is-project-overview button.site-project-note-delete {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: -4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+}
+.site-detail-page.is-project-overview button.site-project-note-delete:hover:not(:disabled) {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+.site-detail-page.is-project-overview button.site-project-note-delete:disabled { opacity: .4; cursor: default; }

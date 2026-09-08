@@ -1386,3 +1386,12 @@ def create_site_note_block(site_id: int, user=Depends(CAN_SITES_WRITE), db: Sess
 @router.patch("/{site_id}/notes/blocks/{block_id}", response_model=SiteNoteBlockRead)
 def update_site_note_block(site_id: int, block_id: int, payload: SiteNoteBlockUpdate, user=Depends(CAN_SITES_WRITE), db: Session = Depends(get_db)):
     return SiteNoteService(db).update_block(site_id, block_id, payload, user.id)
+
+
+@router.delete("/{site_id}/notes/blocks/{block_id}", status_code=204)
+def delete_site_note_block(
+    site_id: int, block_id: int, expected_revision: int = Query(..., ge=1),
+    user=Depends(CAN_SITES_WRITE), db: Session = Depends(get_db),
+):
+    SiteNoteService(db).delete_block(site_id, block_id, expected_revision, user.id)
+    return Response(status_code=204)

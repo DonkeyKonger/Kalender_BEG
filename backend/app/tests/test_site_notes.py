@@ -158,7 +158,8 @@ def test_office_note_api_protects_all_read_and_write_routes(notes_case, role, pe
         responses.append(client.patch(root + f"/blocks/{block_id}", json={
             "title": "Freigabe", "content": "Sichtbar", "visible_to_workers": True, "expected_revision": 1,
         }))
-        assert [response.status_code for response in responses] == ([200, 200, 201, 200] if allowed else [403] * 4)
+        responses.append(client.delete(root + f"/blocks/{block_id}?expected_revision=2"))
+        assert [response.status_code for response in responses] == ([200, 200, 201, 200, 204] if allowed else [403] * 5)
     finally:
         app.dependency_overrides.clear()
 
@@ -284,3 +285,52 @@ def test_existing_mobile_endpoints_supply_legacy_note_text_without_client_opt_in
         assert site["general_info"] == c.site.info
     finally:
         app.dependency_overrides.clear()
+
+
+def test_delete_block_permanently_removes_it_from_storage_and_mobile(notes_case):
+    from app.models.site_note import SiteNoteBlock
+
+    c = notes_case
+    block = c.service.create_block(c.site.id, c.user.id)
+    block = c.service.update_block(c.site.id, block.id, update(block, content="Zu löschender Hinweis"), c.user.id)
+    kept = c.service.create_block(c.site.id, c.user.id)
+    c.service.delete_block(c.site.id, block.id, block.revision, c.user.id)
+    assert c.db.get(SiteNoteBlock, block.id) is None
+    assert [b.id for b in c.service.read(c.site.id).blocks] == [kept.id]
+    mobile = MobileAssignmentService(c.db)
+    assert mobile.project_notes(c.assignment.id, c.user).note_blocks == []
+    result = mobile.list_own_assignments(current_user=c.user, start=date(2026, 9, 8), end=date(2026, 9, 8))
+    assert "Zu löschender Hinweis" not in result.model_dump_json()
+    # A delayed autosave from another client cannot recreate the deleted row.
+    with pytest.raises(HTTPException) as caught:
+        c.service.update_block(c.site.id, block.id, update(block), c.user.id)
+    assert caught.value.status_code == 404
+
+
+def test_delete_block_rejects_stale_revision_and_wrong_site(notes_case):
+    c = notes_case
+    block = c.service.create_block(c.site.id, c.user.id)
+    current = c.service.update_block(c.site.id, block.id, update(block, content="Neuer Stand"), c.user.id)
+    with pytest.raises(HTTPException) as stale:
+        c.service.delete_block(c.site.id, block.id, block.revision, c.user.id)
+    assert stale.value.status_code == 409
+    c.db.rollback()
+    other = Site(name="Andere Baustelle")
+    c.db.add(other)
+    c.db.commit()
+    with pytest.raises(HTTPException) as wrong_site:
+        c.service.delete_block(other.id, block.id, current.revision, c.user.id)
+    assert wrong_site.value.status_code == 404
+    c.db.rollback()
+    assert c.service.read(c.site.id).blocks[0].content == "Neuer Stand"
+
+
+def test_clear_internal_notes_retains_revision_without_archiving_content(notes_case):
+    c = notes_case
+    first = c.service.update_internal(c.site.id, SiteInternalNoteUpdate(content="Interne Notiz", expected_revision=0), c.user.id)
+    cleared = c.service.update_internal(c.site.id, SiteInternalNoteUpdate(content="", expected_revision=first.internal_revision), c.user.id)
+    assert cleared.internal_notes == ""
+    assert cleared.internal_revision == first.internal_revision + 1
+    with pytest.raises(HTTPException) as stale:
+        c.service.update_internal(c.site.id, SiteInternalNoteUpdate(content="Interne Notiz", expected_revision=first.internal_revision), c.user.id)
+    assert stale.value.status_code == 409

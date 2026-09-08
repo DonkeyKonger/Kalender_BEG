@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { FileText, LockKeyhole, Plus } from "lucide-react";
 
+import { ProjectNoteDeleteButton } from "./ProjectNoteDeleteButton";
 import { ProjectNoteTextarea } from "./ProjectNoteTextarea";
 
 import { api } from "../lib/api";
@@ -37,6 +38,9 @@ export function SiteProjectNotes({ siteId, canEdit, children, information }: {
       blocks: current.blocks.map((existing) => existing.id === block.id ? block : existing),
     } : current);
   }, []);
+  const removeDeletedBlock = useCallback((blockId: number) => {
+    setNotes((current) => current ? { ...current, blocks: current.blocks.filter((block) => block.id !== blockId) } : current);
+  }, []);
   const orderedBlocks = [...(notes?.blocks ?? [])].sort((a, b) =>
     Number(b.visible_to_workers) - Number(a.visible_to_workers) || b.number - a.number
   );
@@ -72,7 +76,7 @@ export function SiteProjectNotes({ siteId, canEdit, children, information }: {
         )}
         <div className="site-project-notes-grid">
           {canEdit && (notes ? <>
-            {orderedBlocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} autoFocus={block.id === createdBlockId} onSaved={updateSavedBlock} />)}
+            {orderedBlocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} autoFocus={block.id === createdBlockId} onSaved={updateSavedBlock} onDeleted={removeDeletedBlock} />)}
           </> : !error && <p role="status">Projektnotizen werden geladen…</p>)}
           {canEdit && <button className="site-project-note-create" type="button" aria-label="Neuer Notizblock"
             title="Neuen Notizblock anlegen" aria-busy={creating} disabled={creating || !notes}
@@ -88,6 +92,9 @@ export function SiteProjectNotes({ siteId, canEdit, children, information }: {
 function InternalNotes({ siteId, initial }: { siteId: number; initial: SiteNotes }) {
   const [content, setContent] = useState(initial.internal_notes);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deletingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const savedRef = useRef({ content: initial.internal_notes, revision: initial.internal_revision });
@@ -97,7 +104,7 @@ function InternalNotes({ siteId, initial }: { siteId: number; initial: SiteNotes
 
   // Keep typing possible during a save; persist the latest draft with the new revision.
   const save = useCallback(async () => {
-    if (savingRef.current || contentRef.current.trim() === savedRef.current.content) return;
+    if (deletingRef.current || savingRef.current || contentRef.current.trim() === savedRef.current.content) return;
     savingRef.current = true;
     failedRef.current = false;
     setSaving(true);
@@ -137,16 +144,41 @@ function InternalNotes({ siteId, initial }: { siteId: number; initial: SiteNotes
     };
   }, [save]);
 
+  async function deleteContent() {
+    if (savingRef.current || deletingRef.current) return;
+    deletingRef.current = true;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const result = await api.updateSiteInternalNotes(siteId, "", savedRef.current.revision);
+      savedRef.current = { content: result.internal_notes, revision: result.internal_revision };
+      contentRef.current = "";
+      setContent("");
+      failedRef.current = false;
+      setError(null);
+      setMessage("Notiz gelöscht");
+    } catch (reason) {
+      setDeleteError(errorText(reason));
+    } finally {
+      deletingRef.current = false;
+      setDeleting(false);
+    }
+  }
+
   return (
     <section className="site-notes-section site-project-office-notes" aria-labelledby="site-internal-notes-heading">
       <div className="site-notes-header">
         <h2 id="site-internal-notes-heading"><FileText size={17} aria-hidden="true" />Projekt Notizen</h2>
-        <span className="site-project-note-visibility"><LockKeyhole size={13} aria-hidden="true" />Nur im Büro</span>
+        <div className="site-project-note-header-actions">
+          <span className="site-project-note-visibility"><LockKeyhole size={13} aria-hidden="true" />Nur im Büro</span>
+          <ProjectNoteDeleteButton title="Projekt Notizen" disabled={saving || deleting || (!content && !savedRef.current.content)} onDelete={() => void deleteContent()} />
+        </div>
       </div>
       <p className="site-project-note-help">Diese Notizen werden Monteuren nicht angezeigt.</p>
-      <ProjectNoteTextarea className="site-notes-textarea" aria-label="Projekt Notizen" maxLength={20000} value={content}
+      <ProjectNoteTextarea className="site-notes-textarea" aria-label="Projekt Notizen" maxLength={20000} value={content} disabled={deleting}
         placeholder="Interne Absprachen und Hinweise…" onChange={(event) => { contentRef.current = event.target.value; setContent(event.target.value); setMessage(""); }} />
-      <span className="site-project-note-message" role="status">{saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
+      <span className="site-project-note-message" role="status">{deleting ? "Wird gelöscht…" : saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
+      {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
       {error && <div className="site-project-note-error">
         <p className="form-error" role="alert">{error}</p>
         <button className="site-project-note-button" type="button" disabled={saving} onClick={() => void save()}>Erneut speichern</button>
@@ -155,15 +187,19 @@ function InternalNotes({ siteId, initial }: { siteId: number; initial: SiteNotes
   );
 }
 
-function NoteBlock({ siteId, initial, autoFocus, onSaved }: {
+function NoteBlock({ siteId, initial, autoFocus, onSaved, onDeleted }: {
   siteId: number;
   initial: SiteNoteBlock;
   autoFocus: boolean;
   onSaved: (block: SiteNoteBlock) => void;
+  onDeleted: (blockId: number) => void;
 }) {
   const [saved, setSaved] = useState(initial);
   const [content, setContent] = useState(initial.content);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deletingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const savedRef = useRef(initial);
@@ -176,7 +212,7 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved }: {
   // Serialize writes and always follow an in-flight save with the latest draft.
   // Server revisions and whitespace normalization must not overwrite newer input.
   const save = useCallback(async () => {
-    if (savingRef.current) return;
+    if (deletingRef.current || savingRef.current) return;
     const isDirty = () => contentRef.current.trim() !== savedRef.current.content
       || visibleRef.current !== savedRef.current.visible_to_workers;
     if (!isDirty()) return;
@@ -228,27 +264,45 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved }: {
     };
   }, [save]);
 
+  async function deleteBlock() {
+    if (savingRef.current || deletingRef.current) return;
+    deletingRef.current = true;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteSiteNoteBlock(siteId, savedRef.current.id, savedRef.current.revision);
+      // Keep autosave paused during unmount: a pending draft must never recreate a deleted note.
+      onDeleted(savedRef.current.id);
+    } catch (reason) {
+      deletingRef.current = false;
+      setDeleting(false);
+      setDeleteError(errorText(reason));
+    }
+  }
+
   return (
     <section className={`site-notes-section site-project-note-block${saved.visible_to_workers ? "" : " is-unpublished"}`} aria-labelledby={headingId}>
       <div className="site-notes-header">
         <h3 id={headingId}><FileText size={17} aria-hidden="true" />{saved.title}</h3>
+        <ProjectNoteDeleteButton title={saved.title} disabled={saving || deleting} onDelete={() => void deleteBlock()} />
       </div>
       <div className="site-project-note-meta">
         <time dateTime={saved.created_at}>{new Date(saved.created_at).toLocaleDateString("de-DE")}</time>
         <label className="site-project-note-share" title="Diese Notiz für Monteure sichtbar machen">
           <input type="checkbox" aria-label="Für Monteur sichtbar" checked={saved.visible_to_workers}
-            disabled={saving}
+            disabled={saving || deleting}
             onChange={(event) => { visibleRef.current = event.target.checked; void save(); }} />
           <span>Für Monteur sichtbar</span>
         </label>
       </div>
       <ProjectNoteTextarea className="site-notes-textarea" aria-label={`Notiz: ${saved.title}`} maxLength={20000}
-        value={content} autoFocus={autoFocus} placeholder="Aktuellen Projektstand eintragen…"
+        value={content} disabled={deleting} autoFocus={autoFocus} placeholder="Aktuellen Projektstand eintragen…"
         onChange={(event) => { contentRef.current = event.target.value; setContent(event.target.value); setMessage(""); }} />
-      <span className="site-project-note-message" role="status">{saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
+      <span className="site-project-note-message" role="status">{deleting ? "Wird gelöscht…" : saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
+      {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
       {error && <div className="site-project-note-error">
         <p className="form-error" role="alert">{error}</p>
-        <button className="site-project-note-button" type="button" disabled={saving} onClick={() => void save()}>Erneut speichern</button>
+        <button className="site-project-note-button" type="button" disabled={saving || deleting} onClick={() => void save()}>Erneut speichern</button>
       </div>}
     </section>
   );

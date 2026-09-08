@@ -1,3 +1,4 @@
+import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectNoteTextarea } from "../components/ProjectNoteTextarea";
 import { SiteProjectNotes } from "../components/SiteProjectNotes";
 import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, Wrench, X } from "lucide-react";
@@ -2005,6 +2006,11 @@ function OverviewTab({
   const [notesDraft, setNotesDraft] = useState(site.info ?? "");
   const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const externalNotesRef = useRef(site.info ?? "");
+  const [deletingNotes, setDeletingNotes] = useState(false);
+  const [deleteNotesError, setDeleteNotesError] = useState<string | null>(null);
+  const deletingNotesRef = useRef(false);
+  const pendingNoteSavesRef = useRef(new Set<Promise<void>>());
+  const notesSaveTimerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const nextInfo = site.info ?? "";
@@ -2019,7 +2025,7 @@ function OverviewTab({
   }, [site.id]);
 
   const persistNotes = useCallback(async (value: string): Promise<void> => {
-    if (!canEdit) {
+    if (!canEdit || deletingNotesRef.current) {
       return;
     }
     const normalizedInfo = normalizeSiteNotesInput(value);
@@ -2028,17 +2034,21 @@ function OverviewTab({
       return;
     }
     setNotesSaveStatus("saving");
+    const operation = onSaveNotes(normalizedInfo);
+    pendingNoteSavesRef.current.add(operation);
     try {
-      await onSaveNotes(normalizedInfo);
+      await operation;
       externalNotesRef.current = normalizedInfo ?? "";
       setNotesSaveStatus("saved");
     } catch {
       setNotesSaveStatus("error");
+    } finally {
+      pendingNoteSavesRef.current.delete(operation);
     }
   }, [canEdit, onSaveNotes, site.info]);
 
   useEffect(() => {
-    if (!canEdit || editMode) {
+    if (!canEdit || editMode || deletingNotes) {
       return;
     }
     if (normalizeSiteNotesInput(notesDraft) === normalizeSiteNotesInput(site.info ?? "")) {
@@ -2047,14 +2057,36 @@ function OverviewTab({
     const timeoutId = window.setTimeout(() => {
       void persistNotes(notesDraft);
     }, 1000);
+    notesSaveTimerRef.current = timeoutId;
     return () => window.clearTimeout(timeoutId);
-  }, [canEdit, editMode, notesDraft, persistNotes, site.info]);
+  }, [canEdit, deletingNotes, editMode, notesDraft, persistNotes, site.info]);
 
   function handleNotesBlur(): void {
     if (!canEdit || editMode) {
       return;
     }
     void persistNotes(notesDraft);
+  }
+
+  async function deleteGeneralNotes(): Promise<void> {
+    if (!canEdit || deletingNotesRef.current) return;
+    deletingNotesRef.current = true;
+    window.clearTimeout(notesSaveTimerRef.current);
+    setDeletingNotes(true);
+    setDeleteNotesError(null);
+    try {
+      // Any already-started autosaves must finish before the final clear operation.
+      await Promise.allSettled([...pendingNoteSavesRef.current]);
+      await onSaveNotes(null);
+      externalNotesRef.current = "";
+      setNotesDraft("");
+      setNotesSaveStatus("saved");
+    } catch (reason) {
+      setDeleteNotesError(readApiError(reason, "Die Notiz konnte nicht gelöscht werden. Bitte erneut versuchen."));
+    } finally {
+      deletingNotesRef.current = false;
+      setDeletingNotes(false);
+    }
   }
 
   const projectManagerOptions = getProjectManagerInlineOptions(people, site.project_manager);
@@ -2188,12 +2220,14 @@ function OverviewTab({
             <section className="site-notes-section">
               <div className="site-notes-header">
                 <h2><FileText size={17} aria-hidden="true" />Allgemeine Notizen zum Projekt</h2>
+                {canEdit && <ProjectNoteDeleteButton title="Allgemeine Notizen zum Projekt"
+                  disabled={deletingNotes || (!notesDraft && !site.info)} onDelete={() => void deleteGeneralNotes()} />}
               </div>
               <p className="site-project-note-help">Für Monteure sichtbar und in der Planmatrix rot hervorgehoben.</p>
               <ProjectNoteTextarea
                 aria-label="Allgemeine Notizen zum Projekt"
                 className="site-notes-textarea"
-                disabled={!canEdit}
+                disabled={!canEdit || deletingNotes}
                 placeholder={canEdit ? "Baustellennotizen eintragen..." : "Keine Notizen hinterlegt."}
                 value={notesDraft}
                 onChange={(event) => {
@@ -2203,8 +2237,9 @@ function OverviewTab({
                 onBlur={handleNotesBlur}
               />
               <span className={`site-notes-save-status is-${notesSaveStatus}`} role="status">
-                {canEdit && notesSaveStatus !== "idle" ? formatSiteNotesSaveStatus(notesSaveStatus) : ""}
+                {deletingNotes ? "Wird gelöscht…" : canEdit && notesSaveStatus !== "idle" ? formatSiteNotesSaveStatus(notesSaveStatus) : ""}
               </span>
+              {deleteNotesError && <p className="form-error" role="alert">{deleteNotesError}</p>}
             </section>
           </SiteProjectNotes>
         </>

@@ -1163,6 +1163,10 @@ export const api = {
     });
   },
 
+  async deleteSiteNoteBlock(siteId: number, blockId: number, expectedRevision: number): Promise<void> {
+    await request<void>(`/sites/${siteId}/notes/blocks/${blockId}?expected_revision=${expectedRevision}`, { method: "DELETE" });
+  },
+
   async site(siteId: number): Promise<Site> {
     return request<Site>(`/sites/${siteId}`);
   },
