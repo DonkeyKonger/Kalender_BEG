@@ -12,6 +12,7 @@ export function SiteProjectNotes({ siteId, canEdit, children }: { siteId: number
   const [notes, setNotes] = useState<SiteNotes | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [createdBlockId, setCreatedBlockId] = useState<number | null>(null);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export function SiteProjectNotes({ siteId, canEdit, children }: { siteId: number
     try {
       const block = await api.createSiteNoteBlock(siteId);
       setNotes((current) => current ? { ...current, blocks: [block, ...current.blocks] } : current);
+      setCreatedBlockId(block.id);
     } catch (reason) {
       setError(errorText(reason));
     } finally {
@@ -39,17 +41,6 @@ export function SiteProjectNotes({ siteId, canEdit, children }: { siteId: number
 
   return (
     <section className="site-project-notes" aria-label="Projektnotizen">
-      {canEdit && (
-        <div className="site-project-notes-toolbar">
-          <div>
-            <h2>Projektnotizen</h2>
-            <p className="site-project-note-help">Notizstände für Monteure: Nur freigegebene Blöcke sind mobil sichtbar. Frühere Stände bleiben erhalten.</p>
-          </div>
-          <button className="site-project-note-button" disabled={creating || !notes} type="button" onClick={() => void createBlock()}>
-            <Plus size={15} aria-hidden="true" />{creating ? "Wird angelegt…" : "Neuer Notizblock"}
-          </button>
-        </div>
-      )}
       {canEdit && error && (
         <div className="site-project-notes-error">
           <p className="form-error" role="alert">{error}</p>
@@ -60,8 +51,13 @@ export function SiteProjectNotes({ siteId, canEdit, children }: { siteId: number
         {children}
         {canEdit && (notes ? <>
           <InternalNotes siteId={siteId} initial={notes} />
-          {notes.blocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} />)}
+          {notes.blocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} autoFocus={block.id === createdBlockId} />)}
         </> : !error && <p role="status">Projektnotizen werden geladen…</p>)}
+        {canEdit && <button className="site-project-note-create" type="button" aria-label="Neuer Notizblock"
+          title="Neuen Notizblock anlegen" aria-busy={creating} disabled={creating || !notes}
+          onClick={() => void createBlock()}>
+          <Plus size={40} strokeWidth={1.5} aria-hidden="true" />
+        </button>}
       </div>
     </section>
   );
@@ -106,7 +102,7 @@ function InternalNotes({ siteId, initial }: { siteId: number; initial: SiteNotes
   );
 }
 
-function NoteBlock({ siteId, initial }: { siteId: number; initial: SiteNoteBlock }) {
+function NoteBlock({ siteId, initial, autoFocus }: { siteId: number; initial: SiteNoteBlock; autoFocus: boolean }) {
   const [saved, setSaved] = useState(initial);
   const [content, setContent] = useState(initial.content);
   const [saving, setSaving] = useState(false);
@@ -188,7 +184,7 @@ function NoteBlock({ siteId, initial }: { siteId: number; initial: SiteNoteBlock
         </label>
       </div>
       <textarea className="site-notes-textarea" aria-label={`Notiz: ${saved.title}`} maxLength={20000}
-        value={content} placeholder="Aktuellen Projektstand eintragen…"
+        value={content} autoFocus={autoFocus} placeholder="Aktuellen Projektstand eintragen…"
         onChange={(event) => { contentRef.current = event.target.value; setContent(event.target.value); setMessage(""); }} />
       <span className="site-project-note-message" role="status">{saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
       {error && <div className="site-project-note-error">
