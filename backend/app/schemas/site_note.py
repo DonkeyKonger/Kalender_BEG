@@ -6,7 +6,7 @@ from pydantic import AfterValidator, BaseModel, Field, ValidationInfo
 
 def _display_note_title(value: str, info: ValidationInfo) -> str:
     number = info.data.get("number")
-    return f"Monteurhinweis {number}" if value == f"Notizstand {number}" else value
+    return f"{number}. Monteurinfo" if value in {f"Notizstand {number}", f"Monteurhinweis {number}"} else value
 
 
 NoteTitle = Annotated[str, AfterValidator(_display_note_title)]

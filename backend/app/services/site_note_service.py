@@ -58,7 +58,7 @@ class SiteNoteService:
             SiteNoteBlock.site_id == site_id, SiteNoteBlock.visible_to_workers.is_(True),
         )) or 0
         if count >= 3:
-            raise HTTPException(409, "Es können höchstens 3 Monteurhinweise sichtbar sein. Bitte zuerst einen Hinweis ausblenden.")
+            raise HTTPException(409, "Es können höchstens 3 Monteurinfos sichtbar sein. Bitte zuerst einen Hinweis ausblenden.")
 
     def create_block(self, site_id: int, user_id: int) -> SiteNoteBlockRead:
         self._lock_site(site_id)
@@ -66,7 +66,7 @@ class SiteNoteService:
         number = (self.db.scalar(select(func.max(SiteNoteBlock.number)).where(
             SiteNoteBlock.site_id == site_id,
         )) or 0) + 1
-        block = SiteNoteBlock(site_id=site_id, number=number, title=f"Monteurhinweis {number}", content="", visible_to_workers=True)
+        block = SiteNoteBlock(site_id=site_id, number=number, title=f"{number}. Monteurinfo", content="", visible_to_workers=True)
         self.db.add(block)
         self.db.flush()
         self._audit(site_id, user_id, "site.note_block.created", block.revision)

@@ -64,7 +64,7 @@ def test_new_blocks_are_numbered_and_visible_by_default_and_can_be_hidden(notes_
     first = c.service.create_block(c.site.id, c.user.id)
     second = c.service.create_block(c.site.id, c.user.id)
     assert [first.number, second.number] == [1, 2]
-    assert [first.title, second.title] == ["Monteurhinweis 1", "Monteurhinweis 2"]
+    assert [first.title, second.title] == ["1. Monteurinfo", "2. Monteurinfo"]
     assert first.visible_to_workers and second.visible_to_workers
     first = c.service.update_block(c.site.id, first.id, update(first, content="", visible=False), c.user.id)
     third = c.service.create_block(c.site.id, c.user.id)
@@ -206,8 +206,10 @@ def test_mobile_live_notes_are_assignment_scoped_and_refresh_visibility(notes_ca
 
 @pytest.mark.parametrize("schema", [SiteNoteBlockRead, MobileSiteNote])
 @pytest.mark.parametrize("title, expected", [
-    ("Notizstand 1", "Monteurhinweis 1"),
-    ("Monteurhinweis 1", "Monteurhinweis 1"),
+    ("Notizstand 1", "1. Monteurinfo"),
+    ("Monteurhinweis 1", "1. Monteurinfo"),
+    ("1. Monteurinfo", "1. Monteurinfo"),
+    ("Monteurhinweis 2", "Monteurhinweis 2"),
     ("Dacharbeiten September", "Dacharbeiten September"),
     ("Notizstand 2", "Notizstand 2"),
 ])
@@ -244,8 +246,8 @@ def test_legacy_mobile_info_contains_only_published_hints_and_preserves_general_
     c.db.commit()
     result = load()
     sections = ([general] if general else []) + [
-        "[Monteurhinweis 3 · 09.09.2026]\nAb Mittwoch Dacharbeiten.",
-        "[Monteurhinweis 2 · 09.09.2026]\nZugang über Tor 2.\nSchlüssel im Büro.",
+        "[3. Monteurinfo · 09.09.2026]\nAb Mittwoch Dacharbeiten.",
+        "[2. Monteurinfo · 09.09.2026]\nZugang über Tor 2.\nSchlüssel im Büro.",
     ]
     # This string is the entire notes UI understood by old installed apps.
     assert result.info == "\n\n".join(sections)
@@ -281,7 +283,7 @@ def test_existing_mobile_endpoints_supply_legacy_note_text_without_client_opt_in
         data = response.json()
         site = data[0] if isinstance(data, list) else data["assignments"][0]["site"]
         assert "Alt-App: Eingang im Hof." in site["info"]
-        assert "Monteurhinweis 1" in site["info"]
+        assert "1. Monteurinfo" in site["info"]
         assert site["general_info"] == c.site.info
     finally:
         app.dependency_overrides.clear()

@@ -93,14 +93,14 @@ export function SiteProjectNotes({ siteId, canEdit, children, information }: {
           </div>
         )}
         {canEdit && atVisibleLimit && <p className="site-project-note-limit" role="status">
-          Maximal 3 sichtbare Monteurhinweise. Bitte zuerst einen Hinweis ausblenden.
+          Maximal 3 sichtbare Monteurinfos. Bitte zuerst einen Hinweis ausblenden.
         </p>}
         <div className="site-project-notes-grid">
           {canEdit && (notes ? <>
             {orderedBlocks.map((block, index) => <NoteBlock key={block.id} siteId={siteId} initial={block} placement={placement(index)} canPublish={!atVisibleLimit} autoFocus={block.id === createdBlockId} onSaved={updateSavedBlock} onDeleted={removeDeletedBlock} />)}
           </> : !error && <p role="status">Projektnotizen werden geladen…</p>)}
           {canEdit && <button className="site-project-note-create" style={placement(orderedBlocks.length)} type="button" aria-label="Neuer Notizblock"
-            title={atVisibleLimit ? "Bitte zuerst einen Monteurhinweis ausblenden" : "Neuen Notizblock anlegen"} aria-busy={creating} disabled={creating || !notes || atVisibleLimit}
+            title={atVisibleLimit ? "Bitte zuerst eine Monteurinfo ausblenden" : "Neuen Notizblock anlegen"} aria-busy={creating} disabled={creating || !notes || atVisibleLimit}
             onClick={() => void createBlock()}>
             <Plus size={40} strokeWidth={1.5} aria-hidden="true" />
           </button>}
@@ -312,7 +312,7 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved, onDeleted, placement, 
       </div>
       <div className="site-project-note-meta">
         <time dateTime={saved.created_at}>{new Date(saved.created_at).toLocaleDateString("de-DE")}</time>
-        <label className="site-project-note-share" title={!saved.visible_to_workers && !canPublish ? "Bitte zuerst einen anderen Monteurhinweis ausblenden" : "Diese Notiz für Monteure sichtbar machen"}>
+        <label className="site-project-note-share" title={!saved.visible_to_workers && !canPublish ? "Bitte zuerst eine andere Monteurinfo ausblenden" : "Diese Notiz für Monteure sichtbar machen"}>
           <input type="checkbox" aria-label="Für Monteur sichtbar" checked={saved.visible_to_workers}
             disabled={saving || deleting || (!saved.visible_to_workers && !canPublish)}
             onChange={(event) => { visibleRef.current = event.target.checked; void save(); }} />
