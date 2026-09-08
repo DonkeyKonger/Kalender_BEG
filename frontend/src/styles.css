@@ -34858,3 +34858,22 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   background: #fee2e2;
 }
 .site-detail-page.is-project-overview button.site-project-note-delete:disabled { opacity: .4; cursor: default; }
+
+/* Explicit positions reserve the active row without remounting note editors. */
+.site-detail-page.is-project-overview .site-project-notes-grid > :is(.site-project-note-block, .site-project-note-create) {
+  grid-column: var(--note-column);
+  grid-row: var(--note-row);
+}
+.site-project-note-limit { margin: 0; color: #637285; font-size: 13px; }
+@container project-notes (max-width: 900px) {
+  .site-detail-page.is-project-overview .site-project-notes-grid > :is(.site-project-note-block, .site-project-note-create) {
+    grid-column: var(--note-column-medium);
+    grid-row: var(--note-row-medium);
+  }
+}
+@container project-notes (max-width: 560px) {
+  .site-detail-page.is-project-overview .site-project-notes-grid > :is(.site-project-note-block, .site-project-note-create) {
+    grid-column: 1;
+    grid-row: var(--note-row-narrow);
+  }
+}

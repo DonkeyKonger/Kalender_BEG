@@ -52,8 +52,17 @@ class SiteNoteService:
         self.db.commit()
         return self.read(site_id)
 
+    def _check_visible_capacity(self, site_id: int):
+        # Call only while holding the site lock so concurrent releases cannot exceed the limit.
+        count = self.db.scalar(select(func.count()).select_from(SiteNoteBlock).where(
+            SiteNoteBlock.site_id == site_id, SiteNoteBlock.visible_to_workers.is_(True),
+        )) or 0
+        if count >= 3:
+            raise HTTPException(409, "Es können höchstens 3 Monteurhinweise sichtbar sein. Bitte zuerst einen Hinweis ausblenden.")
+
     def create_block(self, site_id: int, user_id: int) -> SiteNoteBlockRead:
         self._lock_site(site_id)
+        self._check_visible_capacity(site_id)
         number = (self.db.scalar(select(func.max(SiteNoteBlock.number)).where(
             SiteNoteBlock.site_id == site_id,
         )) or 0) + 1
@@ -76,6 +85,8 @@ class SiteNoteService:
         title, content = payload.title.strip(), payload.content.strip()
         if not title:
             raise HTTPException(422, "Bitte einen Titel für den Notizblock angeben.")
+        if payload.visible_to_workers and not block.visible_to_workers:
+            self._check_visible_capacity(site_id)
         block.title, block.content = title, content
         block.visible_to_workers = payload.visible_to_workers
         block.revision += 1

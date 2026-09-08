@@ -334,3 +334,50 @@ def test_clear_internal_notes_retains_revision_without_archiving_content(notes_c
     with pytest.raises(HTTPException) as stale:
         c.service.update_internal(c.site.id, SiteInternalNoteUpdate(content="Interne Notiz", expected_revision=first.internal_revision), c.user.id)
     assert stale.value.status_code == 409
+
+
+def test_visible_hint_limit_counts_empty_notes_and_is_scoped_to_project(notes_case):
+    c = notes_case
+    blocks = [c.service.create_block(c.site.id, c.user.id) for _ in range(3)]
+    with pytest.raises(HTTPException) as caught:
+        c.service.create_block(c.site.id, c.user.id)
+    assert caught.value.status_code == 409
+    assert "höchstens 3" in caught.value.detail
+    c.db.rollback()
+    assert len(c.service.read(c.site.id).blocks) == 3
+    other = Site(name="Weiteres Projekt")
+    c.db.add(other)
+    c.db.commit()
+    assert c.service.create_block(other.id, c.user.id).visible_to_workers
+    edited = c.service.update_block(c.site.id, blocks[0].id, update(blocks[0], content="Neuer Text"), c.user.id)
+    assert edited.content == "Neuer Text"
+    hidden = c.service.update_block(c.site.id, edited.id, update(edited, visible=False), c.user.id)
+    replacement = c.service.create_block(c.site.id, c.user.id)
+    assert replacement.visible_to_workers
+    with pytest.raises(HTTPException) as caught:
+        c.service.update_block(c.site.id, hidden.id, update(hidden, content="Nicht übernehmen"), c.user.id)
+    assert caught.value.status_code == 409
+    c.db.rollback()
+    persisted = next(b for b in c.service.read(c.site.id).blocks if b.id == hidden.id)
+    assert not persisted.visible_to_workers
+    assert persisted.content == hidden.content
+    assert persisted.revision == hidden.revision
+    c.service.delete_block(c.site.id, replacement.id, replacement.revision, c.user.id)
+    assert c.service.update_block(c.site.id, hidden.id, update(hidden), c.user.id).visible_to_workers
+
+
+def test_existing_over_capacity_hints_can_be_edited_and_hidden_without_data_loss(notes_case):
+    from app.models.site_note import SiteNoteBlock
+    c = notes_case
+    for n in range(4):
+        c.db.add(SiteNoteBlock(site_id=c.site.id, number=n + 1, title=f"Monteurhinweis {n + 1}", content="Bestand", visible_to_workers=True))
+    c.db.commit()
+    blocks = c.service.read(c.site.id).blocks
+    edited = c.service.update_block(c.site.id, blocks[0].id, update(blocks[0]), c.user.id)
+    assert edited.visible_to_workers
+    hidden = c.service.update_block(c.site.id, edited.id, update(edited, visible=False), c.user.id)
+    assert not hidden.visible_to_workers
+    with pytest.raises(HTTPException):
+        c.service.update_block(c.site.id, hidden.id, update(hidden), c.user.id)
+    c.db.rollback()
+    assert len(c.service.read(c.site.id).blocks) == 4

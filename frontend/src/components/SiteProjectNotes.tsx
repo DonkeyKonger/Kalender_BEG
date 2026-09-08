@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { FileText, LockKeyhole, Plus } from "lucide-react";
 
 import { ProjectNoteDeleteButton } from "./ProjectNoteDeleteButton";
@@ -45,8 +45,26 @@ export function SiteProjectNotes({ siteId, canEdit, children, information }: {
     Number(b.visible_to_workers) - Number(a.visible_to_workers) || b.number - a.number
   );
 
+  const visibleCount = orderedBlocks.filter((block) => block.visible_to_workers).length;
+  const atVisibleLimit = visibleCount >= 3;
+  function placement(index: number): CSSProperties {
+    const position = (columns: number) => {
+      const cell = index < visibleCount ? index
+        : Math.max(columns, Math.ceil(visibleCount / columns) * columns) + index - visibleCount;
+      return [Math.floor(cell / columns) + 1, cell % columns + 1];
+    };
+    const [row, column] = position(3);
+    const [mediumRow, mediumColumn] = position(2);
+    const [narrowRow] = position(1);
+    return {
+      "--note-row": row, "--note-column": column,
+      "--note-row-medium": mediumRow, "--note-column-medium": mediumColumn,
+      "--note-row-narrow": narrowRow,
+    } as CSSProperties;
+  }
+
   async function createBlock() {
-    if (creating) return;
+    if (creating || atVisibleLimit) return;
     setCreating(true);
     setError(null);
     try {
@@ -74,12 +92,15 @@ export function SiteProjectNotes({ siteId, canEdit, children, information }: {
             {!notes && <button type="button" onClick={() => setReload((value) => value + 1)}>Erneut laden</button>}
           </div>
         )}
+        {canEdit && atVisibleLimit && <p className="site-project-note-limit" role="status">
+          Maximal 3 sichtbare Monteurhinweise. Bitte zuerst einen Hinweis ausblenden.
+        </p>}
         <div className="site-project-notes-grid">
           {canEdit && (notes ? <>
-            {orderedBlocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} autoFocus={block.id === createdBlockId} onSaved={updateSavedBlock} onDeleted={removeDeletedBlock} />)}
+            {orderedBlocks.map((block, index) => <NoteBlock key={block.id} siteId={siteId} initial={block} placement={placement(index)} canPublish={!atVisibleLimit} autoFocus={block.id === createdBlockId} onSaved={updateSavedBlock} onDeleted={removeDeletedBlock} />)}
           </> : !error && <p role="status">Projektnotizen werden geladen…</p>)}
-          {canEdit && <button className="site-project-note-create" type="button" aria-label="Neuer Notizblock"
-            title="Neuen Notizblock anlegen" aria-busy={creating} disabled={creating || !notes}
+          {canEdit && <button className="site-project-note-create" style={placement(orderedBlocks.length)} type="button" aria-label="Neuer Notizblock"
+            title={atVisibleLimit ? "Bitte zuerst einen Monteurhinweis ausblenden" : "Neuen Notizblock anlegen"} aria-busy={creating} disabled={creating || !notes || atVisibleLimit}
             onClick={() => void createBlock()}>
             <Plus size={40} strokeWidth={1.5} aria-hidden="true" />
           </button>}
@@ -187,10 +208,12 @@ function InternalNotes({ siteId, initial }: { siteId: number; initial: SiteNotes
   );
 }
 
-function NoteBlock({ siteId, initial, autoFocus, onSaved, onDeleted }: {
+function NoteBlock({ siteId, initial, autoFocus, onSaved, onDeleted, placement, canPublish }: {
   siteId: number;
   initial: SiteNoteBlock;
   autoFocus: boolean;
+  placement: CSSProperties;
+  canPublish: boolean;
   onSaved: (block: SiteNoteBlock) => void;
   onDeleted: (blockId: number) => void;
 }) {
@@ -236,6 +259,7 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved, onDeleted }: {
       }
       setMessage("Gespeichert");
     } catch (reason) {
+      visibleRef.current = savedRef.current.visible_to_workers;
       failedRef.current = true;
       setError(errorText(reason));
     } finally {
@@ -281,16 +305,16 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved, onDeleted }: {
   }
 
   return (
-    <section className={`site-notes-section site-project-note-block${saved.visible_to_workers ? "" : " is-unpublished"}`} aria-labelledby={headingId}>
+    <section className={`site-notes-section site-project-note-block${saved.visible_to_workers ? "" : " is-unpublished"}`} aria-labelledby={headingId} style={placement}>
       <div className="site-notes-header">
         <h3 id={headingId}><FileText size={17} aria-hidden="true" />{saved.title}</h3>
         <ProjectNoteDeleteButton title={saved.title} disabled={saving || deleting} onDelete={() => void deleteBlock()} />
       </div>
       <div className="site-project-note-meta">
         <time dateTime={saved.created_at}>{new Date(saved.created_at).toLocaleDateString("de-DE")}</time>
-        <label className="site-project-note-share" title="Diese Notiz für Monteure sichtbar machen">
+        <label className="site-project-note-share" title={!saved.visible_to_workers && !canPublish ? "Bitte zuerst einen anderen Monteurhinweis ausblenden" : "Diese Notiz für Monteure sichtbar machen"}>
           <input type="checkbox" aria-label="Für Monteur sichtbar" checked={saved.visible_to_workers}
-            disabled={saving || deleting}
+            disabled={saving || deleting || (!saved.visible_to_workers && !canPublish)}
             onChange={(event) => { visibleRef.current = event.target.checked; void save(); }} />
           <span>Für Monteur sichtbar</span>
         </label>
