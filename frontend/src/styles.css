@@ -34489,17 +34489,13 @@ button.supplementary-order-paper-signature-field.is-editable:focus-visible {
 .site-project-notes-grid > .site-notes-section { min-width: 0; }
 .site-project-notes-grid .site-notes-header { flex-wrap: wrap; }
 .site-project-notes-grid .site-notes-textarea { min-height: 220px; }
-.site-project-note-block { border: 1px solid #d4deeb; background: #fff; min-width: 0; }
-.site-project-note-block summary { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 8px; padding: 12px; background: #f5f7fa; cursor: pointer; }
-.site-project-note-block summary::before { content: "›"; color: #64748b; font-size: 20px; }
-.site-project-note-block[open] summary::before { transform: rotate(90deg); }
-.site-project-note-block summary > span:first-of-type { display: grid; gap: 4px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.site-project-note-block summary > .site-project-note-visibility { grid-column: 2; justify-self: start; }
-.site-project-note-block summary small { color: #64748b; font-size: 0.75rem; }
-.site-project-note-editor { display: grid; gap: 10px; padding: 12px; }
-.site-project-note-editor > label { display: grid; gap: 6px; font-size: 0.82rem; font-weight: 600; }
-.site-project-note-editor > label > input { width: 100%; min-width: 0; border: 1px solid #d4deeb; padding: 8px 10px; font: inherit; }
-.site-project-note-editor .site-notes-textarea { font-size: 1rem; font-weight: 400; }
+.site-project-note-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.site-project-note-heading > div { min-width: 0; }
+.site-project-note-heading h3 { margin: 0; color: #111827; font-size: 0.94rem; overflow-wrap: anywhere; }
+.site-project-note-heading time { display: block; margin-top: 4px; color: #64748b; font-size: 0.75rem; }
+.site-project-note-heading .site-project-note-share { flex-shrink: 0; flex-direction: column; gap: 4px; color: #526174; font-size: 0.7rem; font-weight: 600; }
+.site-project-note-block .site-project-note-message { min-height: 1em; }
+.site-project-note-error { display: grid; justify-items: start; gap: 8px; }
 .site-project-note-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .site-project-note-actions > span, .site-project-note-message { font-size: 0.78rem; color: #64748b; }
 .site-project-note-share { display: inline-flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 600; }
