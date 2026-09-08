@@ -17972,13 +17972,30 @@ body.mobile-modal-scroll-locked {
 
 .payroll-person-month-log-entry {
   display: grid;
-  grid-template-columns: 96px minmax(160px, 0.35fr) minmax(0, 1fr);
+  grid-template-columns: 128px minmax(0, 1fr);
   gap: 10px;
   align-items: start;
   border-bottom: 1px solid #f3e3bd;
   color: #5f430c;
-  padding: 7px 16px;
-  font-size: 0.72rem;
+  padding: 10px 16px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.payroll-person-month-log-date {
+  display: grid;
+  gap: 2px;
+  font-size: 0.75rem;
+}
+
+.payroll-person-month-log-description {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.payroll-person-month-log-description strong {
+  display: block;
+  font-weight: 700;
 }
 
 .payroll-person-month-log-entry:last-child {
@@ -21583,7 +21600,7 @@ body.mobile-modal-scroll-locked {
   }
 
   .payroll-person-month-log-entry {
-    grid-template-columns: minmax(86px, 0.3fr) minmax(130px, 0.4fr) minmax(0, 1fr);
+    grid-template-columns: 118px minmax(0, 1fr);
   }
 
   .time-review-week-nav-row {

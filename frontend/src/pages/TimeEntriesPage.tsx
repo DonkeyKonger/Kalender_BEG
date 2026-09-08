@@ -11,6 +11,7 @@ import { PayrollOvernightStatusControl } from "../components/PayrollOvernightSta
 import { PayrollRemarksDialog } from "../components/PayrollRemarksDialog";
 import { StatusBadge, absenceTypeLabels, type StatusBadgeTone } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
+import { payrollReviewHint } from "../lib/payrollReviewHint";
 import {
   formatPayrollMonthWorkDateContext,
   payrollApprovedPersonIds,
@@ -4629,16 +4630,23 @@ function PayrollPersonMonthClosePanel({
             role="region"
           >
             <div className="payroll-person-month-log-list" role="list">
-              {blockers.map((blocker, index) => (
-                <div className="payroll-person-month-log-entry" key={`${blocker.code}-${blocker.work_date ?? "month"}-${index}`} role="listitem">
-                  <span>{formatPayrollBlockerDateContext(blocker)}</span>
-                  <strong>{blocker.code === "schedule_missing" ? "Regelmäßige Arbeitszeit fehlt" : "Prüfhinweis"}</strong>
-                  <p>{blocker.message}</p>
-                  {blocker.code === "schedule_missing" && blocker.person_id ? (
-                    <button type="button" onClick={() => onOpenWorkingTime(blocker.person_id!)}>Arbeitszeit festlegen</button>
-                  ) : null}
-                </div>
-              ))}
+              {blockers.map((blocker, index) => {
+                const hint = payrollReviewHint(blocker);
+                return (
+                  <div className="payroll-person-month-log-entry" key={`${blocker.code}-${blocker.work_date ?? "month"}-${index}`} role="listitem">
+                    <div className="payroll-person-month-log-date">
+                      {formatPayrollBlockerDateContext(blocker).split(" · ").map((part, partIndex) => <span key={partIndex}>{part}</span>)}
+                    </div>
+                    <div className="payroll-person-month-log-description">
+                      <strong>{hint.title}</strong>
+                      <p>{hint.instruction}</p>
+                    </div>
+                    {blocker.code === "schedule_missing" && blocker.person_id ? (
+                      <button type="button" onClick={() => onOpenWorkingTime(blocker.person_id!)}>Arbeitszeit festlegen</button>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
