@@ -34777,6 +34777,9 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   resize: none;
 }
 .site-detail-page.is-project-overview .site-project-notes .site-notes-textarea:focus { background: #fff; }
+.site-detail-page.is-project-overview .site-project-general-notes .site-notes-textarea {
+  min-height: 166px;
+}
 .site-project-note-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; }
 .site-project-note-meta time { color: var(--pf-muted); font-size: 12px; }
 .site-detail-page.is-project-overview .site-project-note-share { color: #526174; font-size: 12px; font-weight: 400; gap: 6px; }
