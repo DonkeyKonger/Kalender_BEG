@@ -26,5 +26,17 @@ export function ProjectNoteTextarea(props: TextareaHTMLAttributes<HTMLTextAreaEl
     return () => observer.disconnect();
   }, [props.value]);
 
-  return <textarea {...props} ref={ref} rows={4} />;
+  return <textarea {...props} ref={ref} rows={4} onPointerDown={(event) => {
+    props.onPointerDown?.(event);
+    const element = event.currentTarget;
+    if (event.defaultPrevented || event.pointerType !== "mouse" || event.button !== 0
+      || element.disabled || document.activeElement === element) return;
+
+    // Focus before the native mouse-down hit test, keeping the clicked text in place.
+    // Do not prevent default: caret placement, dragging and double-click selection stay native.
+    const { scrollTop, scrollLeft } = element;
+    element.focus({ preventScroll: true });
+    element.scrollTop = scrollTop;
+    element.scrollLeft = scrollLeft;
+  }} />;
 }
