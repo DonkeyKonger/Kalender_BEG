@@ -18675,6 +18675,7 @@ body.mobile-modal-scroll-locked {
   text-align: left;
 }
 
+.time-evaluation-worker-detail .time-review-week-check-head > .time-review-column-work-time-start,
 .time-evaluation-worker-detail .time-review-week-check-head > .time-review-column-status-start {
   justify-self: stretch;
   text-align: center;
