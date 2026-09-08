@@ -31802,6 +31802,14 @@ body.mobile-modal-scroll-locked {
   opacity: 0.58;
 }
 
+.site-detail-page.is-project-file-workspace .site-detail-grid {
+  container: site-info / inline-size;
+}
+
+@container site-info (min-width: 532px) {
+  .site-detail-section--planstatus { grid-column: span 2; }
+}
+
 .site-detail-page.is-project-file-workspace .site-detail-grid,
 .site-detail-page.is-project-file-workspace .site-project-notes-grid {
   /* Share up to four columns; keep empty note slots at the information-card width. */

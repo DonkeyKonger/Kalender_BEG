@@ -1,5 +1,5 @@
 import { SiteProjectNotes } from "../components/SiteProjectNotes";
-import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Phone, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
@@ -95,7 +95,7 @@ import { DEFAULT_SITE_COLOR, getSiteColorDisplayValue } from "../lib/siteColors"
 import { getSiteStatusMenuNavigationIndex } from "../lib/siteStatusMenu";
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
-import { calendarPersonCode, type Person } from "../types/person";
+import type { Person } from "../types/person";
 import type { ExtraWorkTicketEntrySummary, MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimeAnalysisRow, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
@@ -2169,22 +2169,16 @@ function OverviewTab({
               />
             </DetailSection>
 
-            <DetailSection title="Projektleiter" icon={UserRound}>
+            <DetailSection title="Planstatus" icon={CalendarClock} className="site-detail-section--planstatus">
+              <DetailItem label="Angelegt" value={formatDateTime(site.created_at)} />
               <InlineEditableSelectItem
-                label="Name"
+                label="Projektleiter"
                 value={site.project_manager_person_id !== null ? String(site.project_manager_person_id) : ""}
                 displayValue={site.project_manager?.display_name}
                 canEdit={canEdit}
                 options={projectManagerOptions}
                 onSave={(value) => onSaveField({ project_manager_person_id: value ? Number(value) : null })}
               />
-              <DetailItem label="Kuerzel" value={site.project_manager ? calendarPersonCode(site.project_manager) : null} />
-              <DetailItem label="Telefon" value={site.project_manager?.phone} icon={Phone} />
-            </DetailSection>
-
-            <DetailSection title="Planstatus" icon={CalendarClock}>
-              <DetailItem label="Angelegt" value={formatDateTime(site.created_at)} />
-              <DetailItem label="Geschlossen" value={site.closed_at ? formatDateTime(site.closed_at) : null} />
               <SiteColorDetailItem
                 label="Farbe"
                 value={site.color ?? DEFAULT_SITE_COLOR}
@@ -8233,13 +8227,15 @@ function DetailSection({
   title,
   icon: Icon,
   children,
+  className = "",
 }: {
   title: string;
   icon: LucideIcon;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="site-detail-section">
+    <section className={`site-detail-section ${className}`}>
       <h2><Icon aria-hidden="true" size={17} />{title}</h2>
       <div className="site-detail-section-content">{children}</div>
     </section>
