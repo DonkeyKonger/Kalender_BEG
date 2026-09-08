@@ -34509,6 +34509,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   gap: 8px;
   border-radius: 0;
   overflow: auto;
+  container: note-card / inline-size;
 }
 .site-project-notes-grid > .site-notes-section > :not(.site-notes-textarea) { flex-shrink: 0; }
 .site-project-notes-grid .site-notes-header { flex-wrap: wrap; }
@@ -34546,4 +34547,25 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   min-height: 100px;
   border-radius: 0;
   resize: none;
+}
+
+/* Identical header and status space keeps every note editor aligned. */
+.site-project-note-card-header {
+  height: 68px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+}
+.site-project-note-heading.site-project-note-card-header {
+  flex-direction: row;
+  align-items: flex-start;
+}
+.site-project-notes-grid > .site-notes-section > [role="status"] {
+  height: 14px;
+  min-height: 14px;
+  line-height: 14px;
+}
+@container note-card (max-width: 280px) {
+  .site-project-note-card-header { height: 88px; }
 }

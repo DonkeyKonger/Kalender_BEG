@@ -12,7 +12,7 @@ from app.main import create_app
 from app.models.enums import UserRole
 from app.models.site import Site
 from app.schemas.site import SiteRead
-from app.schemas.site_note import SiteInternalNoteUpdate, SiteNoteBlockUpdate
+from app.schemas.site_note import MobileSiteNote, SiteInternalNoteUpdate, SiteNoteBlockRead, SiteNoteBlockUpdate
 from app.services.mobile_assignment_service import MobileAssignmentService
 from app.services.site_note_service import SiteNoteService
 from app.tests.test_mobile_assignment_service import history_context, add_history_assignment
@@ -64,6 +64,7 @@ def test_new_blocks_are_numbered_and_private_and_empty_blocks_cannot_be_publishe
     first = c.service.create_block(c.site.id, c.user.id)
     second = c.service.create_block(c.site.id, c.user.id)
     assert [first.number, second.number] == [1, 2]
+    assert [first.title, second.title] == ["Monteurhinweis 1", "Monteurhinweis 2"]
     assert not first.visible_to_workers and not second.visible_to_workers
     with pytest.raises(HTTPException) as caught:
         c.service.update_block(c.site.id, first.id, update(first, content="  "), c.user.id)
@@ -171,3 +172,19 @@ def test_mobile_live_notes_are_assignment_scoped_and_refresh_visibility(notes_ca
         assert response.json() == {"info": c.site.info, "note_blocks": []}
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("schema", [SiteNoteBlockRead, MobileSiteNote])
+@pytest.mark.parametrize("title, expected", [
+    ("Notizstand 1", "Monteurhinweis 1"),
+    ("Monteurhinweis 1", "Monteurhinweis 1"),
+    ("Dacharbeiten September", "Dacharbeiten September"),
+    ("Notizstand 2", "Notizstand 2"),
+])
+def test_note_title_display_renames_only_matching_generated_titles(schema, title, expected):
+    payload = dict(id=1, number=1, title=title, content="Bestehender Text", visible_to_workers=True,
+                   revision=3, created_at="2026-09-08T10:00:00Z", updated_at="2026-09-08T10:00:00Z")
+    result = schema.model_validate(payload)
+    assert result.title == expected
+    assert result.content == payload["content"]
+    assert payload["title"] == title

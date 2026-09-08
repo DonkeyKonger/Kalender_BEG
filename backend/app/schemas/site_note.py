@@ -1,12 +1,21 @@
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, ValidationInfo
+
+
+def _display_note_title(value: str, info: ValidationInfo) -> str:
+    number = info.data.get("number")
+    return f"Monteurhinweis {number}" if value == f"Notizstand {number}" else value
+
+
+NoteTitle = Annotated[str, AfterValidator(_display_note_title)]
 
 
 class SiteNoteBlockRead(BaseModel):
     id: int
     number: int
-    title: str
+    title: NoteTitle
     content: str
     visible_to_workers: bool
     revision: int
@@ -37,7 +46,7 @@ class SiteNoteBlockUpdate(BaseModel):
 class MobileSiteNote(BaseModel):
     id: int
     number: int
-    title: str
+    title: NoteTitle
     content: str
     updated_at: datetime
 

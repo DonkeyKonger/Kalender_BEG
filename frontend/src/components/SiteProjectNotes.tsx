@@ -209,7 +209,7 @@ function NoteBlock({ siteId, initial, autoFocus }: { siteId: number; initial: Si
 
   return (
     <section className="site-notes-section site-project-note-block" aria-labelledby={headingId}>
-      <div className="site-project-note-heading">
+      <div className="site-project-note-heading site-project-note-card-header">
         <div>
           <h3 id={headingId}>{saved.title}</h3>
           <time dateTime={saved.created_at}>{new Date(saved.created_at).toLocaleDateString("de-DE")}</time>

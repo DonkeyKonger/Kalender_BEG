@@ -57,7 +57,7 @@ class SiteNoteService:
         number = (self.db.scalar(select(func.max(SiteNoteBlock.number)).where(
             SiteNoteBlock.site_id == site_id,
         )) or 0) + 1
-        block = SiteNoteBlock(site_id=site_id, number=number, title=f"Notizstand {number}", content="")
+        block = SiteNoteBlock(site_id=site_id, number=number, title=f"Monteurhinweis {number}", content="")
         self.db.add(block)
         self.db.flush()
         self._audit(site_id, user_id, "site.note_block.created", block.revision)

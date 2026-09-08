@@ -2193,13 +2193,12 @@ function OverviewTab({
               </div>
             )}>
             <section className="site-notes-section">
-              <div className="site-notes-header">
-                <h2>Allgemeine Notizen zum Projekt</h2>
-                {canEdit && notesSaveStatus !== "idle" ? (
-                  <span className={`site-notes-save-status is-${notesSaveStatus}`}>{formatSiteNotesSaveStatus(notesSaveStatus)}</span>
-                ) : null}
+              <div className="site-project-note-card-header">
+                <div className="site-notes-header">
+                  <h2>Allgemeine Notizen zum Projekt</h2>
+                </div>
+                <p className="site-project-note-help">Für Monteure sichtbar und in der Planmatrix rot hervorgehoben.</p>
               </div>
-              <p className="site-project-note-help">Für Monteure sichtbar und in der Planmatrix rot hervorgehoben.</p>
               <textarea
                 aria-label="Allgemeine Notizen zum Projekt"
                 className="site-notes-textarea"
@@ -2212,6 +2211,9 @@ function OverviewTab({
                 }}
                 onBlur={handleNotesBlur}
               />
+              <span className={`site-notes-save-status is-${notesSaveStatus}`} role="status">
+                {canEdit && notesSaveStatus !== "idle" ? formatSiteNotesSaveStatus(notesSaveStatus) : ""}
+              </span>
             </section>
           </SiteProjectNotes>
         </>
