@@ -34957,3 +34957,34 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
     border-left: 0;
   }
 }
+
+/* Worker-note controls share the heading; date and deletion live below the editor. */
+.site-detail-page.is-project-overview .site-project-note-block .site-notes-header {
+  align-items: center;
+}
+.site-detail-page.is-project-overview .site-project-note-block .site-notes-header > h3 {
+  flex: 1 1 auto;
+  max-width: 100%;
+}
+.site-detail-page.is-project-overview .site-project-note-block .site-notes-header > .site-project-note-share {
+  margin-left: auto;
+  max-width: 100%;
+}
+.site-detail-page.is-project-overview .site-project-note-block .site-project-note-share span {
+  white-space: normal;
+}
+.site-detail-page.is-project-overview .site-project-note-footer {
+  min-height: 28px;
+}
+.site-detail-page.is-project-overview .site-project-note-footer-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.site-detail-page.is-project-overview .site-project-note-footer button.site-project-note-delete {
+  margin: 0;
+}
+.site-detail-page.is-project-overview .site-project-note-footer .site-project-note-message {
+  margin-left: auto;
+  text-align: right;
+}

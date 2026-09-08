@@ -321,10 +321,6 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved, onDeleted, placement, 
     <section className={`site-notes-section site-project-note-block${saved.visible_to_workers ? "" : " is-unpublished"}`} aria-labelledby={headingId} style={placement}>
       <div className="site-notes-header">
         <h3 id={headingId}><FileText size={17} aria-hidden="true" />{saved.title}</h3>
-        <ProjectNoteDeleteButton title={saved.title} disabled={saving || deleting} onDelete={() => void deleteBlock()} />
-      </div>
-      <div className="site-project-note-meta">
-        <time dateTime={saved.created_at}>{new Date(saved.created_at).toLocaleDateString("de-DE")}</time>
         <label className="site-project-note-share" title={!saved.visible_to_workers && !canPublish ? "Bitte zuerst eine andere Monteurinfo ausblenden" : "Diese Notiz für Monteure sichtbar machen"}>
           <input type="checkbox" aria-label="Für Monteur sichtbar" checked={saved.visible_to_workers}
             disabled={saving || deleting || (!saved.visible_to_workers && !canPublish)}
@@ -335,7 +331,13 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved, onDeleted, placement, 
       <ProjectNoteTextarea className="site-notes-textarea" aria-label={`Notiz: ${saved.title}`} maxLength={20000}
         value={content} disabled={deleting} autoFocus={autoFocus} placeholder="Aktuellen Projektstand eintragen…"
         onChange={(event) => { contentRef.current = event.target.value; setContent(event.target.value); setMessage(""); }} />
-      <span className="site-project-note-message" role="status">{deleting ? "Wird gelöscht…" : saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
+      <div className="site-project-note-meta site-project-note-footer">
+        <div className="site-project-note-footer-details">
+          <ProjectNoteDeleteButton title={saved.title} disabled={saving || deleting} onDelete={() => void deleteBlock()} />
+          <time dateTime={saved.created_at}>{new Date(saved.created_at).toLocaleDateString("de-DE")}</time>
+        </div>
+        <span className="site-project-note-message" role="status">{deleting ? "Wird gelöscht…" : saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
+      </div>
       {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
       {error && <div className="site-project-note-error">
         <p className="form-error" role="alert">{error}</p>
