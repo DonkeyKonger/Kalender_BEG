@@ -2086,110 +2086,112 @@ function OverviewTab({
         </div>
       ) : (
         <>
-          <div className="site-detail-grid">
-            <DetailSection title="Stammdaten" icon={Building2}>
-              <InlineEditableDetailItem
-                label="Baustellennummer"
-                value={site.site_number}
-                canEdit={canEdit}
-                required
-                emptyMessage="Baustellennummer darf nicht leer sein."
-                onSave={(value) => onSaveField({ site_number: value })}
-              />
-              <CustomerAssignmentDetailItem
-                label="Kunde"
-                site={site}
-                canEdit={canEdit}
-                onSaveCustomer={(customer) => onSaveField({ customer_id: customer.id, customer: customer.company_name })}
-              />
-              <InlineEditableSelectItem
-                label="Status"
-                value={site.status}
-                displayValue={siteStatusLabels[site.status]}
-                canEdit={canEdit}
-                options={Object.entries(siteStatusLabels).map(([value, label]) => ({ value, label }))}
-                onSave={(value) => onSaveField({ status: value as Site["status"] })}
-              />
-              <DetailItem label="Aktualisiert" value={formatDateTime(site.updated_at)} />
-            </DetailSection>
+          <SiteProjectNotes key={site.id} siteId={site.id} canEdit={canEdit}
+            renderInformation={(projectNotes) => (
+              <div className="site-detail-grid">
+                <DetailSection title="Stammdaten" icon={Building2}>
+                  <InlineEditableDetailItem
+                    label="Baustellennummer"
+                    value={site.site_number}
+                    canEdit={canEdit}
+                    required
+                    emptyMessage="Baustellennummer darf nicht leer sein."
+                    onSave={(value) => onSaveField({ site_number: value })}
+                  />
+                  <CustomerAssignmentDetailItem
+                    label="Kunde"
+                    site={site}
+                    canEdit={canEdit}
+                    onSaveCustomer={(customer) => onSaveField({ customer_id: customer.id, customer: customer.company_name })}
+                  />
+                  <InlineEditableSelectItem
+                    label="Status"
+                    value={site.status}
+                    displayValue={siteStatusLabels[site.status]}
+                    canEdit={canEdit}
+                    options={Object.entries(siteStatusLabels).map(([value, label]) => ({ value, label }))}
+                    onSave={(value) => onSaveField({ status: value as Site["status"] })}
+                  />
+                  <DetailItem label="Aktualisiert" value={formatDateTime(site.updated_at)} />
+                </DetailSection>
 
-            <DetailSection title="Adresse / Standort" icon={MapPin}>
-              {canEdit && draft ? (
-                <AddressSearch
-                  className="site-detail-address-search"
-                  disabled={isSaving}
-                  onSelect={(result) => {
-                    const selectedValues: Partial<SiteCreate> = {
-                      address: result.label,
-                      postal_code: result.postal_code,
-                      city: result.city,
-                      location: result.city ?? draft.location,
-                      street: result.street,
-                      house_number: result.house_number,
-                      latitude: result.latitude,
-                      longitude: result.longitude,
-                      location_status: "geocoded",
-                    };
-                    onDraftChange(selectedValues);
-                    onGeocodeSelected?.(selectedValues);
-                  }}
-                />
-              ) : null}
-              <InlineEditableDetailItem
-                label="Ort"
-                value={site.location}
-                canEdit={canEdit}
-                onSave={(value) => onSaveField({ location: value })}
-              />
-              <InlineEditablePairItem
-                label="PLZ / Stadt"
-                firstValue={site.postal_code}
-                secondValue={site.city}
-                firstPlaceholder="PLZ"
-                secondPlaceholder="Stadt"
-                displayValue={[site.postal_code, site.city].filter(Boolean).join(" ")}
-                canEdit={canEdit}
-                onSave={(postalCode, city) => onSaveField({ postal_code: postalCode, city })}
-              />
-              <InlineEditablePairItem
-                label="Strasse"
-                firstValue={site.street}
-                secondValue={site.house_number}
-                firstPlaceholder="Strasse"
-                secondPlaceholder="Hausnummer"
-                displayValue={[site.street, site.house_number].filter(Boolean).join(" ")}
-                canEdit={canEdit}
-                onSave={(street, houseNumber) => onSaveField({ street, house_number: houseNumber })}
-              />
-              <InlineEditableDetailItem
-                label="Adresszusatz"
-                value={site.address_extra || site.address}
-                canEdit={canEdit}
-                onSave={(value) => onSaveField({ address_extra: value })}
-              />
-            </DetailSection>
+                <DetailSection title="Adresse / Standort" icon={MapPin}>
+                  {canEdit && draft ? (
+                    <AddressSearch
+                      className="site-detail-address-search"
+                      disabled={isSaving}
+                      onSelect={(result) => {
+                        const selectedValues: Partial<SiteCreate> = {
+                          address: result.label,
+                          postal_code: result.postal_code,
+                          city: result.city,
+                          location: result.city ?? draft.location,
+                          street: result.street,
+                          house_number: result.house_number,
+                          latitude: result.latitude,
+                          longitude: result.longitude,
+                          location_status: "geocoded",
+                        };
+                        onDraftChange(selectedValues);
+                        onGeocodeSelected?.(selectedValues);
+                      }}
+                    />
+                  ) : null}
+                  <InlineEditableDetailItem
+                    label="Ort"
+                    value={site.location}
+                    canEdit={canEdit}
+                    onSave={(value) => onSaveField({ location: value })}
+                  />
+                  <InlineEditablePairItem
+                    label="PLZ / Stadt"
+                    firstValue={site.postal_code}
+                    secondValue={site.city}
+                    firstPlaceholder="PLZ"
+                    secondPlaceholder="Stadt"
+                    displayValue={[site.postal_code, site.city].filter(Boolean).join(" ")}
+                    canEdit={canEdit}
+                    onSave={(postalCode, city) => onSaveField({ postal_code: postalCode, city })}
+                  />
+                  <InlineEditablePairItem
+                    label="Strasse"
+                    firstValue={site.street}
+                    secondValue={site.house_number}
+                    firstPlaceholder="Strasse"
+                    secondPlaceholder="Hausnummer"
+                    displayValue={[site.street, site.house_number].filter(Boolean).join(" ")}
+                    canEdit={canEdit}
+                    onSave={(street, houseNumber) => onSaveField({ street, house_number: houseNumber })}
+                  />
+                  <InlineEditableDetailItem
+                    label="Adresszusatz"
+                    value={site.address_extra || site.address}
+                    canEdit={canEdit}
+                    onSave={(value) => onSaveField({ address_extra: value })}
+                  />
+                </DetailSection>
 
-            <DetailSection title="Planstatus" icon={CalendarClock} className="site-detail-section--planstatus">
-              <DetailItem label="Angelegt" value={formatDateTime(site.created_at)} />
-              <InlineEditableSelectItem
-                label="Projektleiter"
-                value={site.project_manager_person_id !== null ? String(site.project_manager_person_id) : ""}
-                displayValue={site.project_manager?.display_name}
-                canEdit={canEdit}
-                options={projectManagerOptions}
-                onSave={(value) => onSaveField({ project_manager_person_id: value ? Number(value) : null })}
-              />
-              <SiteColorDetailItem
-                label="Farbe"
-                value={site.color ?? DEFAULT_SITE_COLOR}
-                canEdit={canEdit}
-                disabled={isSaving}
-                onSave={(color) => onSaveField({ color })}
-              />
-            </DetailSection>
-          </div>
-
-          <SiteProjectNotes key={site.id} siteId={site.id} canEdit={canEdit}>
+                <DetailSection title="Planstatus" icon={CalendarClock} className="site-detail-section--planstatus">
+                  <DetailItem label="Angelegt" value={formatDateTime(site.created_at)} />
+                  <InlineEditableSelectItem
+                    label="Projektleiter"
+                    value={site.project_manager_person_id !== null ? String(site.project_manager_person_id) : ""}
+                    displayValue={site.project_manager?.display_name}
+                    canEdit={canEdit}
+                    options={projectManagerOptions}
+                    onSave={(value) => onSaveField({ project_manager_person_id: value ? Number(value) : null })}
+                  />
+                  <SiteColorDetailItem
+                    label="Farbe"
+                    value={site.color ?? DEFAULT_SITE_COLOR}
+                    canEdit={canEdit}
+                    disabled={isSaving}
+                    onSave={(color) => onSaveField({ color })}
+                  />
+                </DetailSection>
+                {projectNotes}
+              </div>
+            )}>
             <section className="site-notes-section">
               <div className="site-notes-header">
                 <h2>Allgemeine Notizen zum Projekt</h2>

@@ -31802,14 +31802,6 @@ body.mobile-modal-scroll-locked {
   opacity: 0.58;
 }
 
-.site-detail-page.is-project-file-workspace .site-detail-grid {
-  container: site-info / inline-size;
-}
-
-@container site-info (min-width: 532px) {
-  .site-detail-section--planstatus { grid-column: span 2; }
-}
-
 .site-detail-page.is-project-file-workspace .site-detail-grid,
 .site-detail-page.is-project-file-workspace .site-project-notes-grid {
   /* Share up to four columns; keep empty note slots at the information-card width. */
@@ -34540,3 +34532,18 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
 .assignment-project-note { display: grid; gap: 6px; overflow-wrap: anywhere; }
 .assignment-project-note > small { font-size: 0.75rem; color: #64748b; }
 .assignment-project-note > p { margin: 0; white-space: pre-wrap; }
+
+.site-detail-page.is-project-file-workspace .site-detail-grid > .site-project-office-notes {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 232px;
+  border-radius: 0;
+}
+.site-project-office-notes .site-notes-header { flex-wrap: wrap; }
+.site-project-office-notes .site-notes-textarea {
+  flex: 1;
+  min-height: 100px;
+  border-radius: 0;
+  resize: none;
+}

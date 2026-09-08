@@ -8,7 +8,12 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : "Die Notiz konnte nicht gespeichert werden. Bitte erneut versuchen.";
 }
 
-export function SiteProjectNotes({ siteId, canEdit, children }: { siteId: number; canEdit: boolean; children: ReactNode }) {
+export function SiteProjectNotes({ siteId, canEdit, children, renderInformation }: {
+  siteId: number;
+  canEdit: boolean;
+  children: ReactNode;
+  renderInformation: (projectNotes: ReactNode) => ReactNode;
+}) {
   const [notes, setNotes] = useState<SiteNotes | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -40,26 +45,28 @@ export function SiteProjectNotes({ siteId, canEdit, children }: { siteId: number
   }
 
   return (
-    <section className="site-project-notes" aria-label="Projektnotizen">
-      {canEdit && error && (
-        <div className="site-project-notes-error">
-          <p className="form-error" role="alert">{error}</p>
-          {!notes && <button type="button" onClick={() => setReload((value) => value + 1)}>Erneut laden</button>}
+    <>
+      {renderInformation(canEdit && notes ? <InternalNotes siteId={siteId} initial={notes} /> : null)}
+      <section className="site-project-notes" aria-label="Projektnotizen">
+        {canEdit && error && (
+          <div className="site-project-notes-error">
+            <p className="form-error" role="alert">{error}</p>
+            {!notes && <button type="button" onClick={() => setReload((value) => value + 1)}>Erneut laden</button>}
+          </div>
+        )}
+        <div className="site-project-notes-grid">
+          {children}
+          {canEdit && (notes ? <>
+            {notes.blocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} autoFocus={block.id === createdBlockId} />)}
+          </> : !error && <p role="status">Projektnotizen werden geladen…</p>)}
+          {canEdit && <button className="site-project-note-create" type="button" aria-label="Neuer Notizblock"
+            title="Neuen Notizblock anlegen" aria-busy={creating} disabled={creating || !notes}
+            onClick={() => void createBlock()}>
+            <Plus size={40} strokeWidth={1.5} aria-hidden="true" />
+          </button>}
         </div>
-      )}
-      <div className="site-project-notes-grid">
-        {children}
-        {canEdit && (notes ? <>
-          <InternalNotes siteId={siteId} initial={notes} />
-          {notes.blocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} autoFocus={block.id === createdBlockId} />)}
-        </> : !error && <p role="status">Projektnotizen werden geladen…</p>)}
-        {canEdit && <button className="site-project-note-create" type="button" aria-label="Neuer Notizblock"
-          title="Neuen Notizblock anlegen" aria-busy={creating} disabled={creating || !notes}
-          onClick={() => void createBlock()}>
-          <Plus size={40} strokeWidth={1.5} aria-hidden="true" />
-        </button>}
-      </div>
-    </section>
+      </section>
+    </>
   );
 }
 
@@ -116,7 +123,7 @@ function InternalNotes({ siteId, initial }: { siteId: number; initial: SiteNotes
   }, [save]);
 
   return (
-    <section className="site-notes-section" aria-labelledby="site-internal-notes-heading">
+    <section className="site-notes-section site-project-office-notes" aria-labelledby="site-internal-notes-heading">
       <div className="site-notes-header">
         <h2 id="site-internal-notes-heading">Projekt Notizen</h2>
         <span className="site-project-note-visibility"><LockKeyhole size={13} aria-hidden="true" />Nur im Büro</span>
