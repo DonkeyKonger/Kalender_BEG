@@ -10,7 +10,9 @@ from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.api.routes import exports, payroll_months
-from app.models.enums import PersonType, UserRole
+from app.models.absence import Absence
+from app.models.enums import AbsenceType, PersonType, UserRole
+from app.models.person_work_day import PersonWorkDay
 from app.models.payroll_month import (
     PAYROLL_MONTH_OPEN,
     PAYROLL_PERSON_MONTH_APPROVED,
@@ -174,7 +176,7 @@ def test_archived_renamed_approval_keeps_snapshot_name_and_can_be_reopened(
     assert reopened.person_approvals[0].status == "OPEN"
 
 
-def test_internal_period_data_retains_archived_or_changed_role_but_not_external_people():
+def test_internal_period_data_retains_archived_workers_but_not_external_people():
     db = database()
     admin = User(
         username="integrity-admin",
@@ -184,29 +186,29 @@ def test_internal_period_data_retains_archived_or_changed_role_but_not_external_
         is_active=True,
         must_change_password=False,
     )
-    changed_role = _person(1, "Interne Bürokraft", person_type=PersonType.INTERNAL)
-    changed_role.is_active = False
+    archived_worker = _person(1, "Archivierter Monteur", person_type=PersonType.INTERNAL)
+    archived_worker.is_active = False
     external = _person(2, "Externer Helfer", person_type=PersonType.EXTERNAL)
     db.add_all(
         [
             admin,
-            changed_role,
+            archived_worker,
             external,
             User(
                 username="former-worker",
-                display_name="Interne Bürokraft",
+                display_name="Archivierter Monteur",
                 password_hash="test",
-                role=UserRole.OFFICE,
+                role=UserRole.MONTEUR,
                 is_active=True,
                 must_change_password=False,
-                person=changed_role,
+                person=archived_worker,
             ),
         ]
     )
     db.flush()
     db.add_all(
         [
-            _entry(changed_role.id, date(2026, 8, 5)),
+            _entry(archived_worker.id, date(2026, 8, 5)),
             _entry(external.id, date(2026, 8, 6)),
         ]
     )
@@ -218,8 +220,69 @@ def test_internal_period_data_retains_archived_or_changed_role_but_not_external_
         current_user=admin,
     )
 
-    assert {person.id for person in source.people} == {changed_role.id}
-    assert {entry.person_id for entry in source.entries} == {changed_role.id}
+    assert {person.id for person in source.people} == {archived_worker.id}
+    assert {entry.person_id for entry in source.entries} == {archived_worker.id}
+
+
+@pytest.mark.parametrize("role", [UserRole.PROJECT_MANAGER, UserRole.OFFICE, UserRole.ADMIN])
+@pytest.mark.parametrize("source_kind", ["entry", "absence", "work_day", "draft"])
+def test_office_roles_are_not_payroll_workers_even_with_month_data(role, source_kind):
+    db = database()
+    admin, worker = payroll_users(db)
+    staff = _person(2, "Projektleitung", person_type=PersonType.INTERNAL)
+    db.add_all([staff, User(
+        username="office-staff", display_name="Projektleitung", password_hash="test",
+        role=role, is_active=True, must_change_password=False, person=staff,
+    )])
+    db.flush()
+    if source_kind == "entry":
+        db.add(_entry(staff.id, date(2026, 8, 5)))
+    elif source_kind == "absence":
+        db.add(Absence(person_id=staff.id, absence_type=AbsenceType.VACATION,
+                       start_date=date(2026, 8, 5), end_date=date(2026, 8, 6)))
+    elif source_kind == "work_day":
+        db.add(PersonWorkDay(person_id=staff.id, work_date=date(2026, 8, 5)))
+    else:
+        db.add(PayrollMonthPersonApproval(year=2026, month=8, person_id=staff.id,
+                                         remarks="Ungeprüfter Entwurf"))
+    db.commit()
+
+    source = PayrollMonthExportService(db).load_live_source(year=2026, month=8, current_user=admin)
+    assert {person.id for person in source.people} == {worker.id}
+    assert not source.entries and not source.absences and not source.work_days
+    status = PayrollMonthCloseService(db).get_status(year=2026, month=8, current_user=admin)
+    assert status.person_approval_summary.total_count == 1
+    assert [item.person_id for item in status.person_approvals] == [worker.id]
+    assert not [item for item in status.blockers if item.person_id == staff.id]
+    db.close()
+
+
+def test_completed_worker_history_survives_role_change_only_in_its_own_month():
+    db = database()
+    _admin, worker = payroll_users(db)
+    db.add(User(username="promoted-worker", display_name=worker.display_name, password_hash="test",
+                role=UserRole.PROJECT_MANAGER, is_active=True, must_change_password=False, person=worker))
+    # A reopened approval retains its completed version and must stay accessible.
+    db.add(PayrollMonthPersonApproval(year=2026, month=8, person_id=worker.id,
+                                     status="OPEN", approval_version=1))
+    db.add(_entry(worker.id, date(2026, 9, 1)))
+    db.commit()
+    service = PayrollMonthExportService(db)
+    assert [person.id for person in service.payroll_people(year=2026, month=8)] == [worker.id]
+    assert service.payroll_people(year=2026, month=9) == []
+    db.close()
+
+
+def test_archived_worker_with_only_remarks_draft_remains_in_its_month():
+    db = database()
+    _admin, worker = payroll_users(db)
+    worker.is_active = False
+    db.add(PayrollMonthPersonApproval(year=2026, month=8, person_id=worker.id, remarks="Zulage"))
+    db.commit()
+    service = PayrollMonthExportService(db)
+    assert [person.id for person in service.payroll_people(year=2026, month=8)] == [worker.id]
+    assert service.payroll_people(year=2026, month=9) == []
+    db.close()
 
 
 def test_status_reads_current_artifact_metadata_without_blobs_and_batches_later_approvals():

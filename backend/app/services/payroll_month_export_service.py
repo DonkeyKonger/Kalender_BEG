@@ -559,9 +559,9 @@ class PayrollMonthExportService:
     ) -> list[Person]:
         """Return today's payroll workers plus people retained by this period.
 
-        Archived people and people whose current role no longer qualifies remain
-        part of a month when an approval, snapshot, or actual period source row
-        references them. This does not recreate any historical approval data.
+        Archived workers remain when this period has source data or a draft.
+        A role change only retains a person if a completed approval or snapshot
+        exists; office/project staff's own time entries do not make them workers.
         """
         retained_state_person_ids: set[int] = set()
         period_data_person_ids: set[int] = set()
@@ -574,6 +574,10 @@ class PayrollMonthExportService:
                         select(PayrollMonthPersonApproval.person_id).where(
                             PayrollMonthPersonApproval.year == year,
                             PayrollMonthPersonApproval.month == month,
+                            or_(
+                                PayrollMonthPersonApproval.status == PAYROLL_PERSON_MONTH_APPROVED,
+                                PayrollMonthPersonApproval.approval_version > 0,
+                            ),
                         ),
                         select(PayrollMonthPersonSnapshot.person_id)
                         .join(
@@ -608,6 +612,10 @@ class PayrollMonthExportService:
                             PersonWorkDay.work_date >= month_start,
                             PersonWorkDay.work_date <= month_end,
                         ),
+                        select(PayrollMonthPersonApproval.person_id).where(
+                            PayrollMonthPersonApproval.year == year,
+                            PayrollMonthPersonApproval.month == month,
+                        ),
                     )
                 )
             )
@@ -639,10 +647,6 @@ class PayrollMonthExportService:
             person
             for person in people
             if person.id in retained_state_person_ids
-            or (
-                person.person_type == PersonType.INTERNAL
-                and person.id in period_data_person_ids
-            )
             or is_payroll_review_person(person)
         ]
 
