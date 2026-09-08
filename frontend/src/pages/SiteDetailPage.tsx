@@ -2105,14 +2105,6 @@ function OverviewTab({
                     canEdit={canEdit}
                     onSaveCustomer={(customer) => onSaveField({ customer_id: customer.id, customer: customer.company_name })}
                   />
-                  <InlineEditableSelectItem
-                    label="Status"
-                    value={site.status}
-                    displayValue={siteStatusLabels[site.status]}
-                    canEdit={canEdit}
-                    options={Object.entries(siteStatusLabels).map(([value, label]) => ({ value, label }))}
-                    onSave={(value) => onSaveField({ status: value as Site["status"] })}
-                  />
                   <DetailItem label="Aktualisiert" value={formatDateTime(site.updated_at)} />
                 </DetailSection>
 
