@@ -18186,6 +18186,13 @@ body.mobile-modal-scroll-locked {
   opacity: 1;
 }
 
+.payroll-person-month-actions .payroll-person-month-download-button:disabled,
+.time-evaluation-period-actions.is-compact [aria-describedby="time-evaluation-monthly-download-status"]:disabled {
+  border-color: #d1d5db;
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
 .payroll-month-dialog-backdrop {
   position: fixed;
   z-index: 1200;
