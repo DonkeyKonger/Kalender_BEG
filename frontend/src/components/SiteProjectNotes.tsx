@@ -47,10 +47,16 @@ export function SiteProjectNotes({ siteId, canEdit, children, information }: {
 
   const visibleCount = orderedBlocks.filter((block) => block.visible_to_workers).length;
   const atVisibleLimit = visibleCount >= 3;
-  function placement(index: number): CSSProperties {
+  const activeSlots = visibleCount + (atVisibleLimit ? 0 : 1);
+  const noteItems = [
+    ...orderedBlocks.slice(0, visibleCount),
+    ...(!atVisibleLimit ? [null] : []),
+    ...orderedBlocks.slice(visibleCount),
+  ];
+  function placement(index: number, isCreate = false): CSSProperties {
     const position = (columns: number) => {
-      const cell = index < visibleCount ? index
-        : Math.max(columns, Math.ceil(visibleCount / columns) * columns) + index - visibleCount;
+      const cell = isCreate ? visibleCount : index < visibleCount ? index
+        : Math.max(columns, Math.ceil(activeSlots / columns) * columns) + index - visibleCount;
       return [Math.floor(cell / columns) + 1, cell % columns + 1];
     };
     const [row, column] = position(3);
@@ -97,13 +103,15 @@ export function SiteProjectNotes({ siteId, canEdit, children, information }: {
         </p>}
         <div className="site-project-notes-grid">
           {canEdit && (notes ? <>
-            {orderedBlocks.map((block, index) => <NoteBlock key={block.id} siteId={siteId} initial={block} placement={placement(index)} canPublish={!atVisibleLimit} autoFocus={block.id === createdBlockId} onSaved={updateSavedBlock} onDeleted={removeDeletedBlock} />)}
+            {noteItems.map((block, index) => block ? <NoteBlock key={block.id} siteId={siteId} initial={block}
+              placement={placement(index - (!atVisibleLimit && index > visibleCount ? 1 : 0))}
+              canPublish={!atVisibleLimit} autoFocus={block.id === createdBlockId} onSaved={updateSavedBlock} onDeleted={removeDeletedBlock} />
+              : <button key="create" className="site-project-note-create" style={placement(visibleCount, true)}
+                type="button" aria-label="Neuer Notizblock" title="Neuen Notizblock anlegen" aria-busy={creating} disabled={creating}
+                onClick={() => void createBlock()}>
+                <Plus size={40} strokeWidth={1.5} aria-hidden="true" />
+              </button>)}
           </> : !error && <p role="status">Projektnotizen werden geladen…</p>)}
-          {canEdit && <button className="site-project-note-create" style={placement(orderedBlocks.length)} type="button" aria-label="Neuer Notizblock"
-            title={atVisibleLimit ? "Bitte zuerst eine Monteurinfo ausblenden" : "Neuen Notizblock anlegen"} aria-busy={creating} disabled={creating || !notes || atVisibleLimit}
-            onClick={() => void createBlock()}>
-            <Plus size={40} strokeWidth={1.5} aria-hidden="true" />
-          </button>}
         </div>
       </section>
     </div>
