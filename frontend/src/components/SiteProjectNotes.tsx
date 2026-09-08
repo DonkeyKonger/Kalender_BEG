@@ -64,40 +64,71 @@ export function SiteProjectNotes({ siteId, canEdit, children }: { siteId: number
 }
 
 function InternalNotes({ siteId, initial }: { siteId: number; initial: SiteNotes }) {
-  const [saved, setSaved] = useState({ content: initial.internal_notes, revision: initial.internal_revision });
   const [content, setContent] = useState(initial.internal_notes);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const dirty = content !== saved.content;
+  const savedRef = useRef({ content: initial.internal_notes, revision: initial.internal_revision });
+  const contentRef = useRef(initial.internal_notes);
+  const savingRef = useRef(false);
+  const failedRef = useRef(false);
 
-  async function save() {
-    if (saving || !dirty) return;
+  // Keep typing possible during a save; persist the latest draft with the new revision.
+  const save = useCallback(async () => {
+    if (savingRef.current || contentRef.current.trim() === savedRef.current.content) return;
+    savingRef.current = true;
+    failedRef.current = false;
     setSaving(true);
     setError(null);
+    setMessage("");
     try {
-      const value = await api.updateSiteInternalNotes(siteId, content, saved.revision);
-      setSaved({ content: value.internal_notes, revision: value.internal_revision });
-      setContent(value.internal_notes);
+      while (contentRef.current.trim() !== savedRef.current.content) {
+        const value = await api.updateSiteInternalNotes(siteId, contentRef.current.trim(), savedRef.current.revision);
+        savedRef.current = { content: value.internal_notes, revision: value.internal_revision };
+      }
       setMessage("Gespeichert");
-    } catch (reason) { setError(errorText(reason)); }
-    finally { setSaving(false); }
-  }
+    } catch (reason) {
+      failedRef.current = true;
+      setError(errorText(reason));
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }, [siteId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void save(), 1000);
+    return () => window.clearTimeout(timer);
+  }, [content, save]);
+
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (savingRef.current || contentRef.current.trim() !== savedRef.current.content) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      if (!failedRef.current) void save();
+    };
+  }, [save]);
 
   return (
     <section className="site-notes-section" aria-labelledby="site-internal-notes-heading">
       <div className="site-notes-header">
-        <h2 id="site-internal-notes-heading">Interne Notizen</h2>
+        <h2 id="site-internal-notes-heading">Projekt Notizen</h2>
         <span className="site-project-note-visibility"><LockKeyhole size={13} aria-hidden="true" />Nur im Büro</span>
       </div>
-      <p className="site-project-note-help">Nur in der Projektakte sichtbar. Diese Notizen werden Monteuren nicht angezeigt.</p>
-      <textarea className="site-notes-textarea" aria-label="Interne Notizen" maxLength={20000} value={content} disabled={saving}
-        placeholder="Interne Absprachen und Hinweise…" onChange={(event) => { setContent(event.target.value); setMessage(""); }} />
-      <div className="site-project-note-actions">
-        <span role="status">{dirty ? "Ungespeicherte Änderungen" : message}</span>
-        <button className="site-project-note-button" type="button" disabled={!dirty || saving} onClick={() => void save()}>{saving ? "Wird gespeichert…" : "Speichern"}</button>
-      </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      <p className="site-project-note-help">Diese Notizen werden Monteuren nicht angezeigt.</p>
+      <textarea className="site-notes-textarea" aria-label="Projekt Notizen" maxLength={20000} value={content}
+        placeholder="Interne Absprachen und Hinweise…" onChange={(event) => { contentRef.current = event.target.value; setContent(event.target.value); setMessage(""); }} />
+      <span className="site-project-note-message" role="status">{saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
+      {error && <div className="site-project-note-error">
+        <p className="form-error" role="alert">{error}</p>
+        <button className="site-project-note-button" type="button" disabled={saving} onClick={() => void save()}>Erneut speichern</button>
+      </div>}
     </section>
   );
 }
