@@ -4526,11 +4526,13 @@ function PayrollPersonMonthClosePanel({
                 : "Wähle links einen Monteur aus, um den Monatsabschluss zu prüfen."}
             </p>
           </div>
-          <div className="payroll-person-month-status-group">
-            <div className={`payroll-person-month-status ${statusClass}`} role="status">
-              {statusText}
+          {selectedWorker && (
+            <div className="payroll-person-month-status-group">
+              <div className={`payroll-person-month-status ${statusClass}`} role="status">
+                {statusText}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         <div className="payroll-person-month-remarks">
           <span title={isApproved ? "Die Eingabe ist nach der Monatsprüfung gesperrt." : "Bemerkungen können nur vor der Monatsprüfung eingetragen werden."}>
