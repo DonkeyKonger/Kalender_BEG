@@ -34621,7 +34621,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   --pf-text: #3d4c60;
   --pf-muted: #637285;
   --pf-active: #59708d;
-  border-radius: 8px;
+  border-radius: 0;
 }
 .site-detail-page.is-project-overview > .back-link {
   background: var(--pf-bg);
@@ -34654,7 +34654,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   min-width: 0;
   padding: 0 14px;
   border: 1px solid var(--pf-border);
-  border-radius: 8px;
+  border-radius: 0;
   background: #fafbfc;
 }
 .site-detail-page.is-project-overview .site-project-data .site-detail-grid {
@@ -34698,7 +34698,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
 .site-detail-page.is-project-overview .site-project-data .site-inline-edit-pair { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
 .site-detail-page.is-project-overview .site-project-data :is(.site-detail-address-search, .site-inline-edit-input) { font-weight: 400; }
 .site-detail-page.is-project-overview .site-project-data :is(.site-detail-address-search input, .site-inline-edit-input) {
-  border-radius: 6px;
+  border-radius: 0;
   box-shadow: none;
   font-size: 13px;
   font-weight: 400;
@@ -34730,7 +34730,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   min-width: 0;
   gap: 10px;
   padding: 0 12px 8px;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--pf-surface);
   overflow: visible;
   container: none;
@@ -34741,7 +34741,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   gap: 8px;
   padding: 10px 12px;
   margin: 0 -12px;
-  border-radius: 7px 7px 0 0;
+  border-radius: 0;
   background: var(--pf-surface-soft);
 }
 .site-detail-page.is-project-overview .site-project-notes :is(h2, h3) {
@@ -34766,7 +34766,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   flex: none;
   min-height: 102px;
   border: 1px solid #becad8;
-  border-radius: 6px;
+  border-radius: 0;
   padding: 10px 12px;
   font-size: 14px;
   line-height: 20px;
@@ -34781,7 +34781,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
 .site-project-note-meta time { color: var(--pf-muted); font-size: 12px; }
 .site-detail-page.is-project-overview .site-project-note-share { color: #526174; font-size: 12px; font-weight: 400; gap: 6px; }
 .site-detail-page.is-project-overview .site-project-note-share input:checked { background: var(--pf-active); border-color: var(--pf-active); }
-.site-detail-page.is-project-overview .site-project-note-visibility { font-weight: 400; border-radius: 4px; }
+.site-detail-page.is-project-overview .site-project-note-visibility { font-weight: 400; border-radius: 0; }
 .site-detail-page.is-project-overview .site-project-notes [role="status"] {
   height: auto;
   min-height: 14px;
@@ -34792,7 +34792,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
 .site-detail-page.is-project-overview .site-project-note-block.is-unpublished { background: #f1f3f5; }
 .site-detail-page.is-project-overview .site-project-note-block.is-unpublished .site-notes-textarea { background: #f1f3f5; color: #526174; }
 .site-detail-page.is-project-overview .site-project-note-block.is-unpublished .site-notes-textarea:focus { background: #fff; }
-.site-detail-page.is-project-overview button.site-project-note-create { min-height: 202px; height: auto; border-radius: 8px; }
+.site-detail-page.is-project-overview button.site-project-note-create { min-height: 202px; height: auto; border-radius: 0; }
 @container project-notes (max-width: 900px) {
   .site-detail-page.is-project-overview .site-project-notes-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -34825,3 +34825,8 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   white-space: nowrap;
 }
 .site-inline-edit-display.is-expanded .site-inline-expand-icon { transform: rotate(180deg); }
+
+/* Keep the project record controls consistent with its square panels. */
+.site-detail-page.is-project-file-workspace :is(button, input, select, textarea, .site-color-swatch, .site-color-menu) {
+  border-radius: 0;
+}
