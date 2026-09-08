@@ -2219,13 +2219,13 @@ function OverviewTab({
             )}>
             <section className="site-notes-section">
               <div className="site-notes-header">
-                <h2><FileText size={17} aria-hidden="true" />Allgemeine Notizen zum Projekt</h2>
-                {canEdit && <ProjectNoteDeleteButton title="Allgemeine Notizen zum Projekt"
+                <h2><FileText size={17} aria-hidden="true" />Schnell Notizen</h2>
+                {canEdit && <ProjectNoteDeleteButton title="Schnell Notizen"
                   disabled={deletingNotes || (!notesDraft && !site.info)} onDelete={() => void deleteGeneralNotes()} />}
               </div>
               <p className="site-project-note-help">Für Monteure sichtbar und in der Planmatrix rot hervorgehoben.</p>
               <ProjectNoteTextarea
-                aria-label="Allgemeine Notizen zum Projekt"
+                aria-label="Schnell Notizen"
                 className="site-notes-textarea"
                 disabled={!canEdit || deletingNotes}
                 placeholder={canEdit ? "Baustellennotizen eintragen..." : "Keine Notizen hinterlegt."}
