@@ -34629,15 +34629,16 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   border-bottom: 0;
 }
 .site-detail-page.is-project-overview .site-detail-header h1 { font-weight: 600; }
-.site-detail-page.is-project-overview .project-record-tabs { flex-wrap: wrap; overflow: visible; }
+.site-detail-page.is-project-overview .project-record-tabs {
+  --pf-active: #3b82f6;
+  --pf-muted: #64748b;
+  --pf-border: #d1d9e6;
+  --pf-surface-soft: #f8fafc;
+  flex-wrap: wrap;
+  overflow: visible;
+}
 .site-detail-page.is-project-overview .project-record-tabs button {
   flex: 0 0 auto;
-  font-weight: 500;
-  padding: 10px 12px;
-}
-.site-detail-page.is-project-overview .project-record-tabs button.is-active {
-  color: #405875;
-  background: #f1f4f8;
 }
 .site-detail-page.is-project-overview :is(button, a, input, select, textarea):focus-visible {
   outline: 2px solid var(--pf-active);
