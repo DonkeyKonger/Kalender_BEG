@@ -34506,7 +34506,8 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   height: 100%;
   min-width: 0;
   min-height: 0;
-  gap: 8px;
+  gap: 4px;
+  padding: 8px;
   border-radius: 0;
   overflow: auto;
   container: note-card / inline-size;
@@ -34518,6 +34519,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   min-height: 64px;
   border-radius: 0;
   resize: none;
+  padding: 8px 10px;
 }
 .site-project-note-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .site-project-note-heading > div { min-width: 0; }
@@ -34572,12 +34574,12 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   resize: none;
 }
 
-/* Identical header and status space keeps every note editor aligned. */
+/* Compact, shared header and status space keeps every note editor aligned. */
 .site-project-note-card-header {
-  height: 68px;
+  height: 60px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   overflow: auto;
 }
 .site-project-note-heading.site-project-note-card-header {
@@ -34589,8 +34591,9 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   min-height: 14px;
   line-height: 14px;
 }
-@container note-card (max-width: 280px) {
-  .site-project-note-card-header { height: 88px; }
+.site-project-note-card-header .site-project-note-help { line-height: 1.35; }
+@container note-card (min-width: 400px) {
+  .site-project-note-card-header { height: 40px; }
 }
 
 .site-detail-page.is-project-file-workspace .site-project-note-block.is-unpublished {
@@ -34605,5 +34608,6 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
 .site-project-note-block.is-unpublished .site-notes-textarea:focus { background: #ffffff; }
 
 @container note-card (max-width: 340px) {
-  .site-project-note-heading.site-project-note-card-header { flex-direction: column; gap: 6px; }
+  .site-project-note-card-header { height: 64px; }
+  .site-project-note-heading.site-project-note-card-header { flex-direction: column; gap: 4px; }
 }
