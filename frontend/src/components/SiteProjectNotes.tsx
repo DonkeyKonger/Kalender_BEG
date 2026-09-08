@@ -51,13 +51,15 @@ export function SiteProjectNotes({ siteId, canEdit, children, information }: {
   const noteItems = [
     ...orderedBlocks.slice(0, visibleCount),
     ...(!atVisibleLimit ? [null] : []),
+    ...(orderedBlocks.length > visibleCount ? ["divider" as const] : []),
     ...orderedBlocks.slice(visibleCount),
   ];
-  function placement(index: number, isCreate = false): CSSProperties {
+  function placement(index: number, isCreate = false, isDivider = false): CSSProperties {
     const position = (columns: number) => {
-      const cell = isCreate ? visibleCount : index < visibleCount ? index
-        : Math.max(columns, Math.ceil(activeSlots / columns) * columns) + index - visibleCount;
-      return [Math.floor(cell / columns) + 1, cell % columns + 1];
+      const activeRows = Math.max(1, Math.ceil(activeSlots / columns));
+      const cell = isDivider ? activeRows * columns : isCreate ? visibleCount : index < visibleCount ? index
+        : (activeRows + 1) * columns + index - visibleCount;
+      return [Math.floor(cell / columns) + 1, isDivider ? "1 / -1" : cell % columns + 1];
     };
     const [row, column] = position(3);
     const [mediumRow, mediumColumn] = position(2);
@@ -103,8 +105,11 @@ export function SiteProjectNotes({ siteId, canEdit, children, information }: {
         </p>}
         <div className="site-project-notes-grid">
           {canEdit && (notes ? <>
-            {noteItems.map((block, index) => block ? <NoteBlock key={block.id} siteId={siteId} initial={block}
-              placement={placement(index - (!atVisibleLimit && index > visibleCount ? 1 : 0))}
+            {noteItems.map((block) => block === "divider" ? <div key="divider"
+              className="site-project-note-divider" role="separator" aria-label="Für Monteure ausgeblendet"
+              style={placement(visibleCount, false, true)}>Für Monteure ausgeblendet</div>
+              : block ? <NoteBlock key={block.id} siteId={siteId} initial={block}
+              placement={placement(orderedBlocks.indexOf(block))}
               canPublish={!atVisibleLimit} autoFocus={block.id === createdBlockId} onSaved={updateSavedBlock} onDeleted={removeDeletedBlock} />
               : <button key="create" className="site-project-note-create" style={placement(visibleCount, true)}
                 type="button" aria-label="Neuer Notizblock" title="Neuen Notizblock anlegen" aria-busy={creating} disabled={creating}
