@@ -215,10 +215,10 @@ function NoteBlock({ siteId, initial, autoFocus }: { siteId: number; initial: Si
           <time dateTime={saved.created_at}>{new Date(saved.created_at).toLocaleDateString("de-DE")}</time>
         </div>
         <label className="site-project-note-share" title="Diese Notiz für Monteure sichtbar machen">
-          <input type="checkbox" aria-label="Für Monteure sichtbar" checked={saved.visible_to_workers}
+          <input type="checkbox" aria-label="Für Monteur sichtbar" checked={saved.visible_to_workers}
             disabled={saving || (!content.trim() && !saved.visible_to_workers)}
             onChange={(event) => { visibleRef.current = event.target.checked; void save(); }} />
-          <span>Für Monteure</span>
+          <span>Für Monteur sichtbar</span>
         </label>
       </div>
       <textarea className="site-notes-textarea" aria-label={`Notiz: ${saved.title}`} maxLength={20000}

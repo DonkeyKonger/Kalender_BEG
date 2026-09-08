@@ -34523,13 +34523,36 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
 .site-project-note-heading > div { min-width: 0; }
 .site-project-note-heading h3 { margin: 0; color: #111827; font-size: 0.94rem; overflow-wrap: anywhere; }
 .site-project-note-heading time { display: block; margin-top: 4px; color: #64748b; font-size: 0.75rem; }
-.site-project-note-heading .site-project-note-share { flex-shrink: 0; flex-direction: column; gap: 4px; color: #526174; font-size: 0.7rem; font-weight: 600; }
+.site-project-note-heading .site-project-note-share { flex-shrink: 0; flex-direction: row; gap: 6px; color: #526174; font-size: 0.7rem; font-weight: 600; }
 .site-project-note-block .site-project-note-message { min-height: 1em; }
 .site-project-note-error { display: grid; justify-items: start; gap: 8px; }
 .site-project-note-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .site-project-note-actions > span, .site-project-note-message { font-size: 0.78rem; color: #64748b; }
 .site-project-note-share { display: inline-flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 600; }
-.site-project-note-share input { width: 16px; height: 16px; margin: 0; }
+.site-project-note-share input {
+  appearance: none;
+  display: grid;
+  place-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid #8193aa;
+  border-radius: 0;
+  background: #ffffff;
+}
+.site-project-note-share input:checked { background: #315f8c; border-color: #315f8c; }
+.site-project-note-share input:checked::after {
+  content: "";
+  width: 5px;
+  height: 9px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
+.site-project-note-share input:focus-visible { outline: 2px solid #315f8c; outline-offset: 3px; }
+.site-project-note-share input:disabled { opacity: 0.55; }
+.site-project-note-share span { white-space: nowrap; }
 .assignment-project-note { display: grid; gap: 6px; overflow-wrap: anywhere; }
 .assignment-project-note > small { font-size: 0.75rem; color: #64748b; }
 .assignment-project-note > p { margin: 0; white-space: pre-wrap; }
@@ -34580,3 +34603,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   color: #475569;
 }
 .site-project-note-block.is-unpublished .site-notes-textarea:focus { background: #ffffff; }
+
+@container note-card (max-width: 340px) {
+  .site-project-note-heading.site-project-note-card-header { flex-direction: column; gap: 6px; }
+}
