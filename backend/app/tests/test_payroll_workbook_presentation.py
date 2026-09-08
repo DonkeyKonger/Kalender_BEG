@@ -171,10 +171,13 @@ def test_download_layout_preserves_calculations_and_unrelated_styles(approved_wo
 
     merges = {merge.get("ref") for merge in sheet.find("main:mergeCells", NS)}
     old_merges = {merge.get("ref") for merge in old_sheet.find("main:mergeCells", NS)}
-    assert merges == old_merges - {"C2:E2"} | {"C2:F2"}
+    assert merges == old_merges - {f"C{row}:E{row}" for row in (2, 3, 4)} | {
+        f"C{row}:F{row}" for row in (2, 3, 4)
+    }
     for ref in ("C2", "C4"):
         assert style(sheet, styles, ref).find("main:alignment", NS).get("horizontal") == "right"
-    assert style(sheet, styles, "F2").get("borderId") == style(old_sheet, old_styles, "E2").get("borderId")
+    for row in (2, 3, 4):
+        assert style(sheet, styles, f"F{row}").get("borderId") == style(old_sheet, old_styles, f"E{row}").get("borderId")
     travel = {f"{column}{row}" for row in range(10, 41) for column in "IJKL"}
     gray = {"E41", "D46", "E46", "D47", "E47", "D48", "E48", "G48"}
     gray |= {f"{column}{row}" for row in range(49, 53) for column in "EG"}
@@ -189,7 +192,7 @@ def test_download_layout_preserves_calculations_and_unrelated_styles(approved_wo
     for old_cell in old_sheet.findall(".//main:c", NS):
         ref = old_cell.get("r")
         new_cell = sheet.find(f'.//main:c[@r="{ref}"]', NS)
-        if ref not in travel | gray | {"C2", "C4", "F2"}:
+        if ref not in travel | gray | {"C2", "C4", "F2", "F3", "F4"}:
             assert ET.tostring(style(sheet, styles, ref)) == ET.tostring(style(old_sheet, old_styles, ref))
         old_cell.attrib.pop("s", None)
         new_cell.attrib.pop("s", None)

@@ -128,7 +128,7 @@ def test_historical_snapshot_and_version_requests_do_not_switch_to_individual_ex
     case.db.commit()
     assert case.service.all_workers_export(**case.args) == b"unchanged historical snapshot"
     assert case.service.all_workers_export(**case.args, version=2) == b"unchanged historical snapshot"
-    assert [item["version"] for item in calls] == [None, 2]
+    assert [item.get("version") for item in calls] == [None, 2]
     period = case.db.scalar(select(PayrollMonthPeriod))
     period.status = "OPEN"
     case.db.commit()

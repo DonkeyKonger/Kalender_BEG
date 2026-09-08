@@ -177,16 +177,18 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
 
     merges = sheet.find(_qname("mergeCells"))
     if merges is not None:
+        header_merges = {f"C{row}:E{row}": row for row in (2, 3, 4)}
         for merge in merges:
-            if merge.get("ref") == "C2:E2":
-                extension = _find_cell(sheet, "F2")
+            row_number = header_merges.get(merge.get("ref"))
+            if row_number is not None:
+                extension = _find_cell(sheet, f"F{row_number}")
                 if extension is None or not list(extension):
-                    merge.set("ref", "C2:F2")
-                    previous_edge = _find_cell(sheet, "E2")
+                    merge.set("ref", f"C{row_number}:F{row_number}")
+                    previous_edge = _find_cell(sheet, f"E{row_number}")
                     if extension is None and previous_edge is not None:
-                        row = sheet.find(f"{_qname('sheetData')}/{_qname('row')}[@r='2']")
+                        row = sheet.find(f"{_qname('sheetData')}/{_qname('row')}[@r='{row_number}']")
                         if row is not None:
-                            extension = ET.Element(_qname("c"), r="F2")
+                            extension = ET.Element(_qname("c"), r=f"F{row_number}")
                             row.insert(list(row).index(previous_edge) + 1, extension)
                     if extension is not None and previous_edge is not None:
                         extension.set("s", previous_edge.get("s", "0"))
