@@ -2164,7 +2164,7 @@ export function MatrixPage() {
                   type="button"
                   onClick={() => selectProjectManagerFilter(String(manager.id))}
                 >
-                  {compactProjectManagerFilterLabel(manager)}
+                  {projectManagerFilterLabel(manager)}
                 </button>
               ))}
             </div>
@@ -4115,7 +4115,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
         </div>
       </th>
       <td className="sticky-col pm-col compact-text">
-        {compactProjectManagerCode(row.site.project_manager)}
+        {projectManagerCode(row.site.project_manager)}
       </td>
       <td className="sticky-col info-col compact-text matrix-info-cell">
         <MatrixInfoEditor
@@ -5306,15 +5306,15 @@ function assignmentChipTitle(assignment: MatrixAssignment, absenceConflict: Matr
   return `${assignment.person.display_name}${selfPlannedHint} - Konflikt: ${absenceTypeLabels[absenceConflict.absence_type]} am Einsatztag${actionHint}`;
 }
 
-function compactProjectManagerCode(person: MatrixPerson | null): string {
+function projectManagerCode(person: MatrixPerson | null): string {
   if (!person) {
     return "";
   }
-  return compactCodeFromText(calendarPersonCode(person) || person.display_name);
+  return person.display_name.trim() || compactCodeFromText(calendarPersonCode(person));
 }
 
-function compactProjectManagerFilterLabel(manager: ProjectManagerOption): string {
-  return compactCodeFromText(manager.shortCode || manager.name);
+function projectManagerFilterLabel(manager: ProjectManagerOption): string {
+  return manager.name.trim() || compactCodeFromText(manager.shortCode);
 }
 
 function compactCodeFromText(value: string): string {
