@@ -34487,10 +34487,11 @@ button.site-project-note-create {
   place-items: center;
   align-self: stretch;
   min-width: 0;
-  min-height: 322px;
+  height: 100%;
+  min-height: 0;
   padding: 14px;
   border: 1px solid #d4dbe4;
-  border-radius: 2px;
+  border-radius: 0;
   background: #eef0f3;
   color: #64748b;
   cursor: pointer;
@@ -34498,10 +34499,25 @@ button.site-project-note-create {
 button.site-project-note-create:hover:not(:disabled) { background: #e4e8ed; color: #334155; }
 button.site-project-note-create:focus-visible { outline: 2px solid #315f8c; outline-offset: 2px; }
 button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
-.site-project-notes-grid { display: grid; align-items: start; gap: 12px; }
-.site-project-notes-grid > .site-notes-section { min-width: 0; }
+.site-project-notes-grid { display: grid; grid-auto-rows: 232px; align-items: stretch; gap: 12px; }
+.site-detail-page.is-project-file-workspace .site-project-notes-grid > .site-notes-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  gap: 8px;
+  border-radius: 0;
+  overflow: auto;
+}
+.site-project-notes-grid > .site-notes-section > :not(.site-notes-textarea) { flex-shrink: 0; }
 .site-project-notes-grid .site-notes-header { flex-wrap: wrap; }
-.site-project-notes-grid .site-notes-textarea { min-height: 220px; }
+.site-project-notes-grid .site-notes-textarea {
+  flex: 1;
+  min-height: 64px;
+  border-radius: 0;
+  resize: none;
+}
 .site-project-note-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .site-project-note-heading > div { min-width: 0; }
 .site-project-note-heading h3 { margin: 0; color: #111827; font-size: 0.94rem; overflow-wrap: anywhere; }
