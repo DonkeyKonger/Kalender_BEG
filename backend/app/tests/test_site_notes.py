@@ -59,18 +59,45 @@ def test_private_notes_and_hidden_history_never_enter_mobile_or_general_site_pay
     assert len(c.service.read(c.site.id).blocks) == 2
 
 
-def test_new_blocks_are_numbered_and_private_and_empty_blocks_cannot_be_published(notes_case):
+def test_new_blocks_are_numbered_and_visible_by_default_and_can_be_hidden(notes_case):
     c = notes_case
     first = c.service.create_block(c.site.id, c.user.id)
     second = c.service.create_block(c.site.id, c.user.id)
     assert [first.number, second.number] == [1, 2]
     assert [first.title, second.title] == ["Monteurhinweis 1", "Monteurhinweis 2"]
-    assert not first.visible_to_workers and not second.visible_to_workers
-    with pytest.raises(HTTPException) as caught:
-        c.service.update_block(c.site.id, first.id, update(first, content="  "), c.user.id)
-    assert caught.value.status_code == 422
-    c.db.rollback()
-    assert not c.service.read(c.site.id).blocks[-1].visible_to_workers
+    assert first.visible_to_workers and second.visible_to_workers
+    first = c.service.update_block(c.site.id, first.id, update(first, content="", visible=False), c.user.id)
+    third = c.service.create_block(c.site.id, c.user.id)
+    persisted = {block.id: block for block in c.service.read(c.site.id).blocks}
+    assert not persisted[first.id].visible_to_workers
+    assert persisted[second.id].visible_to_workers and persisted[third.id].visible_to_workers
+    # The checkbox remains freely changeable before entering text.
+    first = c.service.update_block(c.site.id, first.id, update(first, content="  ", visible=True), c.user.id)
+    assert first.visible_to_workers and first.content == ""
+
+
+def test_default_visible_notes_reach_mobile_after_text_is_saved_and_can_be_cleared(notes_case):
+    c = notes_case
+    mobile = MobileAssignmentService(c.db)
+    block = c.service.create_block(c.site.id, c.user.id)
+    def mobile_site():
+        return mobile.list_own_assignments(current_user=c.user, start=date(2026, 9, 8), end=date(2026, 9, 8)).assignments[0].site
+    assert mobile_site().note_blocks == []
+    assert mobile_site().info == c.site.info
+    assert mobile.project_notes(c.assignment.id, c.user).note_blocks == []
+    block = c.service.update_block(c.site.id, block.id, update(block, content="Sofort für Monteure sichtbar"), c.user.id)
+    assert "Sofort für Monteure sichtbar" in mobile_site().info
+    assert [note.id for note in mobile.project_notes(c.assignment.id, c.user).note_blocks] == [block.id]
+    block = c.service.update_block(c.site.id, block.id, update(block, content="  "), c.user.id)
+    assert block.visible_to_workers and block.content == ""
+    assert mobile_site().info == c.site.info
+    assert mobile.project_notes(c.assignment.id, c.user).note_blocks == []
+    block = c.service.update_block(c.site.id, block.id, update(block, content="Neuer Text"), c.user.id)
+    assert "Neuer Text" in mobile_site().info
+    block = c.service.update_block(c.site.id, block.id, update(block, content=block.content, visible=False), c.user.id)
+    assert mobile_site().info == c.site.info
+    assert mobile.project_notes(c.assignment.id, c.user).note_blocks == []
+    assert c.service.read(c.site.id).blocks[0].content == "Neuer Text"
 
 
 def test_stale_updates_preserve_both_internal_notes_and_published_block(notes_case):
@@ -125,6 +152,8 @@ def test_office_note_api_protects_all_read_and_write_routes(notes_case, role, pe
         responses = [client.get(root), client.patch(root + "/internal", json={"content": "Intern", "expected_revision": 0})]
         created = client.post(root + "/blocks")
         responses.append(created)
+        if allowed:
+            assert created.json()["visible_to_workers"] is True
         block_id = created.json()["id"] if allowed else 123
         responses.append(client.patch(root + f"/blocks/{block_id}", json={
             "title": "Freigabe", "content": "Sichtbar", "visible_to_workers": True, "expected_revision": 1,

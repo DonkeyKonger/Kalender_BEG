@@ -232,7 +232,7 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved }: {
         </div>
         <label className="site-project-note-share" title="Diese Notiz für Monteure sichtbar machen">
           <input type="checkbox" aria-label="Für Monteur sichtbar" checked={saved.visible_to_workers}
-            disabled={saving || (!content.trim() && !saved.visible_to_workers)}
+            disabled={saving}
             onChange={(event) => { visibleRef.current = event.target.checked; void save(); }} />
           <span>Für Monteur sichtbar</span>
         </label>

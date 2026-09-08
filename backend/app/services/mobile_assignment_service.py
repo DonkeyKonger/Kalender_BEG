@@ -46,7 +46,7 @@ class MobileAssignmentService:
             raise HTTPException(404, "Einsatz nicht gefunden.")
         return MobileProjectNotes(
             info=assignment.site.info,
-            note_blocks=[MobileSiteNote.model_validate(note) for note in assignment.site.visible_note_blocks],
+            note_blocks=[MobileSiteNote.model_validate(note) for note in assignment.site.visible_note_blocks if note.content.strip()],
         )
 
     def list_own_assignments(
@@ -377,7 +377,7 @@ class MobileAssignmentService:
         )
 
     def _build_site(self, site: Site) -> MobileSite:
-        notes = [MobileSiteNote.model_validate(note) for note in site.visible_note_blocks]
+        notes = [MobileSiteNote.model_validate(note) for note in site.visible_note_blocks if note.content.strip()]
         # Old installed apps know only site.info. Compose their display text at the
         # response boundary, without changing general notes used by the plan matrix.
         legacy_sections = [site.info] if site.info else []

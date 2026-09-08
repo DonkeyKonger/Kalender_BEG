@@ -57,7 +57,7 @@ class SiteNoteService:
         number = (self.db.scalar(select(func.max(SiteNoteBlock.number)).where(
             SiteNoteBlock.site_id == site_id,
         )) or 0) + 1
-        block = SiteNoteBlock(site_id=site_id, number=number, title=f"Monteurhinweis {number}", content="")
+        block = SiteNoteBlock(site_id=site_id, number=number, title=f"Monteurhinweis {number}", content="", visible_to_workers=True)
         self.db.add(block)
         self.db.flush()
         self._audit(site_id, user_id, "site.note_block.created", block.revision)
@@ -76,8 +76,6 @@ class SiteNoteService:
         title, content = payload.title.strip(), payload.content.strip()
         if not title:
             raise HTTPException(422, "Bitte einen Titel für den Notizblock angeben.")
-        if payload.visible_to_workers and not content:
-            raise HTTPException(422, "Vor der Freigabe bitte eine Notiz eintragen.")
         block.title, block.content = title, content
         block.visible_to_workers = payload.visible_to_workers
         block.revision += 1
