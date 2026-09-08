@@ -3170,7 +3170,11 @@ function MobileProjectNotes({ assignment }: { assignment: MobileAssignment }) {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [assignment.id, retry]);
-  const general = notes ? notes.info : assignment.site.info;
+  // Never show cached legacy hint text while current publication is being checked.
+  // Older cached payloads have no general_info and contain only the general note.
+  const general = notes ? notes.info : (
+    assignment.site.general_info !== undefined ? assignment.site.general_info : assignment.site.info
+  );
   return <>
     {general && <p className="assignment-note">{general}</p>}
     {notes?.note_blocks.map((note) => (

@@ -1,5 +1,6 @@
 import logging
-from datetime import date, timedelta
+from datetime import date, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import case, func, select
@@ -376,6 +377,17 @@ class MobileAssignmentService:
         )
 
     def _build_site(self, site: Site) -> MobileSite:
+        notes = [MobileSiteNote.model_validate(note) for note in site.visible_note_blocks]
+        # Old installed apps know only site.info. Compose their display text at the
+        # response boundary, without changing general notes used by the plan matrix.
+        legacy_sections = [site.info] if site.info else []
+        for note in notes:
+            updated_at = note.updated_at
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=timezone.utc)
+            stand = updated_at.astimezone(ZoneInfo("Europe/Berlin")).strftime("%d.%m.%Y")
+            legacy_sections.append(f"[{note.title} · {stand}]\n{note.content}")
+        legacy_info = "\n\n".join(legacy_sections) if notes else site.info
         return MobileSite(
             id=site.id,
             site_number=site.site_number,
@@ -385,8 +397,9 @@ class MobileAssignmentService:
             customer=site.customer,
             project_manager=self._build_person(site.project_manager) if site.project_manager else None,
             status=site.status,
-            info=site.info,
-            note_blocks=[MobileSiteNote.model_validate(note) for note in site.visible_note_blocks],
+            info=legacy_info,
+            general_info=site.info,
+            note_blocks=notes,
             requires_extra_work_approval=bool(getattr(site, "requires_extra_work_approval", False)),
         )
 

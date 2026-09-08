@@ -188,3 +188,70 @@ def test_note_title_display_renames_only_matching_generated_titles(schema, title
     assert result.title == expected
     assert result.content == payload["content"]
     assert payload["title"] == title
+
+
+@pytest.mark.parametrize("general", [None, "", "Allgemeine Notiz\nmit zweiter Zeile"])
+def test_legacy_mobile_info_contains_only_published_hints_and_preserves_general_notes(notes_case, general):
+    from datetime import datetime, timezone
+    from app.models.site_note import SiteNoteBlock
+
+    c = notes_case
+    c.site.info = general
+    c.db.commit()
+    c.service.update_internal(c.site.id, SiteInternalNoteUpdate(content="GEHEIM BÜRO", expected_revision=0), c.user.id)
+    mobile = MobileAssignmentService(c.db)
+    def load():
+        return mobile.list_own_assignments(current_user=c.user, start=date(2026, 9, 8), end=date(2026, 9, 8)).assignments[0].site
+    assert load().info == general
+    hidden = c.service.create_block(c.site.id, c.user.id)
+    c.service.update_block(c.site.id, hidden.id, update(hidden, content="GEHEIM ENTWURF", visible=False), c.user.id)
+    first = c.service.create_block(c.site.id, c.user.id)
+    first = c.service.update_block(c.site.id, first.id, update(first, content="Zugang über Tor 2.\nSchlüssel im Büro."), c.user.id)
+    second = c.service.create_block(c.site.id, c.user.id)
+    second = c.service.update_block(c.site.id, second.id, update(second, content="Ab Mittwoch Dacharbeiten."), c.user.id)
+    for note in (first, second):
+        c.db.get(SiteNoteBlock, note.id).updated_at = datetime(2026, 9, 8, 22, 30, tzinfo=timezone.utc)
+    c.db.commit()
+    result = load()
+    sections = ([general] if general else []) + [
+        "[Monteurhinweis 3 · 09.09.2026]\nAb Mittwoch Dacharbeiten.",
+        "[Monteurhinweis 2 · 09.09.2026]\nZugang über Tor 2.\nSchlüssel im Büro.",
+    ]
+    # This string is the entire notes UI understood by old installed apps.
+    assert result.info == "\n\n".join(sections)
+    assert result.general_info == general
+    assert "GEHEIM" not in result.model_dump_json()
+    assert c.site.info == general
+    assert SiteRead.model_validate(c.site).info == general
+    live = mobile.project_notes(c.assignment.id, c.user)
+    assert live.info == general  # New clients keep separate cards, without duplicates.
+    assert [n.id for n in live.note_blocks] == [second.id, first.id]
+    c.service.update_block(c.site.id, second.id, update(second, visible=False), c.user.id)
+    assert "Ab Mittwoch Dacharbeiten." not in load().info
+    c.service.update_block(c.site.id, first.id, update(first, visible=False), c.user.id)
+    assert load().info == general
+    assert len(c.service.read(c.site.id).blocks) == 3
+
+
+@pytest.mark.parametrize("path", [
+    "/assignments?start=2026-09-08&end=2026-09-08",
+    "/assignments/history?start=2026-09-08&end=2026-09-08",
+    "/sites",
+])
+def test_existing_mobile_endpoints_supply_legacy_note_text_without_client_opt_in(notes_case, path):
+    c = notes_case
+    block = c.service.create_block(c.site.id, c.user.id)
+    c.service.update_block(c.site.id, block.id, update(block, content="Alt-App: Eingang im Hof."), c.user.id)
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: c.user
+    app.dependency_overrides[get_db] = lambda: c.db
+    try:
+        response = TestClient(app).get("/api/me" + path)
+        assert response.status_code == 200
+        data = response.json()
+        site = data[0] if isinstance(data, list) else data["assignments"][0]["site"]
+        assert "Alt-App: Eingang im Hof." in site["info"]
+        assert "Monteurhinweis 1" in site["info"]
+        assert site["general_info"] == c.site.info
+    finally:
+        app.dependency_overrides.clear()

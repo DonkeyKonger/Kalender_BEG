@@ -35,7 +35,9 @@ class MobileSite(BaseModel):
     customer: str | None = None
     project_manager: MobilePerson | None = None
     status: SiteStatus
+    # Legacy clients render only info; modern clients load structured notes separately.
     info: str | None = None
+    general_info: str | None = None
     note_blocks: list[MobileSiteNote] = Field(default_factory=list)
     requires_extra_work_approval: bool = False
 
