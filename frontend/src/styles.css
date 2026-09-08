@@ -34624,9 +34624,8 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   border-radius: 0;
 }
 .site-detail-page.is-project-overview > .back-link {
-  background: var(--pf-bg);
-  font-weight: 500;
-  border-bottom: 0;
+  --pf-border: #d1d9e6;
+  --pf-surface-soft: #f8fafc;
 }
 .site-detail-page.is-project-overview .site-detail-header h1 { font-weight: 600; }
 .site-detail-page.is-project-overview .project-record-tabs {
@@ -34640,7 +34639,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
 .site-detail-page.is-project-overview .project-record-tabs button {
   flex: 0 0 auto;
 }
-.site-detail-page.is-project-overview :is(button, a, input, select, textarea):focus-visible {
+.site-detail-page.is-project-overview :is(button, a:not(.back-link), input, select, textarea):focus-visible {
   outline: 2px solid var(--pf-active);
   outline-offset: 2px;
 }
