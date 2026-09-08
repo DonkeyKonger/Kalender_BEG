@@ -3136,10 +3136,52 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
           <p><ClipboardList aria-hidden="true" size={16} /><span>Kunde: {assignment.site.customer}</span></p>
         )}
       </div>
-      {assignment.site.info && <p className="assignment-note">{assignment.site.info}</p>}
+      <MobileProjectNotes assignment={assignment} />
       {assignment.note && <p className="assignment-note">{assignment.note}</p>}
     </div>
   );
+}
+
+function MobileProjectNotes({ assignment }: { assignment: MobileAssignment }) {
+  const [notes, setNotes] = useState<Awaited<ReturnType<typeof api.mobileProjectNotes>> | null>(null);
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    let requestNumber = 0;
+    async function refresh() {
+      const current = ++requestNumber;
+      setNotes(null);
+      setError(false);
+      try {
+        const value = await api.mobileProjectNotes(assignment.id);
+        if (active && current === requestNumber) setNotes(value);
+      } catch {
+        if (active && current === requestNumber) setError(true);
+      }
+    }
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+    void refresh();
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [assignment.id, retry]);
+  const general = notes ? notes.info : assignment.site.info;
+  return <>
+    {general && <p className="assignment-note">{general}</p>}
+    {notes?.note_blocks.map((note) => (
+      <section className="assignment-note assignment-project-note" key={note.id} aria-label={note.title}>
+        <strong>{note.title}</strong>
+        <small>Stand {note.number} · {new Date(note.updated_at).toLocaleDateString("de-DE")}</small>
+        <p>{note.content}</p>
+      </section>
+    ))}
+    {error && <div className="assignment-note" role="alert">Aktuelle Notizstände konnten nicht geladen werden. <button type="button" onClick={() => setRetry((value) => value + 1)}>Erneut laden</button></div>}
+  </>;
 }
 
 function MobileProjectPhotoCapture({ assignment, onOpenPhotos }: { assignment: MobileAssignment; onOpenPhotos: () => void }) {

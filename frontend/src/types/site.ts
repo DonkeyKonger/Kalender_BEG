@@ -740,3 +740,25 @@ export type MeasurementDashboardSubmission = {
   entry_count: number;
   position_count: number;
 };
+
+
+export type SiteNoteBlock = {
+  id: number;
+  number: number;
+  title: string;
+  content: string;
+  visible_to_workers: boolean;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SiteNotes = {
+  internal_notes: string;
+  internal_revision: number;
+  blocks: SiteNoteBlock[];
+};
+
+export type SiteNoteBlockUpdate = Pick<SiteNoteBlock, "title" | "content" | "visible_to_workers"> & {
+  expected_revision: number;
+};

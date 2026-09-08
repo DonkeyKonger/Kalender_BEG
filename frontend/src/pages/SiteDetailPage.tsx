@@ -1,3 +1,4 @@
+import { SiteProjectNotes } from "../components/SiteProjectNotes";
 import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Phone, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, UserRound, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -2196,12 +2197,14 @@ function OverviewTab({
 
           <section className="site-notes-section">
             <div className="site-notes-header">
-              <h2>Notizen</h2>
+              <h2>Allgemeine Notizen zum Projekt</h2>
               {canEdit && notesSaveStatus !== "idle" ? (
                 <span className={`site-notes-save-status is-${notesSaveStatus}`}>{formatSiteNotesSaveStatus(notesSaveStatus)}</span>
               ) : null}
             </div>
+            <p className="site-project-note-help">Für Monteure sichtbar und in der Planmatrix rot hervorgehoben.</p>
             <textarea
+              aria-label="Allgemeine Notizen zum Projekt"
               className="site-notes-textarea"
               disabled={!canEdit}
               placeholder={canEdit ? "Baustellennotizen eintragen..." : "Keine Notizen hinterlegt."}
@@ -2213,6 +2216,7 @@ function OverviewTab({
               onBlur={handleNotesBlur}
             />
           </section>
+          {canEdit && <SiteProjectNotes key={site.id} siteId={site.id} />}
         </>
       )}
     </div>

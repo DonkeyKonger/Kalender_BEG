@@ -11,6 +11,7 @@ from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
 from app.schemas.assignment import AssignmentCreate
+from app.schemas.site_note import MobileSiteNote, MobileProjectNotes
 from app.schemas.mobile import (
     MobileAssignment,
     MobileAssignmentSiteHistoryResponse,
@@ -34,6 +35,18 @@ logger = logging.getLogger(__name__)
 class MobileAssignmentService:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def project_notes(self, assignment_id: int, current_user: User) -> MobileProjectNotes:
+        person_id = self._require_person_id(current_user)
+        assignment = self.db.scalar(select(Assignment).where(
+            Assignment.id == assignment_id, Assignment.person_id == person_id,
+        ).options(selectinload(Assignment.site).selectinload(Site.visible_note_blocks)))
+        if assignment is None:
+            raise HTTPException(404, "Einsatz nicht gefunden.")
+        return MobileProjectNotes(
+            info=assignment.site.info,
+            note_blocks=[MobileSiteNote.model_validate(note) for note in assignment.site.visible_note_blocks],
+        )
 
     def list_own_assignments(
         self,
@@ -91,7 +104,7 @@ class MobileAssignmentService:
         statement = (
             select(Site, latest_assignment.c.last_assignment_date)
             .join(latest_assignment, Site.id == latest_assignment.c.site_id)
-            .options(selectinload(Site.project_manager))
+            .options(selectinload(Site.project_manager), selectinload(Site.visible_note_blocks))
             .order_by(latest_assignment.c.last_assignment_date.desc(), Site.id)
         )
         rows = self.db.execute(statement).all()
@@ -119,6 +132,7 @@ class MobileAssignmentService:
             .options(
                 selectinload(Assignment.person),
                 selectinload(Assignment.site).selectinload(Site.project_manager),
+                selectinload(Assignment.site).selectinload(Site.visible_note_blocks),
             )
             .where(
                 Assignment.person_id == person_id,
@@ -171,6 +185,7 @@ class MobileAssignmentService:
             .options(
                 selectinload(Assignment.person),
                 selectinload(Assignment.site).selectinload(Site.project_manager),
+                selectinload(Assignment.site).selectinload(Site.visible_note_blocks),
             )
             .where(
                 Assignment.person_id == person_id,
@@ -211,7 +226,7 @@ class MobileAssignmentService:
 
         statement = (
             select(Site)
-            .options(selectinload(Site.project_manager))
+            .options(selectinload(Site.project_manager), selectinload(Site.visible_note_blocks))
             .where(Site.status == SiteStatus.ACTIVE)
             .order_by(Site.site_number, Site.name, Site.id)
         )
@@ -246,7 +261,7 @@ class MobileAssignmentService:
         statement = (
             select(Site)
             .join(latest_assignment, Site.id == latest_assignment.c.site_id)
-            .options(selectinload(Site.project_manager))
+            .options(selectinload(Site.project_manager), selectinload(Site.visible_note_blocks))
             .where(Site.status.not_in([SiteStatus.COMPLETED, SiteStatus.DELETED]))
             .order_by(latest_assignment.c.last_planned_date.desc(), Site.name, Site.id)
             .limit(MAX_RECENT_SITES)
@@ -272,7 +287,7 @@ class MobileAssignmentService:
 
         site = self.db.scalar(
             select(Site)
-            .options(selectinload(Site.project_manager))
+            .options(selectinload(Site.project_manager), selectinload(Site.visible_note_blocks))
             .where(Site.id == payload.site_id)
         )
         if site is None:
@@ -293,6 +308,7 @@ class MobileAssignmentService:
             .options(
                 selectinload(Assignment.person),
                 selectinload(Assignment.site).selectinload(Site.project_manager),
+                selectinload(Assignment.site).selectinload(Site.visible_note_blocks),
             )
             .where(
                 Assignment.person_id == current_user.person_id,
@@ -370,6 +386,7 @@ class MobileAssignmentService:
             project_manager=self._build_person(site.project_manager) if site.project_manager else None,
             status=site.status,
             info=site.info,
+            note_blocks=[MobileSiteNote.model_validate(note) for note in site.visible_note_blocks],
             requires_extra_work_approval=bool(getattr(site, "requires_extra_work_approval", False)),
         )
 

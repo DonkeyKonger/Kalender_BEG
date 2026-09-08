@@ -21,6 +21,7 @@ export type MobileSite = {
   project_manager: MobilePerson | null;
   status: SiteStatus;
   info: string | null;
+  note_blocks?: { id: number; number: number; title: string; content: string; updated_at: string }[];
   requires_extra_work_approval: boolean;
 };
 

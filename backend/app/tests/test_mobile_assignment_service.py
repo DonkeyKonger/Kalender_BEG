@@ -666,6 +666,7 @@ def mobile_site(site_id, status=SiteStatus.ACTIVE):
         project_manager=None,
         status=status,
         info=None,
+        visible_note_blocks=[],
     )
 
 

@@ -1,3 +1,4 @@
+from app.models.site_note import SiteInternalNote, SiteNoteBlock
 from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
@@ -84,6 +85,8 @@ __all__ = [
     "ProjectFolder",
     "ProjectFolderDocumentCaption",
     "Site",
+    "SiteInternalNote",
+    "SiteNoteBlock",
     "SiteEmailRecipient",
     "SiteMeasurementBase",
     "SiteMeasurementAreaRow",

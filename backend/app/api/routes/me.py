@@ -56,6 +56,7 @@ from app.schemas.time_entry import TimeEntryWeeklyReviewRead
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.mobile_assignment_service import MobileAssignmentService
+from app.schemas.site_note import MobileProjectNotes
 from app.services.mobile_personal_file_service import MobilePersonalFileService
 from app.services.tool_issue_report_service import ToolIssueReportService
 from app.services.push_notification_service import PushNotificationService
@@ -955,3 +956,9 @@ def delete_my_assignment_measurement_entry(
         entry_id=entry_id,
         current_user=current_user,
     )
+
+
+@router.get("/assignments/{assignment_id}/project-notes", response_model=MobileProjectNotes)
+def assignment_project_notes(assignment_id: int, response: Response, user=Depends(get_current_user), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return MobileAssignmentService(db).project_notes(assignment_id, user)

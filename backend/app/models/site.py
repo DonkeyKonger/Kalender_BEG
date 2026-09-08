@@ -57,6 +57,13 @@ class Site(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
 
+    visible_note_blocks = relationship(
+        "SiteNoteBlock",
+        primaryjoin="and_(Site.id == SiteNoteBlock.site_id, SiteNoteBlock.visible_to_workers == true())",
+        order_by="SiteNoteBlock.number.desc()",
+        viewonly=True,
+    )
+
     customer_record = relationship("Customer")
     project_manager = relationship("Person")
     assignments = relationship("Assignment", back_populates="site")

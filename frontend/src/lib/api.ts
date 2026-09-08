@@ -1,3 +1,4 @@
+import type { SiteNotes, SiteNoteBlock, SiteNoteBlockUpdate } from "../types/site";
 import type { Absence, AbsenceCreate, AbsenceUpdate, VacationCarryover, VacationCarryoverUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { PayrollRemarks } from "./payrollRemarks";
@@ -1136,6 +1137,30 @@ export const api = {
   async searchSiteAddress(query: string): Promise<SiteGeocodeSearchResult[]> {
     const search = new URLSearchParams({ q: query, limit: "5" });
     return request<SiteGeocodeSearchResult[]>(`/sites/geocode/search?${search.toString()}`);
+  },
+
+  async mobileProjectNotes(assignmentId: number): Promise<{ info: string | null; note_blocks: { id: number; number: number; title: string; content: string; updated_at: string }[] }> {
+    return request(`/me/assignments/${assignmentId}/project-notes`);
+  },
+
+  async siteNotes(siteId: number): Promise<SiteNotes> {
+    return request<SiteNotes>(`/sites/${siteId}/notes`);
+  },
+
+  async updateSiteInternalNotes(siteId: number, content: string, expectedRevision: number): Promise<SiteNotes> {
+    return request<SiteNotes>(`/sites/${siteId}/notes/internal`, {
+      method: "PATCH", body: JSON.stringify({ content, expected_revision: expectedRevision }),
+    });
+  },
+
+  async createSiteNoteBlock(siteId: number): Promise<SiteNoteBlock> {
+    return request<SiteNoteBlock>(`/sites/${siteId}/notes/blocks`, { method: "POST" });
+  },
+
+  async updateSiteNoteBlock(siteId: number, blockId: number, payload: SiteNoteBlockUpdate): Promise<SiteNoteBlock> {
+    return request<SiteNoteBlock>(`/sites/${siteId}/notes/blocks/${blockId}`, {
+      method: "PATCH", body: JSON.stringify(payload),
+    });
   },
 
   async site(siteId: number): Promise<Site> {

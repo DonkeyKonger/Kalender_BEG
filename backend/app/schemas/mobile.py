@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.site_note import MobileSiteNote
+
 from app.models.enums import (
     AbsenceType,
     AssignmentType,
@@ -34,6 +36,7 @@ class MobileSite(BaseModel):
     project_manager: MobilePerson | None = None
     status: SiteStatus
     info: str | None = None
+    note_blocks: list[MobileSiteNote] = Field(default_factory=list)
     requires_extra_work_approval: bool = False
 
 

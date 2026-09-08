@@ -81,6 +81,8 @@ from app.services.project_photo_pdf_service import ProjectPhotoPdfService
 from app.services.project_manager_service import ProjectManagerService
 from app.services.project_storage_service import ProjectStorageService
 from app.services.site_service import SiteService
+from app.services.site_note_service import SiteNoteService
+from app.schemas.site_note import SiteNotesRead, SiteInternalNoteUpdate, SiteNoteBlockRead, SiteNoteBlockUpdate
 
 router = APIRouter(prefix="/sites", tags=["sites"])
 logger = logging.getLogger(__name__)
@@ -1359,3 +1361,24 @@ def reactivate_site(
 ) -> SiteRead:
     site = SiteService(db).reactivate_site(site_id, current_user.id)
     return SiteRead.model_validate(site)
+
+
+@router.get("/{site_id}/notes", response_model=SiteNotesRead)
+def read_site_notes(site_id: int, response: Response, _user=Depends(CAN_SITES_WRITE), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return SiteNoteService(db).read(site_id)
+
+
+@router.patch("/{site_id}/notes/internal", response_model=SiteNotesRead)
+def update_site_internal_notes(site_id: int, payload: SiteInternalNoteUpdate, user=Depends(CAN_SITES_WRITE), db: Session = Depends(get_db)):
+    return SiteNoteService(db).update_internal(site_id, payload, user.id)
+
+
+@router.post("/{site_id}/notes/blocks", response_model=SiteNoteBlockRead, status_code=201)
+def create_site_note_block(site_id: int, user=Depends(CAN_SITES_WRITE), db: Session = Depends(get_db)):
+    return SiteNoteService(db).create_block(site_id, user.id)
+
+
+@router.patch("/{site_id}/notes/blocks/{block_id}", response_model=SiteNoteBlockRead)
+def update_site_note_block(site_id: int, block_id: int, payload: SiteNoteBlockUpdate, user=Depends(CAN_SITES_WRITE), db: Session = Depends(get_db)):
+    return SiteNoteService(db).update_block(site_id, block_id, payload, user.id)
