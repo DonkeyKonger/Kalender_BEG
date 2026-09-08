@@ -66,7 +66,7 @@ from app.services.extra_work_archive_service import (
     archive_completed_extra_work_ticket_after_response,
 )
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
-from app.services.geo_service import search_geocoding_candidates
+from app.services.geo_service import GeocodingUnavailableError, search_geocoding_candidates
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.services.photo_filename import (
@@ -158,6 +158,10 @@ def search_site_geocode(
     limit: int = Query(default=5, ge=1, le=5),
     _user=Depends(CAN_READ),
 ) -> list[SiteGeocodeSearchResult]:
+    try:
+        candidates = search_geocoding_candidates(q, limit=limit)
+    except GeocodingUnavailableError as error:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
     return [
         SiteGeocodeSearchResult(
             label=candidate.label,
@@ -170,7 +174,7 @@ def search_site_geocode(
             confidence=candidate.confidence,
             source=candidate.source,
         )
-        for candidate in search_geocoding_candidates(q, limit=limit)
+        for candidate in candidates
     ]
 
 

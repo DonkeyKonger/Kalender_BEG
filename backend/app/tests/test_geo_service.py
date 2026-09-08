@@ -141,3 +141,59 @@ def test_search_geocoding_candidates_delegates_to_fetcher(monkeypatch):
 
     assert calls == [("Moorburger Strasse", 4)]
     assert result[0].city == "Hamburg"
+
+
+def test_isolated_search_reports_unavailable_without_network(monkeypatch):
+    import pytest
+
+    monkeypatch.setenv("LOCAL_TEST_MODE", "isolated")
+    monkeypatch.setattr(geo_service, "urlopen", lambda *args, **kwargs: pytest.fail("Unexpected external request"))
+    with pytest.raises(geo_service.GeocodingUnavailableError, match="lokalen Testkalender"):
+        search_geocoding_candidates("Berlin")
+
+
+def test_provider_failure_is_not_an_empty_search_result(monkeypatch):
+    import pytest
+    from urllib.error import URLError
+
+    monkeypatch.delenv("LOCAL_TEST_MODE", raising=False)
+    def unavailable(*args, **kwargs):
+        raise URLError("DNS unavailable")
+    monkeypatch.setattr(geo_service, "urlopen", unavailable)
+    with pytest.raises(geo_service.GeocodingUnavailableError, match="nicht erreichbar"):
+        search_geocoding_candidates("Berlin")
+    assert geo_service.geocode_site_address(SimpleNamespace(city="Berlin")) == []
+
+
+def test_provider_empty_result_remains_empty(monkeypatch):
+    from io import BytesIO
+
+    monkeypatch.delenv("LOCAL_TEST_MODE", raising=False)
+    monkeypatch.setattr(geo_service, "urlopen", lambda *args, **kwargs: BytesIO(b"[]"))
+    assert search_geocoding_candidates("Berlin") == []
+
+
+def test_provider_invalid_payload_reports_unavailable(monkeypatch):
+    import pytest
+    from io import BytesIO
+
+    monkeypatch.delenv("LOCAL_TEST_MODE", raising=False)
+    for payload in (b'{"error":"unavailable"}', b'not json', b'null'):
+        monkeypatch.setattr(geo_service, "urlopen", lambda *args, **kwargs: BytesIO(payload))
+        with pytest.raises(geo_service.GeocodingUnavailableError):
+            search_geocoding_candidates("Berlin")
+
+
+def test_geocoding_routes_return_service_unavailable(monkeypatch):
+    import pytest
+    from fastapi import HTTPException
+    from app.api.routes import sites, persons
+
+    def unavailable(*args, **kwargs):
+        raise geo_service.GeocodingUnavailableError("Adresssuche benötigt Internetzugang.")
+    for module, endpoint in ((sites, sites.search_site_geocode), (persons, persons.search_person_geocode)):
+        monkeypatch.setattr(module, "search_geocoding_candidates", unavailable)
+        with pytest.raises(HTTPException) as failure:
+            endpoint(q="Berlin", limit=5)
+        assert failure.value.status_code == 503
+        assert failure.value.detail == "Adresssuche benötigt Internetzugang."

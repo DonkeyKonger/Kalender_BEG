@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { api } from "../lib/api";
+import { ApiError, api } from "../lib/api";
 import type { SiteGeocodeSearchResult } from "../types/site";
 
 type AddressSearchProps = {
@@ -51,12 +51,14 @@ export function AddressSearch({
             return;
           }
           setAddressResults(results);
-          setAddressSearchMessage(results.length ? null : "Keine passende Adresse gefunden. Bitte Eingabe pruefen oder genauer formulieren.");
+          setAddressSearchMessage(results.length ? null : "Keine passende Adresse gefunden. Bitte Straße und Ort genauer eingeben.");
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (!cancelled) {
             setAddressResults([]);
-            setAddressSearchMessage("Adresssuche aktuell nicht verfuegbar.");
+            setAddressSearchMessage(error instanceof ApiError && error.status === 503
+              ? error.message
+              : "Adresssuche aktuell nicht verfügbar. Bitte später erneut versuchen.");
           }
         })
         .finally(() => {

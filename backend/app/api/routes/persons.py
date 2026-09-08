@@ -22,7 +22,7 @@ from app.schemas.person_hours_account import (
     PersonHoursPayoutCreate,
 )
 from app.schemas.payroll_setup import PayrollWeeklyPlanRead, PayrollWeeklyPlanUpsert
-from app.services.geo_service import search_geocoding_candidates
+from app.services.geo_service import GeocodingUnavailableError, search_geocoding_candidates
 from app.services.person_hours_account_service import PersonHoursAccountService
 from app.services.person_service import PersonService
 from app.services.payroll_daily_ledger_service import (
@@ -81,6 +81,10 @@ def search_person_geocode(
     limit: int = Query(default=5, ge=1, le=5),
     _user=Depends(CAN_READ),
 ) -> list[PersonGeocodeSearchResult]:
+    try:
+        candidates = search_geocoding_candidates(q, limit=limit)
+    except GeocodingUnavailableError as error:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
     return [
         PersonGeocodeSearchResult(
             label=candidate.label,
@@ -93,7 +97,7 @@ def search_person_geocode(
             confidence=candidate.confidence,
             source=candidate.source,
         )
-        for candidate in search_geocoding_candidates(q, limit=limit)
+        for candidate in candidates
     ]
 
 

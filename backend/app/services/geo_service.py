@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import os
 from math import asin, cos, radians, sin, sqrt
 from typing import Protocol
 from urllib.error import URLError
@@ -13,6 +14,10 @@ from app.core.geofence import DEFAULT_SITE_GEOFENCE_RADIUS_M
 EARTH_RADIUS_M = 6_371_000
 NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 GEOCODING_USER_AGENT = "Kalender-Baustellen/1.0"
+
+
+class GeocodingUnavailableError(RuntimeError):
+    """The address provider could not be queried; this is not an empty result."""
 
 
 class CoordinateLike(Protocol):
@@ -88,7 +93,10 @@ def geocode_site_address(site: object) -> list[GeocodingCandidate]:
     query = site_address_query(site)
     if not query:
         return []
-    return fetch_geocoding_candidates(query, limit=2)
+    try:
+        return fetch_geocoding_candidates(query, limit=2)
+    except GeocodingUnavailableError:
+        return []
 
 
 def search_geocoding_candidates(query: str, limit: int = 5) -> list[GeocodingCandidate]:
@@ -115,6 +123,10 @@ def site_address_query(site: object) -> str | None:
 
 
 def fetch_geocoding_candidates(query: str, limit: int = 5) -> list[GeocodingCandidate]:
+    if os.environ.get("LOCAL_TEST_MODE") == "isolated":
+        raise GeocodingUnavailableError(
+            "Die Adresssuche benötigt Internetzugang. Im lokalen Testkalender ist sie deshalb nicht verfügbar. Bitte die Adresse in den Feldern darunter eingeben."
+        )
     params = urlencode({"q": query, "format": "jsonv2", "limit": str(limit), "addressdetails": "1"})
     request = Request(
         f"{NOMINATIM_SEARCH_URL}?{params}",
@@ -123,10 +135,15 @@ def fetch_geocoding_candidates(query: str, limit: int = 5) -> list[GeocodingCand
     try:
         with urlopen(request, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
-    except (OSError, URLError, TimeoutError, json.JSONDecodeError):
-        return []
+    except (OSError, URLError, TimeoutError, json.JSONDecodeError) as error:
+        raise GeocodingUnavailableError(
+            "Der Adressdienst ist derzeit nicht erreichbar. Bitte später erneut versuchen oder die Adresse manuell eingeben."
+        ) from error
 
-    candidates = [candidate for item in payload[:limit] if (candidate := geocoding_candidate_from_payload(item, query))]
+    if not isinstance(payload, list):
+        raise GeocodingUnavailableError("Der Adressdienst hat eine ungültige Antwort geliefert. Bitte später erneut versuchen.")
+
+    candidates = [candidate for item in payload[:limit] if isinstance(item, dict) and (candidate := geocoding_candidate_from_payload(item, query))]
     return sorted(candidates, key=lambda candidate: candidate.confidence or 0, reverse=True)
 
 
