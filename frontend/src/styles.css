@@ -34769,6 +34769,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
 .site-detail-page.is-project-overview .site-project-notes .site-notes-textarea {
   flex: none;
   min-height: 102px;
+  max-height: clamp(166px, 40dvh, 320px);
   border: 1px solid #becad8;
   border-radius: 0;
   padding: 10px 12px;
@@ -34777,7 +34778,8 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   font-weight: 400;
   color: var(--pf-text);
   background: #fafbfc;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   resize: none;
 }
 .site-detail-page.is-project-overview .site-project-notes .site-notes-textarea:focus { background: #fff; }

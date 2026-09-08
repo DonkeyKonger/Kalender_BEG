@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type TextareaHTMLAttributes } from "react";
 
-/** Fit project notes to their content without replacing the focused editor. */
+/** Grow to the CSS height limit; longer notes scroll within the same editor. */
 export function ProjectNoteTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -9,8 +9,10 @@ export function ProjectNoteTextarea(props: TextareaHTMLAttributes<HTMLTextAreaEl
     if (!element) return;
     const resize = () => {
       if (!element.clientWidth) return;
+      const scrollTop = element.scrollTop;
       element.style.height = "auto";
       element.style.height = `${element.scrollHeight + element.offsetHeight - element.clientHeight}px`;
+      element.scrollTop = scrollTop;
     };
     resize();
     let width = element.clientWidth;
