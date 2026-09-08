@@ -4545,22 +4545,24 @@ function PayrollPersonMonthClosePanel({
           </span>
         </div>
         <div className="payroll-person-month-actions">
-          <label
-            className={`payroll-person-month-toggle${isApproved ? " is-checked" : ""}`}
-            title={disabledReason ?? undefined}
-          >
-            <input
-              aria-describedby={disabledReason ? "payroll-person-month-toggle-reason" : undefined}
-              checked={isApproved}
-              disabled={!canToggleApproval || isUpdating}
-              type="checkbox"
-              onChange={() => (isApproved ? onOpenReopen() : onOpenApprove())}
-            />
-            <span className="payroll-person-month-check" aria-hidden="true">
-              {isApproved ? <Check size={13} strokeWidth={3} /> : null}
-            </span>
-            <span>Monteurmonat geprüft</span>
-          </label>
+          {selectedWorker && (
+            <label
+              className={`payroll-person-month-toggle${isApproved ? " is-checked" : ""}`}
+              title={disabledReason ?? undefined}
+            >
+              <input
+                aria-describedby={disabledReason ? "payroll-person-month-toggle-reason" : undefined}
+                checked={isApproved}
+                disabled={!canToggleApproval || isUpdating}
+                type="checkbox"
+                onChange={() => (isApproved ? onOpenReopen() : onOpenApprove())}
+              />
+              <span className="payroll-person-month-check" aria-hidden="true">
+                {isApproved ? <Check size={13} strokeWidth={3} /> : null}
+              </span>
+              <span>Monteurmonat geprüft</span>
+            </label>
+          )}
           {disabledReason && selectedWorker ? (
             <small className="payroll-person-month-disabled-reason" id="payroll-person-month-toggle-reason">
               {disabledReason}
