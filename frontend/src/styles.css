@@ -34958,7 +34958,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   }
 }
 
-/* Worker-note controls share the heading; date and deletion live below the editor. */
+/* Worker-note actions and visibility share the footer below the editor. */
 .site-detail-page.is-project-overview .site-project-note-block .site-notes-header {
   align-items: center;
 }
@@ -34966,7 +34966,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   flex: 1 1 auto;
   max-width: 100%;
 }
-.site-detail-page.is-project-overview .site-project-note-block .site-notes-header > .site-project-note-share {
+.site-detail-page.is-project-overview .site-project-note-block .site-project-note-footer > .site-project-note-share {
   margin-left: auto;
   max-width: 100%;
 }
@@ -34985,6 +34985,9 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   margin: 0;
 }
 .site-detail-page.is-project-overview .site-project-note-footer .site-project-note-message {
+  flex-basis: 100%;
   margin-left: auto;
   text-align: right;
 }
+
+.site-detail-page.is-project-overview .site-project-note-footer .site-project-note-message:empty { display: none; }

@@ -321,12 +321,6 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved, onDeleted, placement, 
     <section className={`site-notes-section site-project-note-block${saved.visible_to_workers ? "" : " is-unpublished"}`} aria-labelledby={headingId} style={placement}>
       <div className="site-notes-header">
         <h3 id={headingId}><FileText size={17} aria-hidden="true" />{saved.title}</h3>
-        <label className="site-project-note-share" title={!saved.visible_to_workers && !canPublish ? "Bitte zuerst eine andere Monteurinfo ausblenden" : "Diese Notiz für Monteure sichtbar machen"}>
-          <input type="checkbox" aria-label="Für Monteur sichtbar" checked={saved.visible_to_workers}
-            disabled={saving || deleting || (!saved.visible_to_workers && !canPublish)}
-            onChange={(event) => { visibleRef.current = event.target.checked; void save(); }} />
-          <span>Für Monteur sichtbar</span>
-        </label>
       </div>
       <ProjectNoteTextarea className="site-notes-textarea" aria-label={`Notiz: ${saved.title}`} maxLength={20000}
         value={content} disabled={deleting} autoFocus={autoFocus} placeholder="Aktuellen Projektstand eintragen…"
@@ -336,6 +330,12 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved, onDeleted, placement, 
           <ProjectNoteDeleteButton title={saved.title} disabled={saving || deleting} onDelete={() => void deleteBlock()} />
           <time dateTime={saved.created_at}>{new Date(saved.created_at).toLocaleDateString("de-DE")}</time>
         </div>
+        <label className="site-project-note-share" title={!saved.visible_to_workers && !canPublish ? "Bitte zuerst eine andere Monteurinfo ausblenden" : "Diese Notiz für Monteure sichtbar machen"}>
+          <input type="checkbox" aria-label="Für Monteur sichtbar" checked={saved.visible_to_workers}
+            disabled={saving || deleting || (!saved.visible_to_workers && !canPublish)}
+            onChange={(event) => { visibleRef.current = event.target.checked; void save(); }} />
+          <span>Für Monteur sichtbar</span>
+        </label>
         <span className="site-project-note-message" role="status">{deleting ? "Wird gelöscht…" : saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
       </div>
       {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
