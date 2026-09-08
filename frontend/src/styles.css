@@ -34810,3 +34810,18 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   .site-detail-page.is-project-overview .site-detail-header { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .site-detail-page.is-project-overview .site-detail-header-actions { justify-items: start; }
 }
+
+/* Secondary address details stay compact until explicitly expanded. */
+.site-detail-page.is-project-overview .site-inline-edit-display.is-collapsible {
+  align-items: flex-start;
+  gap: 4px;
+}
+.site-detail-page.is-project-overview .site-inline-edit-display.is-collapsible > span {
+  flex: 1 1 0;
+}
+.site-detail-page.is-project-overview .site-inline-edit-display.is-collapsible:not(.is-expanded) > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-inline-edit-display.is-expanded .site-inline-expand-icon { transform: rotate(180deg); }

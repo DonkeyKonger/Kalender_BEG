@@ -2166,6 +2166,7 @@ function OverviewTab({
                   />
                   <InlineEditableDetailItem
                     label="Adresszusatz"
+                    collapsible
                     value={site.address_extra || site.address}
                     canEdit={canEdit}
                     onSave={(value) => onSaveField({ address_extra: value })}
@@ -8728,6 +8729,7 @@ function InlineEditableDetailItem({
   value,
   canEdit,
   required = false,
+  collapsible = false,
   emptyMessage = "Dieses Feld darf nicht leer sein.",
   onSave,
 }: {
@@ -8735,10 +8737,13 @@ function InlineEditableDetailItem({
   value: string | null | undefined;
   canEdit: boolean;
   required?: boolean;
+  collapsible?: boolean;
   emptyMessage?: string;
   onSave: (value: string | null) => Promise<void>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const valueId = useId();
   const [draftValue, setDraftValue] = useState(value ?? "");
   const [status, setStatus] = useState<InlineEditStatus>("idle");
 
@@ -8804,8 +8809,20 @@ function InlineEditableDetailItem({
         </div>
       ) : (
         <>
-          <strong className="site-inline-edit-display">
-            <span>{value || "-"}</span>
+          <strong className={`site-inline-edit-display${collapsible ? " is-collapsible" : ""}${isExpanded ? " is-expanded" : ""}`}>
+            <span id={valueId}>{value || "-"}</span>
+            {collapsible && value ? (
+              <button
+                type="button"
+                className="site-inline-edit-button"
+                aria-label={`${label} ${isExpanded ? "einklappen" : "ausklappen"}`}
+                aria-expanded={isExpanded}
+                aria-controls={valueId}
+                onClick={() => setIsExpanded((expanded) => !expanded)}
+              >
+                <ChevronDown aria-hidden="true" size={13} className="site-inline-expand-icon" />
+              </button>
+            ) : null}
             {canEdit ? (
               <button
                 type="button"
