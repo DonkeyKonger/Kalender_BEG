@@ -79,9 +79,9 @@ def test_reviewed_week_resolves_all_month_subchecks_without_rewriting_diagnostic
     after = case.service.get_status(year=2026, month=8, current_user=case.admin)
     assert not [item for item in after.blockers if item.work_date == entry.work_date]
     # Other weeks are not silently approved; global and person counts agree.
-    assert [item.code for item in after.blockers] == ["payroll_week_not_reviewed"] * 3
+    assert [item.code for item in after.blockers] == ["payroll_week_not_reviewed"] * 3 + ["payroll_last_weekday_entry_missing"]
     assert after.person_approvals[0].blockers == after.blockers
-    assert after.person_approvals[0].blocker_count == 3
+    assert after.person_approvals[0].blocker_count == 4
     assert PayrollMonthExportService.source_manifest(
         PayrollMonthExportService(case.db).load_live_source(
             year=2026, month=8, current_user=case.admin,
@@ -170,6 +170,9 @@ def test_day_validation_is_covered_but_month_template_failure_is_not(review_case
 
 def test_person_approval_revalidates_the_same_week_aware_count(review_case):
     case = review_case
+    last_day = case.add_day(date(2026, 8, 31))
+    last_day.payroll_reviewed_at = datetime.now(timezone.utc)
+    case.db.commit()
     case.add_day(date(2026, 8, 24))
     for week in (32, 33, 34, 35):
         case.review(2026, week)
@@ -379,3 +382,29 @@ def test_review_clock_uses_berlin_date_after_local_midnight(monkeypatch, instant
 
     monkeypatch.setattr(month_module, "datetime", FixedDateTime)
     assert month_module._review_today() == date.fromordinal(instant.date().toordinal() + 1)
+
+
+def test_empty_current_month_stays_open_until_last_weekday_has_entry(review_case, monkeypatch):
+    case = review_case
+    monkeypatch.setattr(month_module, "_review_today", lambda: date(2026, 9, 8))
+    before = case.service.get_status(year=2026, month=9, current_user=case.admin)
+    assert [item.code for item in before.blockers] == ["payroll_last_weekday_entry_missing"]
+    approval = before.person_approvals[0]
+    assert approval.status == "OPEN"
+    assert approval.blocker_count == 1
+    assert approval.blockers == before.blockers
+    assert not approval.export_ready
+    # A reviewed week alone must not make an empty month appear ready.
+    case.review(2026, 40)
+    assert case.service.get_status(year=2026, month=9, current_user=case.admin).blockers == before.blockers
+    last_day = case.add_day(date(2026, 9, 30))
+    last_day.payroll_reviewed_at = datetime.now(timezone.utc)
+    case.db.commit()
+    after = case.service.get_status(year=2026, month=9, current_user=case.admin)
+    assert after.blockers == []
+    assert after.person_approvals[0].status == "OPEN"
+    assert after.person_approvals[0].blocker_fingerprint != approval.blocker_fingerprint
+    case.db.delete(last_day)
+    case.db.commit()
+    case_entries = case.service.get_status(year=2026, month=9, current_user=case.admin)
+    assert "payroll_last_weekday_entry_missing" in {item.code for item in case_entries.blockers}

@@ -1148,6 +1148,7 @@ class PayrollMonthCloseService:
             entry for entry in source.entries if month_start <= entry.work_date <= month_end
         ]
         reviewed_days = self._reviewed_day_keys(entries)
+        blockers.extend(self._last_weekday_entry_blockers(source, month_end))
         blockers.extend(self._time_entry_blockers(entries))
         blockers.extend(
             self._absence_blockers(
@@ -1291,6 +1292,9 @@ class PayrollMonthCloseService:
         reviewed_weeks: set[tuple[int, int, int]],
         reviewed_days: set[tuple[int, date]] | None = None,
     ) -> bool:
+        # Reviewing a week cannot supply the missing month-end entry.
+        if blocker.code == "payroll_last_weekday_entry_missing":
+            return False
         if blocker.person_id is None or blocker.work_date is None:
             return False
         end = blocker.work_date_end or blocker.work_date
@@ -1309,6 +1313,36 @@ class PayrollMonthCloseService:
                 return False
             day += timedelta(days=1)
         return True
+
+    @staticmethod
+    def _last_weekday_entry_blockers(
+        source: PayrollMonthSourceBundle,
+        month_end: date,
+    ) -> list[PayrollMonthBlocker]:
+        last_weekday = month_end
+        while last_weekday.weekday() >= 5:
+            last_weekday -= timedelta(days=1)
+        people_with_entry = {
+            entry.person_id for entry in source.entries
+            if entry.work_date == last_weekday
+        }
+        people_with_entry.update(
+            absence.person_id for absence in source.absences
+            if absence.status == AbsenceStatus.ACTIVE
+            and absence.start_date <= last_weekday <= absence.end_date
+        )
+        return [
+            PayrollMonthBlocker(
+                code="payroll_last_weekday_entry_missing",
+                message=(
+                    "Für den letzten Arbeitstag des Monats fehlt ein Eintrag. "
+                    "Arbeitszeit oder Abwesenheit ergänzen."
+                ),
+                person_id=person.id,
+                work_date=last_weekday,
+            )
+            for person in source.people if person.id not in people_with_entry
+        ]
 
     @staticmethod
     def _time_entry_blockers(entries) -> list[PayrollMonthBlocker]:

@@ -437,7 +437,7 @@ def test_missing_account_and_contract_hours_keep_normal_export_available():
     service = PayrollMonthCloseService(db)
 
     open_status = service.get_status(year=2026, month=8, current_user=admin)
-    assert open_status.blockers == []
+    assert [item.code for item in open_status.blockers] == ["payroll_last_weekday_entry_missing"]
     assert open_status.person_approvals[0].can_approve is True
 
     approved = service.approve_person_month(
@@ -445,8 +445,8 @@ def test_missing_account_and_contract_hours_keep_normal_export_available():
         month=8,
         person_id=worker.id,
         confirmed=True,
-        acknowledged_blocker_count=0,
-        acknowledged_blocker_fingerprint=_blocker_fingerprint([]),
+        acknowledged_blocker_count=1,
+        acknowledged_blocker_fingerprint=open_status.person_approvals[0].blocker_fingerprint,
         current_user=admin,
     )
 

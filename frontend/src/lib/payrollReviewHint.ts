@@ -4,6 +4,10 @@ type PayrollReviewHint = { title: string; instruction: string };
 
 // Display copy only: keep the original blockers and approval rules unchanged.
 const hints: Record<string, PayrollReviewHint> = {
+  payroll_last_weekday_entry_missing: {
+    title: "Eintrag zum Monatsende fehlt",
+    instruction: "Für den letzten Arbeitstag Arbeitszeit oder Abwesenheit ergänzen.",
+  },
   open_time_or_gps_review: {
     title: "Tag noch nicht geprüft",
     instruction: "In der Wochenprüfung Arbeitszeit und Ort prüfen.",
