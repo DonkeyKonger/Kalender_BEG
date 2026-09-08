@@ -22881,6 +22881,11 @@ body.mobile-modal-scroll-locked {
   padding: 4px;
 }
 
+.site-planstatus-color-select .site-color-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
 .site-color-menu button {
   height: 30px;
   border-color: transparent;
