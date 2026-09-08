@@ -208,7 +208,7 @@ function NoteBlock({ siteId, initial, autoFocus }: { siteId: number; initial: Si
   }, [save]);
 
   return (
-    <section className="site-notes-section site-project-note-block" aria-labelledby={headingId}>
+    <section className={`site-notes-section site-project-note-block${saved.visible_to_workers ? "" : " is-unpublished"}`} aria-labelledby={headingId}>
       <div className="site-project-note-heading site-project-note-card-header">
         <div>
           <h3 id={headingId}>{saved.title}</h3>
