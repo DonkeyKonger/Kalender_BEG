@@ -34707,6 +34707,9 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   font-size: 13px;
   font-weight: 400;
 }
+.site-detail-page.is-project-overview .site-project-data .site-inline-edit-button .lucide-pencil {
+  filter: saturate(0.8);
+}
 .site-detail-page.is-project-overview .site-project-data .site-planstatus-color-control { min-width: 0; }
 .site-detail-page.is-project-overview .site-project-data .site-color-select-trigger { max-width: 100%; font-weight: 400; }
 .site-detail-page.is-project-overview .site-project-notes {
