@@ -1,3 +1,4 @@
+import { ProjectNoteTextarea } from "../components/ProjectNoteTextarea";
 import { SiteProjectNotes } from "../components/SiteProjectNotes";
 import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -1529,7 +1530,7 @@ export function SiteDetailPage() {
 
   return (
     <section
-      className={`site-detail-page is-project-file-workspace${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}${isMeasurementTimesheetWorkspace ? " is-measurement-timesheet-workspace" : ""}`}
+      className={`site-detail-page is-project-file-workspace${activeTab === "overview" ? " is-project-overview" : ""}${isMeasurementReviewWorkspace ? " is-measurement-review-workspace" : ""}${isMeasurementTimesheetWorkspace ? " is-measurement-timesheet-workspace" : ""}`}
     >
       <Link
         className="back-link"
@@ -2087,7 +2088,7 @@ function OverviewTab({
       ) : (
         <>
           <SiteProjectNotes key={site.id} siteId={site.id} canEdit={canEdit}
-            renderInformation={(projectNotes) => (
+            information={(
               <div className="site-detail-grid">
                 <DetailSection title="Stammdaten" icon={Building2}>
                   <InlineEditableDetailItem
@@ -2189,17 +2190,14 @@ function OverviewTab({
                     onSave={(color) => onSaveField({ color })}
                   />
                 </DetailSection>
-                {projectNotes}
               </div>
             )}>
             <section className="site-notes-section">
-              <div className="site-project-note-card-header">
-                <div className="site-notes-header">
-                  <h2>Allgemeine Notizen zum Projekt</h2>
-                </div>
-                <p className="site-project-note-help">Für Monteure sichtbar und in der Planmatrix rot hervorgehoben.</p>
+              <div className="site-notes-header">
+                <h2><FileText size={17} aria-hidden="true" />Allgemeine Notizen zum Projekt</h2>
               </div>
-              <textarea
+              <p className="site-project-note-help">Für Monteure sichtbar und in der Planmatrix rot hervorgehoben.</p>
+              <ProjectNoteTextarea
                 aria-label="Allgemeine Notizen zum Projekt"
                 className="site-notes-textarea"
                 disabled={!canEdit}

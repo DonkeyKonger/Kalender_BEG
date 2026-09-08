@@ -1,5 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { LockKeyhole, Plus } from "lucide-react";
+import { FileText, LockKeyhole, Plus } from "lucide-react";
+
+import { ProjectNoteTextarea } from "./ProjectNoteTextarea";
 
 import { api } from "../lib/api";
 import type { SiteNoteBlock, SiteNotes } from "../types/site";
@@ -8,11 +10,11 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : "Die Notiz konnte nicht gespeichert werden. Bitte erneut versuchen.";
 }
 
-export function SiteProjectNotes({ siteId, canEdit, children, renderInformation }: {
+export function SiteProjectNotes({ siteId, canEdit, children, information }: {
   siteId: number;
   canEdit: boolean;
   children: ReactNode;
-  renderInformation: (projectNotes: ReactNode) => ReactNode;
+  information: ReactNode;
 }) {
   const [notes, setNotes] = useState<SiteNotes | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,9 +57,13 @@ export function SiteProjectNotes({ siteId, canEdit, children, renderInformation 
   }
 
   return (
-    <>
-      {renderInformation(canEdit && notes ? <InternalNotes siteId={siteId} initial={notes} /> : null)}
+    <div className="site-project-overview-layout">
+      <aside className="site-project-data" aria-label="Projektdaten">{information}</aside>
       <section className="site-project-notes" aria-label="Projektnotizen">
+        <div className={`site-project-general-notes${canEdit && notes ? " has-office-notes" : ""}`}>
+          {children}
+          {canEdit && notes ? <InternalNotes siteId={siteId} initial={notes} /> : null}
+        </div>
         {canEdit && error && (
           <div className="site-project-notes-error">
             <p className="form-error" role="alert">{error}</p>
@@ -65,7 +71,6 @@ export function SiteProjectNotes({ siteId, canEdit, children, renderInformation 
           </div>
         )}
         <div className="site-project-notes-grid">
-          {children}
           {canEdit && (notes ? <>
             {orderedBlocks.map((block) => <NoteBlock key={block.id} siteId={siteId} initial={block} autoFocus={block.id === createdBlockId} onSaved={updateSavedBlock} />)}
           </> : !error && <p role="status">Projektnotizen werden geladen…</p>)}
@@ -76,7 +81,7 @@ export function SiteProjectNotes({ siteId, canEdit, children, renderInformation 
           </button>}
         </div>
       </section>
-    </>
+    </div>
   );
 }
 
@@ -135,11 +140,11 @@ function InternalNotes({ siteId, initial }: { siteId: number; initial: SiteNotes
   return (
     <section className="site-notes-section site-project-office-notes" aria-labelledby="site-internal-notes-heading">
       <div className="site-notes-header">
-        <h2 id="site-internal-notes-heading">Projekt Notizen</h2>
+        <h2 id="site-internal-notes-heading"><FileText size={17} aria-hidden="true" />Projekt Notizen</h2>
         <span className="site-project-note-visibility"><LockKeyhole size={13} aria-hidden="true" />Nur im Büro</span>
       </div>
       <p className="site-project-note-help">Diese Notizen werden Monteuren nicht angezeigt.</p>
-      <textarea className="site-notes-textarea" aria-label="Projekt Notizen" maxLength={20000} value={content}
+      <ProjectNoteTextarea className="site-notes-textarea" aria-label="Projekt Notizen" maxLength={20000} value={content}
         placeholder="Interne Absprachen und Hinweise…" onChange={(event) => { contentRef.current = event.target.value; setContent(event.target.value); setMessage(""); }} />
       <span className="site-project-note-message" role="status">{saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
       {error && <div className="site-project-note-error">
@@ -225,11 +230,11 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved }: {
 
   return (
     <section className={`site-notes-section site-project-note-block${saved.visible_to_workers ? "" : " is-unpublished"}`} aria-labelledby={headingId}>
-      <div className="site-project-note-heading site-project-note-card-header">
-        <div>
-          <h3 id={headingId}>{saved.title}</h3>
-          <time dateTime={saved.created_at}>{new Date(saved.created_at).toLocaleDateString("de-DE")}</time>
-        </div>
+      <div className="site-notes-header">
+        <h3 id={headingId}><FileText size={17} aria-hidden="true" />{saved.title}</h3>
+      </div>
+      <div className="site-project-note-meta">
+        <time dateTime={saved.created_at}>{new Date(saved.created_at).toLocaleDateString("de-DE")}</time>
         <label className="site-project-note-share" title="Diese Notiz für Monteure sichtbar machen">
           <input type="checkbox" aria-label="Für Monteur sichtbar" checked={saved.visible_to_workers}
             disabled={saving}
@@ -237,7 +242,7 @@ function NoteBlock({ siteId, initial, autoFocus, onSaved }: {
           <span>Für Monteur sichtbar</span>
         </label>
       </div>
-      <textarea className="site-notes-textarea" aria-label={`Notiz: ${saved.title}`} maxLength={20000}
+      <ProjectNoteTextarea className="site-notes-textarea" aria-label={`Notiz: ${saved.title}`} maxLength={20000}
         value={content} autoFocus={autoFocus} placeholder="Aktuellen Projektstand eintragen…"
         onChange={(event) => { contentRef.current = event.target.value; setContent(event.target.value); setMessage(""); }} />
       <span className="site-project-note-message" role="status">{saving ? "Wird gespeichert…" : error ? "Nicht gespeichert" : message}</span>
