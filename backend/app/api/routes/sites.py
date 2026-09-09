@@ -277,6 +277,27 @@ def list_project_folder_item_children(
     )
 
 
+@router.delete(
+    "/{site_id}/documents/folders/{folder_key}/items/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_project_folder_document(
+    site_id: int,
+    folder_key: str,
+    item_id: str,
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> Response:
+    folder = ProjectFolderService(db).get_project_folder_for_site_by_key(site_id, folder_key, current_user)
+    # The storage service rejects folders and verifies the entire parent chain.
+    ProjectStorageService().delete_file_from_folder(
+        drive_id=folder.external_drive_id,
+        folder_item_id=folder.external_item_id,
+        item_id=item_id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/{site_id}/documents/folders/{folder_key}/items/{item_id}/download")
 def download_project_folder_document(
     site_id: int,

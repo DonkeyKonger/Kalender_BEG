@@ -12511,6 +12511,52 @@ body.mobile-modal-scroll-locked {
   white-space: nowrap;
 }
 
+.project-document-delete-slot {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding-right: 8px;
+}
+
+.project-document-delete-slot::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 25%;
+  height: 50%;
+  width: 1px;
+  background: #dce2e9;
+}
+
+.project-document-delete-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #8994a3;
+  cursor: pointer;
+}
+
+.project-document-delete-action:hover:not(:disabled) {
+  color: #a63636;
+  background: #fff1f1;
+}
+
+.project-document-delete-action:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.project-document-delete-action:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
 
 .measurement-import-drop-action.is-drop-target {
   border-color: #1f2f46;
@@ -32229,6 +32275,10 @@ body.mobile-modal-scroll-locked {
 
 .site-detail-page.is-project-file-workspace .project-document-name-cell svg.is-pdf {
   color: #ef4444;
+}
+
+.site-detail-page.is-project-file-workspace .project-document-delete-action svg {
+  color: inherit;
 }
 
 .site-detail-page.is-project-file-workspace .project-document-name-cell svg.is-word {

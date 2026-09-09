@@ -2351,6 +2351,7 @@ function ProjectFoldersPanel({
           <div className="project-folder-content">
             {selectedFolder ? (
               <ProjectFolderDocumentBrowser
+                key={`${site.id}:${selectedFolder.id}`}
                 siteId={site.id}
                 folder={selectedFolder}
                 hasSharePointFolder={Boolean(site.project_folder_web_url)}
@@ -2401,6 +2402,41 @@ function ProjectFolderDocumentBrowser({
   onUpload: (files: FileList | File[]) => Promise<void>;
   onRetry: () => void;
 }) {
+  const { user } = useAuth();
+  const canDeleteDocuments = canEditMainPage(user, "sites");
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+  const [deletedItemIds, setDeletedItemIds] = useState<Set<string>>(() => new Set());
+  const deletePendingRef = useRef(false);
+  const browserMountedRef = useRef(false);
+  useEffect(() => {
+    browserMountedRef.current = true;
+    return () => { browserMountedRef.current = false; };
+  }, []);
+
+  async function handleDelete(item: ProjectFolderDocumentItem): Promise<void> {
+    if (!canDeleteDocuments || item.is_folder || !item.id || deletePendingRef.current) return;
+    if (!window.confirm(`„${item.name}“ wirklich löschen?\n\nDie Datei wird auch aus SharePoint entfernt und in den SharePoint-Papierkorb verschoben.`)) return;
+    deletePendingRef.current = true;
+    setDeletingItemId(item.id);
+    setDeleteError(null);
+    setDeleteMessage(null);
+    try {
+      await api.deleteProjectFolderDocument(siteId, folder.folder_key, item.id);
+      if (!browserMountedRef.current) return;
+      setDeletedItemIds((current) => new Set([...current, item.id]));
+      setDeleteMessage(`„${item.name}“ wurde gelöscht.`);
+    } catch (requestError) {
+      if (browserMountedRef.current) {
+        setDeleteError(readApiError(requestError, "Datei konnte nicht gelöscht werden. Bitte erneut versuchen."));
+      }
+    } finally {
+      deletePendingRef.current = false;
+      if (browserMountedRef.current) setDeletingItemId(null);
+    }
+  }
+
   const [query, setQuery] = useState("");
   const [folderStack, setFolderStack] = useState<ProjectFolderNavigationLevel[]>([]);
   const [folderNavigationLoading, setFolderNavigationLoading] = useState(false);
@@ -2494,7 +2530,11 @@ function ProjectFolderDocumentBrowser({
   }
 
   const currentLevel = folderStack.length > 0 ? folderStack[folderStack.length - 1] : undefined;
-  const currentDocuments = currentLevel?.documents ?? documents;
+  const sourceDocuments = currentLevel?.documents ?? documents;
+  const currentDocuments = useMemo(() => sourceDocuments ? {
+    ...sourceDocuments,
+    items: sourceDocuments.items.filter((item) => !deletedItemIds.has(item.id)),
+  } : null, [sourceDocuments, deletedItemIds]);
   const isInSubfolder = Boolean(currentLevel);
   const currentFolderTitle = currentLevel?.name ?? `${folder.sort_order}. ${folder.name}`;
   const normalizedQuery = query.trim().toLowerCase();
@@ -2642,6 +2682,8 @@ function ProjectFolderDocumentBrowser({
       {folderNavigationError ? <div className="project-record-empty-state is-error"><strong>{folderNavigationError}</strong></div> : null}
       {openError ? <div className="project-record-empty-state is-error"><strong>{openError}</strong></div> : null}
       {downloadError ? <div className="project-record-empty-state is-error"><strong>{downloadError}</strong></div> : null}
+      {deleteError ? <div className="project-record-empty-state is-error" role="alert"><strong>{deleteError}</strong></div> : null}
+      {deleteMessage ? <div className="project-record-empty-state is-success" role="status">{deleteMessage}</div> : null}
 
       {!hasSharePointFolder ? (
         <div className="project-record-empty-state">Noch kein SharePoint-Projektordner für diese Baustelle vorhanden.</div>
@@ -2694,6 +2736,21 @@ function ProjectFolderDocumentBrowser({
                 <tr key={item.id || item.name} className="project-document-row">
                   <td>
                     <div className="project-document-name-cell">
+                      {canDeleteDocuments && !item.is_folder && item.id ? (
+                        <span className="project-document-delete-slot">
+                          <button
+                            type="button"
+                            className="project-document-delete-action"
+                            aria-label={`Datei „${item.name}“ löschen`}
+                            title={`Datei „${item.name}“ löschen`}
+                            disabled={deletingItemId !== null}
+                            aria-busy={deletingItemId === item.id}
+                            onClick={() => void handleDelete(item)}
+                          >
+                            <X aria-hidden="true" size={14} />
+                          </button>
+                        </span>
+                      ) : null}
                       <DocumentTypeIcon item={item} />
                       <strong>{item.name}</strong>
                     </div>

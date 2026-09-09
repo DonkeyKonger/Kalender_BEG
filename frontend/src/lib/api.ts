@@ -1228,6 +1228,13 @@ export const api = {
     );
   },
 
+  async deleteProjectFolderDocument(siteId: number, folderKey: string, itemId: string): Promise<void> {
+    return request<void>(
+      `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/items/${encodeURIComponent(itemId)}`,
+      { method: "DELETE" },
+    );
+  },
+
   async downloadProjectFolderDocument(
     siteId: number,
     folderKey: string,
