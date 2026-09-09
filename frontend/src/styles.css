@@ -12502,6 +12502,10 @@ body.mobile-modal-scroll-locked {
   gap: 8px;
 }
 
+.project-document-row.is-folder {
+  cursor: pointer;
+}
+
 .project-document-name-cell strong {
   overflow: hidden;
   color: #172033;

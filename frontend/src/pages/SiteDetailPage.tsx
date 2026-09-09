@@ -2435,6 +2435,7 @@ function ProjectFolderDocumentBrowser({
   const [query, setQuery] = useState("");
   const [folderStack, setFolderStack] = useState<ProjectFolderNavigationLevel[]>([]);
   const [folderNavigationLoading, setFolderNavigationLoading] = useState(false);
+  const folderNavigationPendingRef = useRef(false);
   const [folderNavigationError, setFolderNavigationError] = useState<string | null>(null);
   const [openingItemId, setOpeningItemId] = useState<string | null>(null);
   const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null);
@@ -2466,13 +2467,15 @@ function ProjectFolderDocumentBrowser({
   }, [folder.id]);
 
   async function handleOpenFolder(item: ProjectFolderDocumentItem): Promise<void> {
-    if (!item.is_folder) {
+    if (!item.is_folder || folderNavigationPendingRef.current) {
       return;
     }
+    folderNavigationPendingRef.current = true;
     setFolderNavigationError(null);
     setFolderNavigationLoading(true);
     try {
       const childDocuments = await api.projectFolderItemChildren(siteId, folder.folder_key, item.id);
+      if (!browserMountedRef.current) return;
       setFolderStack((currentStack) => [
         ...currentStack,
         { itemId: item.id, name: item.name, documents: childDocuments },
@@ -2480,13 +2483,17 @@ function ProjectFolderDocumentBrowser({
       resetFileDropState();
       setQuery("");
     } catch (requestError) {
-      setFolderNavigationError(readApiError(requestError, "Unterordner konnte nicht geladen werden."));
+      if (browserMountedRef.current) {
+        setFolderNavigationError(readApiError(requestError, "Unterordner konnte nicht geladen werden."));
+      }
     } finally {
-      setFolderNavigationLoading(false);
+      folderNavigationPendingRef.current = false;
+      if (browserMountedRef.current) setFolderNavigationLoading(false);
     }
   }
 
   function handleBackToParentFolder(): void {
+    if (folderNavigationPendingRef.current) return;
     setFolderStack((currentStack) => currentStack.slice(0, -1));
     setFolderNavigationError(null);
     resetFileDropState();
@@ -2656,7 +2663,7 @@ function ProjectFolderDocumentBrowser({
             </label>
           ) : null}
           {isInSubfolder ? (
-            <button type="button" className="secondary-action" onClick={handleBackToParentFolder}>
+            <button type="button" className="secondary-action" disabled={folderNavigationLoading} onClick={handleBackToParentFolder}>
               <ArrowLeft aria-hidden="true" size={15} />
               <span>Zurück</span>
             </button>
@@ -2748,7 +2755,11 @@ function ProjectFolderDocumentBrowser({
             </thead>
             <tbody>
               {visibleItems.map((item) => (
-                <tr key={item.id || item.name} className="project-document-row">
+                <tr key={item.id || item.name} className={`project-document-row${item.is_folder ? " is-folder" : ""}`}
+                  onDoubleClick={item.is_folder ? (event) => {
+                    if (event.target instanceof Element && event.target.closest("button, a, input")) return;
+                    void handleOpenFolder(item);
+                  } : undefined}>
                   <td>
                     <div className={`project-document-name-cell${canDeleteDocuments ? " has-delete-actions" : ""}`}>
                       {canDeleteDocuments ? (
