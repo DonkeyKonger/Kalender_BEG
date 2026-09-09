@@ -12548,7 +12548,7 @@ body.mobile-modal-scroll-locked {
   max-height: calc(100dvh - 32px);
   padding: 24px;
   border: 1px solid #d5dfec;
-  border-radius: 8px;
+  border-radius: 0;
   color: #24354e;
   background: white;
   box-shadow: 0 16px 60px #182b4933;
@@ -12583,7 +12583,7 @@ body.mobile-modal-scroll-locked {
   min-height: 40px;
   padding: 8px 10px;
   border: 1px solid #bac8da;
-  border-radius: 3px;
+  border-radius: 0;
   font: inherit;
 }
 
@@ -12606,6 +12606,7 @@ body.mobile-modal-scroll-locked {
 
 .project-folder-create-actions button {
   min-height: 40px;
+  border-radius: 0;
 }
 
 .project-document-delete-slot::after {

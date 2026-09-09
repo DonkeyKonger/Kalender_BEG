@@ -3,6 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 const page = readFileSync(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8");
 const dialog = readFileSync(new URL("../src/components/ProjectFolderCreateDialog.tsx", import.meta.url), "utf8");
+const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+
+test("folder dialog, input and actions use square corners", () => {
+  for (const selector of [".project-folder-create-dialog", ".project-folder-create-dialog input", ".project-folder-create-actions button"]) {
+    const block = styles.slice(styles.indexOf(`${selector} {`)).split("}")[0];
+    assert.match(block, /border-radius: 0;/);
+  }
+});
 
 test("folder creation replaces the external link and targets the current folder", () => {
   assert.doesNotMatch(page, /canOpenSharePointDirectly/);
