@@ -44,6 +44,7 @@ from app.schemas.project_folder import (
     ProjectFolderDocumentItem,
     ProjectFolderDocumentList,
     ProjectFolderRead,
+    ProjectSubfolderCreate,
 )
 from app.schemas.site import (
     SiteCreate,
@@ -275,6 +276,28 @@ def list_project_folder_item_children(
         folder_name=folder.name,
         items=items,
     )
+
+
+@router.post(
+    "/{site_id}/documents/folders/{folder_key}/subfolders",
+    response_model=ProjectFolderDocumentItem,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_project_subfolder(
+    site_id: int,
+    folder_key: str,
+    payload: ProjectSubfolderCreate,
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> ProjectFolderDocumentItem:
+    folder = ProjectFolderService(db).get_project_folder_for_site_by_key(site_id, folder_key, current_user)
+    created = ProjectStorageService().create_subfolder(
+        drive_id=folder.external_drive_id,
+        root_folder_item_id=folder.external_item_id,
+        parent_item_id=payload.parent_item_id,
+        name=payload.name,
+    )
+    return ProjectFolderDocumentItem.model_validate(created)
 
 
 @router.delete(

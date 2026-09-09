@@ -12518,6 +12518,71 @@ body.mobile-modal-scroll-locked {
   padding-right: 8px;
 }
 
+.project-folder-create-dialog {
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  border: 1px solid #d5dfec;
+  border-radius: 8px;
+  color: #24354e;
+  background: white;
+  box-shadow: 0 16px 60px #182b4933;
+}
+
+.project-folder-create-dialog::backdrop {
+  background: #17203366;
+}
+
+.project-folder-create-dialog form {
+  display: grid;
+  gap: 12px;
+}
+
+.project-folder-create-dialog h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.project-folder-create-dialog p {
+  margin: 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.project-folder-create-dialog input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #bac8da;
+  border-radius: 3px;
+  font: inherit;
+}
+
+.project-folder-create-dialog input:focus-visible,
+.project-folder-create-dialog button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.project-folder-create-error {
+  color: #a63636;
+}
+
+.project-folder-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.project-folder-create-actions button {
+  min-height: 40px;
+}
+
 .project-document-delete-slot::after {
   content: "";
   position: absolute;

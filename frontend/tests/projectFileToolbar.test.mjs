@@ -13,7 +13,9 @@ const browserSource = pageSource.slice(browserStart, browserEnd);
 
 test("project file toolbar keeps upload and folder actions without SharePoint or close controls", () => {
   assert.match(browserSource, /<span>\{isUploading \? "Lädt\.\.\." : "Hochladen"\}<\/span>/);
-  assert.match(browserSource, /<Folder aria-hidden="true" size=\{15\} \/>\s*<span>Ordner<\/span>/);
+  assert.match(browserSource, /<Folder aria-hidden="true" size=\{15\} \/>\s*<span>Ordner erstellen<\/span>/);
+  assert.match(browserSource, /onClick=\{\(\) => setCreateFolderOpen\(true\)\}/);
+  assert.doesNotMatch(browserSource, /href=\{folder.external_web_url\}/);
   assert.doesNotMatch(browserSource, /project-document-sharepoint-link/);
   assert.doesNotMatch(browserSource, /<span>SharePoint<\/span>/);
   assert.doesNotMatch(browserSource, /project-document-close-action/);

@@ -1,6 +1,21 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+
+
+class ProjectSubfolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    parent_item_id: str | None = Field(default=None, min_length=1, max_length=512)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        name = value.strip()
+        if not name or name.endswith(".") or any(
+            char in '\\/:*?"<>|' or ord(char) < 32 for char in name
+        ):
+            raise ValueError("Bitte einen gültigen Ordnernamen ohne Sonderzeichen oder abschließenden Punkt eingeben.")
+        return name
 
 
 class ProjectFolderRead(BaseModel):

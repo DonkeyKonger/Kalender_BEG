@@ -1235,6 +1235,13 @@ export const api = {
     );
   },
 
+  async createProjectSubfolder(siteId: number, folderKey: string, name: string, parentItemId: string | null): Promise<ProjectFolderDocumentItem> {
+    return request<ProjectFolderDocumentItem>(
+      `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/subfolders`,
+      { method: "POST", body: JSON.stringify({ name, parent_item_id: parentItemId }) },
+    );
+  },
+
   async downloadProjectFolderDocument(
     siteId: number,
     folderKey: string,

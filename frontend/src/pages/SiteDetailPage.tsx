@@ -1,4 +1,5 @@
 import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
+import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
 import { ProjectNoteTextarea } from "../components/ProjectNoteTextarea";
 import { SiteProjectNotes } from "../components/SiteProjectNotes";
 import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, Wrench, X } from "lucide-react";
@@ -182,7 +183,6 @@ const emptyCustomerForProjectRecord: CustomerCreate = {
 export function SiteDetailPage() {
   const { user } = useAuth();
   const canEditSite = canEditMainPage(user, "sites");
-  const canOpenSharePointDirectly = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const { siteId } = useParams();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -1604,7 +1604,6 @@ export function SiteDetailPage() {
       {activeTab === "folders" ? (
         <ProjectFoldersPanel
           site={site}
-          canOpenSharePointDirectly={canOpenSharePointDirectly}
           folders={folders}
           isLoading={foldersLoading}
           error={foldersError}
@@ -2257,7 +2256,6 @@ function OverviewTab({
 
 function ProjectFoldersPanel({
   site,
-  canOpenSharePointDirectly,
   folders,
   isLoading,
   error,
@@ -2276,7 +2274,6 @@ function ProjectFoldersPanel({
   onRetryDocuments,
 }: {
   site: Site;
-  canOpenSharePointDirectly: boolean;
   folders: ProjectFolder[];
   isLoading: boolean;
   error: string | null;
@@ -2355,7 +2352,6 @@ function ProjectFoldersPanel({
                 siteId={site.id}
                 folder={selectedFolder}
                 hasSharePointFolder={Boolean(site.project_folder_web_url)}
-                canOpenSharePointDirectly={canOpenSharePointDirectly}
                 documents={documents}
                 isLoading={documentsLoading}
                 error={documentsError}
@@ -2379,7 +2375,6 @@ function ProjectFolderDocumentBrowser({
   siteId,
   folder,
   hasSharePointFolder,
-  canOpenSharePointDirectly,
   documents,
   isLoading,
   error,
@@ -2392,7 +2387,6 @@ function ProjectFolderDocumentBrowser({
   siteId: number;
   folder: ProjectFolder;
   hasSharePointFolder: boolean;
-  canOpenSharePointDirectly: boolean;
   documents: ProjectFolderDocumentList | null;
   isLoading: boolean;
   error: string | null;
@@ -2404,6 +2398,7 @@ function ProjectFolderDocumentBrowser({
 }) {
   const { user } = useAuth();
   const canDeleteDocuments = canEditMainPage(user, "sites");
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
@@ -2555,6 +2550,21 @@ function ProjectFolderDocumentBrowser({
   const isCurrentLoading = isInSubfolder ? folderNavigationLoading : isLoading;
   const canUploadToCurrentFolder = hasSharePointFolder && !isInSubfolder;
 
+  async function handleCreateFolder(name: string): Promise<void> {
+    if (!canDeleteDocuments) throw new Error("Keine Bearbeitungsberechtigung.");
+    const parentItemId = currentLevel?.itemId ?? null;
+    const created = await api.createProjectSubfolder(siteId, folder.folder_key, name, parentItemId);
+    if (!browserMountedRef.current) return;
+    setQuery("");
+    if (parentItemId) {
+      setFolderStack((stack) => stack.map((level) => level.itemId === parentItemId ? {
+        ...level, documents: { ...level.documents, items: [...level.documents.items, created] },
+      } : level));
+    } else {
+      onRetry();
+    }
+  }
+
   function handleDocumentSort(key: ProjectDocumentSortKey): void {
     setDocumentSort((currentSort) => getNextProjectDocumentSort(currentSort, key));
   }
@@ -2668,11 +2678,13 @@ function ProjectFolderDocumentBrowser({
               />
             </label>
           ) : null}
-          {canOpenSharePointDirectly && !isInSubfolder && folder.external_web_url ? (
-            <a className="secondary-action project-document-open-action" href={folder.external_web_url} target="_blank" rel="noreferrer">
+          {hasSharePointFolder && canDeleteDocuments ? (
+            <button type="button" className="secondary-action project-document-open-action"
+              disabled={isCurrentLoading || folderNavigationLoading}
+              onClick={() => setCreateFolderOpen(true)}>
               <Folder aria-hidden="true" size={15} />
-              <span>Ordner</span>
-            </a>
+              <span>Ordner erstellen</span>
+            </button>
           ) : null}
         </div>
       </div>
@@ -2684,6 +2696,9 @@ function ProjectFolderDocumentBrowser({
       {downloadError ? <div className="project-record-empty-state is-error"><strong>{downloadError}</strong></div> : null}
       {deleteError ? <div className="project-record-empty-state is-error" role="alert"><strong>{deleteError}</strong></div> : null}
       {deleteMessage ? <div className="project-record-empty-state is-success" role="status">{deleteMessage}</div> : null}
+      {createFolderOpen ? (
+        <ProjectFolderCreateDialog parentName={currentFolderTitle} onCreate={handleCreateFolder} onClose={() => setCreateFolderOpen(false)} />
+      ) : null}
 
       {!hasSharePointFolder ? (
         <div className="project-record-empty-state">Noch kein SharePoint-Projektordner für diese Baustelle vorhanden.</div>
