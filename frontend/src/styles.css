@@ -12511,11 +12511,32 @@ body.mobile-modal-scroll-locked {
   white-space: nowrap;
 }
 
+.project-document-name-cell.has-delete-actions {
+  --project-document-delete-size: 24px;
+  gap: 6px;
+}
+
+.project-document-name-cell > svg {
+  flex: 0 0 auto;
+}
+
 .project-document-delete-slot {
   position: relative;
   display: inline-flex;
   flex: 0 0 auto;
-  padding-right: 8px;
+  width: calc(var(--project-document-delete-size) + 4px);
+  height: var(--project-document-delete-size);
+  padding-right: 4px;
+}
+
+.project-document-delete-slot.is-placeholder::after {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .project-document-name-cell.has-delete-actions {
+    --project-document-delete-size: 32px;
+  }
 }
 
 .project-folder-create-dialog {
@@ -12597,8 +12618,8 @@ body.mobile-modal-scroll-locked {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--project-document-delete-size);
+  height: var(--project-document-delete-size);
   padding: 0;
   border: 0;
   border-radius: 3px;

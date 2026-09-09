@@ -2750,20 +2750,22 @@ function ProjectFolderDocumentBrowser({
               {visibleItems.map((item) => (
                 <tr key={item.id || item.name} className="project-document-row">
                   <td>
-                    <div className="project-document-name-cell">
-                      {canDeleteDocuments && !item.is_folder && item.id ? (
-                        <span className="project-document-delete-slot">
-                          <button
-                            type="button"
-                            className="project-document-delete-action"
-                            aria-label={`Datei „${item.name}“ löschen`}
-                            title={`Datei „${item.name}“ löschen`}
-                            disabled={deletingItemId !== null}
-                            aria-busy={deletingItemId === item.id}
-                            onClick={() => void handleDelete(item)}
-                          >
-                            <X aria-hidden="true" size={14} />
-                          </button>
+                    <div className={`project-document-name-cell${canDeleteDocuments ? " has-delete-actions" : ""}`}>
+                      {canDeleteDocuments ? (
+                        <span className={`project-document-delete-slot${item.is_folder || !item.id ? " is-placeholder" : ""}`} aria-hidden={item.is_folder || !item.id ? true : undefined}>
+                          {!item.is_folder && item.id ? (
+                            <button
+                              type="button"
+                              className="project-document-delete-action"
+                              aria-label={`Datei „${item.name}“ löschen`}
+                              title={`Datei „${item.name}“ löschen`}
+                              disabled={deletingItemId !== null}
+                              aria-busy={deletingItemId === item.id}
+                              onClick={() => void handleDelete(item)}
+                            >
+                              <X aria-hidden="true" size={14} />
+                            </button>
+                          ) : null}
                         </span>
                       ) : null}
                       <DocumentTypeIcon item={item} />
