@@ -11900,7 +11900,6 @@ body.mobile-modal-scroll-locked {
 .site-detail-page .project-document-browser,
 .site-detail-page .project-record-empty-state,
 .site-detail-page .project-placeholder-card,
-.site-detail-page .measurement-review-card,
 .site-detail-page .measurement-review-position,
 .site-detail-page .measurement-review-detail,
 .site-detail-page .measurement-evaluation-grid > div {
@@ -11945,10 +11944,6 @@ body.mobile-modal-scroll-locked {
   color: #276738;
 }
 
-.site-detail-page .measurement-review-card.is-submitted {
-  border-color: var(--project-border-strong);
-  background: #fffaf1;
-}
 
 .project-record-tabs {
   display: inline-flex;
@@ -15333,14 +15328,12 @@ body.mobile-modal-scroll-locked {
   opacity: 0.65;
 }
 
-.measurement-review-list,
 .measurement-review-positions,
 .measurement-review-entry-list {
   display: grid;
   gap: 8px;
 }
 
-.measurement-review-card,
 .measurement-review-position,
 .measurement-review-detail,
 .measurement-evaluation-grid > div {
@@ -15349,47 +15342,9 @@ body.mobile-modal-scroll-locked {
   background: #ffffff;
 }
 
-.measurement-review-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  color: #172033;
-  cursor: default;
-  font: inherit;
-  padding: 0;
-  text-align: left;
-}
 
-.measurement-review-card.has-delete-action {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
-}
 
-.measurement-review-card-controls {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  min-width: 0;
-  padding-left: 12px;
-}
 
-.measurement-review-delete-action {
-  display: inline-grid;
-  width: 22px;
-  height: 24px;
-  place-items: center;
-  border: 1px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: #cbd5e1;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.95rem;
-  font-weight: 650;
-  line-height: 1;
-  padding: 0;
-}
 
 .measurement-review-status-badge.has-delete-control {
   display: inline-grid;
@@ -15399,22 +15354,7 @@ body.mobile-modal-scroll-locked {
   padding: 0;
 }
 
-.measurement-review-status-badge.has-delete-control .measurement-review-delete-action {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
-  min-height: 26px;
-  border: 0;
-  padding-left: 6px;
-  padding-right: 4px;
-  color: #aeb8c6;
-}
 
-.measurement-review-status-badge.has-delete-control .measurement-review-status-spacer {
-  display: block;
-  min-height: 26px;
-}
 
 .measurement-review-status-badge.has-delete-control .measurement-review-status-label {
   display: inline-flex;
@@ -15507,104 +15447,19 @@ body.mobile-modal-scroll-locked {
   outline-offset: -2px;
 }
 
-.measurement-review-delete-action:hover,
-.measurement-review-delete-action:focus-visible {
-  border-color: transparent;
-  background: transparent;
-  color: #94a3b8;
-  outline: none;
-}
 
-.measurement-review-status-badge.has-delete-control .measurement-review-delete-action:hover,
-.measurement-review-status-badge.has-delete-control .measurement-review-delete-action:focus-visible {
-  background: #f1f5f9;
-  color: #64748b;
-}
 
-.measurement-review-delete-action:disabled {
-  cursor: not-allowed;
-  opacity: 0.48;
-}
 
-.measurement-review-card-open {
-  display: grid;
-  grid-template-columns: 152px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  padding: 12px;
-  text-align: left;
-}
 
-.measurement-review-card.has-delete-action .measurement-review-card-open {
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding-left: 0;
-}
 
-.measurement-review-card-open:hover,
-.measurement-review-card-open:focus-visible {
-  background: rgb(15 23 42 / 3%);
-  outline: none;
-}
 
-.measurement-review-pdf-action {
-  min-height: 32px;
-  border: 1px solid #cbd5e1;
-  border-radius: 2px;
-  background: #ffffff;
-  color: #1e293b;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 800;
-  padding: 5px 10px;
-  white-space: nowrap;
-}
 
-.measurement-review-pdf-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-right: 12px;
-}
 
-.measurement-review-pdf-action:hover,
-.measurement-review-pdf-action:focus-visible {
-  border-color: #94a3b8;
-  background: #f8fafc;
-  outline: none;
-}
 
-.measurement-review-pdf-action:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
 
-.measurement-review-card.is-submitted {
-  border-color: #9db7da;
-  background: #f8fbff;
-}
 
-.measurement-review-card.is-old-offer {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-}
 
-.measurement-review-card.is-old-offer .measurement-review-card-open {
-  color: #475569;
-}
 
-.measurement-review-card-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
 
 .measurement-status.is-old-offer {
   min-height: 20px;
@@ -15615,17 +15470,12 @@ body.mobile-modal-scroll-locked {
   font-size: 0.72rem;
 }
 
-.measurement-review-card strong,
-.measurement-review-card-main strong,
 .measurement-review-position strong,
 .measurement-review-entry strong,
 .measurement-evaluation-grid strong {
   color: #111827;
 }
 
-.measurement-review-card small,
-.measurement-review-card-main small,
-.measurement-review-card b,
 .measurement-review-position small,
 .measurement-review-position span,
 .measurement-review-entry span,
@@ -15634,28 +15484,7 @@ body.mobile-modal-scroll-locked {
   font-size: 0.88rem;
 }
 
-.measurement-review-card-main .measurement-review-email-status,
-.measurement-review-card-main .measurement-review-submitter-status {
-  font-size: 0.78rem;
-  font-weight: 760;
-  line-height: 1.25;
-}
 
-.measurement-review-card-main .measurement-review-submitter-status {
-  color: #64748b;
-}
-
-.measurement-review-email-status.is-not-sent {
-  color: #94a3b8;
-}
-
-.measurement-review-email-status.is-signature-open {
-  color: #b7791f;
-}
-
-.measurement-review-email-status.is-complete {
-  color: #2f6096;
-}
 
 .measurement-review-detail {
   display: grid;
@@ -15697,11 +15526,6 @@ body.mobile-modal-scroll-locked {
   text-overflow: ellipsis;
 }
 
-.measurement-review-card-main {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
 
 .measurement-review-entry {
   display: grid;
@@ -31958,7 +31782,6 @@ body.mobile-modal-scroll-locked {
 .site-detail-page.is-project-file-workspace .project-document-browser,
 .site-detail-page.is-project-file-workspace .project-record-empty-state,
 .site-detail-page.is-project-file-workspace .project-placeholder-card,
-.site-detail-page.is-project-file-workspace .measurement-review-card,
 .site-detail-page.is-project-file-workspace .measurement-review-position,
 .site-detail-page.is-project-file-workspace .measurement-review-detail,
 .site-detail-page.is-project-file-workspace .measurement-timesheet-workspace,
@@ -32015,9 +31838,7 @@ body.mobile-modal-scroll-locked {
 .site-detail-page.is-project-file-workspace .project-document-browser p,
 .site-detail-page.is-project-file-workspace .project-document-item span,
 .site-detail-page.is-project-file-workspace .project-placeholder-card small,
-.site-detail-page.is-project-file-workspace .measurement-base-card small,
-.site-detail-page.is-project-file-workspace .measurement-review-card small,
-.site-detail-page.is-project-file-workspace .measurement-review-card b {
+.site-detail-page.is-project-file-workspace .measurement-base-card small {
   color: var(--pf-muted);
 }
 
@@ -32025,8 +31846,7 @@ body.mobile-modal-scroll-locked {
 .site-detail-page.is-project-file-workspace .site-inline-edit-display > span,
 .site-detail-page.is-project-file-workspace .project-document-item strong,
 .site-detail-page.is-project-file-workspace .project-placeholder-card span,
-.site-detail-page.is-project-file-workspace .measurement-base-card strong,
-.site-detail-page.is-project-file-workspace .measurement-review-card strong {
+.site-detail-page.is-project-file-workspace .measurement-base-card strong {
   color: var(--pf-text);
 }
 
@@ -32767,28 +32587,8 @@ body.mobile-modal-scroll-locked {
   gap: 16px;
 }
 
-.site-detail-page .measurement-review-toolbar .measurement-review-header-copy {
-  display: grid;
-  min-width: 0;
-  gap: 7px;
-}
 
-.site-detail-page .measurement-review-toolbar .measurement-review-header-actions {
-  display: flex;
-  flex: 0 0 auto;
-  justify-content: flex-end;
-  min-width: 0;
-  margin-left: auto;
-  gap: 8px;
-}
 
-.site-detail-page .measurement-review-toolbar .measurement-review-header-actions > .secondary-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: auto;
-  white-space: nowrap;
-}
 
 .measurement-create-modal-backdrop {
   position: fixed;
@@ -32954,16 +32754,7 @@ body.mobile-modal-scroll-locked {
     align-items: stretch;
   }
 
-  .site-detail-page .measurement-review-toolbar .measurement-review-header-actions {
-    align-self: flex-end;
-    max-width: 100%;
-    margin-left: 0;
-  }
 
-  .site-detail-page .measurement-review-toolbar .measurement-review-header-actions > .secondary-action {
-    max-width: 100%;
-    white-space: normal;
-  }
 }
 
 .measurement-review-package-row,

@@ -5,6 +5,7 @@ import test from "node:test";
 import { getMeasurementSuggestionAlignment } from "../src/lib/measurementSuggestionPlacement.ts";
 
 const pageSource = readFileSync(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8");
+const overviewSource = readFileSync(new URL("../src/components/MeasurementReviewOverview.tsx", import.meta.url), "utf8");
 const apiSource = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
@@ -16,7 +17,8 @@ test("desktop measurement creation uses the protected shared measurement endpoin
 });
 
 test("measurement review exposes the office dialog and reuses the controlled picker", () => {
-  assert.match(pageSource, /<Plus aria-hidden="true" size=\{15\} \/>\s*Aufmaß anlegen/);
+  assert.match(overviewSource, /onClick=\{props.onCreate\}[^\n]*Aufmaß anlegen/);
+  assert.match(pageSource, /canCreate=\{canCreateBatch\} onCreate=\{openCreateDialog\}/);
   assert.match(pageSource, /Bereich\/Ort \*/);
   assert.match(pageSource, /Aufmaßdatum \*/);
   assert.match(pageSource, /Verantwortlicher Monteur/);
@@ -157,7 +159,7 @@ test("linking a free position invalidates derived execution and time analysis da
 
 test("office origin does not create a special presentation and never offers a fake worker original", () => {
   assert.doesNotMatch(pageSource, /Dieses Aufmaß wurde im Büro angelegt und nicht durch einen Monteur eingereicht\./);
-  assert.match(pageSource, /batch\.has_original_worker_submission \? \(/);
+  assert.match(overviewSource, /selected\.has_original_worker_submission \? \["original"\] : \[\]/);
   assert.doesNotMatch(styles, /\.measurement-review-origin-note/);
   assert.match(styles, /\.measurement-create-modal\s*\{[^}]*border-radius:\s*0/s);
 });

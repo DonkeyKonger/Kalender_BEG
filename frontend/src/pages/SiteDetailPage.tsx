@@ -1,11 +1,13 @@
 import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
+import { MeasurementReviewOverview } from "../components/MeasurementReviewOverview";
+import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import { ProjectNoteTextarea } from "../components/ProjectNoteTextarea";
 import { SiteProjectNotes } from "../components/SiteProjectNotes";
 import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, MouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
@@ -19,7 +21,7 @@ import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } 
 import { SupplementaryOrderDetail } from "../components/SupplementaryOrderDetail";
 import { ApiError, api } from "../lib/api";
 import { containsDraggedFiles } from "../lib/fileDrag";
-import { getCustomerEmailStatus, type CustomerEmailStatusItem } from "../lib/customerEmailStatus";
+import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
 import {
   EXTRA_WORK_PHOTO_ACCEPT,
   MAX_EXTRA_WORK_PHOTOS,
@@ -1630,6 +1632,7 @@ export function SiteDetailPage() {
       ) : null}
       {activeTab === "measurement" ? (
         <MeasurementTab
+          site={site}
           siteNumber={site.site_number}
           activeSubtab={measurementSubtab}
           onSubtabChange={(subtab) => {
@@ -2911,6 +2914,8 @@ function ProjectRecordStatusControl<T extends string>({
   onSelect,
   onToggle,
   showCaret = true,
+  menuLabel = "Status ändern",
+  menuHeading = "Status setzen auf",
 }: {
   active: boolean;
   ariaLabel: string;
@@ -2921,6 +2926,8 @@ function ProjectRecordStatusControl<T extends string>({
   onSelect: (status: T) => void;
   onToggle: () => void;
   showCaret?: boolean;
+  menuLabel?: string;
+  menuHeading?: string;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -2995,12 +3002,12 @@ function ProjectRecordStatusControl<T extends string>({
       {active ? createPortal(
         <div
           ref={popoverRef}
-          aria-label="Status ändern"
+          aria-label={menuLabel}
           className="project-record-status-popover"
           role="menu"
           style={{ left: position.left, top: position.top }}
         >
-          <strong>Status setzen auf</strong>
+          <strong>{menuHeading}</strong>
           {options.map((option) => (
             <button key={option.value} role="menuitem" type="button" onClick={() => onSelect(option.value)}>
               {option.label}
@@ -4787,6 +4794,7 @@ function ExtraWorkOverviewPhotoModal({
 
 
 function MeasurementTab({
+  site,
   siteNumber,
   activeSubtab,
   onSubtabChange,
@@ -4849,6 +4857,7 @@ function MeasurementTab({
   onExportPdf,
 }: {
   siteNumber: string | null;
+  site: Site;
   activeSubtab: MeasurementSubtab;
   onSubtabChange: (subtab: MeasurementSubtab) => void;
   bases: MeasurementBase[];
@@ -5079,6 +5088,7 @@ function MeasurementTab({
 
       {activeSubtab === "review" ? (
         <MeasurementReviewPanel
+          site={site}
           siteNumber={siteNumber}
           projectPositionSuggestions={projectPositionSuggestions}
           canCreateBatch={canCreateBatch}
@@ -6094,6 +6104,7 @@ function addMeasurementEntryToItems(items: MobileMeasurementItem[], createdEntry
 }
 
 function MeasurementReviewPanel({
+  site,
   siteNumber,
   projectPositionSuggestions,
   canCreateBatch,
@@ -6132,6 +6143,7 @@ function MeasurementReviewPanel({
   onResetToSubmitted,
   onExportPdf,
 }: {
+  site: Site;
   siteNumber: string | null;
   projectPositionSuggestions: MeasurementPositionSuggestion[];
   canCreateBatch: boolean;
@@ -6174,7 +6186,8 @@ function MeasurementReviewPanel({
   const [undoStack, setUndoStack] = useState<MeasurementEntryUndoState[]>([]);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
-  const [pdfExportingAction, setPdfExportingAction] = useState<string | null>(null);
+  const [overviewState, setOverviewState] = useState<MeasurementOverviewState>({ selectedId: null, query: "", page: 1 });
+  const [openOverviewActionId, setOpenOverviewActionId] = useState<number | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<number | null>(null);
   const [restoringBatchId, setRestoringBatchId] = useState<number | null>(null);
   const [openStatusBatchId, setOpenStatusBatchId] = useState<number | null>(null);
@@ -6441,8 +6454,7 @@ function MeasurementReviewPanel({
     }
   }
 
-  async function deleteBatch(event: MouseEvent<HTMLButtonElement>, batch: MobileMeasurementBatch): Promise<void> {
-    event.stopPropagation();
+  async function deleteBatch(batch: MobileMeasurementBatch): Promise<void> {
     if (deletingBatchId !== null || reviewActionLoading) {
       return;
     }
@@ -6585,27 +6597,42 @@ function MeasurementReviewPanel({
 
   return (
     <>
-      <header className="project-record-toolbar measurement-review-toolbar">
-        <div className="measurement-review-header-copy">
-          <h2><Ruler aria-hidden="true" size={18} />{archiveMode ? "Archivierte Aufmaße" : "Prüfung"}</h2>
-          <p>
-            {archiveMode
-              ? "Gelöschte Aufmaße können hier wiederhergestellt werden."
-              : "Eingereichte Aufmaßpakete prüfen, unterschreiben lassen und abschließen."}
-          </p>
-        </div>
-        <div className="measurement-review-header-actions">
-          {!archiveMode && canCreateBatch ? (
-            <button type="button" className="secondary-action" disabled={batchesLoading} onClick={openCreateDialog}>
-              <Plus aria-hidden="true" size={15} />
-              Aufmaß anlegen
-            </button>
-          ) : null}
-          <button type="button" className="secondary-action" disabled={batchesLoading} onClick={onToggleArchive}>
-            {archiveMode ? "Aktive Aufmaße anzeigen" : "Archiv anzeigen"}
-          </button>
-        </div>
-      </header>
+      <MeasurementReviewOverview
+        site={site} batches={sortedBatches} state={overviewState} onState={(state) => { setOverviewState(state); setOpenStatusBatchId(null); setOpenOverviewActionId(null); }}
+        loading={batchesLoading} error={batchesError} message={reviewMessage} actionError={reviewError}
+        archive={archiveMode} busy={reviewActionLoading || statusActionId !== null || isCreatingBatch}
+        canCreate={canCreateBatch} onCreate={openCreateDialog} onRetry={onRetryBatches}
+        onToggleArchive={() => { setOverviewState({ selectedId: null, query: "", page: 1 }); setOpenStatusBatchId(null); setOpenOverviewActionId(null); onToggleArchive(); }}
+        onOpen={onSelectBatch} onExport={onExportPdf} canExport={isMeasurementBatchPdfExportable}
+        title={(batch) => formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}
+        date={(value) => value.length === 10 ? formatDateOnly(value) : formatExtraWorkOverviewCreatedDate(value)} dateTime={formatDateTime}
+        renderStatus={(batch) => {
+          const badge = getMeasurementBatchStatusBadge(batch);
+          return <span className={`${badge.className} measurement-overview-status`}>
+            <ProjectRecordStatusControl
+              active={openStatusBatchId === batch.id} label={badge.label}
+              ariaLabel={`${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}: Status ${badge.label}`}
+              busy={reviewActionLoading || statusActionId !== null}
+              options={!archiveMode && canPromoteStatus ? measurementStatusPromotionOptions(batch.status, batch.customer_signed_at) : []}
+              onClose={() => setOpenStatusBatchId(null)}
+              onSelect={(status) => { setOpenStatusBatchId(null); onPromoteStatus(batch, status); }}
+              onToggle={() => setOpenStatusBatchId(current => current === batch.id ? null : batch.id)}
+            />
+          </span>;
+        }}
+        renderActions={(batch) => canCreateBatch ? <div className="measurement-overview-more">
+          <ProjectRecordStatusControl
+            active={openOverviewActionId === batch.id} label="⋯" showCaret={false}
+            menuLabel="Aufmaßaktionen" menuHeading="Weitere Aktionen"
+            ariaLabel={`Weitere Aktionen für ${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}`}
+            busy={reviewActionLoading || deletingBatchId !== null || restoringBatchId !== null}
+            options={[{value: "action", label: archiveMode ? "Wiederherstellen" : "Aufmaß löschen"}]}
+            onClose={() => setOpenOverviewActionId(null)}
+            onToggle={() => setOpenOverviewActionId(current => current === batch.id ? null : batch.id)}
+            onSelect={() => { setOpenOverviewActionId(null); if (archiveMode) void restoreBatch(batch); else void deleteBatch(batch); }}
+          />
+        </div> : null}
+      />
       {isCreateDialogOpen ? (
         <div
           className="measurement-create-modal-backdrop"
@@ -6721,169 +6748,6 @@ function MeasurementReviewPanel({
               </button>
             </footer>
           </section>
-        </div>
-      ) : null}
-      {batchesLoading ? <div className="matrix-state">Aufmaßpakete werden geladen...</div> : null}
-      {batchesError ? (
-        <div className="project-record-empty-state is-error">
-          <strong>{batchesError}</strong>
-          <button type="button" className="secondary-action" onClick={onRetryBatches}>Erneut laden</button>
-        </div>
-      ) : null}
-      {!batchesLoading && !batchesError && sortedBatches.length === 0 ? (
-        <div className="project-record-empty-state">
-          {archiveMode
-            ? "Keine archivierten Aufmaße vorhanden."
-            : "Noch keine Aufmaßpakete vorhanden. Du kannst ein Aufmaß im Büro anlegen, wenn kein Monteur-Aufmaß vorliegt."}
-        </div>
-      ) : null}
-      {!batchesLoading && !batchesError && sortedBatches.length > 0 ? (
-        <div className="measurement-review-list">
-          {sortedBatches.map((batch) => {
-            const canExportPdf = isMeasurementBatchPdfExportable(batch.status);
-            const isOldOffer = batch.is_current_offer === false;
-            const checkedPdfKey = `${batch.id}:checked`;
-            const originalPdfKey = `${batch.id}:original`;
-            const isExportingCheckedPdf = pdfExportingAction === checkedPdfKey;
-            const isExportingOriginalPdf = pdfExportingAction === originalPdfKey;
-            const isExportingPdf = isExportingCheckedPdf || isExportingOriginalPdf;
-            const statusBadge = getMeasurementBatchStatusBadge(batch);
-            const statusOptions = canPromoteStatus
-              ? measurementStatusPromotionOptions(batch.status, batch.customer_signed_at)
-              : [];
-            if (archiveMode) {
-              return (
-                <div
-                  key={batch.id}
-                  className="measurement-review-card has-delete-action is-archive"
-                >
-                  <div className="measurement-review-card-controls">
-                    <span className={`${statusBadge.className} has-delete-control`}>
-                      <span className="measurement-review-status-spacer" aria-hidden="true" />
-                      <span className="measurement-review-status-label">{statusBadge.label}</span>
-                    </span>
-                  </div>
-                  <div className="measurement-review-card-open">
-                    <div className="measurement-review-card-main">
-                      <div className="measurement-review-card-title-row">
-                        <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
-                        {batch.offer_name ? <span className="measurement-status is-old-offer">{batch.offer_name}</span> : null}
-                      </div>
-                      <small className="measurement-review-submitter-status">
-                        {batch.origin === "OFFICE"
-                          ? `Im Büro angelegt${batch.created_by_name ? ` · von ${batch.created_by_name}` : ""}`
-                          : batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
-                        {batch.origin !== "OFFICE" && batch.submitted_at ? ` · Eingereicht ${formatDateTime(batch.submitted_at)}` : ""}
-                      </small>
-                      <small className="measurement-review-submitter-status">
-                        Gelöscht {batch.deleted_at ? formatDateTime(batch.deleted_at) : "ohne Datum"}
-                        {batch.deleted_by_name ? ` · von ${batch.deleted_by_name}` : " · ohne Benutzer"}
-                      </small>
-                    </div>
-                    <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>
-                  </div>
-                  <div className="measurement-review-pdf-actions">
-                    <button
-                      type="button"
-                      className="measurement-review-pdf-action"
-                      disabled={reviewActionLoading || restoringBatchId !== null}
-                      onClick={() => void restoreBatch(batch)}
-                    >
-                      {restoringBatchId === batch.id ? "Stellt wieder her..." : "Wiederherstellen"}
-                    </button>
-                  </div>
-                </div>
-              );
-            }
-            return (
-              <div
-                key={batch.id}
-                className={`measurement-review-card has-delete-action${batch.status === "submitted" ? " is-submitted" : ""}${isOldOffer ? " is-old-offer" : ""}`}
-              >
-                <div className="measurement-review-card-controls">
-                  <span className={`${statusBadge.className} has-delete-control`}>
-                    <button
-                      type="button"
-                      className="measurement-review-delete-action"
-                      disabled={reviewActionLoading || deletingBatchId !== null}
-                      title="Aufmaß löschen"
-                      aria-label={`${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)} löschen`}
-                      onClick={(event) => void deleteBatch(event, batch)}
-                    >
-                      {deletingBatchId === batch.id ? "..." : "×"}
-                    </button>
-                    <ProjectRecordStatusControl
-                      active={openStatusBatchId === batch.id}
-                      ariaLabel={`${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}: Status ${statusBadge.label}`}
-                      busy={statusActionId === batch.id}
-                      label={statusBadge.label}
-                      options={statusOptions}
-                      onClose={() => setOpenStatusBatchId(null)}
-                      onSelect={(status) => {
-                        setOpenStatusBatchId(null);
-                        onPromoteStatus(batch, status);
-                      }}
-                      onToggle={() => setOpenStatusBatchId((current) => (current === batch.id ? null : batch.id))}
-                    />
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="measurement-review-card-open"
-                  onClick={() => onSelectBatch(batch)}
-                >
-                  <div className="measurement-review-card-main">
-                    <div className="measurement-review-card-title-row">
-                      <strong>{formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}</strong>
-                      {isOldOffer ? <span className="measurement-status is-old-offer">Altes Angebot</span> : null}
-                    </div>
-                    <CustomerEmailStatusLine item={batch} />
-                    <small className="measurement-review-submitter-status">
-                      {batch.origin === "OFFICE"
-                        ? `Im Büro angelegt${batch.created_by_name ? ` · von ${batch.created_by_name}` : ""}`
-                        : batch.submitted_by_name ? `Von ${batch.submitted_by_name}` : "Ohne Einreicher"}
-                      {batch.origin !== "OFFICE" && batch.submitted_at ? ` · ${formatDateTime(batch.submitted_at)}` : ""}
-                      {isOldOffer && batch.offer_name ? ` · ${batch.offer_name}` : ""}
-                    </small>
-                    {batch.area_location || batch.measurement_date || batch.assigned_employee_name ? (
-                      <small className="measurement-review-submitter-status">
-                        {[batch.area_location, batch.measurement_date ? formatDateOnly(batch.measurement_date, "numeric") : null, batch.assigned_employee_name].filter(Boolean).join(" · ")}
-                      </small>
-                    ) : null}
-                  </div>
-                  <b>{batch.entry_count} Zeilen · {batch.position_count} Positionen</b>
-                </button>
-                <div className="measurement-review-pdf-actions">
-                  <button
-                    type="button"
-                    className="measurement-review-pdf-action"
-                    disabled={!canExportPdf || isExportingPdf}
-                    title={canExportPdf ? "Geprüftes PDF mit Projektleiterkorrekturen exportieren" : "PDF-Export erst nach Prüfung oder Abschluss verfügbar"}
-                    onClick={() => {
-                      setPdfExportingAction(checkedPdfKey);
-                      void onExportPdf(batch, "checked").finally(() => setPdfExportingAction(null));
-                    }}
-                  >
-                    {isExportingCheckedPdf ? "PDF..." : "Aufmaß geprüft"}
-                  </button>
-                  {batch.has_original_worker_submission ? (
-                    <button
-                      type="button"
-                      className="measurement-review-pdf-action"
-                      disabled={!canExportPdf || isExportingPdf}
-                      title={canExportPdf ? "Originales Monteur-Aufmaß exportieren" : "PDF-Export erst nach Prüfung oder Abschluss verfügbar"}
-                      onClick={() => {
-                        setPdfExportingAction(originalPdfKey);
-                        void onExportPdf(batch, "original").finally(() => setPdfExportingAction(null));
-                      }}
-                    >
-                      {isExportingOriginalPdf ? "PDF..." : "Originales Monteur-Aufmaß"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
         </div>
       ) : null}
     </>
@@ -9350,11 +9214,6 @@ function getExtraWorkTicketStatusBadge(ticket: MobileExtraWorkTicket): {
     label: labels[status] ?? status,
     className: ["measurement-status", "measurement-review-status-badge", `is-${status}`].join(" "),
   };
-}
-
-function CustomerEmailStatusLine({ item }: { item: CustomerEmailStatusItem }) {
-  const status = getCustomerEmailStatus(item);
-  return <small className={`measurement-review-email-status ${status.className}`}>{status.label}</small>;
 }
 
 function formatExtraWorkTicketHours(ticket: MobileExtraWorkTicket): string {
