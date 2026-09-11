@@ -59,6 +59,26 @@ export function MeasurementReviewOverview(props: Props) {
 
   useLayoutEffect(() => { if (detailRef.current) detailRef.current.scrollTop = 0; }, [selected?.id]);
 
+  useLayoutEffect(() => {
+    const detail = detailRef.current;
+    if (!detail) return;
+    const update = () => {
+      const style = window.getComputedStyle(detail);
+      const border = parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
+      const scrollbar = Math.max(0, detail.offsetWidth - detail.clientWidth - border);
+      detail.style.setProperty("--measurement-overview-detail-scrollbar", `${scrollbar}px`);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(detail);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+      detail.style.removeProperty("--measurement-overview-detail-scrollbar");
+    };
+  }, []);
+
   async function exportPdf(batch: MobileMeasurementBatch) {
     if (pdfPending.current) return;
     pdfPending.current = true;

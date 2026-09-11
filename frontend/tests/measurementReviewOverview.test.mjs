@@ -300,3 +300,14 @@ test("measurement review uses the full shell width without double-compensating t
   // Other project tabs retain their existing padding; only the review shell is full bleed.
   assert.match(css, /\.site-detail-page\.is-project-file-workspace \.project-record-tab-panel \{[^}]*padding: 18px;/);
 });
+
+test("right actions compensate the actual detail scrollbar without moving other content", () => {
+  const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/components/MeasurementReviewOverview.tsx", import.meta.url), "utf8");
+  assert.match(css, /\.measurement-overview-toolbar-right \{ position: relative;[^}]*scrollbar-gutter: auto/);
+  assert.match(css, /\.measurement-overview-detail-head \{[^}]*padding-right: max\(0px, calc\(18px - var\(--measurement-overview-detail-scrollbar, 0px\)\)\)/);
+  assert.match(source, /detail.offsetWidth - detail.clientWidth - border/);
+  assert.match(source, /observer.observe\(detail\)/);
+  assert.match(css, /\.measurement-overview-detail-head button:focus-visible \{ outline-offset: -2px/);
+  assert.match(css, /\.measurement-overview-meta \{[^}]*padding: 14px 22px/);
+});
