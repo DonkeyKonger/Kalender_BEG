@@ -4,7 +4,7 @@ import { FileText, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
 import type { MobileMeasurementBatch, Site } from "../types/site";
 import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
 import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
-import { formatMeasurementCount, getMeasurementOverviewWindow } from "../lib/measurementReviewOverview";
+import { formatMeasurementCount, formatMeasurementOverviewHours, getMeasurementOverviewWindow } from "../lib/measurementReviewOverview";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import "./MeasurementReviewOverview.css";
 
@@ -88,7 +88,7 @@ export function MeasurementReviewOverview(props: Props) {
     <div className="measurement-overview-workspace" ref={workspaceRef} style={{ "--measurement-overview-height": `${height}px` } as CSSProperties}>
       <div className="measurement-overview-master">
         <div className="measurement-overview-list" role="region" aria-label="Aufmaßliste">
-          <table><colgroup><col style={{width:"148px"}}/><col/><col style={{width:"104px"}}/><col style={{width:"104px"}}/><col style={{width:"104px"}}/></colgroup>
+          <table><colgroup><col style={{width:"180px"}}/><col/><col style={{width:"104px"}}/><col style={{width:"104px"}}/><col style={{width:"104px"}}/></colgroup>
             <thead><tr>{["Status", "Titel / Nummer", "Datum", "Ersteller", "Umfang"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
             <tbody>
               {loading || error || view.visible.length === 0 ? <tr className="measurement-overview-state"><td colSpan={5}>
@@ -104,7 +104,9 @@ export function MeasurementReviewOverview(props: Props) {
                   </td>
                   <td title={batch.measurement_date ? "Aufmaßdatum" : "Einreichdatum"}>{date ? props.date(date) : "—"}</td>
                   <td title={creator.fullName || undefined}>{batch.created_by_name ? creator.shortName : "—"}</td>
-                  <td><span>{formatMeasurementCount(batch.entry_count,"Zeile","Zeilen")}</span><span>{formatMeasurementCount(batch.position_count,"Position","Positionen")}</span></td>
+                  <td className="measurement-overview-hours" title="Arbeitsstunden der Aufmaßpositionen laut hinterlegter Zeitkalkulation">
+                    {formatMeasurementOverviewHours(batch.reported_hours)}
+                  </td>
                 </tr>;
               })}
             </tbody>

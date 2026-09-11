@@ -30,14 +30,14 @@
 .measurement-overview-list th,
 .measurement-overview-list td { padding: 0 10px; border-bottom: 1px solid var(--measurement-overview-border); text-align: left; }
 .measurement-overview-list td:nth-child(4) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.measurement-overview-list td:last-child > span { display: block; }
+.measurement-overview-list .measurement-overview-hours { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .measurement-overview-list tbody tr:hover td { background: #f7fafd; }
 .measurement-overview-list tbody tr.is-selected td { background: #eff5fd; }
 .measurement-overview-list tr.is-selected td:first-child { box-shadow: inset 3px 0 var(--pf-primary); }
 .measurement-overview .measurement-overview-select { display: block; width: 100%; border: 0; padding: 0; background: none; color: #15253f; text-align: left; font-size: .84rem; line-height: 1.25; font-weight: 650; cursor: pointer; overflow-wrap: anywhere; }
 .measurement-overview-list .is-old-offer { display: inline-block; margin-top: 4px; border-radius: 2px; font-size: .75rem; white-space: normal; }
 .measurement-overview .measurement-overview-status { display: flex; width: 100%; min-width: 0; height: auto; min-height: 28px; border-radius: 2px; padding: 0; }
-.measurement-overview .measurement-review-status-label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 26px; padding: 4px 8px; color: #1e3552; white-space: normal; font-size: .78rem; font-weight: 750; line-height: 1; }
+.measurement-overview .measurement-review-status-label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 26px; padding: 4px 8px; color: #1e3552; white-space: nowrap; font-size: .78rem; font-weight: 750; line-height: 1; }
 .measurement-overview-pagination { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 48px; border-top: 1px solid var(--measurement-overview-border); padding: 7px 10px; color: #526a86; background: #fbfcfe; font-size: .76rem; }
 .measurement-overview-pagination nav { display: flex; gap: 3px; align-items: center; }
 .measurement-overview-pagination button { min-width: 28px; height: 28px; padding: 0; border: 1px solid transparent; background: none; color: #30577d; font: inherit; font-weight: 750; cursor: pointer; }

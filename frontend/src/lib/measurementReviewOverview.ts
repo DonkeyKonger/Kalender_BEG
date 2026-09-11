@@ -23,3 +23,12 @@ export function getMeasurementOverviewWindow(
 export function formatMeasurementCount(value: number | null | undefined, singular: string, plural: string) {
   return value === null || value === undefined ? `— ${plural}` : `${value} ${value === 1 ? singular : plural}`;
 }
+
+// Use the server's quantity × calculation-time total, not entry counts or tracked time.
+export function formatMeasurementOverviewHours(value: MobileMeasurementBatch["reported_hours"] | undefined) {
+  if (value === null || value === undefined || (typeof value === "string" && !value.trim())) return "—";
+  const hours = Number(value);
+  return Number.isFinite(hours)
+    ? `${new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(hours)} h`
+    : "—";
+}

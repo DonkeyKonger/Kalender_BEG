@@ -11,7 +11,7 @@ const compiled = await build({
     import React from 'react';
     import { renderToStaticMarkup } from 'react-dom/server';
     import { MeasurementReviewOverview } from './src/components/MeasurementReviewOverview';
-    export { getMeasurementOverviewWindow, formatMeasurementCount } from './src/lib/measurementReviewOverview';
+    export { getMeasurementOverviewWindow, formatMeasurementCount, formatMeasurementOverviewHours } from './src/lib/measurementReviewOverview';
     export { EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE } from './src/lib/extraWorkOverview';
     export const render = props => renderToStaticMarkup(React.createElement(MeasurementReviewOverview, props));
   `, resolveDir: fileURLToPath(new URL("..", import.meta.url)), loader: "tsx" },
@@ -22,7 +22,7 @@ const compiledModule = { exports: {} };
 new Function("require", "module", "exports", compiled.outputFiles[0].text)(
   createRequire(import.meta.url), compiledModule, compiledModule.exports,
 );
-const { getMeasurementOverviewWindow: windowFor, formatMeasurementCount, render } = compiledModule.exports;
+const { getMeasurementOverviewWindow: windowFor, formatMeasurementCount, formatMeasurementOverviewHours, render } = compiledModule.exports;
 const title = batch => `Aufmaß 9999.${batch.number}`;
 const batches = Array.from({ length: 12 }, (_, i) => ({
   id: i + 1, number: 25 - i, title: `Paket ${i + 1}`, status: "draft", origin: "MONTEUR",
@@ -89,6 +89,23 @@ test("counts distinguish unknown, zero, one and multiple server entries/position
   assert.equal(formatMeasurementCount(0, "Zeile", "Zeilen"), "0 Zeilen");
   assert.equal(formatMeasurementCount(1, "Position", "Positionen"), "1 Position");
   assert.equal(formatMeasurementCount(3, "Position", "Positionen"), "3 Positionen");
+});
+
+test("hours preserve server totals, decimal strings, zero and negative corrections without inventing missing values", () => {
+  for (const [value, expected] of [[12.5, "12,50 h"], ["1234.567", "1.234,57 h"], [0, "0,00 h"], [-1.25, "-1,25 h"], [null, "—"], [undefined, "—"], ["", "—"], [" ", "—"], ["invalid", "—"], [Infinity, "—"]]) {
+    assert.equal(formatMeasurementOverviewHours(value), expected);
+  }
+});
+
+test("Umfang renders calculated hours, never entry/position counts or minutes; detail counts remain", () => {
+  const html = render({ ...props, batches: [{ ...batches[0], entry_count: 18, position_count: 14, reported_minutes: 750, reported_hours: "12.5" }] });
+  const table = html.match(/<table>[\s\S]*?<\/table>/)[0];
+  assert.match(table, /12,50 h/);
+  assert.doesNotMatch(table, /18 Zeilen|14 Positionen|750/);
+  assert.match(html, /<dt>Zeilen<\/dt><dd>18/);
+  assert.match(html, /<dt>Positionen<\/dt><dd>14/);
+  const unknown = render({ ...props, batches: [{ ...batches[0], reported_hours: null }] });
+  assert.match(unknown, /class="measurement-overview-hours"[^>]*>—<\/td>/);
 });
 
 test("rendered overview keeps table headers, creator and submitter distinct and shows old offers", () => {
