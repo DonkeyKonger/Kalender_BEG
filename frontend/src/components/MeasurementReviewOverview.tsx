@@ -93,7 +93,7 @@ export function MeasurementReviewOverview(props: Props) {
       <div className="measurement-overview-master">
         <div className="measurement-overview-list" role="region" aria-label="Aufmaßliste">
           <table><colgroup><col style={{width:"180px"}}/><col/><col style={{width:"104px"}}/><col style={{width:"104px"}}/><col style={{width:"104px"}}/><col style={{width:"104px"}}/></colgroup>
-            <thead><tr>{["Status", "Titel / Nummer", "Abgerechnet", "Datum", "Ersteller", "Umfang"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+            <thead><tr>{["Status", "Titel / Nummer", "Abgerechnet", "Datum", "Ersteller", "Umfang"].map((label) => <th key={label} scope="col" className={label === "Umfang" ? "measurement-overview-hours" : undefined}>{label}</th>)}</tr></thead>
             <tbody>
               {loading || error || view.visible.length === 0 ? <tr className="measurement-overview-state"><td colSpan={6}>
                 {loading ? "Aufmaße werden geladen…" : error ? <><p role="alert">{error}</p><button type="button" className="secondary-action" onClick={props.onRetry}>Erneut laden</button></> : state.query.trim() ? "Keine Aufmaße gefunden" : archive ? "Keine archivierten Aufmaße vorhanden" : "Noch keine Aufmaße vorhanden"}

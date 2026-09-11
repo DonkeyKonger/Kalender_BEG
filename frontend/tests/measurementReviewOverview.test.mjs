@@ -167,7 +167,8 @@ test("delivery status follows commission number as the shared icon with accessib
 
 test("rendered overview keeps table headers, creator and submitter distinct and shows old offers", () => {
   const html = render(props);
-  for (const name of ["Status", "Titel / Nummer", "Datum", "Ersteller", "Umfang"]) assert.ok(html.includes(`<th scope="col">${name}</th>`));
+  for (const name of ["Status", "Titel / Nummer", "Datum", "Ersteller"]) assert.ok(html.includes(`<th scope="col">${name}</th>`));
+  assert.match(html, /<th scope="col" class="measurement-overview-hours">Umfang<\/th>/);
   assert.match(html, /title="Anna Büro"/);
   assert.match(html, /<dt>Einreicher<\/dt><dd>Boris Monteur/);
   assert.doesNotMatch(html, /<dt>Zeilen<\/dt>/);
