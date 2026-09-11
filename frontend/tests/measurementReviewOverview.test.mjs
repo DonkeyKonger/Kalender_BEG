@@ -261,3 +261,11 @@ test("scoped layout shares its divider and keeps rows natural inside independent
   assert.match(css, /@container measurement-review \(max-width: 1279px\)/);
   assert.match(css, /\.measurement-overview-list \.measurement-overview-hours \{[^}]*text-align: right;[^}]*font-variant-numeric: tabular-nums/);
 });
+
+test("create button and detail action group share the same full width including gaps", () => {
+  const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
+  assert.match(css, /--measurement-overview-actions-width: 184px/);
+  assert.match(css, /\.measurement-overview-toolbar-right > button \{[^}]*width: var\(--measurement-overview-actions-width\)/);
+  assert.match(css, /\.measurement-overview-detail-head > div \{[^}]*grid-template-columns: minmax\(0, 1fr\) 68px 34px;[^}]*width: var\(--measurement-overview-actions-width\);[^}]*gap: 8px/);
+  assert.match(css, /@container measurement-review \(max-width: 1279px\)[\s\S]*?\.measurement-overview-toolbar-right \{[^}]*scrollbar-gutter: auto/);
+});
