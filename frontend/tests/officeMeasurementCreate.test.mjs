@@ -159,7 +159,8 @@ test("linking a free position invalidates derived execution and time analysis da
 
 test("office origin does not create a special presentation and never offers a fake worker original", () => {
   assert.doesNotMatch(pageSource, /Dieses Aufmaß wurde im Büro angelegt und nicht durch einen Monteur eingereicht\./);
-  assert.match(overviewSource, /selected\.has_original_worker_submission \? \["original"\] : \[\]/);
+  assert.match(overviewSource, /await props.onExport\(batch, "checked"\)/);
+  assert.doesNotMatch(overviewSource, /Originales Monteur-Aufmaß|measurement-overview-documents/);
   assert.doesNotMatch(styles, /\.measurement-review-origin-note/);
   assert.match(styles, /\.measurement-create-modal\s*\{[^}]*border-radius:\s*0/s);
 });

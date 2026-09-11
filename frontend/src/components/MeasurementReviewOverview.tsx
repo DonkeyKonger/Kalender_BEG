@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { Check, FileText, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
+import { Check, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
 import type { MobileMeasurementBatch, Site } from "../types/site";
 import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
 import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
@@ -58,11 +58,12 @@ export function MeasurementReviewOverview(props: Props) {
 
   useLayoutEffect(() => { if (detailRef.current) detailRef.current.scrollTop = 0; }, [selected?.id]);
 
-  async function exportPdf(batch: MobileMeasurementBatch, mode: "checked" | "original") {
+  async function exportPdf(batch: MobileMeasurementBatch) {
     if (pdfPending.current) return;
     pdfPending.current = true;
-    setPdfAction(`${batch.id}:${mode}`);
-    try { await props.onExport(batch, mode); }
+    setPdfAction(`${batch.id}`);
+    // The checked export uses current entries, not the original submission snapshot.
+    try { await props.onExport(batch, "checked"); }
     catch { /* The existing parent export handler presents the error. */ }
     finally { pdfPending.current = false; setPdfAction(null); }
   }
@@ -138,6 +139,11 @@ export function MeasurementReviewOverview(props: Props) {
         {!selected ? <p className="measurement-overview-empty">{loading ? "Aufmaße werden geladen…" : "Kein Aufmaß ausgewählt"}</p> : <>
           <header className="measurement-overview-detail-head"><h3>{title(selected)}</h3><div>
             <button type="button" className="secondary-action" disabled={archive || props.busy} title={archive ? "Aufmaß vor dem Öffnen wiederherstellen" : undefined} onClick={() => props.onOpen(selected)}>Öffnen</button>
+            <button type="button" className="secondary-action measurement-overview-pdf"
+              disabled={archive || props.busy || !props.canExport(selected.status) || pdfAction !== null}
+              title={archive ? "Aufmaß vor dem PDF-Export wiederherstellen" : props.canExport(selected.status) ? "Aktuellen Aufmaßstand als PDF herunterladen" : "PDF-Export erst nach Prüfung oder Abschluss verfügbar"}
+              aria-label={`${title(selected)}: aktuellen Stand als PDF herunterladen`} aria-busy={pdfAction === `${selected.id}`}
+              onClick={() => void exportPdf(selected)}>{pdfAction === `${selected.id}` ? "PDF…" : "PDF"}</button>
             {props.renderActions(selected)}
           </div></header>
           <dl className="measurement-overview-meta">
@@ -160,14 +166,6 @@ export function MeasurementReviewOverview(props: Props) {
               </span>
             </dd></div>
           </dl></section>
-          <section><h4>Dokumente</h4><div className="measurement-overview-documents">
-            {(["checked", ...(selected.has_original_worker_submission ? ["original"] : [])] as const).map((mode) => <button type="button" key={mode}
-              className="secondary-action" disabled={archive || !props.canExport(selected.status) || pdfAction !== null}
-              title={archive ? "Aufmaß vor dem PDF-Export wiederherstellen" : props.canExport(selected.status) ? mode === "checked" ? "Geprüftes PDF mit Projektleiterkorrekturen exportieren" : "Originales Monteur-Aufmaß exportieren" : "PDF-Export erst nach Prüfung oder Abschluss verfügbar"}
-              onClick={() => void exportPdf(selected,mode as "checked" | "original")}>
-              <FileText size={18} aria-hidden="true"/>{pdfAction === `${selected.id}:${mode}` ? "PDF…" : mode === "checked" ? "Aufmaß geprüft" : "Originales Monteur-Aufmaß"}
-            </button>)}
-          </div></section>
         </>}
       </aside>
     </div>

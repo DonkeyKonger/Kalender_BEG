@@ -159,13 +159,28 @@ test("rendered overview keeps table headers, creator and submitter distinct and 
   assert.match(html, /Noch nicht an Kunden gesendet/);
 });
 
-test("actual PDF availability remains gated; office origin never fabricates an original", () => {
+test("one current-state PDF follows Open in the header, without a documents section or original variant", () => {
+  for (const batch of [batches[0], batches[1]]) {
+    const html = render({ ...props, batches: [{ ...batch, status: "reviewed" }] });
+    const header = html.match(/<header class="measurement-overview-detail-head">([\s\S]*?)<\/header>/)[1];
+    assert.match(header, />Öffnen<\/button><button[^>]*measurement-overview-pdf[^>]*>PDF<\/button>/);
+    assert.equal([...html.matchAll(/class="secondary-action measurement-overview-pdf"/g)].length, 1);
+    assert.match(header, /aria-label="[^"]*: aktuellen Stand als PDF herunterladen"/);
+    assert.doesNotMatch(html, /<h4>Dokumente|measurement-overview-documents|Originales Monteur-Aufmaß|Aufmaß geprüft/);
+  }
+  const source = readFileSync(new URL("../src/components/MeasurementReviewOverview.tsx", import.meta.url), "utf8");
+  assert.match(source, /await props.onExport\(batch, "checked"\)/);
+  assert.match(source, /onClick=\{\(\) => void exportPdf\(selected\)\}/);
+});
+
+test("single PDF availability remains gated for drafts, archived records and pending actions", () => {
   const draft = render({ ...props, batches: [{ ...batches[0], origin: "OFFICE" }] });
   assert.doesNotMatch(draft, /Originales Monteur-Aufmaß/);
   assert.match(draft, /disabled="" title="PDF-Export erst nach Prüfung/);
   const reviewed = render({ ...props, batches: [{ ...batches[1], status: "reviewed" }] });
-  assert.match(reviewed, /Originales Monteur-Aufmaß/);
-  assert.doesNotMatch(reviewed, /disabled="" title="(?:Geprüftes|Originales)/);
+  assert.match(reviewed, />PDF<\/button>/);
+  assert.doesNotMatch(reviewed, /disabled="" title="Aktuellen Aufmaßstand/);
+  assert.match(render({ ...props, batches: [{ ...batches[1], status: "reviewed" }], busy: true }), /disabled="" title="Aktuellen Aufmaßstand/);
   const archived = render({ ...props, batches: [batches[1]], archive: true });
   assert.match(archived, /disabled="" title="Aufmaß vor dem Öffnen wiederherstellen/);
   assert.match(archived, /disabled="" title="Aufmaß vor dem PDF-Export wiederherstellen/);

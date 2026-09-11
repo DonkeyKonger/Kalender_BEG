@@ -50,6 +50,7 @@
 .measurement-overview-detail-head > div { display: flex; align-items: center; flex-shrink: 0; gap: 8px; }
 .site-detail-page.is-project-file-workspace .measurement-overview .measurement-overview-detail-head button { min-height: 30px; border: 1px solid #30577d; border-radius: 2px; padding: 6px 10px; color: #30577d; background: white; font-size: .8rem; font-weight: 750; }
 .measurement-overview-more { width: 34px; }
+.measurement-overview-pdf { min-width: 68px; }
 .measurement-overview-more button { width: 100%; }
 .site-detail-page.is-project-file-workspace .measurement-overview .measurement-overview-more button { height: 32px; min-height: 32px; padding: 0; }
 .measurement-overview-detail dl { display: grid; margin: 0; }
@@ -63,18 +64,14 @@
 .measurement-overview-detail section:last-child { border: 0; }
 .measurement-overview-detail h4 { font-size: .875rem; font-weight: 750; line-height: normal; margin: 0 0 10px; color: #15253f; }
 .measurement-overview-project { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 84px 100px; }
-.measurement-overview-documents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.site-detail-page.is-project-file-workspace .measurement-overview .measurement-overview-documents button { justify-content: flex-start; min-height: 32px; padding: 6px 10px; border: 1px solid var(--measurement-overview-border); border-radius: 2px; white-space: normal; font-size: .8rem; font-weight: 750; line-height: 1.35; text-align: left; gap: 8px; }
 .site-detail-page.is-project-file-workspace .measurement-overview button.secondary-action:hover:not(:disabled) { background: #f6f9fc; border-color: #30577d; }
 .site-detail-page.is-project-file-workspace .measurement-overview button.primary-action:hover:not(:disabled) { background: #174678; }
-.measurement-overview-documents svg { flex: none; }
 .measurement-overview-origin { margin: 0; padding: 8px 22px; font-size: .78rem; color: #526a86; border-bottom: 1px solid var(--measurement-overview-border); }
 .measurement-overview-empty { padding: 28px; color: #526a86; }
 .measurement-overview button:focus-visible,
 .measurement-overview-search:focus-within { outline: 2px solid #2f65ec; outline-offset: 2px; }
 @container measurement-review (max-width: 1399px) {
   .measurement-overview-meta { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 80px; }
-  .measurement-overview-documents { grid-template-columns: 1fr; }
 }
 @container measurement-review (max-width: 1279px) {
   .measurement-overview-toolbar, .measurement-overview-workspace { grid-template-columns: minmax(0,1fr); }
