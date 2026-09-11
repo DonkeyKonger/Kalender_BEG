@@ -3,6 +3,20 @@ import { getExtraWorkOverviewPageWindow } from "./extraWorkOverview";
 
 export type MeasurementOverviewState = { selectedId: number | null; query: string; page: number };
 
+// Use actual wrapped chip positions, not a fixed item count or viewport breakpoint.
+export function getMeasurementLocationPreviewCount(rowTops: number[]): number {
+  let row = 0;
+  let previousTop = -Infinity;
+  for (let index = 0; index < rowTops.length; index += 1) {
+    if (Math.abs(rowTops[index] - previousTop) > 1) {
+      row += 1;
+      previousTop = rowTops[index];
+    }
+    if (row > 2) return index;
+  }
+  return rowTops.length;
+}
+
 // Filter the complete server result before applying the local page window.
 export function getMeasurementOverviewWindow(
   batches: MobileMeasurementBatch[], state: MeasurementOverviewState, pageSize: number,

@@ -11,7 +11,7 @@ const compiled = await build({
     import React from 'react';
     import { renderToStaticMarkup } from 'react-dom/server';
     import { MeasurementReviewOverview } from './src/components/MeasurementReviewOverview';
-    export { getMeasurementOverviewWindow, formatMeasurementCount, formatMeasurementOverviewHours } from './src/lib/measurementReviewOverview';
+    export { getMeasurementOverviewWindow, formatMeasurementCount, formatMeasurementOverviewHours, getMeasurementLocationPreviewCount } from './src/lib/measurementReviewOverview';
     export { EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE } from './src/lib/extraWorkOverview';
     export const render = props => renderToStaticMarkup(React.createElement(MeasurementReviewOverview, props));
   `, resolveDir: fileURLToPath(new URL("..", import.meta.url)), loader: "tsx" },
@@ -176,22 +176,36 @@ test("one current-state PDF follows Open in the header, without a documents sect
   assert.match(source, /onClick=\{\(\) => void exportPdf\(selected\)\}/);
 });
 
-test("mounting locations follow project details and keep long lists collapsed without losing names", () => {
+test("mounting location preview fills exactly two measured rows, independent of item count", () => {
+  const count = compiledModule.exports.getMeasurementLocationPreviewCount;
+  assert.equal(count([]), 0);
+  assert.equal(count([0, 0, 0, 0, 0, 0]), 6);
+  assert.equal(count([0, 0, 0, 32, 32, 32, 64]), 6);
+  assert.equal(count([0, 32, 64, 96]), 2);
+  assert.equal(count([0, 0.2, 32, 32.3, 64]), 4);
+});
+
+test("mounting locations use an inaccessible measuring list and preserve all names for adaptive layout", () => {
   const locations = ["1. OG BTB", "EG BTA", "Dach", ...Array.from({ length: 9 }, (_, i) => `Ort ${i + 4}`)];
   const html = render({ ...props, batches: [{ ...batches[0], mounting_locations: locations }] });
   assert.ok(html.indexOf("measurement-overview-locations") > html.indexOf("measurement-overview-project"));
   assert.match(html, /<h4>Montageorte<span[^>]*>12<\/span><\/h4>/);
   const preview = html.match(/<ul class="measurement-overview-location-list" aria-label="Montageorte">([\s\S]*?)<\/ul>/)[1];
-  assert.equal([...preview.matchAll(/<li /g)].length, 3);
-  assert.match(html, /<details class="measurement-overview-locations-more">/);
-  assert.match(html, /\+ 9 weitere anzeigen/);
-  assert.match(html, /tabindex="0" role="region" aria-label="Weitere Montageorte"/);
+  // SSR has no geometry; layout effect determines the visible count before browser paint.
+  assert.equal([...preview.matchAll(/<li /g)].length, locations.length);
+  assert.match(html, /measurement-overview-location-measure" aria-hidden="true"/);
   for (const location of locations) assert.ok(html.includes(`>${location}</li>`));
   const short = render({ ...props, batches: [{ ...batches[0], mounting_locations: locations.slice(0, 2) }] });
   assert.doesNotMatch(short, /<details/);
   assert.match(render(props), /Keine Montageorte eingetragen/);
   const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
   assert.match(css, /\.measurement-overview-locations-scroll \{[^}]*max-height: 160px; overflow-y: auto/);
+  assert.match(css, /\.measurement-overview-location-measure \{[^}]*position: absolute;[^}]*visibility: hidden/);
+  assert.match(css, /\.measurement-overview-location-preview \{[^}]*overflow: hidden/);
+  const source = readFileSync(new URL("../src/components/MeasurementReviewOverview.tsx", import.meta.url), "utf8");
+  assert.match(source, /new ResizeObserver\(measure\)/);
+  assert.match(source, /locations\.slice\(visibleCount\)/);
+  assert.match(source, /remaining\.length > 0 \? <details/);
 });
 
 test("photo gallery belongs to the selected measurement and follows mounting locations", () => {

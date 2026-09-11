@@ -71,7 +71,9 @@
 .measurement-overview-location-count { margin-left: 8px; color: #58708e; font-size: .75rem; font-weight: 500; }
 .measurement-overview-location-list { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
 .measurement-overview-location-list li { min-width: 0; max-width: 100%; padding: 4px 8px; border: 1px solid var(--measurement-overview-border); background: #f7f9fc; color: #334e70; font-size: .8rem; line-height: 1.35; overflow-wrap: anywhere; }
-.measurement-overview-locations > .measurement-overview-location-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.measurement-overview-location-preview { position: relative; min-width: 0; overflow: hidden; }
+.measurement-overview-location-preview .measurement-overview-location-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.measurement-overview-location-measure { position: absolute; inset: 0 0 auto; visibility: hidden; pointer-events: none; }
 .measurement-overview-locations-empty { margin: 0; color: #58708e; font-size: .8rem; }
 .measurement-overview-locations-more { margin-top: 8px; }
 .measurement-overview-locations-more summary { width: fit-content; padding: 4px 0; cursor: pointer; color: #30577d; font-size: .8rem; font-weight: 650; }

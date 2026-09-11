@@ -4,7 +4,7 @@ import { Check, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
 import type { MobileMeasurementBatch, Site } from "../types/site";
 import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
 import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
-import { formatMeasurementCount, formatMeasurementOverviewHours, getMeasurementOverviewWindow } from "../lib/measurementReviewOverview";
+import { formatMeasurementCount, formatMeasurementOverviewHours, getMeasurementOverviewWindow, getMeasurementLocationPreviewCount } from "../lib/measurementReviewOverview";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import "./MeasurementReviewOverview.css";
 
@@ -176,13 +176,36 @@ export function MeasurementReviewOverview(props: Props) {
 }
 
 function MeasurementMountingLocations({ locations }: { locations: string[] }) {
-  const remaining = locations.slice(3);
+  const measureRef = useRef<HTMLUListElement>(null);
+  const [visibleCount, setVisibleCount] = useState(locations.length);
+  useLayoutEffect(() => {
+    const list = measureRef.current;
+    if (!list) return;
+    const measure = () => {
+      if (list.getBoundingClientRect().width === 0) return;
+      setVisibleCount(getMeasurementLocationPreviewCount(
+        Array.from(list.children, item => item.getBoundingClientRect().top),
+      ));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(list);
+    // Font changes can alter the wrapping even when the total list height stays equal.
+    Array.from(list.children).forEach(item => observer.observe(item));
+    return () => observer.disconnect();
+  }, [locations]);
+  const remaining = locations.slice(visibleCount);
   return <section className="measurement-overview-locations">
     <h4>Montageorte{locations.length > 0 ? <span className="measurement-overview-location-count">{locations.length}</span> : null}</h4>
     {locations.length === 0 ? <p className="measurement-overview-locations-empty">Keine Montageorte eingetragen</p> : <>
-      <ul className="measurement-overview-location-list" aria-label="Montageorte">
-        {locations.slice(0, 3).map(location => <li key={location} title={location}>{location}</li>)}
-      </ul>
+      <div className="measurement-overview-location-preview">
+        <ul className="measurement-overview-location-list" aria-label="Montageorte">
+          {locations.slice(0, visibleCount).map(location => <li key={location} title={location}>{location}</li>)}
+        </ul>
+        <ul ref={measureRef} className="measurement-overview-location-list measurement-overview-location-measure" aria-hidden="true">
+          {locations.map(location => <li key={location}>{location}</li>)}
+        </ul>
+      </div>
       {remaining.length > 0 ? <details className="measurement-overview-locations-more">
         <summary><span className="when-closed">+ {remaining.length} weitere anzeigen</span><span className="when-open">Weniger anzeigen</span></summary>
         <div className="measurement-overview-locations-scroll" tabIndex={0} role="region" aria-label="Weitere Montageorte">
