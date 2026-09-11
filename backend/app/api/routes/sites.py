@@ -962,6 +962,28 @@ def list_measurement_batch_photos(site_id: int, batch_id: int, include_deleted: 
     return MeasurementService(db).list_site_batch_photos(site_id=site_id, batch_id=batch_id, include_deleted=include_deleted)
 
 
+@router.post(
+    "/{site_id}/measurement-batches/{batch_id}/photos",
+    response_model=MobileMeasurementBatchPhotoRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_measurement_batch_photo(
+    site_id: int,
+    batch_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchPhotoRead:
+    return MeasurementService(db).upload_site_batch_photo(
+        site_id=site_id,
+        batch_id=batch_id,
+        current_user=current_user,
+        filename=file.filename,
+        content=await file.read(),
+        content_type=file.content_type,
+    )
+
+
 @router.get("/{site_id}/measurement-batches/{batch_id}/photos/{photo_id}/content")
 def download_measurement_batch_photo(site_id: int, batch_id: int, photo_id: int, include_deleted: bool = Query(default=False), current_user: User = Depends(CAN_READ), db: Session = Depends(get_db)) -> Response:
     content, content_type, filename = MeasurementService(db).get_site_batch_photo_content(site_id=site_id, batch_id=batch_id, photo_id=photo_id, current_user=current_user, include_deleted=include_deleted)

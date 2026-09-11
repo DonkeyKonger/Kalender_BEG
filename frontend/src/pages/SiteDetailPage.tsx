@@ -1700,6 +1700,10 @@ export function SiteDetailPage() {
             setMeasurementTimeAnalysisError(null);
           }}
           batches={measurementBatches}
+          onBatchPhotoCountUpdated={(batchId, photoCount) => {
+            setMeasurementBatches((current) => current.map((batch) => batch.id === batchId ? { ...batch, photo_count: photoCount } : batch));
+            setSelectedMeasurementBatch((current) => current?.id === batchId ? { ...current, photo_count: photoCount } : current);
+          }}
           measurementWorkers={measurementWorkers}
           measurementWorkersLoading={measurementWorkersLoading}
           measurementWorkersError={measurementWorkersError}
@@ -3833,7 +3837,7 @@ function ExtraWorkOverviewPhotos({
   const photoIdentity = photos.map((photo) => photo.id).join(":");
   const isUploadBlocked = (
     !canUpload
-    || photoKind === "measurement"
+    || includeDeleted
     || isLoading
     || hasError
     || uploadingSlotIndex !== null
@@ -4037,7 +4041,8 @@ function ExtraWorkOverviewPhotos({
     setUploadError(null);
     setUploadErrorSlotIndex(null);
     try {
-      const storedPhoto = await api.uploadSiteExtraWorkTicketPhoto(
+      const upload = photoKind === "measurement" ? api.uploadSiteMeasurementBatchPhoto : api.uploadSiteExtraWorkTicketPhoto;
+      const storedPhoto = await upload(
         uploadSiteId,
         uploadTicketId,
         candidate.file,
@@ -4209,7 +4214,7 @@ function ExtraWorkOverviewPhotos({
       {isLoading ? <span className="sr-only" role="status">Fotovorschau wird geladen…</span> : null}
       {hasError ? <span className="project-extra-work-photo-feedback is-error" role="status">Fotovorschau nicht verfügbar.</span> : null}
       {uploadError ? <span className="project-extra-work-photo-feedback is-error" role="alert">{uploadError}</span> : null}
-      {photoKind === "measurement" && !isLoading && !hasError && photos.length === 0 ? <span className="project-extra-work-photo-feedback">Keine Fotos vorhanden.</span> : null}
+      {photoKind === "measurement" && !canUpload && !isLoading && !hasError && photos.length === 0 ? <span className="sr-only">Keine Fotos vorhanden.</span> : null}
       {photoKind === "extra-work" && photos.length > 0 ? (
         <span aria-live="polite" className="sr-only" role="status">
           {ticket.customer_signed_at ? (
@@ -4857,6 +4862,7 @@ function MeasurementTab({
   onRetry,
   onRetryTimeAnalysis,
   batches,
+  onBatchPhotoCountUpdated,
   measurementWorkers,
   measurementWorkersLoading,
   measurementWorkersError,
@@ -4920,6 +4926,7 @@ function MeasurementTab({
   onRetry: () => void;
   onRetryTimeAnalysis: () => void;
   batches: MobileMeasurementBatch[];
+  onBatchPhotoCountUpdated: (batchId: number, photoCount: number) => void;
   measurementWorkers: MeasurementWorkerOption[];
   measurementWorkersLoading: boolean;
   measurementWorkersError: string | null;
@@ -5131,6 +5138,7 @@ function MeasurementTab({
           canCreateBatch={canCreateBatch}
           canPromoteStatus={canPromoteStatus}
           batches={batches}
+          onBatchPhotoCountUpdated={onBatchPhotoCountUpdated}
           measurementWorkers={measurementWorkers}
           measurementWorkersLoading={measurementWorkersLoading}
           measurementWorkersError={measurementWorkersError}
@@ -6148,6 +6156,7 @@ function MeasurementReviewPanel({
   canCreateBatch,
   canPromoteStatus,
   batches,
+  onBatchPhotoCountUpdated,
   measurementWorkers,
   measurementWorkersLoading,
   measurementWorkersError,
@@ -6188,6 +6197,7 @@ function MeasurementReviewPanel({
   canCreateBatch: boolean;
   canPromoteStatus: boolean;
   batches: MobileMeasurementBatch[];
+  onBatchPhotoCountUpdated: (batchId: number, photoCount: number) => void;
   measurementWorkers: MeasurementWorkerOption[];
   measurementWorkersLoading: boolean;
   measurementWorkersError: string | null;
@@ -6645,7 +6655,7 @@ function MeasurementReviewPanel({
         canMarkInvoiced={canPromoteStatus} onToggleInvoiced={onToggleBatchInvoiced}
         onToggleArchive={() => { setOverviewState({ selectedId: null, query: "", page: 1 }); setOpenStatusBatchId(null); setOpenOverviewActionId(null); onToggleArchive(); }}
         onOpen={onSelectBatch} onExport={onExportPdf} canExport={isMeasurementBatchPdfExportable}
-        renderPhotos={(batch) => <ExtraWorkOverviewPhotos key={`measurement:${site.id}:${batch.id}:${archiveMode}`} siteId={site.id} ticket={batch} photoKind="measurement" includeDeleted={archiveMode} canUpload={false} onPhotoCountUpdated={() => {}} />}
+        renderPhotos={(batch) => <ExtraWorkOverviewPhotos key={`measurement:${site.id}:${batch.id}:${archiveMode}`} siteId={site.id} ticket={batch} photoKind="measurement" includeDeleted={archiveMode} canUpload={canCreateBatch && !archiveMode} onPhotoCountUpdated={onBatchPhotoCountUpdated} />}
         title={(batch) => formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}
         date={(value) => value.length === 10 ? formatDateOnly(value) : formatExtraWorkOverviewCreatedDate(value)} dateTime={formatDateTime}
         renderStatus={(batch) => {

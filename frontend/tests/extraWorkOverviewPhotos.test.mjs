@@ -50,8 +50,11 @@ test("measurement and extra-work photos never share metadata or thumbnail cache 
   assert.equal(await b.text(), "Aufmaß");
 });
 
-test("measurements reuse the existing gallery and viewer with measurement-only read endpoints", () => {
-  assert.match(pageSource, /renderPhotos=\{\(batch\) => <ExtraWorkOverviewPhotos[^\n]*photoKind="measurement"[^\n]*canUpload=\{false\}/);
+test("measurements reuse the existing gallery and upload slots with scoped endpoints and permissions", () => {
+  assert.match(pageSource, /renderPhotos=\{\(batch\) => <ExtraWorkOverviewPhotos[^\n]*photoKind="measurement"[^\n]*canUpload=\{canCreateBatch && !archiveMode\}[^\n]*onPhotoCountUpdated=\{onBatchPhotoCountUpdated\}/);
+  assert.match(pageSource, /photoKind === "measurement" \? api.uploadSiteMeasurementBatchPhoto : api.uploadSiteExtraWorkTicketPhoto/);
+  assert.match(apiSource, /async uploadSiteMeasurementBatchPhoto[\s\S]*?measurement-batches\/\$\{batchId\}\/photos[\s\S]*?method: "POST"/);
+  assert.match(pageSource, /setMeasurementBatches\(\(current\) => current.map\(\(batch\) => batch.id === batchId \? \{ ...batch, photo_count: photoCount \}/);
   assert.match(pageSource, /photoKind === "measurement" \? api.siteMeasurementBatchPhotos/);
   assert.match(pageSource, /photoKind === "measurement" \? api.siteMeasurementBatchPhotoThumbnail/);
   assert.match(pageSource, /photoKind === "measurement" \? api.siteMeasurementBatchPhotoContent/);
@@ -149,6 +152,7 @@ test("stored thumbnail bytes stay deferred from ticket-list photo loading", () =
 test("the preview uses five equal responsive columns and square cover-cropped tiles", () => {
   assert.match(styles, /\.project-extra-work-photo-list \{[^}]*width:\s*100%;[^}]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\);[^}]*gap:\s*clamp\(6px, 0\.8vw, 10px\);/s);
   assert.match(styles, /\.project-extra-work-photo \{[^}]*width:\s*100%;[^}]*aspect-ratio:\s*1;/s);
+  assert.match(styles, /\.project-extra-work-photo \{[^}]*border: 1px solid var\(--project-extra-work-divider, #e3e6eb\)/s);
   assert.match(styles, /\.project-extra-work-photo img \{[^}]*object-fit:\s*cover/s);
   assert.match(styles, /\.project-extra-work-photo-placeholder \{[^}]*border-style:\s*dashed;[^}]*background:\s*#f4f6f8;/s);
   assert.doesNotMatch(styles, /\.project-extra-work-photo-list \{[^}]*flex-wrap:/s);

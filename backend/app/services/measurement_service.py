@@ -1142,7 +1142,27 @@ class MeasurementService:
         content_type: str | None,
     ) -> MobileMeasurementBatchPhotoRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
-        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        return self.upload_site_batch_photo(
+            site_id=assignment.site_id,
+            batch_id=batch_id,
+            current_user=current_user,
+            filename=filename,
+            content=content,
+            content_type=content_type,
+        )
+
+    def upload_site_batch_photo(
+        self,
+        *,
+        site_id: int,
+        batch_id: int,
+        current_user: User,
+        filename: str | None,
+        content: bytes,
+        content_type: str | None,
+    ) -> MobileMeasurementBatchPhotoRead:
+        # Serialize uploads for this batch so concurrent requests respect the five-photo limit.
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
         current_photo_count = self.db.scalar(
             select(func.count(SiteMeasurementBatchPhoto.id)).where(
                 SiteMeasurementBatchPhoto.measurement_batch_id == batch.id
@@ -1170,7 +1190,7 @@ class MeasurementService:
         )
 
         folder = ProjectFolderService(self.db).get_project_folder_for_site_by_key(
-            assignment.site_id,
+            batch.site_id,
             MEASUREMENT_PHOTO_FOLDER_KEY,
             current_user,
         )

@@ -1547,6 +1547,15 @@ export const api = {
     return request<MobileMeasurementBatchPhoto[]>(`/sites/${siteId}/measurement-batches/${batchId}/photos${suffix}`);
   },
 
+  async uploadSiteMeasurementBatchPhoto(siteId: number, batchId: number, file: File): Promise<MobileMeasurementBatchPhoto> {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    return request<MobileMeasurementBatchPhoto>(`/sites/${siteId}/measurement-batches/${batchId}/photos`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+
   async siteMeasurementBatchPhotoContent(siteId: number, batchId: number, photoId: number, params: { includeDeleted?: boolean; signal?: AbortSignal } = {}): Promise<Blob> {
     const suffix = params.includeDeleted ? "?include_deleted=true" : "";
     return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/photos/${photoId}/content${suffix}`, params.signal);

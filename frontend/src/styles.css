@@ -30997,7 +30997,7 @@ body.mobile-modal-scroll-locked {
   margin: 0;
   aspect-ratio: 1;
   overflow: hidden;
-  border: 1px solid var(--project-extra-work-divider);
+  border: 1px solid var(--project-extra-work-divider, #e3e6eb);
   border-radius: 2px;
   background: #f8fafc;
   place-items: center;

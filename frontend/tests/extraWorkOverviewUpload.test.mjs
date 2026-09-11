@@ -52,7 +52,7 @@ test("dragging a file marks only the target slot and dropping cannot navigate th
 
 test("one validated file uploads through the existing endpoint before becoming persisted metadata", () => {
   assert.match(previewSource, /validateExtraWorkPhotoFiles\(\[file\], photos\.length\)\[0\]/);
-  assert.match(previewSource, /const storedPhoto = await api\.uploadSiteExtraWorkTicketPhoto\([\s\S]*uploadSiteId,[\s\S]*uploadTicketId,[\s\S]*candidate\.file/);
+  assert.match(previewSource, /const storedPhoto = await upload\([\s\S]*uploadSiteId,[\s\S]*uploadTicketId,[\s\S]*candidate\.file/);
   assert.match(previewSource, /onPhotoCountUpdated\(uploadTicketId, nextPhotoCount\)/);
   assert.match(previewSource, /setPhotos\(\(current\) => \([\s\S]*\[\.\.\.current, storedPhoto\]\.slice\(0, MAX_EXTRA_WORK_PHOTOS\)/);
   assert.match(apiSource, /uploadSiteExtraWorkTicketPhoto[\s\S]*new FormData\(\)[\s\S]*\/photos[\s\S]*method:\s*"POST"/);
@@ -76,7 +76,8 @@ test("upload state, duplicate protection and understandable validation and reque
 
 test("selection changes keep upload ownership on the captured ticket and suppress stale local UI", () => {
   assert.match(previewSource, /const uploadSiteId = siteId;[\s\S]*const uploadTicketId = ticket\.id;/);
-  assert.match(previewSource, /api\.uploadSiteExtraWorkTicketPhoto\([\s\S]*uploadTicketId/);
+  assert.match(previewSource, /photoKind === "measurement" \? api.uploadSiteMeasurementBatchPhoto : api.uploadSiteExtraWorkTicketPhoto/);
+  assert.match(previewSource, /await upload\([\s\S]*uploadTicketId/);
   assert.match(previewSource, /onPhotoCountUpdated\(uploadTicketId, nextPhotoCount\)/);
   assert.match(previewSource, /activeTicketIdRef\.current === uploadTicketId[\s\S]*photoUploadOperationRef\.current\?\.token === uploadToken[\s\S]*setPhotos/);
   assert.match(previewSource, /catch \(requestError\) \{[\s\S]*activeTicketIdRef\.current === uploadTicketId[\s\S]*setUploadError/);
