@@ -92,16 +92,19 @@ test("counts distinguish unknown, zero, one and multiple server entries/position
   assert.equal(formatMeasurementCount(3, "Position", "Positionen"), "3 Positionen");
 });
 
-test("hours preserve server totals, decimal strings, zero and negative corrections without inventing missing values", () => {
-  for (const [value, expected] of [[12.5, "12,50 h"], ["1234.567", "1.234,57 h"], [0, "0,00 h"], [-1.25, "-1,25 h"], [null, "—"], [undefined, "—"], ["", "—"], [" ", "—"], ["invalid", "—"], [Infinity, "—"]]) {
+test("overview hours truncate decimals without rounding and preserve missing-value placeholders", () => {
+  for (const [value, expected] of [[12.5, "12 h"], ["100.55", "100 h"], [109.99, "109 h"], ["1234.567", "1.234 h"], [0, "0 h"], [0.99, "0 h"], [-1.75, "-1 h"], [-0.75, "0 h"], [null, "—"], [undefined, "—"], ["", "—"], [" ", "—"], ["invalid", "—"], [Infinity, "—"]]) {
     assert.equal(formatMeasurementOverviewHours(value), expected);
   }
 });
 
 test("Umfang renders calculated hours; details retain positions but omit redundant row count", () => {
-  const html = render({ ...props, batches: [{ ...batches[0], entry_count: 18, position_count: 14, reported_minutes: 750, reported_hours: "12.5" }] });
+  const batch = Object.freeze({ ...batches[0], entry_count: 18, position_count: 14, reported_minutes: 750, reported_hours: "12.50" });
+  const html = render({ ...props, batches: [batch] });
+  assert.equal(batch.reported_hours, "12.50");
+  assert.equal(batch.reported_minutes, 750);
   const table = html.match(/<table>[\s\S]*?<\/table>/)[0];
-  assert.match(table, /12,50 h/);
+  assert.match(table, /12 h/);
   assert.doesNotMatch(table, /18 Zeilen|14 Positionen|750/);
   assert.doesNotMatch(html, /<dt>Zeilen<\/dt>/);
   assert.match(html, /<dt>Positionen<\/dt><dd>14/);

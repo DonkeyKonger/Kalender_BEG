@@ -28,7 +28,8 @@ export function formatMeasurementCount(value: number | null | undefined, singula
 export function formatMeasurementOverviewHours(value: MobileMeasurementBatch["reported_hours"] | undefined) {
   if (value === null || value === undefined || (typeof value === "string" && !value.trim())) return "—";
   const hours = Number(value);
+  // Overview only: drop fractional hours without rounding or changing server totals.
   return Number.isFinite(hours)
-    ? `${new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(hours)} h`
+    ? `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(Math.trunc(hours) || 0)} h`
     : "—";
 }
