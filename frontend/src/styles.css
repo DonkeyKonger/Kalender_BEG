@@ -32507,19 +32507,25 @@ body.mobile-modal-scroll-locked {
 .site-detail-page.is-measurement-review-workspace .project-record-tab-panel {
   gap: 0;
   min-height: 0;
+  padding-inline: 0;
   background: var(--figma-bg);
+}
+
+.site-detail-page.is-measurement-review-workspace .project-record-subtab-bar {
+  width: 100%;
+  margin-inline: 0;
 }
 
 .site-detail-page.is-measurement-review-workspace .project-record-subtabs {
   display: flex;
   box-sizing: border-box;
-  width: calc(100% + 36px);
+  width: 100%;
   border: 0;
   border-bottom: 1px solid var(--figma-border);
   border-radius: 0;
   background: var(--figma-surface);
   gap: 8px;
-  margin: -18px -18px 0;
+  margin: -18px 0 0;
   padding: 10px 18px;
 }
 

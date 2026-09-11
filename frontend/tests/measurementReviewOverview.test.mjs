@@ -291,3 +291,12 @@ test("search toolbar divider is inset like extra work and disappears in the stac
   assert.match(css, /@container measurement-review \(max-width: 1279px\)[\s\S]*?\.measurement-overview-toolbar-right::before \{ display: none; \}/);
   assert.match(css, /\.measurement-overview-detail \{[^}]*border-left: 1px solid var\(--measurement-overview-border\)/);
 });
+
+test("measurement review uses the full shell width without double-compensating the subtab bar", () => {
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.site-detail-page\.is-measurement-review-workspace \.project-record-tab-panel \{[^}]*padding-inline: 0;/);
+  assert.match(css, /\.site-detail-page\.is-measurement-review-workspace \.project-record-subtab-bar \{[^}]*width: 100%;[^}]*margin-inline: 0;/);
+  assert.match(css, /\.site-detail-page\.is-measurement-review-workspace \.project-record-subtabs \{[^}]*width: 100%;[^}]*margin: -18px 0 0;/);
+  // Other project tabs retain their existing padding; only the review shell is full bleed.
+  assert.match(css, /\.site-detail-page\.is-project-file-workspace \.project-record-tab-panel \{[^}]*padding: 18px;/);
+});
