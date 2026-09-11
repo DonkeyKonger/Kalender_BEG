@@ -130,6 +130,24 @@ test("success announcements take no visible banner space while errors stay visib
   assert.match(html, /Als abgerechnet markieren und Aufmaß abschließen/);
 });
 
+test("delivery status follows commission number as the shared icon with accessible tooltip for every state", () => {
+  for (const [override, stateClass, text, icon] of [
+    [{}, "is-not-sent", "Noch nicht an Kunden gesendet", "mail-x"],
+    [{ customer_email_sent_at: "2026-09-07T10:00:00Z" }, "is-signature-open", "Unterschrift fehlt", "mail-check"],
+    [{ customer_email_sent_at: "2026-09-07T10:00:00Z", customer_email_signature_present: true }, "is-complete", "Unterschrift erhalten", "mail-check"],
+  ]) {
+    const html = render({ ...props, batches: [{ ...batches[0], ...override }] });
+    const project = html.match(/<dl class="measurement-overview-project">([\s\S]*?)<\/dl>/)[1];
+    assert.deepEqual([...project.matchAll(/<dt>(.*?)<\/dt>/g)].map(match => match[1]), ["Kunde", "Projekt", "Kom.-Nr.", "Versandstatus"]);
+    assert.match(project, new RegExp(`project-extra-work-delivery-status ${stateClass}`));
+    assert.match(project, new RegExp(`role="img" tabindex="0" aria-label="[^"]*${text}`));
+    assert.match(project, /aria-describedby="measurement-delivery-status-1"/);
+    assert.match(project, /id="measurement-delivery-status-1" role="tooltip"/);
+    assert.match(project, new RegExp(`lucide-${icon}`));
+    assert.doesNotMatch(html, /<h4>Versandstatus|measurement-overview-delivery/);
+  }
+});
+
 test("rendered overview keeps table headers, creator and submitter distinct and shows old offers", () => {
   const html = render(props);
   for (const name of ["Status", "Titel / Nummer", "Datum", "Ersteller", "Umfang"]) assert.ok(html.includes(`<th scope="col">${name}</th>`));
@@ -138,7 +156,7 @@ test("rendered overview keeps table headers, creator and submitter distinct and 
   assert.doesNotMatch(html, /<dt>Zeilen<\/dt>/);
   assert.match(html, /<dt>Positionen<\/dt><dd>0/);
   assert.match(html, /Altes Angebot/);
-  assert.match(html, /Nicht an Kunden gesendet/);
+  assert.match(html, /Noch nicht an Kunden gesendet/);
 });
 
 test("actual PDF availability remains gated; office origin never fabricates an original", () => {

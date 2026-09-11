@@ -62,11 +62,7 @@
 .measurement-overview-detail section { padding: 12px 22px 14px; border-bottom: 1px solid var(--measurement-overview-border); }
 .measurement-overview-detail section:last-child { border: 0; }
 .measurement-overview-detail h4 { font-size: .875rem; font-weight: 750; line-height: normal; margin: 0 0 10px; color: #15253f; }
-.measurement-overview-project { grid-template-columns: 38fr 38fr 24fr; }
-.measurement-overview-delivery { display: flex; align-items: center; gap: 10px; margin: 0; }
-.measurement-overview-delivery svg { flex: none; color: #219653; }
-.measurement-overview-delivery.is-not-sent svg { color: #cf2722; }
-.measurement-overview-delivery.is-signature-open svg { color: #b87915; }
+.measurement-overview-project { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 84px 100px; }
 .measurement-overview-documents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .site-detail-page.is-project-file-workspace .measurement-overview .measurement-overview-documents button { justify-content: flex-start; min-height: 32px; padding: 6px 10px; border: 1px solid var(--measurement-overview-border); border-radius: 2px; white-space: normal; font-size: .8rem; font-weight: 750; line-height: 1.35; text-align: left; gap: 8px; }
 .site-detail-page.is-project-file-workspace .measurement-overview button.secondary-action:hover:not(:disabled) { background: #f6f9fc; border-color: #30577d; }
@@ -93,6 +89,7 @@
   .measurement-overview-detail-head { flex-wrap: wrap; }
   .measurement-overview-project { grid-template-columns: 1fr; gap: 16px; }
   .measurement-overview-project > div { padding: 0 !important; border: 0 !important; }
+  .measurement-overview-project .project-extra-work-delivery-tooltip { left: 0; right: auto; }
   .measurement-overview-pagination { flex-wrap: wrap; }
 }
 @container measurement-review (max-width: 420px) {

@@ -152,10 +152,14 @@ export function MeasurementReviewOverview(props: Props) {
           </p> : null}
           <section><h4>Kunde &amp; Projekt</h4><dl className="measurement-overview-project">
             <div><dt>Kunde</dt><dd>{site.customer || "—"}</dd></div><div><dt>Projekt</dt><dd>{site.name}</dd></div><div><dt>Kom.-Nr.</dt><dd>{site.site_number || "—"}</dd></div>
+            <div className="project-extra-work-delivery-field"><dt>Versandstatus</dt><dd>
+              <span className={`project-extra-work-delivery-status ${email!.className}`} role="img" tabIndex={0}
+                aria-label={email!.accessibleLabel} aria-describedby={`measurement-delivery-status-${selected.id}`}>
+                {email!.isSent ? <MailCheck size={19} aria-hidden="true"/> : <MailX size={19} aria-hidden="true"/>}
+                <span className="project-extra-work-delivery-tooltip" id={`measurement-delivery-status-${selected.id}`} role="tooltip">{email!.accessibleLabel}</span>
+              </span>
+            </dd></div>
           </dl></section>
-          <section><h4>Versandstatus</h4><p className={`measurement-overview-delivery ${email!.className}`}>
-            {email!.isSent ? <MailCheck size={19} aria-hidden="true"/> : <MailX size={19} aria-hidden="true"/>}{email!.label}
-          </p></section>
           <section><h4>Dokumente</h4><div className="measurement-overview-documents">
             {(["checked", ...(selected.has_original_worker_submission ? ["original"] : [])] as const).map((mode) => <button type="button" key={mode}
               className="secondary-action" disabled={archive || !props.canExport(selected.status) || pdfAction !== null}
