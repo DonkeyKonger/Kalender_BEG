@@ -2794,6 +2794,16 @@ class MeasurementService:
             calculation_lookup=calculation_lookup,
         )
         reported_hours = reported_minutes / Decimal("60") if reported_minutes is not None else None
+        # Same current content as the measurement matrix; no original snapshots or
+        # office assignment metadata. Keep explicit row order and collapse duplicates.
+        mounting_locations: dict[str, str] = {}
+        for area in [
+            *(row.area_or_comment for row in sorted(batch.area_rows, key=lambda row: (row.sort_order, row.id))),
+            *(entry.area_or_comment for entry in visible_entries),
+        ]:
+            label = " ".join((area or "").split())
+            if label:
+                mounting_locations.setdefault(label.casefold(), label)
         workflow_state = self._mobile_batch_workflow_state(
             batch,
             has_measurement_content=bool(visible_entries) or bool(batch.area_rows),
@@ -2861,6 +2871,7 @@ class MeasurementService:
             updated_at=batch.updated_at,
             position_count=len(position_ids),
             entry_count=len(visible_entries),
+            mounting_locations=list(mounting_locations.values()),
             reported_minutes=reported_minutes,
             reported_hours=reported_hours,
             photo_count=photo_count if photo_count is not None else self._photo_count_for_batch(batch.id),

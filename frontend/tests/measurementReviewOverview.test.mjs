@@ -173,6 +173,24 @@ test("one current-state PDF follows Open in the header, without a documents sect
   assert.match(source, /onClick=\{\(\) => void exportPdf\(selected\)\}/);
 });
 
+test("mounting locations follow project details and keep long lists collapsed without losing names", () => {
+  const locations = ["1. OG BTB", "EG BTA", "Dach", ...Array.from({ length: 9 }, (_, i) => `Ort ${i + 4}`)];
+  const html = render({ ...props, batches: [{ ...batches[0], mounting_locations: locations }] });
+  assert.ok(html.indexOf("measurement-overview-locations") > html.indexOf("measurement-overview-project"));
+  assert.match(html, /<h4>Montageorte<span[^>]*>12<\/span><\/h4>/);
+  const preview = html.match(/<ul class="measurement-overview-location-list" aria-label="Montageorte">([\s\S]*?)<\/ul>/)[1];
+  assert.equal([...preview.matchAll(/<li /g)].length, 3);
+  assert.match(html, /<details class="measurement-overview-locations-more">/);
+  assert.match(html, /\+ 9 weitere anzeigen/);
+  assert.match(html, /tabindex="0" role="region" aria-label="Weitere Montageorte"/);
+  for (const location of locations) assert.ok(html.includes(`>${location}</li>`));
+  const short = render({ ...props, batches: [{ ...batches[0], mounting_locations: locations.slice(0, 2) }] });
+  assert.doesNotMatch(short, /<details/);
+  assert.match(render(props), /Keine Montageorte eingetragen/);
+  const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
+  assert.match(css, /\.measurement-overview-locations-scroll \{[^}]*max-height: 160px; overflow-y: auto/);
+});
+
 test("single PDF availability remains gated for drafts, archived records and pending actions", () => {
   const draft = render({ ...props, batches: [{ ...batches[0], origin: "OFFICE" }] });
   assert.doesNotMatch(draft, /Originales Monteur-Aufmaß/);

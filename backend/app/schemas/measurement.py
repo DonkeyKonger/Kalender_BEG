@@ -233,6 +233,7 @@ class MobileMeasurementBatchRead(BaseModel):
     available_actions: MobileMeasurementBatchAvailableActionsRead
     block_reasons: MobileMeasurementBatchBlockReasonsRead
     area_rows: list[MeasurementAreaRowRead] = Field(default_factory=list)
+    mounting_locations: list[str] = Field(default_factory=list)
 
 
 class MeasurementBatchInvoicedUpdate(BaseModel):

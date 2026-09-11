@@ -21,6 +21,7 @@ from app.models.person import Person
 from app.models.site import Site
 from app.models.site_measurement_item import (
     SiteMeasurementBase,
+    SiteMeasurementAreaRow,
     SiteMeasurementBatch,
     SiteMeasurementBatchPhoto,
     SiteMeasurementEntry,
@@ -3763,6 +3764,37 @@ def test_site_measurement_batches_include_customer_email_status():
 
     assert read_batch.customer_email_sent_at is not None
     assert read_batch.customer_email_signature_present is False
+
+
+def test_batch_mounting_locations_use_current_visible_entries_and_explicit_rows():
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    batch = SiteMeasurementBatch(site=site, measurement_base=base, number=1, title="Orte", status="reviewed", area_location="Nur Büro-Zuordnung")
+    other = SiteMeasurementBatch(site=site, measurement_base=base, number=2, title="Anderes Aufmaß", status="draft")
+    item = SiteMeasurementItem(site=site, measurement_base=base, position="1", description="Kabel", unit="m", sort_order=1)
+    hidden = SiteMeasurementItem(site=site, measurement_base=base, position="2", description="Ausgeblendet", unit="m", sort_order=2, is_hidden=True)
+    db.add_all([batch, other, item, hidden])
+    db.flush()
+    def entry(target, position, label):
+        return SiteMeasurementEntry(site=site, measurement_batch=target, measurement_item=position, quantity=Decimal("1"), area_or_comment=label, status="submitted")
+    current = entry(batch, item, "  2. OG   BTC ")
+    db.add_all([
+        SiteMeasurementAreaRow(site=site, measurement_batch=batch, area_or_comment="  1. OG   BTB ", sort_order=1),
+        SiteMeasurementAreaRow(site=site, measurement_batch=batch, area_or_comment="EG BTA", sort_order=0),
+        entry(batch, item, "1. og btb"), current,
+        entry(batch, hidden, "Versteckter Ort"), entry(batch, item, "   "),
+        entry(other, item, "Anderes Gebäude"),
+    ])
+    db.commit()
+    service = MeasurementService(db)
+    result = {row.id: row for row in service.list_site_batches(site.id)}
+    assert result[batch.id].mounting_locations == ["EG BTA", "1. OG BTB", "2. OG BTC"]
+    assert result[other.id].mounting_locations == ["Anderes Gebäude"]
+    current.area_or_comment = "3. OG BTD"
+    db.commit()
+    result = {row.id: row for row in service.list_site_batches(site.id)}
+    assert result[batch.id].mounting_locations == ["EG BTA", "1. OG BTB", "3. OG BTD"]
 
 
 def test_site_measurement_batch_delete_archives_and_restore_reactivates():

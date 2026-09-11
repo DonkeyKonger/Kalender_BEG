@@ -339,6 +339,7 @@ export type MobileMeasurementBatch = {
     customer_sign?: string | null;
   };
   area_rows?: MeasurementAreaRow[];
+  mounting_locations?: string[];
 };
 
 export type OfficeMeasurementBatchPayload = {

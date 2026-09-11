@@ -166,8 +166,27 @@ export function MeasurementReviewOverview(props: Props) {
               </span>
             </dd></div>
           </dl></section>
+          <MeasurementMountingLocations key={selected.id} locations={selected.mounting_locations ?? []} />
         </>}
       </aside>
     </div>
+  </section>;
+}
+
+function MeasurementMountingLocations({ locations }: { locations: string[] }) {
+  const remaining = locations.slice(3);
+  return <section className="measurement-overview-locations">
+    <h4>Montageorte{locations.length > 0 ? <span className="measurement-overview-location-count">{locations.length}</span> : null}</h4>
+    {locations.length === 0 ? <p className="measurement-overview-locations-empty">Keine Montageorte eingetragen</p> : <>
+      <ul className="measurement-overview-location-list" aria-label="Montageorte">
+        {locations.slice(0, 3).map(location => <li key={location} title={location}>{location}</li>)}
+      </ul>
+      {remaining.length > 0 ? <details className="measurement-overview-locations-more">
+        <summary><span className="when-closed">+ {remaining.length} weitere anzeigen</span><span className="when-open">Weniger anzeigen</span></summary>
+        <div className="measurement-overview-locations-scroll" tabIndex={0} role="region" aria-label="Weitere Montageorte">
+          <ul className="measurement-overview-location-list">{remaining.map(location => <li key={location}>{location}</li>)}</ul>
+        </div>
+      </details> : null}
+    </>}
   </section>;
 }

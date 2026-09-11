@@ -68,6 +68,18 @@
 .site-detail-page.is-project-file-workspace .measurement-overview button.primary-action:hover:not(:disabled) { background: #174678; }
 .measurement-overview-origin { margin: 0; padding: 8px 22px; font-size: .78rem; color: #526a86; border-bottom: 1px solid var(--measurement-overview-border); }
 .measurement-overview-empty { padding: 28px; color: #526a86; }
+.measurement-overview-location-count { margin-left: 8px; color: #58708e; font-size: .75rem; font-weight: 500; }
+.measurement-overview-location-list { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.measurement-overview-location-list li { min-width: 0; max-width: 100%; padding: 4px 8px; border: 1px solid var(--measurement-overview-border); background: #f7f9fc; color: #334e70; font-size: .8rem; line-height: 1.35; overflow-wrap: anywhere; }
+.measurement-overview-locations > .measurement-overview-location-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.measurement-overview-locations-empty { margin: 0; color: #58708e; font-size: .8rem; }
+.measurement-overview-locations-more { margin-top: 8px; }
+.measurement-overview-locations-more summary { width: fit-content; padding: 4px 0; cursor: pointer; color: #30577d; font-size: .8rem; font-weight: 650; }
+.measurement-overview-locations-more .when-open, .measurement-overview-locations-more[open] .when-closed { display: none; }
+.measurement-overview-locations-more[open] .when-open { display: inline; }
+.measurement-overview-locations-scroll { max-height: 160px; overflow-y: auto; overscroll-behavior: contain; margin-top: 8px; padding: 2px; }
+.measurement-overview-locations-more summary:focus-visible,
+.measurement-overview-locations-scroll:focus-visible { outline: 2px solid #2f65ec; outline-offset: 2px; }
 .measurement-overview button:focus-visible,
 .measurement-overview-search:focus-within { outline: 2px solid #2f65ec; outline-offset: 2px; }
 @container measurement-review (max-width: 1399px) {
