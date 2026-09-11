@@ -143,7 +143,6 @@ export function MeasurementReviewOverview(props: Props) {
           <dl className="measurement-overview-meta">
             <div><dt>Einreicher</dt><dd>{selected.submitted_by_name || "Ohne Einreicher"}</dd></div>
             <div><dt>Eingereicht am</dt><dd>{selected.submitted_at ? props.dateTime(selected.submitted_at) : "—"}</dd></div>
-            <div><dt>Zeilen</dt><dd>{selected.entry_count ?? "—"}</dd></div>
             <div><dt>Positionen</dt><dd>{selected.position_count ?? "—"}</dd></div>
           </dl>
           {selected.origin === "OFFICE" || selected.area_location || selected.assigned_employee_name || archive ? <p className="measurement-overview-origin">

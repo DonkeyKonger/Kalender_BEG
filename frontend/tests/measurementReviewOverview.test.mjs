@@ -98,12 +98,12 @@ test("hours preserve server totals, decimal strings, zero and negative correctio
   }
 });
 
-test("Umfang renders calculated hours, never entry/position counts or minutes; detail counts remain", () => {
+test("Umfang renders calculated hours; details retain positions but omit redundant row count", () => {
   const html = render({ ...props, batches: [{ ...batches[0], entry_count: 18, position_count: 14, reported_minutes: 750, reported_hours: "12.5" }] });
   const table = html.match(/<table>[\s\S]*?<\/table>/)[0];
   assert.match(table, /12,50 h/);
   assert.doesNotMatch(table, /18 Zeilen|14 Positionen|750/);
-  assert.match(html, /<dt>Zeilen<\/dt><dd>18/);
+  assert.doesNotMatch(html, /<dt>Zeilen<\/dt>/);
   assert.match(html, /<dt>Positionen<\/dt><dd>14/);
   const unknown = render({ ...props, batches: [{ ...batches[0], reported_hours: null }] });
   assert.match(unknown, /class="measurement-overview-hours"[^>]*>—<\/td>/);
@@ -135,7 +135,7 @@ test("rendered overview keeps table headers, creator and submitter distinct and 
   for (const name of ["Status", "Titel / Nummer", "Datum", "Ersteller", "Umfang"]) assert.ok(html.includes(`<th scope="col">${name}</th>`));
   assert.match(html, /title="Anna Büro"/);
   assert.match(html, /<dt>Einreicher<\/dt><dd>Boris Monteur/);
-  assert.match(html, /<dt>Zeilen<\/dt><dd>0/);
+  assert.doesNotMatch(html, /<dt>Zeilen<\/dt>/);
   assert.match(html, /<dt>Positionen<\/dt><dd>0/);
   assert.match(html, /Altes Angebot/);
   assert.match(html, /Nicht an Kunden gesendet/);
