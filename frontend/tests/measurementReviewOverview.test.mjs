@@ -11,7 +11,7 @@ const compiled = await build({
     import React from 'react';
     import { renderToStaticMarkup } from 'react-dom/server';
     import { MeasurementReviewOverview } from './src/components/MeasurementReviewOverview';
-    export { getMeasurementOverviewWindow, formatMeasurementCount, formatMeasurementOverviewHours, getMeasurementLocationPreviewCount } from './src/lib/measurementReviewOverview';
+    export { getMeasurementOverviewWindow, formatMeasurementCount, formatMeasurementOverviewHours, formatMeasurementDetailHours, getMeasurementLocationPreviewCount } from './src/lib/measurementReviewOverview';
     export { EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE } from './src/lib/extraWorkOverview';
     export const render = props => renderToStaticMarkup(React.createElement(MeasurementReviewOverview, props));
   `, resolveDir: fileURLToPath(new URL("..", import.meta.url)), loader: "tsx" },
@@ -96,6 +96,20 @@ test("overview hours truncate decimals without rounding and preserve missing-val
   for (const [value, expected] of [[12.5, "12 h"], ["100.55", "100 h"], [109.99, "109 h"], ["1234.567", "1.234 h"], [0, "0 h"], [0.99, "0 h"], [-1.75, "-1 h"], [-0.75, "0 h"], [null, "—"], [undefined, "—"], ["", "—"], [" ", "—"], ["invalid", "—"], [Infinity, "—"]]) {
     assert.equal(formatMeasurementOverviewHours(value), expected);
   }
+});
+
+test("detail total hours preserve two decimals next to positions while overview stays truncated", () => {
+  const format = compiledModule.exports.formatMeasurementDetailHours;
+  for (const [value, expected] of [["100.55", "100,55 h"], [12.5, "12,50 h"], [0, "0,00 h"], [-1.75, "-1,75 h"], [1234.56, "1.234,56 h"], [null, "—"], [undefined, "—"], ["", "—"], ["invalid", "—"], [Infinity, "—"]]) {
+    assert.equal(format(value), expected);
+  }
+  const batch = Object.freeze({ ...batches[0], reported_hours: "100.55", position_count: 14 });
+  const html = render({ ...props, batches: [batch] });
+  const meta = html.match(/<dl class="measurement-overview-meta">([\s\S]*?)<\/dl>/)[1];
+  assert.deepEqual([...meta.matchAll(/<dt>(.*?)<\/dt>/g)].map(match => match[1]), ["Einreicher", "Eingereicht am", "Positionen", "Gesamtstunden"]);
+  assert.match(meta, /<dt>Gesamtstunden<\/dt><dd>100,55 h<\/dd>/);
+  assert.match(html, /class="measurement-overview-hours"[^>]*>100 h<\/td>/);
+  assert.equal(batch.reported_hours, "100.55");
 });
 
 test("Umfang renders calculated hours; details retain positions but omit redundant row count", () => {

@@ -4,7 +4,7 @@ import { Check, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
 import type { MobileMeasurementBatch, Site } from "../types/site";
 import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
 import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
-import { formatMeasurementCount, formatMeasurementOverviewHours, getMeasurementOverviewWindow, getMeasurementLocationPreviewCount } from "../lib/measurementReviewOverview";
+import { formatMeasurementCount, formatMeasurementOverviewHours, formatMeasurementDetailHours, getMeasurementOverviewWindow, getMeasurementLocationPreviewCount } from "../lib/measurementReviewOverview";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import "./MeasurementReviewOverview.css";
 
@@ -151,6 +151,7 @@ export function MeasurementReviewOverview(props: Props) {
             <div><dt>Einreicher</dt><dd>{selected.submitted_by_name || "Ohne Einreicher"}</dd></div>
             <div><dt>Eingereicht am</dt><dd>{selected.submitted_at ? props.dateTime(selected.submitted_at) : "—"}</dd></div>
             <div><dt>Positionen</dt><dd>{selected.position_count ?? "—"}</dd></div>
+            <div><dt>Gesamtstunden</dt><dd>{formatMeasurementDetailHours(selected.reported_hours)}</dd></div>
           </dl>
           {selected.origin === "OFFICE" || selected.area_location || selected.assigned_employee_name || archive ? <p className="measurement-overview-origin">
             {selected.origin === "OFFICE" ? `Im Büro angelegt${selected.created_by_name ? ` · von ${selected.created_by_name}` : ""}` : null}

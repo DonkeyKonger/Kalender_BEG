@@ -39,6 +39,14 @@ export function formatMeasurementCount(value: number | null | undefined, singula
 }
 
 // Use the server's quantity × calculation-time total, not entry counts or tracked time.
+export function formatMeasurementDetailHours(value: MobileMeasurementBatch["reported_hours"] | undefined) {
+  if (value === null || value === undefined || (typeof value === "string" && !value.trim())) return "—";
+  const hours = Number(value);
+  return Number.isFinite(hours)
+    ? `${new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(hours)} h`
+    : "—";
+}
+
 export function formatMeasurementOverviewHours(value: MobileMeasurementBatch["reported_hours"] | undefined) {
   if (value === null || value === undefined || (typeof value === "string" && !value.trim())) return "—";
   const hours = Number(value);

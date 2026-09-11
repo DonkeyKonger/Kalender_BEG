@@ -54,7 +54,7 @@
 .measurement-overview-more button { width: 100%; }
 .site-detail-page.is-project-file-workspace .measurement-overview .measurement-overview-more button { height: 32px; min-height: 32px; padding: 0; }
 .measurement-overview-detail dl { display: grid; margin: 0; }
-.measurement-overview-meta { grid-template-columns: minmax(0, 1fr) 180px 100px; padding: 14px 22px; border-bottom: 1px solid var(--measurement-overview-border); }
+.measurement-overview-meta { grid-template-columns: minmax(0, 1fr) 180px 80px 120px; padding: 14px 22px; border-bottom: 1px solid var(--measurement-overview-border); }
 .measurement-overview-detail dt { color: #58708e; font-size: .75rem; font-weight: 750; margin-bottom: 6px; }
 .measurement-overview-detail dd { margin: 0; font-size: .82rem; font-weight: 600; line-height: 1.35; color: #142842; overflow-wrap: anywhere; }
 .measurement-overview-detail dl > div { padding-left: 14px; min-width: 0; border-left: 1px solid var(--measurement-overview-border); }
@@ -85,7 +85,7 @@
 .measurement-overview button:focus-visible,
 .measurement-overview-search:focus-within { outline: 2px solid #2f65ec; outline-offset: 2px; }
 @container measurement-review (max-width: 1399px) {
-  .measurement-overview-meta { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 80px; }
+  .measurement-overview-meta { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 80px 120px; }
 }
 @container measurement-review (max-width: 1279px) {
   .measurement-overview-toolbar, .measurement-overview-workspace { grid-template-columns: minmax(0,1fr); }
