@@ -23,6 +23,7 @@ type Props = {
   date: (value: string) => string; dateTime: (value: string) => string;
   renderStatus: (batch: MobileMeasurementBatch) => ReactNode;
   renderActions: (batch: MobileMeasurementBatch) => ReactNode;
+  renderPhotos?: (batch: MobileMeasurementBatch) => ReactNode;
 };
 
 export function MeasurementReviewOverview(props: Props) {
@@ -167,6 +168,7 @@ export function MeasurementReviewOverview(props: Props) {
             </dd></div>
           </dl></section>
           <MeasurementMountingLocations key={selected.id} locations={selected.mounting_locations ?? []} />
+          {props.renderPhotos?.(selected)}
         </>}
       </aside>
     </div>

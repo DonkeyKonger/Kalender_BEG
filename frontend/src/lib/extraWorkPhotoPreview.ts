@@ -1,13 +1,16 @@
 import type { MobileExtraWorkTicketPhoto } from "../types/site";
 
+export type OverviewPhoto = Pick<MobileExtraWorkTicketPhoto, "id" | "filename" | "caption"> & Partial<Pick<MobileExtraWorkTicketPhoto, "customer_document_selected" | "signed_document_member">>;
+export type OverviewPhotoKind = "extra-work" | "measurement";
+
 export const MAX_EXTRA_WORK_OVERVIEW_PHOTOS = 5;
 
-const photoListLoaders = new Map<string, Promise<MobileExtraWorkTicketPhoto[]>>();
+const photoListLoaders = new Map<string, Promise<OverviewPhoto[]>>();
 const thumbnailLoaders = new Map<string, Promise<Blob>>();
 
 export function getExtraWorkOverviewPhotoSlots(
-  photos: MobileExtraWorkTicketPhoto[],
-): Array<MobileExtraWorkTicketPhoto | null> {
+  photos: OverviewPhoto[],
+): Array<OverviewPhoto | null> {
   return Array.from(
     { length: MAX_EXTRA_WORK_OVERVIEW_PHOTOS },
     (_, index) => photos[index] ?? null,
@@ -18,9 +21,10 @@ export function loadExtraWorkOverviewPhotoList(
   siteId: number,
   ticketId: number,
   includeDeleted: boolean,
-  loader: () => Promise<MobileExtraWorkTicketPhoto[]>,
-): Promise<MobileExtraWorkTicketPhoto[]> {
-  const key = `${siteId}:${ticketId}:${includeDeleted ? "deleted" : "active"}`;
+  loader: () => Promise<OverviewPhoto[]>,
+  kind: OverviewPhotoKind = "extra-work",
+): Promise<OverviewPhoto[]> {
+  const key = `${kind}:${siteId}:${ticketId}:${includeDeleted ? "deleted" : "active"}`;
   const existing = photoListLoaders.get(key);
   if (existing) {
     return existing;
@@ -42,8 +46,9 @@ export function loadExtraWorkOverviewThumbnail(
   photoId: number,
   includeDeleted: boolean,
   loader: () => Promise<Blob>,
+  kind: OverviewPhotoKind = "extra-work",
 ): Promise<Blob> {
-  const key = `${siteId}:${ticketId}:${photoId}:${includeDeleted ? "deleted" : "active"}`;
+  const key = `${kind}:${siteId}:${ticketId}:${photoId}:${includeDeleted ? "deleted" : "active"}`;
   const existing = thumbnailLoaders.get(key);
   if (existing) {
     return existing;

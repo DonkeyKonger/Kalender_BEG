@@ -194,6 +194,12 @@ test("mounting locations follow project details and keep long lists collapsed wi
   assert.match(css, /\.measurement-overview-locations-scroll \{[^}]*max-height: 160px; overflow-y: auto/);
 });
 
+test("photo gallery belongs to the selected measurement and follows mounting locations", () => {
+  const html = render({ ...props, renderPhotos: batch => `Fotovorschau für ${batch.id}` });
+  assert.ok(html.indexOf("Fotovorschau für 1") > html.indexOf("Keine Montageorte eingetragen"));
+  assert.doesNotMatch(render({ ...props, loading: true, renderPhotos: () => "Fotovorschau" }), /Fotovorschau/);
+});
+
 test("single PDF availability remains gated for drafts, archived records and pending actions", () => {
   const draft = render({ ...props, batches: [{ ...batches[0], origin: "OFFICE" }] });
   assert.doesNotMatch(draft, /Originales Monteur-Aufmaß/);

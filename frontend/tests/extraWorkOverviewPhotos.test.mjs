@@ -37,6 +37,27 @@ test("the overview always exposes five ordered photo slots and fills the remaind
   );
 });
 
+test("measurement and extra-work photos never share metadata or thumbnail cache keys", async () => {
+  const [extra, measurement] = await Promise.all([
+    loadExtraWorkOverviewPhotoList(999, 1, false, async () => [{ id: 1, filename: "Zusatz" }]),
+    loadExtraWorkOverviewPhotoList(999, 1, false, async () => [{ id: 1, filename: "Aufmaß" }], "measurement"),
+  ]);
+  assert.equal(extra[0].filename, "Zusatz");
+  assert.equal(measurement[0].filename, "Aufmaß");
+  const a = await loadExtraWorkOverviewThumbnail(999, 1, 1, false, async () => new Blob(["Zusatz"]));
+  const b = await loadExtraWorkOverviewThumbnail(999, 1, 1, false, async () => new Blob(["Aufmaß"]), "measurement");
+  assert.equal(await a.text(), "Zusatz");
+  assert.equal(await b.text(), "Aufmaß");
+});
+
+test("measurements reuse the existing gallery and viewer with measurement-only read endpoints", () => {
+  assert.match(pageSource, /renderPhotos=\{\(batch\) => <ExtraWorkOverviewPhotos[^\n]*photoKind="measurement"[^\n]*canUpload=\{false\}/);
+  assert.match(pageSource, /photoKind === "measurement" \? api.siteMeasurementBatchPhotos/);
+  assert.match(pageSource, /photoKind === "measurement" \? api.siteMeasurementBatchPhotoThumbnail/);
+  assert.match(pageSource, /photoKind === "measurement" \? api.siteMeasurementBatchPhotoContent/);
+  assert.match(pageSource, /photoKind === "extra-work" \? <button\s+aria-label=\{`\$\{selectionLabel\}/);
+});
+
 test("preview metadata is in-flight deduplicated and capped at five without becoming stale session data", async () => {
   let calls = 0;
   const loader = async () => {

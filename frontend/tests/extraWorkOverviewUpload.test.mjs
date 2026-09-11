@@ -94,7 +94,7 @@ test("upload refreshes metadata and schedules its original only through idle pre
   assert.match(pageSource.slice(thumbnailStart, modalStart), /api\.siteExtraWorkTicketPhotoThumbnail/);
   assert.match(modalSource, /api\.siteExtraWorkTicketPhotoContent/);
   assert.match(apiSource, /siteExtraWorkTicketPhotos[\s\S]*request<MobileExtraWorkTicketPhoto\[\]>/);
-  assert.doesNotMatch(apiSource.slice(apiSource.indexOf("async siteExtraWorkTicketPhotos"), apiSource.indexOf("async uploadSiteExtraWorkTicketPhoto")), /requestBlob/);
+  assert.doesNotMatch(apiSource.slice(apiSource.indexOf("async siteExtraWorkTicketPhotos"), apiSource.indexOf("async siteMeasurementBatchPhotos")), /requestBlob/);
 });
 
 test("photo upload stays available after signature but not in archive mode", () => {

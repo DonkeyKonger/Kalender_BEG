@@ -35,6 +35,7 @@ from app.schemas.measurement import (
     MeasurementTimeAnalysisRead,
     MeasurementTimesheetRead,
     MobileMeasurementBatchRead,
+    MobileMeasurementBatchPhotoRead,
     MobileMeasurementFreeItemCreate,
     MobileMeasurementItemRead,
     OfficeMeasurementBatchCreate,
@@ -64,6 +65,7 @@ from app.services.document_thumbnail_service import (
     is_pdf_document,
 )
 from app.services.extra_work_service import ExtraWorkService
+from app.services.document_photo_optimizer import create_document_photo_thumbnail, OPTIMIZED_PHOTO_CONTENT_TYPE
 from app.services.extra_work_archive_service import (
     archive_completed_extra_work_ticket_after_response,
 )
@@ -953,6 +955,25 @@ def get_measurement_time_analysis(
     db: Session = Depends(get_db),
 ) -> MeasurementTimeAnalysisRead:
     return MeasurementService(db).get_site_measurement_time_analysis(site_id)
+
+
+@router.get("/{site_id}/measurement-batches/{batch_id}/photos", response_model=list[MobileMeasurementBatchPhotoRead])
+def list_measurement_batch_photos(site_id: int, batch_id: int, include_deleted: bool = Query(default=False), _user: User = Depends(CAN_READ), db: Session = Depends(get_db)) -> list[MobileMeasurementBatchPhotoRead]:
+    return MeasurementService(db).list_site_batch_photos(site_id=site_id, batch_id=batch_id, include_deleted=include_deleted)
+
+
+@router.get("/{site_id}/measurement-batches/{batch_id}/photos/{photo_id}/content")
+def download_measurement_batch_photo(site_id: int, batch_id: int, photo_id: int, include_deleted: bool = Query(default=False), current_user: User = Depends(CAN_READ), db: Session = Depends(get_db)) -> Response:
+    content, content_type, filename = MeasurementService(db).get_site_batch_photo_content(site_id=site_id, batch_id=batch_id, photo_id=photo_id, current_user=current_user, include_deleted=include_deleted)
+    return Response(content=content, media_type=content_type, headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}"})
+
+
+@router.get("/{site_id}/measurement-batches/{batch_id}/photos/{photo_id}/thumbnail")
+def download_measurement_batch_photo_thumbnail(site_id: int, batch_id: int, photo_id: int, include_deleted: bool = Query(default=False), current_user: User = Depends(CAN_READ), db: Session = Depends(get_db)) -> Response:
+    content, _content_type, _filename = MeasurementService(db).get_site_batch_photo_content(site_id=site_id, batch_id=batch_id, photo_id=photo_id, current_user=current_user, include_deleted=include_deleted)
+    # Reuse the document-photo thumbnail renderer without changing persisted photos.
+    thumbnail = create_document_photo_thumbnail(bytes(content))
+    return Response(content=thumbnail, media_type=OPTIMIZED_PHOTO_CONTENT_TYPE, headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.get("/{site_id}/measurement-batches", response_model=list[MobileMeasurementBatchRead])

@@ -2,6 +2,7 @@ import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
 import { MeasurementReviewOverview } from "../components/MeasurementReviewOverview";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
+import type { OverviewPhoto, OverviewPhotoKind } from "../lib/extraWorkPhotoPreview";
 import { ProjectNoteTextarea } from "../components/ProjectNoteTextarea";
 import { SiteProjectNotes } from "../components/SiteProjectNotes";
 import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, Wrench, X } from "lucide-react";
@@ -101,7 +102,7 @@ import { getSiteStatusMenuNavigationIndex } from "../lib/siteStatusMenu";
 import type { AssignmentRead } from "../types/matrix";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { Person } from "../types/person";
-import type { ExtraWorkTicketEntrySummary, MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimeAnalysisRow, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
+import type { ExtraWorkTicketEntrySummary, MeasurementBase, MeasurementBaseUpdate, MeasurementEntry, MeasurementImportOptions, MeasurementItem, MeasurementItemUpdatePayload, MeasurementTimeAnalysis, MeasurementTimeAnalysisRow, MeasurementTimesheet, MeasurementWorkerOption, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileMeasurementBatch, MobileMeasurementFreeItemPayload, MobileMeasurementItem, OfficeMeasurementBatchPayload, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, Site, SiteCreate, SiteUpdate } from "../types/site";
 import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
 import { SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
@@ -3784,20 +3785,22 @@ function ExtraWorkOverviewPhotos({
   includeDeleted,
   canUpload,
   onPhotoCountUpdated,
+  photoKind = "extra-work",
 }: {
   siteId: number;
-  ticket: MobileExtraWorkTicket;
+  ticket: Pick<MobileExtraWorkTicket, "id" | "photo_count" | "customer_signed_at">;
   includeDeleted: boolean;
   canUpload: boolean;
   onPhotoCountUpdated: (ticketId: number, photoCount: number) => void;
+  photoKind?: OverviewPhotoKind;
 }) {
-  const [photos, setPhotos] = useState<MobileExtraWorkTicketPhoto[]>([]);
+  const [photos, setPhotos] = useState<OverviewPhoto[]>([]);
   const [photoOwnerTicketId, setPhotoOwnerTicketId] = useState<number | null>(
     ticket.photo_count > 0 ? null : ticket.id,
   );
   const [isLoading, setIsLoading] = useState(ticket.photo_count > 0);
   const [hasError, setHasError] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState<MobileExtraWorkTicketPhoto | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<OverviewPhoto | null>(null);
   const [uploadingSlotIndex, setUploadingSlotIndex] = useState<number | null>(null);
   const [dragOverSlotIndex, setDragOverSlotIndex] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -3830,13 +3833,14 @@ function ExtraWorkOverviewPhotos({
   const photoIdentity = photos.map((photo) => photo.id).join(":");
   const isUploadBlocked = (
     !canUpload
+    || photoKind === "measurement"
     || isLoading
     || hasError
     || uploadingSlotIndex !== null
     || photos.length >= MAX_EXTRA_WORK_PHOTOS
   );
 
-  const openPhotoPreview = useCallback((photo: MobileExtraWorkTicketPhoto, opener: HTMLButtonElement) => {
+  const openPhotoPreview = useCallback((photo: OverviewPhoto, opener: HTMLButtonElement) => {
     if (focusFrameRef.current !== null) {
       window.cancelAnimationFrame(focusFrameRef.current);
       focusFrameRef.current = null;
@@ -3897,7 +3901,8 @@ function ExtraWorkOverviewPhotos({
       siteId,
       ticket.id,
       includeDeleted,
-      () => api.siteExtraWorkTicketPhotos(siteId, ticket.id, { includeDeleted }),
+      () => photoKind === "measurement" ? api.siteMeasurementBatchPhotos(siteId, ticket.id, { includeDeleted }) : api.siteExtraWorkTicketPhotos(siteId, ticket.id, { includeDeleted }),
+      photoKind,
     )
       .then((loadedPhotos) => {
         if (active) {
@@ -3919,7 +3924,7 @@ function ExtraWorkOverviewPhotos({
     return () => {
       active = false;
     };
-  }, [includeDeleted, siteId, ticket.id]);
+  }, [includeDeleted, siteId, ticket.id, photoKind]);
 
   useEffect(() => {
     if (isLoading || hasError || photoOwnerTicketId !== ticket.id || photoIdentity.length === 0) {
@@ -3939,7 +3944,7 @@ function ExtraWorkOverviewPhotos({
           return;
         }
         try {
-          await originalPhotoCache.load(photoId, (signal) => api.siteExtraWorkTicketPhotoContent(
+          await originalPhotoCache.load(photoId, (signal) => (photoKind === "measurement" ? api.siteMeasurementBatchPhotoContent : api.siteExtraWorkTicketPhotoContent)(
             siteId,
             ticket.id,
             photoId,
@@ -3966,14 +3971,14 @@ function ExtraWorkOverviewPhotos({
       }
       originalPhotoCache.clear();
     };
-  }, [hasError, includeDeleted, isLoading, originalPhotoCache, photoIdentity, photoOwnerTicketId, siteId, ticket.id]);
+  }, [hasError, includeDeleted, isLoading, originalPhotoCache, photoIdentity, photoOwnerTicketId, siteId, ticket.id, photoKind]);
 
   function canUseUploadSlot(): boolean {
     return !isUploadBlocked && photoUploadOperationRef.current === null;
   }
 
-  async function togglePhotoSelection(photo: MobileExtraWorkTicketPhoto): Promise<void> {
-    if (selectionPendingPhotoId !== null || photo.signed_document_member) {
+  async function togglePhotoSelection(photo: OverviewPhoto): Promise<void> {
+    if (photoKind === "measurement" || selectionPendingPhotoId !== null || photo.signed_document_member) {
       return;
     }
     const uploadTicketId = ticket.id;
@@ -4128,13 +4133,14 @@ function ExtraWorkOverviewPhotos({
     <section
       className="project-extra-work-photo-preview"
       aria-busy={isLoading || uploadingSlotIndex !== null}
-      aria-label="Fotos zum Zusatzauftrag"
+      aria-label={photoKind === "measurement" ? "Fotos zum Aufmaß" : "Fotos zum Zusatzauftrag"}
     >
       <div className="project-extra-work-photo-list">
         {photoSlots.map((photo, index) => (
           photo ? (
             <ExtraWorkOverviewThumbnail
               key={photo.id}
+              photoKind={photoKind}
               siteId={siteId}
               ticketId={ticket.id}
               photo={photo}
@@ -4203,7 +4209,8 @@ function ExtraWorkOverviewPhotos({
       {isLoading ? <span className="sr-only" role="status">Fotovorschau wird geladen…</span> : null}
       {hasError ? <span className="project-extra-work-photo-feedback is-error" role="status">Fotovorschau nicht verfügbar.</span> : null}
       {uploadError ? <span className="project-extra-work-photo-feedback is-error" role="alert">{uploadError}</span> : null}
-      {photos.length > 0 ? (
+      {photoKind === "measurement" && !isLoading && !hasError && photos.length === 0 ? <span className="project-extra-work-photo-feedback">Keine Fotos vorhanden.</span> : null}
+      {photoKind === "extra-work" && photos.length > 0 ? (
         <span aria-live="polite" className="sr-only" role="status">
           {ticket.customer_signed_at ? (
             <>{photos.filter((photo) => photo.signed_document_member).length} Fotos im unterschriebenen Dokument · {photos.filter((photo) => !photo.signed_document_member && photo.customer_document_selected).length} zusätzliche Fotos werden mitgesendet</>
@@ -4216,6 +4223,7 @@ function ExtraWorkOverviewPhotos({
       {selectedPhoto ? (
         <ExtraWorkOverviewPhotoModal
           key={ticket.id}
+          photoKind={photoKind}
           includeDeleted={includeDeleted}
           initialPhotoId={selectedPhoto.id}
           photos={photos}
@@ -4238,15 +4246,17 @@ function ExtraWorkOverviewThumbnail({
   onToggleSelection,
   selectionPending,
   signed,
+  photoKind = "extra-work",
 }: {
   siteId: number;
   ticketId: number;
-  photo: MobileExtraWorkTicketPhoto;
+  photo: OverviewPhoto;
   includeDeleted: boolean;
-  onOpen: (photo: MobileExtraWorkTicketPhoto, opener: HTMLButtonElement) => void;
-  onToggleSelection: (photo: MobileExtraWorkTicketPhoto) => void;
+  onOpen: (photo: OverviewPhoto, opener: HTMLButtonElement) => void;
+  onToggleSelection: (photo: OverviewPhoto) => void;
   selectionPending: boolean;
   signed: boolean;
+  photoKind?: OverviewPhotoKind;
 }) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
@@ -4259,12 +4269,13 @@ function ExtraWorkOverviewThumbnail({
       ticketId,
       photo.id,
       includeDeleted,
-      () => api.siteExtraWorkTicketPhotoThumbnail(
+      () => (photoKind === "measurement" ? api.siteMeasurementBatchPhotoThumbnail : api.siteExtraWorkTicketPhotoThumbnail)(
         siteId,
         ticketId,
         photo.id,
         { includeDeleted },
       ),
+      photoKind,
     )
       .then((blob) => {
         if (!active) {
@@ -4284,7 +4295,7 @@ function ExtraWorkOverviewThumbnail({
         window.URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [includeDeleted, photo.id, siteId, ticketId]);
+  }, [includeDeleted, photo.id, siteId, ticketId, photoKind]);
 
   const accessibleName = photo.caption?.trim()
     ? `Foto: ${photo.caption.trim()}`
@@ -4295,7 +4306,7 @@ function ExtraWorkOverviewThumbnail({
       ? (signed ? "Nicht als zusätzliche Fotodokumentation mitsenden" : "Aus Dokument ausschließen")
       : (signed ? "Als zusätzliche Fotodokumentation mitsenden" : "Im Dokument verwenden");
   return (
-    <div className={`project-extra-work-photo-wrap${photo.customer_document_selected || photo.signed_document_member ? "" : " is-excluded"}`}>
+    <div className={`project-extra-work-photo-wrap${photoKind === "measurement" || photo.customer_document_selected || photo.signed_document_member ? "" : " is-excluded"}`}>
     <button
       aria-haspopup="dialog"
       className={`project-extra-work-photo project-extra-work-photo-trigger${hasError ? " has-error" : ""}`}
@@ -4311,7 +4322,7 @@ function ExtraWorkOverviewThumbnail({
         </span>
       )}
     </button>
-      <button
+      {photoKind === "extra-work" ? <button
         aria-label={`${selectionLabel}: ${photo.filename}`}
         aria-busy={selectionPending}
         aria-pressed={photo.signed_document_member ? undefined : photo.customer_document_selected}
@@ -4325,8 +4336,8 @@ function ExtraWorkOverviewThumbnail({
         }}
       >
         {selectionPending ? "…" : photo.signed_document_member ? <Lock aria-hidden="true" size={13} /> : photo.customer_document_selected ? <Check aria-hidden="true" size={15} /> : "○"}
-      </button>
-      {!photo.signed_document_member && !photo.customer_document_selected ? <span className="project-extra-work-photo-selection-label">{signed ? "Nicht mitsenden" : "Nicht im Dokument"}</span> : null}
+      </button> : null}
+      {photoKind === "extra-work" && !photo.signed_document_member && !photo.customer_document_selected ? <span className="project-extra-work-photo-selection-label">{signed ? "Nicht mitsenden" : "Nicht im Dokument"}</span> : null}
     </div>
   );
 }
@@ -4339,14 +4350,16 @@ function ExtraWorkOverviewPhotoModal({
   siteId,
   ticketId,
   onClose,
+  photoKind = "extra-work",
 }: {
   includeDeleted: boolean;
   initialPhotoId: number;
-  photos: MobileExtraWorkTicketPhoto[];
+  photos: OverviewPhoto[];
   originalPhotoCache: ExtraWorkPhotoOriginalCache;
   siteId: number;
   ticketId: number;
   onClose: () => void;
+  photoKind?: OverviewPhotoKind;
 }) {
   const [activePhotoIndex, setActivePhotoIndex] = useState(() => {
     const initialIndex = photos.findIndex((photo) => photo.id === initialPhotoId);
@@ -4442,7 +4455,7 @@ function ExtraWorkOverviewPhotoModal({
       setIsLoading(true);
     }
     if (!cachedBlob) {
-      void originalPhotoCache.load(activePhoto.id, (signal) => api.siteExtraWorkTicketPhotoContent(
+      void originalPhotoCache.load(activePhoto.id, (signal) => (photoKind === "measurement" ? api.siteMeasurementBatchPhotoContent : api.siteExtraWorkTicketPhotoContent)(
         siteId,
         ticketId,
         activePhoto.id,
@@ -4473,7 +4486,7 @@ function ExtraWorkOverviewPhotoModal({
         window.URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [activePhoto.id, includeDeleted, originalPhotoCache, resetViewer, siteId, ticketId]);
+  }, [activePhoto.id, includeDeleted, originalPhotoCache, resetViewer, siteId, ticketId, photoKind]);
 
   useEffect(() => {
     if (!isTopModal) {
@@ -6632,6 +6645,7 @@ function MeasurementReviewPanel({
         canMarkInvoiced={canPromoteStatus} onToggleInvoiced={onToggleBatchInvoiced}
         onToggleArchive={() => { setOverviewState({ selectedId: null, query: "", page: 1 }); setOpenStatusBatchId(null); setOpenOverviewActionId(null); onToggleArchive(); }}
         onOpen={onSelectBatch} onExport={onExportPdf} canExport={isMeasurementBatchPdfExportable}
+        renderPhotos={(batch) => <ExtraWorkOverviewPhotos key={`measurement:${site.id}:${batch.id}:${archiveMode}`} siteId={site.id} ticket={batch} photoKind="measurement" includeDeleted={archiveMode} canUpload={false} onPhotoCountUpdated={() => {}} />}
         title={(batch) => formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}
         date={(value) => value.length === 10 ? formatDateOnly(value) : formatExtraWorkOverviewCreatedDate(value)} dateTime={formatDateTime}
         renderStatus={(batch) => {

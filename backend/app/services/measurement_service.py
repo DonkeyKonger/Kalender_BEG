@@ -1111,6 +1111,26 @@ class MeasurementService:
         )
         return [self._build_mobile_photo(photo) for photo in photos]
 
+    def list_site_batch_photos(self, *, site_id: int, batch_id: int, include_deleted: bool = False) -> list[MobileMeasurementBatchPhotoRead]:
+        batch = self._get_batch_for_site(batch_id, site_id, include_deleted=include_deleted)
+        photos = self.db.scalars(
+            select(SiteMeasurementBatchPhoto)
+            .options(selectinload(SiteMeasurementBatchPhoto.uploaded_by).selectinload(User.person))
+            .where(SiteMeasurementBatchPhoto.measurement_batch_id == batch.id)
+            .order_by(SiteMeasurementBatchPhoto.created_at, SiteMeasurementBatchPhoto.id)
+        )
+        return [self._build_mobile_photo(photo) for photo in photos]
+
+    def get_site_batch_photo_content(self, *, site_id: int, batch_id: int, photo_id: int, current_user: User, include_deleted: bool = False) -> tuple[bytes, str, str]:
+        batch = self._get_batch_for_site(batch_id, site_id, include_deleted=include_deleted)
+        photo = self._get_photo_for_batch(photo_id, batch.id)
+        downloaded = ProjectStorageService().download_file_from_folder(
+            drive_id=photo.external_drive_id,
+            folder_item_id=self._get_photo_folder_item_id(photo, current_user),
+            item_id=photo.external_item_id,
+        )
+        return downloaded["content"], str(downloaded.get("content_type") or photo.content_type), str(downloaded.get("filename") or photo.filename)
+
     def upload_mobile_batch_photo(
         self,
         *,

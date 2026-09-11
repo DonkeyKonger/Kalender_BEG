@@ -24,6 +24,24 @@ async function fixture(t, responder) {
 const json = (data, status = 200) => Response.json(data, { status });
 const download = api => api.projectPhotoAppendixPdf(1);
 
+test('measurement photo requests stay authenticated and use only scoped read endpoints', async t => {
+  const requests = [];
+  const { api } = await fixture(t, async (url, options) => {
+    requests.push({ url, method: options.method ?? 'GET', auth: options.headers.get('Authorization') });
+    return url.includes('/content') || url.includes('/thumbnail') ? new Response('photo') : json([{ id: 3, measurement_batch_id: 2 }]);
+  });
+  const photos = await api.siteMeasurementBatchPhotos(1, 2, { includeDeleted: true });
+  assert.equal(photos[0].measurement_batch_id, 2);
+  assert.equal(await (await api.siteMeasurementBatchPhotoContent(1, 2, 3, { includeDeleted: true })).text(), 'photo');
+  assert.equal(await (await api.siteMeasurementBatchPhotoThumbnail(1, 2, 3)).text(), 'photo');
+  assert.deepEqual(requests.map(request => new URL(request.url).pathname + new URL(request.url).search), [
+    '/api/sites/1/measurement-batches/2/photos?include_deleted=true',
+    '/api/sites/1/measurement-batches/2/photos/3/content?include_deleted=true',
+    '/api/sites/1/measurement-batches/2/photos/3/thumbnail',
+  ]);
+  assert.ok(requests.every(request => request.method === 'GET' && request.auth === 'Bearer expired'));
+});
+
 test('JSON and downloads share one refresh while preserving binary contents', async t => {
   let refreshCount = 0;
   const requests = [];

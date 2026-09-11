@@ -1542,6 +1542,21 @@ export const api = {
     return request<MobileExtraWorkTicketPhoto[]>(`/sites/${siteId}/extra-work-tickets/${ticketId}/photos${suffix}`);
   },
 
+  async siteMeasurementBatchPhotos(siteId: number, batchId: number, params: { includeDeleted?: boolean } = {}): Promise<MobileMeasurementBatchPhoto[]> {
+    const suffix = params.includeDeleted ? "?include_deleted=true" : "";
+    return request<MobileMeasurementBatchPhoto[]>(`/sites/${siteId}/measurement-batches/${batchId}/photos${suffix}`);
+  },
+
+  async siteMeasurementBatchPhotoContent(siteId: number, batchId: number, photoId: number, params: { includeDeleted?: boolean; signal?: AbortSignal } = {}): Promise<Blob> {
+    const suffix = params.includeDeleted ? "?include_deleted=true" : "";
+    return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/photos/${photoId}/content${suffix}`, params.signal);
+  },
+
+  async siteMeasurementBatchPhotoThumbnail(siteId: number, batchId: number, photoId: number, params: { includeDeleted?: boolean } = {}): Promise<Blob> {
+    const suffix = params.includeDeleted ? "?include_deleted=true" : "";
+    return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/photos/${photoId}/thumbnail${suffix}`);
+  },
+
   async uploadSiteExtraWorkTicketPhoto(
     siteId: number,
     ticketId: number,
