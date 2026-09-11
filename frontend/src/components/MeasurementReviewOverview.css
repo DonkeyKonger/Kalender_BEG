@@ -31,7 +31,7 @@
 .measurement-overview-list td { padding: 0 10px; border-bottom: 1px solid var(--measurement-overview-border); text-align: left; }
 .measurement-overview-list td:nth-child(5) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .measurement-overview-invoiced { margin-inline: auto; }
-.measurement-overview-list .measurement-overview-hours { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.measurement-overview-list .measurement-overview-hours { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .measurement-overview-list tbody tr:hover td { background: #f7fafd; }
 .measurement-overview-list tbody tr.is-selected td { background: #eff5fd; }
 .measurement-overview-list tr.is-selected td:first-child { box-shadow: inset 3px 0 var(--pf-primary); }

@@ -259,4 +259,5 @@ test("scoped layout shares its divider and keeps rows natural inside independent
   assert.match(css, /\.measurement-overview-detail \{[^}]*overflow: auto/);
   assert.match(css, /\.measurement-overview-list td \{[^}]*height: 66px/);
   assert.match(css, /@container measurement-review \(max-width: 1279px\)/);
+  assert.match(css, /\.measurement-overview-list \.measurement-overview-hours \{[^}]*text-align: right;[^}]*font-variant-numeric: tabular-nums/);
 });
