@@ -290,6 +290,7 @@ export type MobileMeasurementFreeItemPayload = {
 };
 
 export type MobileMeasurementBatch = {
+  is_invoiced: boolean;
   id: number;
   site_id: number;
   measurement_base_id: number | null;

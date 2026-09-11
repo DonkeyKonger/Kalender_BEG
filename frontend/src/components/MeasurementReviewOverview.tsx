@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { FileText, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
+import { Check, FileText, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
 import type { MobileMeasurementBatch, Site } from "../types/site";
 import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
 import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
@@ -13,6 +13,8 @@ type Props = {
   onState: (state: MeasurementOverviewState) => void;
   loading: boolean; error: string | null; message: string | null; actionError: string | null;
   archive: boolean; busy: boolean; canCreate: boolean;
+  canMarkInvoiced: boolean;
+  onToggleInvoiced: (batch: MobileMeasurementBatch) => void;
   onToggleArchive: () => void; onRetry: () => void; onCreate: () => void;
   onOpen: (batch: MobileMeasurementBatch) => void;
   onExport: (batch: MobileMeasurementBatch, mode: "checked" | "original") => Promise<void>;
@@ -88,10 +90,10 @@ export function MeasurementReviewOverview(props: Props) {
     <div className="measurement-overview-workspace" ref={workspaceRef} style={{ "--measurement-overview-height": `${height}px` } as CSSProperties}>
       <div className="measurement-overview-master">
         <div className="measurement-overview-list" role="region" aria-label="Aufmaßliste">
-          <table><colgroup><col style={{width:"180px"}}/><col/><col style={{width:"104px"}}/><col style={{width:"104px"}}/><col style={{width:"104px"}}/></colgroup>
-            <thead><tr>{["Status", "Titel / Nummer", "Datum", "Ersteller", "Umfang"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+          <table><colgroup><col style={{width:"180px"}}/><col/><col style={{width:"104px"}}/><col style={{width:"104px"}}/><col style={{width:"104px"}}/><col style={{width:"104px"}}/></colgroup>
+            <thead><tr>{["Status", "Titel / Nummer", "Abgerechnet", "Datum", "Ersteller", "Umfang"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
             <tbody>
-              {loading || error || view.visible.length === 0 ? <tr className="measurement-overview-state"><td colSpan={5}>
+              {loading || error || view.visible.length === 0 ? <tr className="measurement-overview-state"><td colSpan={6}>
                 {loading ? "Aufmaße werden geladen…" : error ? <><p role="alert">{error}</p><button type="button" className="secondary-action" onClick={props.onRetry}>Erneut laden</button></> : state.query.trim() ? "Keine Aufmaße gefunden" : archive ? "Keine archivierten Aufmaße vorhanden" : "Noch keine Aufmaße vorhanden"}
               </td></tr> : view.visible.map((batch) => {
                 const creator = formatExtraWorkOverviewCreatorName(batch.created_by_name);
@@ -101,6 +103,15 @@ export function MeasurementReviewOverview(props: Props) {
                   <td onClick={(e) => e.stopPropagation()}>{props.renderStatus(batch)}</td>
                   <td><button type="button" className="measurement-overview-select" aria-pressed={selected?.id === batch.id} onClick={() => onState({...state, selectedId:batch.id})}>{title(batch)}</button>
                     {batch.is_current_offer === false ? <span className="measurement-status is-old-offer" title={batch.offer_name ?? undefined}>Altes Angebot</span> : null}
+                  </td>
+                  <td onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                    <label className="project-extra-work-invoiced-control measurement-overview-invoiced" title={batch.is_invoiced ? "Abgerechnet – unabhängig vom Aufmaßstatus" : "Nicht abgerechnet – unabhängig vom Aufmaßstatus"}>
+                      <input type="checkbox" checked={batch.is_invoiced === true}
+                        disabled={!props.canMarkInvoiced || archive || props.busy || loading}
+                        aria-label={`${title(batch)}: ${batch.is_invoiced ? "Abrechnungsmarkierung entfernen" : "Als abgerechnet markieren"}`}
+                        onChange={() => props.onToggleInvoiced(batch)} />
+                      <span className="project-extra-work-invoiced-box" aria-hidden="true">{batch.is_invoiced ? <Check size={14} strokeWidth={3} /> : null}</span>
+                    </label>
                   </td>
                   <td title={batch.measurement_date ? "Aufmaßdatum" : "Einreichdatum"}>{date ? props.date(date) : "—"}</td>
                   <td title={creator.fullName || undefined}>{batch.created_by_name ? creator.shortName : "—"}</td>

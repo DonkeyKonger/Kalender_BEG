@@ -31,6 +31,7 @@ from app.schemas.measurement import (
     MeasurementItemUpdate,
     MeasurementWorkerOptionRead,
     MeasurementBatchManualStatusUpdate,
+    MeasurementBatchInvoicedUpdate,
     MeasurementTimeAnalysisRead,
     MeasurementTimesheetRead,
     MobileMeasurementBatchRead,
@@ -1070,6 +1071,19 @@ def delete_measurement_batch_free_item(
         site_id=site_id,
         batch_id=batch_id,
         measurement_item_id=measurement_item_id,
+    )
+
+
+@router.patch("/{site_id}/measurement-batches/{batch_id}/invoiced", response_model=MobileMeasurementBatchRead)
+def update_measurement_batch_invoiced(
+    site_id: int,
+    batch_id: int,
+    payload: MeasurementBatchInvoicedUpdate,
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).set_site_batch_invoiced(
+        site_id=site_id, batch_id=batch_id, is_invoiced=payload.is_invoiced, current_user=current_user,
     )
 
 

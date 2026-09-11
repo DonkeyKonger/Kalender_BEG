@@ -1436,8 +1436,12 @@ export const api = {
   },
 
   async markSiteMeasurementBatchBilled(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
-    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/mark-billed`, {
-      method: "POST",
+    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/mark-billed`, { method: "POST" });
+  },
+
+  async updateSiteMeasurementBatchInvoiced(siteId: number, batchId: number, isInvoiced: boolean): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/invoiced`, {
+      method: "PATCH", body: JSON.stringify({ is_invoiced: isInvoiced }),
     });
   },
 

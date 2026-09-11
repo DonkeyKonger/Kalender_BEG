@@ -1,5 +1,5 @@
 .measurement-overview {
-  --measurement-overview-columns: minmax(680px, 52%) minmax(0, 1fr);
+  --measurement-overview-columns: minmax(748px, 52%) minmax(0, 1fr);
   --measurement-overview-border: #e3e6eb;
   container: measurement-review / inline-size;
   min-width: 0;
@@ -24,12 +24,13 @@
 .measurement-overview-workspace { height: var(--measurement-overview-height); min-height: 0; border-bottom: 1px solid var(--measurement-overview-border); }
 .measurement-overview-master { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .measurement-overview-list { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; overscroll-behavior: contain; }
-.measurement-overview-list table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: .82rem; font-weight: 550; line-height: normal; }
+.measurement-overview-list table { width: 100%; min-width: 748px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: .82rem; font-weight: 550; line-height: normal; }
 .measurement-overview-list th { position: sticky; top: 0; z-index: 1; height: 42px; background: #f7f9fc; color: #334e70; font-size: .75rem; font-weight: 800; }
 .measurement-overview-list td { height: 66px; background: white; vertical-align: middle; overflow-wrap: anywhere; }
 .measurement-overview-list th,
 .measurement-overview-list td { padding: 0 10px; border-bottom: 1px solid var(--measurement-overview-border); text-align: left; }
-.measurement-overview-list td:nth-child(4) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.measurement-overview-list td:nth-child(5) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.measurement-overview-invoiced { margin-inline: auto; }
 .measurement-overview-list .measurement-overview-hours { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .measurement-overview-list tbody tr:hover td { background: #f7fafd; }
 .measurement-overview-list tbody tr.is-selected td { background: #eff5fd; }
@@ -88,7 +89,6 @@
   .measurement-overview-toolbar-right { border-left: 0; padding: 10px 18px; flex-wrap: wrap; }
   .measurement-overview-detail { border-left: 0; border-top: 1px solid var(--measurement-overview-border); overflow: visible; }
   .measurement-overview-detail-head { position: static; }
-  .measurement-overview-list table { min-width: 650px; }
 }
 @container measurement-review (max-width: 600px) {
   .measurement-overview-detail-head { flex-wrap: wrap; }

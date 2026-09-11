@@ -1699,6 +1699,30 @@ class MeasurementService:
             rows=rows,
         )
 
+    def set_site_batch_invoiced(
+        self, *, site_id: int, batch_id: int, is_invoiced: bool, current_user: User,
+    ) -> MobileMeasurementBatchRead:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
+        if batch.is_invoiced == is_invoiced:
+            return self._build_mobile_batch(batch)
+        AuditService(self.db).record(
+            user_id=current_user.id,
+            action="measurement.invoiced_updated",
+            entity_type="site_measurement_batch",
+            entity_id=batch.id,
+            old_value={"is_invoiced": batch.is_invoiced},
+            new_value={"is_invoiced": is_invoiced},
+        )
+        batch.is_invoiced = is_invoiced
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        self.db.refresh(batch)
+        return self._build_mobile_batch(batch)
+
     def set_site_batch_billing_status(
         self,
         *,
@@ -2780,6 +2804,7 @@ class MeasurementService:
             number=batch.number,
             title=batch.title,
             status=batch.status,
+            is_invoiced=batch.is_invoiced,
             origin=batch.origin,
             position_mode=batch.position_mode,
             creator_role_at_creation=batch.creator_role_at_creation,

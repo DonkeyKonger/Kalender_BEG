@@ -198,6 +198,7 @@ class MobileMeasurementBatchRead(BaseModel):
     number: int
     title: str
     status: str
+    is_invoiced: bool = False
     origin: MeasurementBatchOrigin = MeasurementBatchOrigin.LEGACY
     position_mode: MeasurementPositionMode = MeasurementPositionMode.OFFER_BASED
     creator_role_at_creation: str | None = None
@@ -232,6 +233,10 @@ class MobileMeasurementBatchRead(BaseModel):
     available_actions: MobileMeasurementBatchAvailableActionsRead
     block_reasons: MobileMeasurementBatchBlockReasonsRead
     area_rows: list[MeasurementAreaRowRead] = Field(default_factory=list)
+
+
+class MeasurementBatchInvoicedUpdate(BaseModel):
+    is_invoiced: bool
 
 
 class MeasurementBatchManualStatusUpdate(BaseModel):

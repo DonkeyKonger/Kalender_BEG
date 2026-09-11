@@ -751,6 +751,23 @@ export function SiteDetailPage() {
     }
   }
 
+  async function toggleMeasurementBatchInvoiced(batch: MobileMeasurementBatch): Promise<void> {
+    if (!site || !canEditSite || measurementReviewActionLoading || measurementStatusActionId !== null || batch.deleted_at) return;
+    setMeasurementReviewActionLoading(true);
+    setMeasurementReviewMessage(null);
+    setMeasurementReviewError(null);
+    try {
+      const updated = await api.updateSiteMeasurementBatchInvoiced(site.id, batch.id, !batch.is_invoiced);
+      setMeasurementBatches(current => current.map(entry => entry.id === updated.id ? { ...entry, is_invoiced: updated.is_invoiced } : entry));
+      setSelectedMeasurementBatch(current => current?.id === updated.id ? { ...current, is_invoiced: updated.is_invoiced } : current);
+      setMeasurementReviewMessage(`${batch.title}: ${updated.is_invoiced ? "Als abgerechnet markiert" : "Abrechnungsmarkierung entfernt"}.`);
+    } catch (requestError) {
+      setMeasurementReviewError(readApiError(requestError, "Abrechnungsmarkierung konnte nicht gespeichert werden."));
+    } finally {
+      setMeasurementReviewActionLoading(false);
+    }
+  }
+
   async function setMeasurementBatchBillingStatus(
     batch: MobileMeasurementBatch,
     billingStatus: "submitted" | "billed",
@@ -1719,6 +1736,7 @@ export function SiteDetailPage() {
           onMarkBilled={(batch) => void setMeasurementBatchBillingStatus(batch, "billed")}
           onMarkOpen={(batch) => void setMeasurementBatchBillingStatus(batch, "submitted")}
           onMarkReviewed={(batch) => void markMeasurementBatchReviewed(batch)}
+          onToggleBatchInvoiced={(batch) => void toggleMeasurementBatchInvoiced(batch)}
           onPromoteStatus={(batch, status) => void promoteMeasurementBatchStatus(batch, status)}
           onDeleteBatch={deleteMeasurementBatch}
           onRestoreBatch={restoreMeasurementBatch}
@@ -4845,6 +4863,7 @@ function MeasurementTab({
   onMarkBilled,
   onMarkOpen,
   onMarkReviewed,
+  onToggleBatchInvoiced,
   onPromoteStatus,
   onDeleteBatch,
   onRestoreBatch,
@@ -4907,6 +4926,7 @@ function MeasurementTab({
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
+  onToggleBatchInvoiced: (batch: MobileMeasurementBatch) => void;
   onPromoteStatus: (batch: MobileMeasurementBatch, status: MeasurementManualStatus) => void;
   onDeleteBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onRestoreBatch: (batch: MobileMeasurementBatch) => Promise<void>;
@@ -5116,6 +5136,7 @@ function MeasurementTab({
           onMarkBilled={onMarkBilled}
           onMarkOpen={onMarkOpen}
           onMarkReviewed={onMarkReviewed}
+          onToggleBatchInvoiced={onToggleBatchInvoiced}
           onPromoteStatus={onPromoteStatus}
           onDeleteBatch={onDeleteBatch}
           onRestoreBatch={onRestoreBatch}
@@ -6132,6 +6153,7 @@ function MeasurementReviewPanel({
   onMarkBilled,
   onMarkOpen,
   onMarkReviewed,
+  onToggleBatchInvoiced,
   onPromoteStatus,
   onDeleteBatch,
   onRestoreBatch,
@@ -6171,6 +6193,7 @@ function MeasurementReviewPanel({
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
   onMarkOpen: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
+  onToggleBatchInvoiced: (batch: MobileMeasurementBatch) => void;
   onPromoteStatus: (batch: MobileMeasurementBatch, status: MeasurementManualStatus) => void;
   onDeleteBatch: (batch: MobileMeasurementBatch) => Promise<void>;
   onRestoreBatch: (batch: MobileMeasurementBatch) => Promise<void>;
@@ -6602,6 +6625,7 @@ function MeasurementReviewPanel({
         loading={batchesLoading} error={batchesError} message={reviewMessage} actionError={reviewError}
         archive={archiveMode} busy={reviewActionLoading || statusActionId !== null || isCreatingBatch}
         canCreate={canCreateBatch} onCreate={openCreateDialog} onRetry={onRetryBatches}
+        canMarkInvoiced={canPromoteStatus} onToggleInvoiced={onToggleBatchInvoiced}
         onToggleArchive={() => { setOverviewState({ selectedId: null, query: "", page: 1 }); setOpenStatusBatchId(null); setOpenOverviewActionId(null); onToggleArchive(); }}
         onOpen={onSelectBatch} onExport={onExportPdf} canExport={isMeasurementBatchPdfExportable}
         title={(batch) => formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}

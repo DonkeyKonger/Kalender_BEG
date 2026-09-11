@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -97,6 +97,7 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="draft", index=True)
+    is_invoiced: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
     origin: Mapped[str] = mapped_column(
         String(20), nullable=False, default=MeasurementBatchOrigin.LEGACY.value, index=True
     )

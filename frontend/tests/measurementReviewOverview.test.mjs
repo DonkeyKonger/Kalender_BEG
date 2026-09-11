@@ -36,6 +36,7 @@ const props = {
   site: { id: 7, name: "Testbaustelle Finienweg", customer: "ebm GmbH", site_number: "9999" },
   batches, state, onState() {}, loading: false, error: null, message: null, actionError: null,
   archive: false, busy: false, canCreate: true, onToggleArchive() {}, onRetry() {}, onCreate() {},
+  canMarkInvoiced: true, onToggleInvoiced() { throw new Error("Rendering must not change invoiced state"); },
   onOpen() { throw new Error("Rendering must not open or mutate a batch"); },
   async onExport() { throw new Error("Rendering must not export"); },
   canExport: status => ["reviewed", "billed", "customer_signed"].includes(status),
@@ -108,6 +109,19 @@ test("Umfang renders calculated hours, never entry/position counts or minutes; d
   assert.match(unknown, /class="measurement-overview-hours"[^>]*>—<\/td>/);
 });
 
+test("independent invoiced checkbox is accessible and gated by permissions, pending work and archive", () => {
+  const completed = { ...batches[0], status: "billed", is_invoiced: false };
+  const checkbox = override => render({ ...props, batches: [completed], ...override }).match(/<input type="checkbox"[^>]*>/)[0];
+  assert.doesNotMatch(checkbox({}), /checked|disabled/);
+  assert.match(checkbox({}), /Als abgerechnet markieren/);
+  const marked = checkbox({ batches: [{ ...completed, status: "draft", is_invoiced: true }] });
+  assert.match(marked, /checked=""/);
+  assert.match(marked, /Abrechnungsmarkierung entfernen/);
+  for (const override of [{ canMarkInvoiced: false }, { busy: true }, { archive: true }]) {
+    assert.match(checkbox(override), /disabled=""/);
+  }
+});
+
 test("rendered overview keeps table headers, creator and submitter distinct and shows old offers", () => {
   const html = render(props);
   for (const name of ["Status", "Titel / Nummer", "Datum", "Ersteller", "Umfang"]) assert.ok(html.includes(`<th scope="col">${name}</th>`));
@@ -143,7 +157,7 @@ test("loading, errors and empty results never expose stale selected documents", 
 
 test("scoped layout shares its divider and keeps rows natural inside independent scroll areas", () => {
   const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
-  assert.match(css, /--measurement-overview-columns: minmax\(680px, 52%\) minmax\(0, 1fr\)/);
+  assert.match(css, /--measurement-overview-columns: minmax\(748px, 52%\) minmax\(0, 1fr\)/);
   assert.match(css, /\.measurement-overview-toolbar,\s*\.measurement-overview-workspace[^}]*grid-template-columns: var\(--measurement-overview-columns\)/);
   assert.match(css, /\.measurement-overview-list \{[^}]*overflow: auto/);
   assert.match(css, /\.measurement-overview-detail \{[^}]*overflow: auto/);
