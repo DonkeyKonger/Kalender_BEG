@@ -14,7 +14,8 @@
 .measurement-overview-toolbar-left,
 .measurement-overview-toolbar-right { display: flex; align-items: center; min-width: 0; gap: 16px; }
 .measurement-overview-toolbar-left { padding: 10px 18px; gap: 12px; }
-.measurement-overview-toolbar-right { padding: 10px 18px; border-left: 1px solid var(--measurement-overview-border); overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; }
+.measurement-overview-toolbar-right { position: relative; padding: 10px 18px 10px 19px; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; }
+.measurement-overview-toolbar-right::before { position: absolute; inset: 10px auto 10px 0; width: 1px; background: var(--measurement-overview-border); content: ""; pointer-events: none; }
 .measurement-overview-toolbar h2 { display: flex; align-items: center; gap: 9px; margin: 0; color: #15253f; font-size: 1.05rem; line-height: 1.25; }
 .measurement-overview-modes { display: grid; grid-template-columns: auto 6px auto; align-items: center; height: 24px; font-size: .7rem; }
 .measurement-overview-modes button { background: none; border: 0; border-bottom: 1px solid transparent; height: 24px; min-height: 24px; padding: 0 4px; color: #30577d; font: inherit; cursor: pointer; }
@@ -95,6 +96,7 @@
   .measurement-overview-master { max-height: 620px; }
   .measurement-overview-toolbar-left { padding: 10px 18px; }
   .measurement-overview-toolbar-right { border-left: 0; padding: 10px 18px; flex-wrap: wrap; scrollbar-gutter: auto; }
+  .measurement-overview-toolbar-right::before { display: none; }
   .measurement-overview-detail { border-left: 0; border-top: 1px solid var(--measurement-overview-border); overflow: visible; }
   .measurement-overview-detail-head { position: static; }
 }

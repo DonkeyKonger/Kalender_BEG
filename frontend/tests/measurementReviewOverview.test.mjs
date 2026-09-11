@@ -282,3 +282,12 @@ test("positions and commission number align with hours and delivery status throu
   assert.match(narrow, /\.measurement-overview-meta \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(narrow, /\.measurement-overview-project \{[^}]*grid-template-columns: 1fr/);
 });
+
+test("search toolbar divider is inset like extra work and disappears in the stacked layout", () => {
+  const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
+  assert.match(css, /\.measurement-overview-toolbar-right::before \{[^}]*inset: 10px auto 10px 0;[^}]*width: 1px;[^}]*pointer-events: none/);
+  const toolbar = css.match(/\.measurement-overview-toolbar-right \{ position: relative;[^}]*\}/)[0];
+  assert.doesNotMatch(toolbar, /border-left:/);
+  assert.match(css, /@container measurement-review \(max-width: 1279px\)[\s\S]*?\.measurement-overview-toolbar-right::before \{ display: none; \}/);
+  assert.match(css, /\.measurement-overview-detail \{[^}]*border-left: 1px solid var\(--measurement-overview-border\)/);
+});
