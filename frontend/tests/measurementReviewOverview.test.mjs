@@ -269,3 +269,15 @@ test("create button and detail action group share the same full width including 
   assert.match(css, /\.measurement-overview-detail-head > div \{[^}]*grid-template-columns: minmax\(0, 1fr\) 68px 34px;[^}]*width: var\(--measurement-overview-actions-width\);[^}]*gap: 8px/);
   assert.match(css, /@container measurement-review \(max-width: 1279px\)[\s\S]*?\.measurement-overview-toolbar-right \{[^}]*scrollbar-gutter: auto/);
 });
+
+test("positions and commission number align with hours and delivery status through shared trailing columns", () => {
+  const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
+  assert.match(css, /--measurement-overview-summary-tail: 84px 120px/);
+  for (const selector of ["meta", "project"]) {
+    assert.match(css, new RegExp(`\\.measurement-overview-${selector} \\{[^}]*grid-template-columns:[^;]*var\\(--measurement-overview-summary-tail\\)`));
+  }
+  assert.match(css, /@container measurement-review \(max-width: 1399px\) \{\s*\.measurement-overview-meta \{[^}]*var\(--measurement-overview-summary-tail\)/);
+  const narrow = css.slice(css.indexOf("@container measurement-review (max-width: 600px)"));
+  assert.match(narrow, /\.measurement-overview-meta \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(narrow, /\.measurement-overview-project \{[^}]*grid-template-columns: 1fr/);
+});

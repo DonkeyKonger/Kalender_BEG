@@ -2,6 +2,7 @@
   --measurement-overview-columns: minmax(748px, 52%) minmax(0, 1fr);
   --measurement-overview-border: #e3e6eb;
   --measurement-overview-actions-width: 184px;
+  --measurement-overview-summary-tail: 84px 120px;
   container: measurement-review / inline-size;
   min-width: 0;
   color: #1e3552;
@@ -55,7 +56,7 @@
 .measurement-overview-more button { width: 100%; }
 .site-detail-page.is-project-file-workspace .measurement-overview .measurement-overview-more button { height: 32px; min-height: 32px; padding: 0; }
 .measurement-overview-detail dl { display: grid; margin: 0; }
-.measurement-overview-meta { grid-template-columns: minmax(0, 1fr) 180px 80px 120px; padding: 14px 22px; border-bottom: 1px solid var(--measurement-overview-border); }
+.measurement-overview-meta { grid-template-columns: minmax(0, 1fr) 180px var(--measurement-overview-summary-tail); padding: 14px 22px; border-bottom: 1px solid var(--measurement-overview-border); }
 .measurement-overview-detail dt { color: #58708e; font-size: .75rem; font-weight: 750; margin-bottom: 6px; }
 .measurement-overview-detail dd { margin: 0; font-size: .82rem; font-weight: 600; line-height: 1.35; color: #142842; overflow-wrap: anywhere; }
 .measurement-overview-detail dl > div { padding-left: 14px; min-width: 0; border-left: 1px solid var(--measurement-overview-border); }
@@ -64,7 +65,7 @@
 .measurement-overview-detail section { padding: 12px 22px 14px; border-bottom: 1px solid var(--measurement-overview-border); }
 .measurement-overview-detail section:last-child { border: 0; }
 .measurement-overview-detail h4 { font-size: .875rem; font-weight: 750; line-height: normal; margin: 0 0 10px; color: #15253f; }
-.measurement-overview-project { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 84px 100px; }
+.measurement-overview-project { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--measurement-overview-summary-tail); }
 .site-detail-page.is-project-file-workspace .measurement-overview button.secondary-action:hover:not(:disabled) { background: #f6f9fc; border-color: #30577d; }
 .site-detail-page.is-project-file-workspace .measurement-overview button.primary-action:hover:not(:disabled) { background: #174678; }
 .measurement-overview-origin { margin: 0; padding: 8px 22px; font-size: .78rem; color: #526a86; border-bottom: 1px solid var(--measurement-overview-border); }
@@ -86,7 +87,7 @@
 .measurement-overview button:focus-visible,
 .measurement-overview-search:focus-within { outline: 2px solid #2f65ec; outline-offset: 2px; }
 @container measurement-review (max-width: 1399px) {
-  .measurement-overview-meta { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 80px 120px; }
+  .measurement-overview-meta { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--measurement-overview-summary-tail); }
 }
 @container measurement-review (max-width: 1279px) {
   .measurement-overview-toolbar, .measurement-overview-workspace { grid-template-columns: minmax(0,1fr); }
@@ -99,12 +100,10 @@
 }
 @container measurement-review (max-width: 600px) {
   .measurement-overview-detail-head { flex-wrap: wrap; }
+  .measurement-overview-meta { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .measurement-overview-meta > div + div { border-left: 0; padding-left: 0; }
   .measurement-overview-project { grid-template-columns: 1fr; gap: 16px; }
   .measurement-overview-project > div { padding: 0 !important; border: 0 !important; }
   .measurement-overview-project .project-extra-work-delivery-tooltip { left: 0; right: auto; }
   .measurement-overview-pagination { flex-wrap: wrap; }
-}
-@container measurement-review (max-width: 420px) {
-  .measurement-overview-meta { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .measurement-overview-meta > div + div { border-left: 0; padding-left: 0; }
 }
