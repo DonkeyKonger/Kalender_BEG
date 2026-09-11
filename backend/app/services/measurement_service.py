@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 import logging
@@ -1701,26 +1702,43 @@ class MeasurementService:
 
     def set_site_batch_invoiced(
         self, *, site_id: int, batch_id: int, is_invoiced: bool, current_user: User,
+        schedule_completed_archive: Callable[[int, int, int], None] | None = None,
     ) -> MobileMeasurementBatchRead:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
-        if batch.is_invoiced == is_invoiced:
+        previous_status = batch.status
+        status_changed = is_invoiced and previous_status not in {"billed", "approved", "closed"}
+        if batch.is_invoiced == is_invoiced and not status_changed:
             return self._build_mobile_batch(batch)
         AuditService(self.db).record(
             user_id=current_user.id,
             action="measurement.invoiced_updated",
             entity_type="site_measurement_batch",
             entity_id=batch.id,
-            old_value={"is_invoiced": batch.is_invoiced},
-            new_value={"is_invoiced": is_invoiced},
+            old_value={"is_invoiced": batch.is_invoiced, "status": previous_status},
+            new_value={"is_invoiced": is_invoiced, "status": "billed" if status_changed else previous_status},
         )
         batch.is_invoiced = is_invoiced
+        if status_changed:
+            batch.status = "billed"
+            for entry in _current_measurement_entries(list(batch.entries)):
+                entry.status = "billed"
         try:
             self.db.commit()
         except Exception:
             self.db.rollback()
             raise
         self.db.refresh(batch)
+        if status_changed:
+            # Keep the existing completion PDF side effect, but do not hold up
+            # or roll back the persisted checkbox for a storage failure.
+            try:
+                if schedule_completed_archive is not None:
+                    schedule_completed_archive(site_id, batch_id, current_user.id)
+                else:
+                    self._archive_billed_batch_pdf(batch=batch, current_user=current_user)
+            except Exception:
+                LOGGER.exception("Measurement completion archive failed: site_id=%s batch_id=%s", site_id, batch_id)
         return self._build_mobile_batch(batch)
 
     def set_site_batch_billing_status(

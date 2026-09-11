@@ -758,9 +758,13 @@ export function SiteDetailPage() {
     setMeasurementReviewError(null);
     try {
       const updated = await api.updateSiteMeasurementBatchInvoiced(site.id, batch.id, !batch.is_invoiced);
-      setMeasurementBatches(current => current.map(entry => entry.id === updated.id ? { ...entry, is_invoiced: updated.is_invoiced } : entry));
-      setSelectedMeasurementBatch(current => current?.id === updated.id ? { ...current, is_invoiced: updated.is_invoiced } : current);
-      setMeasurementReviewMessage(`${batch.title}: ${updated.is_invoiced ? "Als abgerechnet markiert" : "Abrechnungsmarkierung entfernt"}.`);
+      setMeasurementBatches(current => current.map(entry => entry.id === updated.id ? updated : entry));
+      setSelectedMeasurementBatch(current => current?.id === updated.id ? updated : current);
+      setMeasurementTimesheet(null);
+      setMeasurementLoaded(false);
+      setMeasurementTimeAnalysis(null);
+      setMeasurementTimeAnalysisLoaded(false);
+      setMeasurementReviewMessage(`${batch.title}: ${updated.is_invoiced ? "Abgerechnet und abgeschlossen" : "Abrechnungsmarkierung entfernt"}.`);
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Abrechnungsmarkierung konnte nicht gespeichert werden."));
     } finally {

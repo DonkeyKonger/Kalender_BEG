@@ -122,6 +122,14 @@ test("independent invoiced checkbox is accessible and gated by permissions, pend
   }
 });
 
+test("success announcements take no visible banner space while errors stay visible", () => {
+  const html = render({ ...props, message: "Abgerechnet und abgeschlossen.", actionError: "Speichern fehlgeschlagen" });
+  assert.match(html, /role="status" class="sr-only">Abgerechnet und abgeschlossen\./);
+  assert.doesNotMatch(html, /project-record-empty-state is-success/);
+  assert.match(html, /role="alert" class="project-record-empty-state is-error">Speichern fehlgeschlagen/);
+  assert.match(html, /Als abgerechnet markieren und Aufmaß abschließen/);
+});
+
 test("rendered overview keeps table headers, creator and submitter distinct and shows old offers", () => {
   const html = render(props);
   for (const name of ["Status", "Titel / Nummer", "Datum", "Ersteller", "Umfang"]) assert.ok(html.includes(`<th scope="col">${name}</th>`));

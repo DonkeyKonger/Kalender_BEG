@@ -85,7 +85,7 @@ export function MeasurementReviewOverview(props: Props) {
         {!archive && props.canCreate ? <button type="button" className="primary-action" disabled={loading || props.busy} onClick={props.onCreate}><Plus size={18} aria-hidden="true" />Aufmaß anlegen</button> : null}
       </div>
     </header>
-    {props.message ? <div role="status" className="project-record-empty-state is-success">{props.message}</div> : null}
+    <div role="status" className="sr-only">{props.message ?? ""}</div>
     {props.actionError ? <div role="alert" className="project-record-empty-state is-error">{props.actionError}</div> : null}
     <div className="measurement-overview-workspace" ref={workspaceRef} style={{ "--measurement-overview-height": `${height}px` } as CSSProperties}>
       <div className="measurement-overview-master">
@@ -105,7 +105,7 @@ export function MeasurementReviewOverview(props: Props) {
                     {batch.is_current_offer === false ? <span className="measurement-status is-old-offer" title={batch.offer_name ?? undefined}>Altes Angebot</span> : null}
                   </td>
                   <td onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-                    <label className="project-extra-work-invoiced-control measurement-overview-invoiced" title={batch.is_invoiced ? "Abgerechnet – unabhängig vom Aufmaßstatus" : "Nicht abgerechnet – unabhängig vom Aufmaßstatus"}>
+                    <label className="project-extra-work-invoiced-control measurement-overview-invoiced" title={batch.is_invoiced ? "Abrechnungsmarkierung entfernen – Aufmaß bleibt abgeschlossen" : "Als abgerechnet markieren und Aufmaß abschließen"}>
                       <input type="checkbox" checked={batch.is_invoiced === true}
                         disabled={!props.canMarkInvoiced || archive || props.busy || loading}
                         aria-label={`${title(batch)}: ${batch.is_invoiced ? "Abrechnungsmarkierung entfernen" : "Als abgerechnet markieren"}`}

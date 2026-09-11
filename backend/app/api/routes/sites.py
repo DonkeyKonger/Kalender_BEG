@@ -71,6 +71,7 @@ from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.geo_service import GeocodingUnavailableError, search_geocoding_candidates
 from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
+from app.services.measurement_archive_service import archive_completed_measurement_after_response
 from app.services.photo_filename import (
     PHOTO_UPLOAD_FOLDER_KEY,
     build_photo_filename,
@@ -1079,11 +1080,15 @@ def update_measurement_batch_invoiced(
     site_id: int,
     batch_id: int,
     payload: MeasurementBatchInvoicedUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(CAN_SITES_WRITE),
     db: Session = Depends(get_db),
 ) -> MobileMeasurementBatchRead:
     return MeasurementService(db).set_site_batch_invoiced(
         site_id=site_id, batch_id=batch_id, is_invoiced=payload.is_invoiced, current_user=current_user,
+        schedule_completed_archive=lambda sid, bid, uid: background_tasks.add_task(
+            archive_completed_measurement_after_response, sid, bid, uid,
+        ),
     )
 
 
