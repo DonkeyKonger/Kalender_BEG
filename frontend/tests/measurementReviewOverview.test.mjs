@@ -12,6 +12,7 @@ const compiled = await build({
     import { renderToStaticMarkup } from 'react-dom/server';
     import { MeasurementReviewOverview } from './src/components/MeasurementReviewOverview';
     export { getMeasurementOverviewWindow, formatMeasurementCount } from './src/lib/measurementReviewOverview';
+    export { EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE } from './src/lib/extraWorkOverview';
     export const render = props => renderToStaticMarkup(React.createElement(MeasurementReviewOverview, props));
   `, resolveDir: fileURLToPath(new URL("..", import.meta.url)), loader: "tsx" },
   bundle: true, write: false, format: "cjs", platform: "node", packages: "external",
@@ -41,6 +42,12 @@ const props = {
   title, date: value => value.slice(0, 10), dateTime: value => value,
   renderStatus: batch => batch.status, renderActions: () => null,
 };
+
+test("initial rendered page uses the same compact row capacity as Zusatzaufträge", () => {
+  const html = render(props);
+  assert.equal((html.match(/class="measurement-overview-select"/g) ?? []).length,
+    compiledModule.exports.EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE);
+});
 
 test("search filters the whole server list before paging, including later pages", () => {
   const view = windowFor(batches, { ...state, query: "  pAKet 12  " }, 4, title);
@@ -119,10 +126,10 @@ test("loading, errors and empty results never expose stale selected documents", 
 
 test("scoped layout shares its divider and keeps rows natural inside independent scroll areas", () => {
   const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
-  assert.match(css, /--measurement-overview-columns: minmax\(0, 53fr\) minmax\(0, 47fr\)/);
+  assert.match(css, /--measurement-overview-columns: minmax\(680px, 52%\) minmax\(0, 1fr\)/);
   assert.match(css, /\.measurement-overview-toolbar,\s*\.measurement-overview-workspace[^}]*grid-template-columns: var\(--measurement-overview-columns\)/);
   assert.match(css, /\.measurement-overview-list \{[^}]*overflow: auto/);
   assert.match(css, /\.measurement-overview-detail \{[^}]*overflow: auto/);
-  assert.match(css, /\.measurement-overview-list td \{[^}]*height: 90px/);
+  assert.match(css, /\.measurement-overview-list td \{[^}]*height: 66px/);
   assert.match(css, /@container measurement-review \(max-width: 1279px\)/);
 });

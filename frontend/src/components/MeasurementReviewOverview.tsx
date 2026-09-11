@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { FileText, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
 import type { MobileMeasurementBatch, Site } from "../types/site";
 import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
-import { formatExtraWorkOverviewCreatorName, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
+import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
 import { formatMeasurementCount, getMeasurementOverviewWindow } from "../lib/measurementReviewOverview";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import "./MeasurementReviewOverview.css";
@@ -27,10 +27,10 @@ export function MeasurementReviewOverview(props: Props) {
   const { site, batches, state, onState, loading, error, archive, title } = props;
   const workspaceRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLElement>(null);
-  const [height, setHeight] = useState(580);
+  const [height, setHeight] = useState(getExtraWorkOverviewMasterHeight(EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE));
   const [pdfAction, setPdfAction] = useState<string | null>(null);
   const pdfPending = useRef(false);
-  const pageSize = Math.max(4, Math.min(10, Math.floor((height - 130) / 90)));
+  const pageSize = calculateExtraWorkOverviewPageSize(height);
   const view = getMeasurementOverviewWindow(batches, state, pageSize, title);
   const selected = loading || error ? null : view.selected;
   const email = selected ? getCustomerEmailStatus(selected) : null;
@@ -38,7 +38,7 @@ export function MeasurementReviewOverview(props: Props) {
   useLayoutEffect(() => {
     const workspace = workspaceRef.current;
     if (!workspace) return;
-    const update = () => setHeight(Math.max(490, Math.floor((window.visualViewport?.height ?? window.innerHeight) - workspace.getBoundingClientRect().top - 18)));
+    const update = () => setHeight(Math.max(getExtraWorkOverviewMasterHeight(EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE), Math.floor((window.visualViewport?.height ?? window.innerHeight) - workspace.getBoundingClientRect().top - 18)));
     update();
     const observer = new ResizeObserver(update);
     observer.observe(workspace.parentElement!);
@@ -68,7 +68,7 @@ export function MeasurementReviewOverview(props: Props) {
   return <section className="measurement-overview">
     <header className="measurement-overview-toolbar">
       <div className="measurement-overview-toolbar-left">
-        <h2><Ruler size={24} aria-hidden="true" />Prüfung</h2>
+        <h2><Ruler size={18} aria-hidden="true" />Prüfung</h2>
         <div className="measurement-overview-modes" role="group" aria-label="Aufmaßansicht">
           <button type="button" aria-pressed={!archive} disabled={loading || props.busy} onClick={() => archive && props.onToggleArchive()}>Aktiv</button>
           <span aria-hidden="true">·</span>
@@ -78,7 +78,7 @@ export function MeasurementReviewOverview(props: Props) {
       <div className="measurement-overview-toolbar-right">
         <label className="measurement-overview-search"><span className="sr-only">Aufmaße durchsuchen</span>
           <input type="search" placeholder="Suche…" value={state.query} onChange={(e) => onState({ selectedId: null, page: 1, query: e.target.value })} />
-          <Search size={20} aria-hidden="true" />
+          <Search size={16} aria-hidden="true" />
         </label>
         {!archive && props.canCreate ? <button type="button" className="primary-action" disabled={loading || props.busy} onClick={props.onCreate}><Plus size={18} aria-hidden="true" />Aufmaß anlegen</button> : null}
       </div>
@@ -88,7 +88,7 @@ export function MeasurementReviewOverview(props: Props) {
     <div className="measurement-overview-workspace" ref={workspaceRef} style={{ "--measurement-overview-height": `${height}px` } as CSSProperties}>
       <div className="measurement-overview-master">
         <div className="measurement-overview-list" role="region" aria-label="Aufmaßliste">
-          <table><colgroup><col style={{width:"23.7%"}}/><col style={{width:"28.8%"}}/><col style={{width:"15.3%"}}/><col style={{width:"17%"}}/><col style={{width:"15.2%"}}/></colgroup>
+          <table><colgroup><col style={{width:"148px"}}/><col/><col style={{width:"104px"}}/><col style={{width:"104px"}}/><col style={{width:"104px"}}/></colgroup>
             <thead><tr>{["Status", "Titel / Nummer", "Datum", "Ersteller", "Umfang"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
             <tbody>
               {loading || error || view.visible.length === 0 ? <tr className="measurement-overview-state"><td colSpan={5}>
@@ -142,14 +142,14 @@ export function MeasurementReviewOverview(props: Props) {
             <div><dt>Kunde</dt><dd>{site.customer || "—"}</dd></div><div><dt>Projekt</dt><dd>{site.name}</dd></div><div><dt>Kom.-Nr.</dt><dd>{site.site_number || "—"}</dd></div>
           </dl></section>
           <section><h4>Versandstatus</h4><p className={`measurement-overview-delivery ${email!.className}`}>
-            {email!.isSent ? <MailCheck size={32} aria-hidden="true"/> : <MailX size={32} aria-hidden="true"/>}{email!.label}
+            {email!.isSent ? <MailCheck size={19} aria-hidden="true"/> : <MailX size={19} aria-hidden="true"/>}{email!.label}
           </p></section>
           <section><h4>Dokumente</h4><div className="measurement-overview-documents">
             {(["checked", ...(selected.has_original_worker_submission ? ["original"] : [])] as const).map((mode) => <button type="button" key={mode}
               className="secondary-action" disabled={archive || !props.canExport(selected.status) || pdfAction !== null}
               title={archive ? "Aufmaß vor dem PDF-Export wiederherstellen" : props.canExport(selected.status) ? mode === "checked" ? "Geprüftes PDF mit Projektleiterkorrekturen exportieren" : "Originales Monteur-Aufmaß exportieren" : "PDF-Export erst nach Prüfung oder Abschluss verfügbar"}
               onClick={() => void exportPdf(selected,mode as "checked" | "original")}>
-              <FileText size={24} aria-hidden="true"/>{pdfAction === `${selected.id}:${mode}` ? "PDF…" : mode === "checked" ? "Aufmaß geprüft" : "Originales Monteur-Aufmaß"}
+              <FileText size={18} aria-hidden="true"/>{pdfAction === `${selected.id}:${mode}` ? "PDF…" : mode === "checked" ? "Aufmaß geprüft" : "Originales Monteur-Aufmaß"}
             </button>)}
           </div></section>
         </>}
