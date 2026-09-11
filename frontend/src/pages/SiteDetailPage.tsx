@@ -6370,15 +6370,6 @@ function MeasurementReviewPanel({
     }
   }
 
-  const sortedBatches = useMemo(() => [...batches].sort((left, right) => {
-    const rightTime = getMeasurementBatchSortTime(right);
-    const leftTime = getMeasurementBatchSortTime(left);
-    if (rightTime !== leftTime) {
-      return rightTime - leftTime;
-    }
-    return right.number - left.number;
-  }), [batches]);
-
   function resetEntryDraft(entry: MobileMeasurementItem["entries"][number]): void {
     setEntryDrafts((current) => ({
       ...current,
@@ -6648,7 +6639,7 @@ function MeasurementReviewPanel({
   return (
     <>
       <MeasurementReviewOverview
-        site={site} batches={sortedBatches} state={overviewState} onState={(state) => { setOverviewState(state); setOpenStatusBatchId(null); setOpenOverviewActionId(null); }}
+        site={site} batches={batches} state={overviewState} onState={(state) => { setOverviewState(state); setOpenStatusBatchId(null); setOpenOverviewActionId(null); }}
         loading={batchesLoading} error={batchesError} message={reviewMessage} actionError={reviewError}
         archive={archiveMode} busy={reviewActionLoading || statusActionId !== null || isCreatingBatch}
         canCreate={canCreateBatch} onCreate={openCreateDialog} onRetry={onRetryBatches}
@@ -9480,12 +9471,6 @@ function parseMeasurementQuantityInput(value: string): number | null {
 function syncMeasurementNegativeInputClass(input: HTMLInputElement): void {
   const quantity = parseMeasurementQuantityInput(input.value);
   input.classList.toggle("measurement-negative-quantity", quantity !== null && quantity < 0);
-}
-
-function getMeasurementBatchSortTime(batch: MobileMeasurementBatch): number {
-  const value = batch.submitted_at ?? batch.created_at;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function clampProgressPercent(value: number): number {

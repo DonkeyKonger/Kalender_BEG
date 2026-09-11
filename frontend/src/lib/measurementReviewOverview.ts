@@ -17,7 +17,7 @@ export function getMeasurementLocationPreviewCount(rowTops: number[]): number {
   return rowTops.length;
 }
 
-// Filter the complete server result before applying the local page window.
+// Filter and sort the complete server result before applying the local page window.
 export function getMeasurementOverviewWindow(
   batches: MobileMeasurementBatch[], state: MeasurementOverviewState, pageSize: number,
   title: (batch: MobileMeasurementBatch) => string,
@@ -25,7 +25,9 @@ export function getMeasurementOverviewWindow(
   const query = state.query.trim().toLocaleLowerCase("de-DE");
   const filtered = batches.filter((batch) => !query || [
     title(batch), batch.title, batch.created_by_name, batch.submitted_by_name, batch.area_location,
-  ].some((value) => value?.toLocaleLowerCase("de-DE").includes(query)));
+  ].some((value) => value?.toLocaleLowerCase("de-DE").includes(query)))
+    // Number is the fixed chronology; submitting or reviewing must never move a row.
+    .sort((left, right) => right.number - left.number || right.id - left.id);
   const selectedIndex = filtered.findIndex((batch) => batch.id === state.selectedId);
   const window = getExtraWorkOverviewPageWindow(filtered.length,
     selectedIndex >= 0 ? Math.floor(selectedIndex / pageSize) + 1 : state.page, pageSize);

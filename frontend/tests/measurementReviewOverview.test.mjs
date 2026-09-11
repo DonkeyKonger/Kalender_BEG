@@ -76,6 +76,29 @@ test("selection survives resize, sorting and editor return by stable ID, never b
   }
 });
 
+test("fixed numeric order ignores submission dates, statuses and server order without mutating input", () => {
+  const entries = [
+    { ...batches[0], id: 9, number: 9, status: "submitted", submitted_at: "2026-09-11T14:00:00Z" },
+    { ...batches[0], id: 10, number: 10, status: "draft", submitted_at: null, created_at: "2026-09-10T10:00:00Z" },
+    { ...batches[0], id: 2, number: 2, status: "billed", submitted_at: "2026-09-12T10:00:00Z" },
+    { ...batches[0], id: 100, number: 100, status: "draft", submitted_at: null },
+  ];
+  const original = structuredClone(entries);
+  const numbers = list => windowFor(list, state, 10, title).visible.map(batch => batch.number);
+  assert.deepEqual(numbers(entries), [100, 10, 9, 2]);
+  assert.deepEqual(numbers([...entries].reverse()), [100, 10, 9, 2]);
+  assert.deepEqual(numbers(entries.map(batch => ({ ...batch, status: "billed", is_invoiced: true, submitted_at: "2099-01-01T00:00:00Z" }))), [100, 10, 9, 2]);
+  assert.deepEqual(entries, original);
+  const page = windowFor(entries, { selectedId: null, query: "9999.", page: 2 }, 2, title);
+  assert.deepEqual(page.visible.map(batch => batch.number), [9, 2]);
+  assert.equal(windowFor(entries, { selectedId: 10, query: "", page: 2 }, 2, title).selected.id, 10);
+  for (const archive of [false, true]) {
+    const html = render({ ...props, batches: entries, archive });
+    const rows = [...html.matchAll(/class="measurement-overview-select"[^>]*>([^<]+)<\/button>/g)].map(match => match[1]);
+    assert.deepEqual(rows, ["Aufmaß 9999.100", "Aufmaß 9999.10", "Aufmaß 9999.9", "Aufmaß 9999.2"]);
+  }
+});
+
 test("removal, empty searches and shrinking lists cannot leave stale detail data", () => {
   const view = windowFor(batches.slice(0, 3), { ...state, page: 3, selectedId: 12 }, 4, title);
   assert.equal(view.page, 1);
