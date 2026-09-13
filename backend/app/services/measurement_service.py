@@ -1800,7 +1800,9 @@ class MeasurementService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültiger Abschlussstatus.")
 
         self._get_site(site_id)
-        batch = self._get_batch_for_site(batch_id, site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
+        # Status reset (mark-open) deliberately preserves quantities, snapshots,
+        # signatures and invoicing. Restoring worker data is a separate endpoint.
         batch.status = normalized_status
         if normalized_status == "submitted" and batch.first_submitted_at is None:
             batch.first_submitted_at = datetime.now(timezone.utc)

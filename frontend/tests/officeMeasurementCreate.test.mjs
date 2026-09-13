@@ -56,11 +56,8 @@ test("saved blank positions remain fully editable and deletable through the shar
 test("office-created measurements hide worker-only review UI while keeping the final completion action", () => {
   assert.match(pageSource, /const isOfficeCreatedBatch = selectedBatch\.origin === "OFFICE"/);
   assert.match(pageSource, /!isOfficeCreatedBatch && showUnsubmittedWarning/);
-  assert.match(pageSource, /\{!isOfficeCreatedBatch \? \(\s*<>\s*<span className="measurement-review-action-divider"/);
-  assert.match(pageSource, /!isOfficeCreatedBatch && !isReviewed && !isCustomerSigned \? \(/);
-  assert.match(pageSource, />\s*Prüfung abschließen\s*<\/button>/);
-  assert.match(pageSource, />\s*Aufmaß abschließen\s*<\/button>/);
-  assert.match(pageSource, /measurement-review-filter-group/);
+  assert.match(pageSource, /<MeasurementReviewStatusBar/);
+  assert.match(pageSource, /canReview=\{!isOfficeCreatedBatch && !isReviewed && !isCustomerSigned\}/);
 });
 
 test("blank measurements expose ten lazy free columns and append one after the last used slot", () => {

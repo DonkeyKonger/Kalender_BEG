@@ -2086,6 +2086,47 @@ def test_office_can_review_and_bill_unsubmitted_measurement_batch():
     assert db.get(SiteMeasurementEntry, billing_entry.id).status == "billed"
 
 
+@pytest.mark.parametrize("initial_status", ["billed", "approved", "closed"])
+@pytest.mark.parametrize("signed", [False, True])
+def test_status_reset_preserves_reviewed_content_signatures_and_invoicing(initial_status, signed):
+    db = db_session()
+    site = create_site(db)
+    stamp = datetime(2026, 9, 1, 10, tzinfo=timezone.utc)
+    batch = SiteMeasurementBatch(
+        site=site, number=1, title="Statusleisten-Test", status=initial_status,
+        is_invoiced=True, submitted_at=stamp, first_submitted_at=stamp,
+        original_submitted_snapshot={"worker": "original, not restored"},
+        customer_signed_at=stamp if signed else None,
+        customer_signature_name="Kunde" if signed else None,
+        customer_signed_snapshot={"signed": "retained"} if signed else None,
+    )
+    item = SiteMeasurementItem(site=site, measurement_batch=batch, position="1.1", description="Büroposition", unit="m", is_free_position=True, sort_order=1)
+    entry = SiteMeasurementEntry(site=site, measurement_batch=batch, measurement_item=item, quantity=Decimal("12.55"), area_or_comment="2. OG Büroänderung", status=initial_status)
+    db.add_all([batch, item, entry])
+    db.commit()
+    saved_id = entry.id
+    original_submission = batch.first_submitted_at
+    original_signature = batch.customer_signed_at
+    service = MeasurementService(db)
+
+    # Repeated requests remain a status operation, never a worker-data reset.
+    for _ in range(2):
+        result = service.set_site_batch_billing_status(site_id=site.id, batch_id=batch.id, billing_status="submitted")
+        db.expire_all()
+        stored = db.get(SiteMeasurementBatch, batch.id)
+        stored_entry = db.get(SiteMeasurementEntry, saved_id)
+        assert result.status == stored.status == stored_entry.status == "submitted"
+        assert stored_entry.quantity == Decimal("12.55")
+        assert stored_entry.area_or_comment == "2. OG Büroänderung"
+        assert stored.original_submitted_snapshot == {"worker": "original, not restored"}
+        assert stored.customer_signed_snapshot == ({"signed": "retained"} if signed else None)
+        assert stored.customer_signed_at == original_signature
+        assert stored.customer_signature_name == ("Kunde" if signed else None)
+        assert stored.first_submitted_at == original_submission
+        assert stored.is_invoiced is True
+        assert len(stored.entries) == 1
+
+
 def test_site_measurement_billing_status_and_entry_update():
     from datetime import date
 

@@ -1,6 +1,7 @@
 import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
 import { MeasurementReviewOverview } from "../components/MeasurementReviewOverview";
+import { MeasurementReviewStatusBar } from "../components/MeasurementReviewStatusBar";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import type { OverviewPhoto, OverviewPhotoKind } from "../lib/extraWorkPhotoPreview";
 import { ProjectNoteTextarea } from "../components/ProjectNoteTextarea";
@@ -1010,26 +1011,6 @@ export function SiteDetailPage() {
     }
   }
 
-  async function resetMeasurementBatchToSubmitted(batch: MobileMeasurementBatch): Promise<void> {
-    if (!site || measurementReviewActionLoading) {
-      return;
-    }
-    setMeasurementReviewActionLoading(true);
-    setMeasurementReviewMessage(null);
-    setMeasurementReviewError(null);
-    try {
-      setMeasurementBatchItems(orderMeasurementItemsByColumnPosition(
-        await api.resetSiteMeasurementBatchToSubmitted(site.id, batch.id),
-      ));
-      setMeasurementReviewMessage(`${formatMeasurementPackageNumber(site.site_number, batch.number, batch.title)} wurde auf den Monteurstand zurückgesetzt.`);
-    } catch (requestError) {
-      setMeasurementReviewError(readApiError(requestError, "Monteurstand konnte nicht wiederhergestellt werden."));
-      throw requestError;
-    } finally {
-      setMeasurementReviewActionLoading(false);
-    }
-  }
-
   async function downloadMeasurementBatchPdf(batch: MobileMeasurementBatch, mode: MeasurementPdfMode): Promise<void> {
     if (!site || measurementReviewActionLoading) {
       return;
@@ -1754,7 +1735,6 @@ export function SiteDetailPage() {
           onCreateFreeItem={createMeasurementFreeItem}
           onUpdateFreeItem={updateMeasurementFreeItem}
           onDeleteFreeItem={deleteMeasurementFreeItem}
-          onResetToSubmitted={resetMeasurementBatchToSubmitted}
           onExportPdf={downloadMeasurementBatchPdf}
         />
       ) : null}
@@ -4895,7 +4875,6 @@ function MeasurementTab({
   onCreateFreeItem,
   onUpdateFreeItem,
   onDeleteFreeItem,
-  onResetToSubmitted,
   onExportPdf,
 }: {
   siteNumber: string | null;
@@ -4959,7 +4938,6 @@ function MeasurementTab({
   onCreateFreeItem: (batch: MobileMeasurementBatch, payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
   onUpdateFreeItem: (batch: MobileMeasurementBatch, measurementItemId: number, payload: MeasurementItemUpdatePayload) => Promise<MobileMeasurementItem>;
   onDeleteFreeItem: (batch: MobileMeasurementBatch, measurementItemId: number) => Promise<void>;
-  onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
   onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
   const selectableBases = useMemo(
@@ -5170,7 +5148,6 @@ function MeasurementTab({
           onCreateFreeItem={onCreateFreeItem}
           onUpdateFreeItem={onUpdateFreeItem}
           onDeleteFreeItem={onDeleteFreeItem}
-          onResetToSubmitted={onResetToSubmitted}
           onExportPdf={onExportPdf}
         />
       ) : null}
@@ -5946,12 +5923,6 @@ type MeasurementEntryDraft = {
   quantity: string;
 };
 
-type MeasurementEntryUndoState = {
-  entryId: number;
-  area_or_comment: string;
-  quantity: string;
-};
-
 type MeasurementManualColumnDraft = {
   position: string;
   description: string;
@@ -6188,7 +6159,6 @@ function MeasurementReviewPanel({
   onCreateFreeItem,
   onUpdateFreeItem,
   onDeleteFreeItem,
-  onResetToSubmitted,
   onExportPdf,
 }: {
   site: Site;
@@ -6229,11 +6199,9 @@ function MeasurementReviewPanel({
   onCreateFreeItem: (batch: MobileMeasurementBatch, payload: MobileMeasurementFreeItemPayload) => Promise<MobileMeasurementItem>;
   onUpdateFreeItem: (batch: MobileMeasurementBatch, measurementItemId: number, payload: MeasurementItemUpdatePayload) => Promise<MobileMeasurementItem>;
   onDeleteFreeItem: (batch: MobileMeasurementBatch, measurementItemId: number) => Promise<void>;
-  onResetToSubmitted: (batch: MobileMeasurementBatch) => Promise<void>;
   onExportPdf: (batch: MobileMeasurementBatch, mode: MeasurementPdfMode) => Promise<void>;
 }) {
   const [, setEntryDrafts] = useState<Record<number, MeasurementEntryDraft>>({});
-  const [undoStack, setUndoStack] = useState<MeasurementEntryUndoState[]>([]);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
   const [overviewState, setOverviewState] = useState<MeasurementOverviewState>({ selectedId: null, query: "", page: 1 });
@@ -6309,10 +6277,6 @@ function MeasurementReviewPanel({
     setEntryDrafts(drafts);
     setInlineError(null);
   }, [batchItems, selectedBatch?.id]);
-
-  useEffect(() => {
-    setUndoStack([]);
-  }, [selectedBatch?.id]);
 
   useEffect(() => {
     if (!isCreateDialogOpen) {
@@ -6413,12 +6377,6 @@ function MeasurementReviewPanel({
       return;
     }
 
-    const previousState: MeasurementEntryUndoState = {
-      entryId: entry.id,
-      area_or_comment: entry.area_or_comment,
-      quantity: formatMeasurementDraftQuantity(entry.quantity),
-    };
-
     setSavingEntryId(entry.id);
     setInlineError(null);
     try {
@@ -6427,71 +6385,11 @@ function MeasurementReviewPanel({
         ...current,
         [entry.id]: { area_or_comment: comment, quantity: formatMeasurementDraftQuantity(quantity) },
       }));
-      setUndoStack((current) => [...current, previousState].slice(-20));
     } catch {
       setInlineError("Änderung konnte nicht gespeichert werden.");
       resetEntryDraft(entry);
     } finally {
       setSavingEntryId(null);
-    }
-  }
-
-  async function undoLastEntryChange(batch: MobileMeasurementBatch): Promise<void> {
-    const previousState = undoStack[undoStack.length - 1];
-    if (!previousState || savingEntryId !== null || reviewActionLoading) {
-      return;
-    }
-
-    const currentEntry = batchItems
-      .flatMap((item) => item.entries)
-      .find((entry) => entry.id === previousState.entryId);
-    const previousQuantity = parseMeasurementQuantityInput(previousState.quantity);
-    if (!currentEntry || previousQuantity === null) {
-      setInlineError("Die letzte Änderung kann nicht wiederhergestellt werden.");
-      return;
-    }
-
-    setSavingEntryId(previousState.entryId);
-    setInlineError(null);
-    try {
-      await onUpdateEntry(batch, previousState.entryId, {
-        area_or_comment: previousState.area_or_comment,
-        quantity: previousQuantity,
-      });
-      setUndoStack((current) => {
-        const undoIndex = current.lastIndexOf(previousState);
-        if (undoIndex === -1) {
-          return current;
-        }
-        return [
-          ...current.slice(0, undoIndex),
-          ...current.slice(undoIndex + 1),
-        ];
-      });
-      setEntryDrafts((current) => ({
-        ...current,
-        [previousState.entryId]: {
-          area_or_comment: previousState.area_or_comment,
-          quantity: formatMeasurementDraftQuantity(previousQuantity),
-        },
-      }));
-    } catch {
-      setInlineError("Undo konnte nicht gespeichert werden.");
-    } finally {
-      setSavingEntryId(null);
-    }
-  }
-
-  async function resetToSubmitted(batch: MobileMeasurementBatch): Promise<void> {
-    if (!window.confirm("Dieses Aufmaß wirklich auf den ursprünglichen Monteurstand zurücksetzen?")) {
-      return;
-    }
-    setInlineError(null);
-    try {
-      await onResetToSubmitted(batch);
-      setUndoStack([]);
-    } catch {
-      // The parent handler already surfaces the API error; avoid duplicate red messages.
     }
   }
 
@@ -6545,64 +6443,18 @@ function MeasurementReviewPanel({
       <div className="measurement-review-detail is-table-view">
         <div className="measurement-package-header measurement-review-package-row">
           <div className="measurement-review-package-title">
+            <button type="button" className="secondary-action" onClick={onBackToBatchList}><ArrowLeft size={16} aria-hidden="true" />Zurück</button>
+            <span className="measurement-review-action-divider" aria-hidden="true" />
             <h2>{displayTitle}</h2>
           </div>
           {updatedLabel ? <span className="measurement-review-updated">Letzte Änderung: {updatedLabel}</span> : null}
         </div>
 
-        <div className="measurement-table-toolbar measurement-review-toolbar-row">
-          <div className="measurement-review-toolbar-left">
-            <button type="button" className="secondary-action" onClick={onBackToBatchList}>Zurück</button>
-            {!isOfficeCreatedBatch ? (
-              <>
-                <span className="measurement-review-action-divider" aria-hidden="true" />
-                <div className="measurement-review-filter-group" aria-label="Aktueller Prüfstatus">
-                  <span className={isMeasurementBatchReviewRequired(selectedBatch) ? "is-active" : ""}>Eingereicht</span>
-                  <span className={isReviewed ? "is-active" : ""}>Geprüft</span>
-                  <span className={isCustomerSigned && !isBilled ? "is-active" : ""}>Unterschrieben</span>
-                  <span className={isBilled ? "is-active" : ""}>Abgeschlossen</span>
-                </div>
-              </>
-            ) : null}
-          </div>
-          <div className="measurement-review-actions">
-            <button
-              type="button"
-              className="secondary-action"
-              disabled={!canEditRows || undoStack.length === 0 || reviewActionLoading || savingEntryId !== null}
-              onClick={() => void undoLastEntryChange(selectedBatch)}
-            >
-              Undo
-            </button>
-            {selectedBatch.has_original_worker_submission ? (
-              <button
-                type="button"
-                className="secondary-action"
-                disabled={!canEditRows || reviewActionLoading || savingEntryId !== null}
-                onClick={() => void resetToSubmitted(selectedBatch)}
-              >
-                Auf Monteurstand zurücksetzen
-              </button>
-            ) : null}
-            <span className="measurement-review-action-divider" aria-hidden="true" />
-            {isBilled ? (
-              <button type="button" className="secondary-action" disabled={reviewActionLoading} onClick={() => onMarkOpen(selectedBatch)}>
-                Wieder auf Eingereicht setzen
-              </button>
-            ) : (
-              <>
-                {!isOfficeCreatedBatch && !isReviewed && !isCustomerSigned ? (
-                  <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkReviewed(selectedBatch)}>
-                    Prüfung abschließen
-                  </button>
-                ) : null}
-                <button type="button" className="primary-action" disabled={reviewActionLoading} onClick={() => onMarkBilled(selectedBatch)}>
-                  Aufmaß abschließen
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+        <MeasurementReviewStatusBar
+          batch={selectedBatch} busy={reviewActionLoading}
+          isBilled={isBilled} canReview={!isOfficeCreatedBatch && !isReviewed && !isCustomerSigned}
+          onMarkOpen={onMarkOpen} onMarkReviewed={onMarkReviewed} onMarkBilled={onMarkBilled}
+        />
 
         {!isOfficeCreatedBatch && showUnsubmittedWarning ? (
           <div className="measurement-review-unsubmitted-warning" role="note">
@@ -9329,10 +9181,6 @@ function isMeasurementBatchReviewed(status: string): boolean {
 
 function isMeasurementBatchBeforeSubmitted(status: string): boolean {
   return MEASUREMENT_BATCH_BEFORE_SUBMITTED_STATUSES.has(status.toLowerCase());
-}
-
-function isMeasurementBatchReviewRequired(batch: MobileMeasurementBatch): boolean {
-  return isMeasurementBatchOpen(batch.status) && !isCustomerSignedMeasurementBatch(batch);
 }
 
 function isMeasurementBatchOpen(status: string): boolean {

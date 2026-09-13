@@ -84,6 +84,10 @@ class FakeMeasurementService:
         assert current_user.id == 7
         return created_batch().model_copy(update={"status": target_status})
 
+    def set_site_batch_billing_status(self, *, site_id, batch_id, billing_status):
+        assert (site_id, batch_id, billing_status) == (8, 12, "submitted")
+        return created_batch().model_copy(update={"status": billing_status})
+
 
 def api_client(monkeypatch, user) -> TestClient:
     app = FastAPI()
@@ -100,6 +104,36 @@ PAYLOAD = {
     "assigned_employee_id": None,
     "request_id": "route-measurement-request",
 }
+
+
+@pytest.mark.parametrize("user", [
+    current_user(UserRole.ADMIN), current_user(UserRole.PROJECT_MANAGER),
+    current_user(UserRole.OFFICE, "sites"), current_user(UserRole.OFFICE, "calendar"),
+])
+def test_statusbar_reset_uses_existing_mark_open_service_and_permissions(monkeypatch, user):
+    response = api_client(monkeypatch, user).post("/api/sites/8/measurement-batches/12/mark-open")
+    assert response.status_code == 200
+    assert response.json()["status"] == "submitted"
+
+
+@pytest.mark.parametrize("user", [current_user(UserRole.MONTEUR), current_user(UserRole.OFFICE)])
+def test_statusbar_reset_cannot_bypass_write_permissions(monkeypatch, user):
+    response = api_client(monkeypatch, user).post("/api/sites/8/measurement-batches/12/mark-open")
+    assert response.status_code == 403
+
+
+def test_statusbar_reset_propagates_failure(monkeypatch):
+    from fastapi import HTTPException
+
+    client = api_client(monkeypatch, current_user(UserRole.ADMIN))
+
+    def fail(*_args, **_kwargs):
+        raise HTTPException(409, "Status konnte nicht geändert werden.")
+
+    monkeypatch.setattr(FakeMeasurementService, "set_site_batch_billing_status", fail)
+    response = client.post("/api/sites/8/measurement-batches/12/mark-open")
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Status konnte nicht geändert werden."
 
 
 @pytest.mark.parametrize("role", [UserRole.ADMIN, UserRole.PROJECT_MANAGER])

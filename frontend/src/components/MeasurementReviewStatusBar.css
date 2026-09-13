@@ -1,0 +1,144 @@
+.measurement-review-statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-width: 0;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--ct-border);
+  background: var(--ct-surface-muted);
+}
+
+.measurement-review-process-scroll {
+  position: relative;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.measurement-review-process {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.measurement-review-process li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #526278;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.measurement-review-process-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.measurement-review-process-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 21px;
+  width: 21px;
+  height: 21px;
+  border: 1px solid #94a3b8;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.measurement-review-process-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
+.measurement-review-process-arrow {
+  flex: 0 0 13px;
+  width: 13px;
+  height: 13px;
+  color: #94a3b8;
+}
+
+.measurement-review-process .is-reached .measurement-review-process-icon {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.measurement-review-process .is-current .measurement-review-process-step {
+  background: #eaf0f5;
+  color: #284968;
+  font-weight: 600;
+}
+
+.measurement-review-process .is-current .measurement-review-process-icon {
+  border-color: #456987;
+  background: #456987;
+  color: #fff;
+}
+
+.measurement-review-process-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-process-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  max-height: none;
+  padding: 6px 10px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.measurement-review-process-actions button svg {
+  flex-shrink: 0;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-process-actions .secondary-action {
+  border: 1px solid var(--ct-border);
+  background: var(--ct-surface);
+}
+
+.measurement-review-statusbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.measurement-review-statusbar button:focus-visible,
+.measurement-review-process-scroll:focus-visible {
+  outline: 2px solid #456987;
+  outline-offset: -2px;
+}
+
+.measurement-review-process-sr {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
