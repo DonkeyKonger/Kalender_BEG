@@ -277,12 +277,12 @@ test("loading, errors and empty results never expose stale selected documents", 
 
 test("scoped layout shares its divider and keeps rows natural inside independent scroll areas", () => {
   const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
-  assert.match(css, /--measurement-overview-columns: minmax\(748px, 52%\) minmax\(0, 1fr\)/);
+  assert.match(css, /--measurement-overview-columns: minmax\(680px, 52%\) minmax\(0, 1fr\)/);
   assert.match(css, /\.measurement-overview-toolbar,\s*\.measurement-overview-workspace[^}]*grid-template-columns: var\(--measurement-overview-columns\)/);
   assert.match(css, /\.measurement-overview-list \{[^}]*overflow: auto/);
   assert.match(css, /\.measurement-overview-detail \{[^}]*overflow: auto/);
   assert.match(css, /\.measurement-overview-list td \{[^}]*height: 66px/);
-  assert.match(css, /@container measurement-review \(max-width: 1279px\)/);
+  assert.match(css, /@media \(max-width: 1180px\)/);
   assert.match(css, /\.measurement-overview-list \.measurement-overview-hours \{[^}]*text-align: right;[^}]*font-variant-numeric: tabular-nums/);
 });
 
@@ -291,17 +291,17 @@ test("create button and detail action group share the same full width including 
   assert.match(css, /--measurement-overview-actions-width: 184px/);
   assert.match(css, /\.measurement-overview-toolbar-right > button \{[^}]*width: var\(--measurement-overview-actions-width\)/);
   assert.match(css, /\.measurement-overview-detail-head > div \{[^}]*grid-template-columns: minmax\(0, 1fr\) 68px 34px;[^}]*width: var\(--measurement-overview-actions-width\);[^}]*gap: 8px/);
-  assert.match(css, /@container measurement-review \(max-width: 1279px\)[\s\S]*?\.measurement-overview-toolbar-right \{[^}]*scrollbar-gutter: auto/);
+  assert.match(css, /@media \(max-width: 1180px\)[\s\S]*?\.measurement-overview-toolbar-right \{[^}]*scrollbar-gutter: auto/);
 });
 
 test("positions and commission number align with hours and delivery status through shared trailing columns", () => {
   const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
-  assert.match(css, /--measurement-overview-summary-tail: 84px 120px/);
+  assert.match(css, /--measurement-overview-summary-tail: 108px 100px/);
   for (const selector of ["meta", "project"]) {
     assert.match(css, new RegExp(`\\.measurement-overview-${selector} \\{[^}]*grid-template-columns:[^;]*var\\(--measurement-overview-summary-tail\\)`));
   }
-  assert.match(css, /@container measurement-review \(max-width: 1399px\) \{\s*\.measurement-overview-meta \{[^}]*var\(--measurement-overview-summary-tail\)/);
-  const narrow = css.slice(css.indexOf("@container measurement-review (max-width: 600px)"));
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.measurement-overview-meta, \.measurement-overview-project \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  const narrow = css.slice(css.indexOf("@media (max-width: 480px)"));
   assert.match(narrow, /\.measurement-overview-meta \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(narrow, /\.measurement-overview-project \{[^}]*grid-template-columns: 1fr/);
 });
@@ -311,8 +311,28 @@ test("search toolbar divider is inset like extra work and disappears in the stac
   assert.match(css, /\.measurement-overview-toolbar-right::before \{[^}]*inset: 10px auto 10px 0;[^}]*width: 1px;[^}]*pointer-events: none/);
   const toolbar = css.match(/\.measurement-overview-toolbar-right \{ position: relative;[^}]*\}/)[0];
   assert.doesNotMatch(toolbar, /border-left:/);
-  assert.match(css, /@container measurement-review \(max-width: 1279px\)[\s\S]*?\.measurement-overview-toolbar-right::before \{ display: none; \}/);
+  assert.match(css, /@media \(max-width: 1180px\)[\s\S]*?\.measurement-overview-toolbar-right::before \{ display: none; \}/);
   assert.match(css, /\.measurement-overview-detail \{[^}]*border-left: 1px solid var\(--measurement-overview-border\)/);
+});
+
+test("measurement sizing follows the unchanged extra-work reference at every breakpoint", () => {
+  const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
+  const reference = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  for (const minWidth of [680, 660]) {
+    assert.match(reference, new RegExp(`--project-extra-work-master-column: minmax\\(${minWidth}px, 52%\\)`));
+    assert.match(css, new RegExp(`--measurement-overview-columns: minmax\\(${minWidth}px, 52%\\)`));
+  }
+  for (const breakpoint of [1280, 1180, 900, 760, 600, 480]) {
+    assert.ok(reference.includes(`@media (max-width: ${breakpoint}px)`));
+    assert.ok(css.includes(`@media (max-width: ${breakpoint}px)`));
+  }
+  assert.match(reference, /grid-template-columns: 148px minmax\(152px, 1fr\) 104px 88px 104px 68px/);
+  for (const [name, width] of [["status",148],["date",88],["hours",68]]) {
+    assert.match(css, new RegExp(`\\.measurement-overview-${name}-col \\{ width: ${width}px; \\}`));
+  }
+  assert.match(reference, /--project-extra-work-detail-columns: minmax\(0, 1fr\) 180px 108px 100px/);
+  assert.match(css, /--measurement-overview-summary-tail: 108px 100px/);
+  assert.doesNotMatch(css, /minmax\(748px|1279px|1399px/);
 });
 
 test("measurement review uses the full shell width without double-compensating the subtab bar", () => {

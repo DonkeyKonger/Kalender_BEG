@@ -1,8 +1,9 @@
 .measurement-overview {
-  --measurement-overview-columns: minmax(748px, 52%) minmax(0, 1fr);
+  /* Match the reference Zusatzauftrag overview, including its viewport breakpoints. */
+  --measurement-overview-columns: minmax(680px, 52%) minmax(0, 1fr);
   --measurement-overview-border: #e3e6eb;
   --measurement-overview-actions-width: 184px;
-  --measurement-overview-summary-tail: 84px 120px;
+  --measurement-overview-summary-tail: 108px 100px;
   container: measurement-review / inline-size;
   min-width: 0;
   color: #1e3552;
@@ -27,7 +28,11 @@
 .measurement-overview-workspace { height: var(--measurement-overview-height); min-height: 0; border-bottom: 1px solid var(--measurement-overview-border); }
 .measurement-overview-master { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .measurement-overview-list { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; overscroll-behavior: contain; }
-.measurement-overview-list table { width: 100%; min-width: 748px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: .82rem; font-weight: 550; line-height: normal; }
+.measurement-overview-list table { width: 100%; min-width: 664px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: .82rem; font-weight: 550; line-height: normal; }
+.measurement-overview-status-col { width: 148px; }
+.measurement-overview-invoiced-col, .measurement-overview-creator-col { width: 104px; }
+.measurement-overview-date-col { width: 88px; }
+.measurement-overview-hours-col { width: 68px; }
 .measurement-overview-list th { position: sticky; top: 0; z-index: 1; height: 42px; background: #f7f9fc; color: #334e70; font-size: .75rem; font-weight: 800; }
 .measurement-overview-list td { height: 66px; background: white; vertical-align: middle; overflow-wrap: anywhere; }
 .measurement-overview-list th,
@@ -41,7 +46,7 @@
 .measurement-overview .measurement-overview-select { display: block; width: 100%; border: 0; padding: 0; background: none; color: #15253f; text-align: left; font-size: .84rem; line-height: 1.25; font-weight: 650; cursor: pointer; overflow-wrap: anywhere; }
 .measurement-overview-list .is-old-offer { display: inline-block; margin-top: 4px; border-radius: 2px; font-size: .75rem; white-space: normal; }
 .measurement-overview .measurement-overview-status { display: flex; width: 100%; min-width: 0; height: auto; min-height: 28px; border-radius: 2px; padding: 0; }
-.measurement-overview .measurement-review-status-label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 26px; padding: 4px 8px; color: #1e3552; white-space: nowrap; font-size: .78rem; font-weight: 750; line-height: 1; }
+.measurement-overview .measurement-review-status-label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 26px; padding: 4px; color: #1e3552; white-space: nowrap; font-size: .78rem; font-weight: 750; line-height: 1; }
 .measurement-overview-pagination { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 48px; border-top: 1px solid var(--measurement-overview-border); padding: 7px 10px; color: #526a86; background: #fbfcfe; font-size: .76rem; }
 .measurement-overview-pagination nav { display: flex; gap: 3px; align-items: center; }
 .measurement-overview-pagination button { min-width: 28px; height: 28px; padding: 0; border: 1px solid transparent; background: none; color: #30577d; font: inherit; font-weight: 750; cursor: pointer; }
@@ -66,7 +71,7 @@
 .measurement-overview-detail section { padding: 12px 22px 14px; border-bottom: 1px solid var(--measurement-overview-border); }
 .measurement-overview-detail section:last-child { border: 0; }
 .measurement-overview-detail h4 { font-size: .875rem; font-weight: 750; line-height: normal; margin: 0 0 10px; color: #15253f; }
-.measurement-overview-project { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--measurement-overview-summary-tail); }
+.measurement-overview-project { grid-template-columns: minmax(0, 1fr) 180px var(--measurement-overview-summary-tail); }
 .site-detail-page.is-project-file-workspace .measurement-overview button.secondary-action:hover:not(:disabled) { background: #f6f9fc; border-color: #30577d; }
 .site-detail-page.is-project-file-workspace .measurement-overview button.primary-action:hover:not(:disabled) { background: #174678; }
 .measurement-overview-origin { margin: 0; padding: 8px 22px; font-size: .78rem; color: #526a86; border-bottom: 1px solid var(--measurement-overview-border); }
@@ -88,25 +93,42 @@
 .measurement-overview button:focus-visible,
 .measurement-overview-search:focus-within { outline: 2px solid #2f65ec; outline-offset: 2px; }
 .measurement-overview-detail-head button:focus-visible { outline-offset: -2px; }
-@container measurement-review (max-width: 1399px) {
-  .measurement-overview-meta { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--measurement-overview-summary-tail); }
+@media (max-width: 1280px) {
+  .measurement-overview { --measurement-overview-columns: minmax(660px, 52%) minmax(0, 1fr); }
 }
-@container measurement-review (max-width: 1279px) {
+@media (max-width: 1180px) {
   .measurement-overview-toolbar, .measurement-overview-workspace { grid-template-columns: minmax(0,1fr); }
   .measurement-overview-workspace { height: auto; }
-  .measurement-overview-master { max-height: 620px; }
+  .measurement-overview-master { height: var(--measurement-overview-master-height); }
   .measurement-overview-toolbar-left { padding: 10px 18px; }
-  .measurement-overview-toolbar-right { border-left: 0; padding: 10px 18px; flex-wrap: wrap; scrollbar-gutter: auto; }
+  .measurement-overview-toolbar-right { border-left: 0; border-top: 1px solid var(--measurement-overview-border); padding: 10px 18px; scrollbar-gutter: auto; }
   .measurement-overview-toolbar-right::before { display: none; }
   .measurement-overview-detail { border-left: 0; border-top: 1px solid var(--measurement-overview-border); overflow: visible; }
   .measurement-overview-detail-head { position: static; }
 }
-@container measurement-review (max-width: 600px) {
+@media (max-width: 900px) {
+  .measurement-overview-toolbar-left, .measurement-overview-toolbar-right { padding-inline: 14px; }
+}
+@media (max-width: 760px) {
+  .measurement-overview-status-col { width: 140px; }
+  .measurement-overview-invoiced-col { width: 100px; }
+  .measurement-overview-list table { min-width: 636px; }
+  .measurement-overview-list th, .measurement-overview-list td { padding-inline: 6px; }
   .measurement-overview-detail-head { flex-wrap: wrap; }
+  .measurement-overview-meta, .measurement-overview-project { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .measurement-overview-detail dl > div:nth-child(odd) { border-left: 0; padding-left: 0; }
+}
+@media (max-width: 600px) {
+  .measurement-overview-toolbar-right { flex-wrap: wrap; gap: 10px; }
+  .measurement-overview-search { flex-basis: 100%; }
+  .site-detail-page.is-project-file-workspace .measurement-overview .measurement-overview-toolbar-right > button { width: 100%; }
+  .measurement-overview-detail-head > div { width: 100%; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px; }
+  .measurement-overview-pagination { flex-wrap: wrap; }
+}
+@media (max-width: 480px) {
   .measurement-overview-meta { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .measurement-overview-meta > div + div { border-left: 0; padding-left: 0; }
   .measurement-overview-project { grid-template-columns: 1fr; gap: 16px; }
   .measurement-overview-project > div { padding: 0 !important; border: 0 !important; }
   .measurement-overview-project .project-extra-work-delivery-tooltip { left: 0; right: auto; }
-  .measurement-overview-pagination { flex-wrap: wrap; }
 }

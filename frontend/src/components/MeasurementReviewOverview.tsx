@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Check, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
 import type { MobileMeasurementBatch, Site } from "../types/site";
 import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
-import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
+import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
 import { formatMeasurementCount, formatMeasurementOverviewHours, formatMeasurementDetailHours, getMeasurementOverviewWindow, getMeasurementLocationPreviewCount } from "../lib/measurementReviewOverview";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import "./MeasurementReviewOverview.css";
@@ -41,7 +41,7 @@ export function MeasurementReviewOverview(props: Props) {
   useLayoutEffect(() => {
     const workspace = workspaceRef.current;
     if (!workspace) return;
-    const update = () => setHeight(Math.max(getExtraWorkOverviewMasterHeight(EXTRA_WORK_OVERVIEW_MIN_PAGE_SIZE), Math.floor((window.visualViewport?.height ?? window.innerHeight) - workspace.getBoundingClientRect().top - 18)));
+    const update = () => setHeight(Math.max(280, Math.floor((window.visualViewport?.height ?? window.innerHeight) - workspace.getBoundingClientRect().top - 18)));
     update();
     const observer = new ResizeObserver(update);
     observer.observe(workspace.parentElement!);
@@ -109,10 +109,10 @@ export function MeasurementReviewOverview(props: Props) {
     </header>
     <div role="status" className="sr-only">{props.message ?? ""}</div>
     {props.actionError ? <div role="alert" className="project-record-empty-state is-error">{props.actionError}</div> : null}
-    <div className="measurement-overview-workspace" ref={workspaceRef} style={{ "--measurement-overview-height": `${height}px` } as CSSProperties}>
+    <div className="measurement-overview-workspace" ref={workspaceRef} style={{ "--measurement-overview-height": `${height}px`, "--measurement-overview-master-height": `${getExtraWorkOverviewMasterHeight(pageSize)}px` } as CSSProperties}>
       <div className="measurement-overview-master">
         <div className="measurement-overview-list" role="region" aria-label="Aufmaßliste">
-          <table><colgroup><col style={{width:"180px"}}/><col/><col style={{width:"104px"}}/><col style={{width:"104px"}}/><col style={{width:"104px"}}/><col style={{width:"104px"}}/></colgroup>
+          <table><colgroup><col className="measurement-overview-status-col"/><col/><col className="measurement-overview-invoiced-col"/><col className="measurement-overview-date-col"/><col className="measurement-overview-creator-col"/><col className="measurement-overview-hours-col"/></colgroup>
             <thead><tr>{["Status", "Titel / Nummer", "Abgerechnet", "Datum", "Ersteller", "Umfang"].map((label) => <th key={label} scope="col" className={label === "Umfang" ? "measurement-overview-hours" : undefined}>{label}</th>)}</tr></thead>
             <tbody>
               {loading || error || view.visible.length === 0 ? <tr className="measurement-overview-state"><td colSpan={6}>
