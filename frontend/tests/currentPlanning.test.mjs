@@ -65,12 +65,13 @@ test("current planning hides add-site rows while retaining permission checks in 
   assert.match(source, /props\.canCreateSites && \(\s*<MatrixAddSiteRow/);
 });
 
-test("current planning reduces manager separators by 70 percent without changing normal mode", () => {
+test("current planning replaces manager spacers with bold dashed boundaries only between groups", () => {
   const source = readFileSync(new URL("../src/pages/MatrixPage.tsx", import.meta.url), "utf8");
   const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
   assert.match(source, /isCurrentPlanningOnly \? "is-current-planning" : ""/);
   assert.match(css, /\.matrix-group-row th \{[^}]*height: 32px;/);
-  assert.match(css, /\.matrix-page\.is-current-planning \.matrix-group-row th \{[^}]*height: 9\.6px;[^}]*min-height: 0;[^}]*padding: 0 10px;/);
-  assert.match(source, /className="matrix-group-label">\{group.label\}<\/span>/);
-  assert.match(css, /\.matrix-page\.is-current-planning\.is-compact \.matrix-table tbody \.matrix-group-row,[\s\S]*?\.matrix-page\.is-current-planning\.is-compact \.matrix-group-row th \{[^}]*height: 10\.2px;[^}]*min-height: 0;/);
+  assert.match(css, /\.matrix-page\.is-current-planning \.matrix-group-row \{\s*display: none;/);
+  assert.match(css, /\.matrix-page\.is-current-planning \.matrix-group-row:not\(:first-child\) \+ tr > th,/);
+  assert.match(css, /\.matrix-page\.is-current-planning \.matrix-group-row:not\(:first-child\) \+ tr > td \{\s*border-top: 3px dashed #64748b;/);
+  assert.doesNotMatch(css, /height: (9\.6|10\.2)px/);
 });

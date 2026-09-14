@@ -4597,21 +4597,14 @@ button.person-chip:focus-visible {
   text-align: left;
 }
 
-.matrix-page.is-current-planning .matrix-group-row th {
-  height: 9.6px;
-  min-height: 0;
-  padding: 0 10px;
-  line-height: 0;
+.matrix-page.is-current-planning .matrix-group-row {
+  display: none;
 }
 
-/* Keep the group name accessible without enlarging the compact separator. */
-.matrix-page.is-current-planning .matrix-group-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+/* Separate managers directly on the next site row, without an empty spacer. */
+.matrix-page.is-current-planning .matrix-group-row:not(:first-child) + tr > th,
+.matrix-page.is-current-planning .matrix-group-row:not(:first-child) + tr > td {
+  border-top: 3px dashed #64748b;
 }
 
 .day-col.today,
@@ -5132,13 +5125,6 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .matrix-table tbody tr {
   height: 34px;
-}
-
-.matrix-page.is-current-planning.is-compact .matrix-table tbody .matrix-group-row,
-.matrix-page.is-current-planning.is-compact .matrix-group-row th {
-  height: 10.2px;
-  min-height: 0;
-  padding: 0 10px;
 }
 
 .matrix-page.is-compact .matrix-table thead th {
