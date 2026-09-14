@@ -33145,6 +33145,10 @@ body.mobile-modal-scroll-locked {
   resize: none;
 }
 
+.measurement-review-detail.is-table-view textarea.measurement-placeholder-header-input.is-description {
+  font-weight: 400;
+}
+
 .measurement-review-detail.is-table-view .measurement-placeholder-header-input::placeholder {
   color: #94a3b8;
   font-weight: 650;

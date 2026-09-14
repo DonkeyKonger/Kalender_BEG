@@ -70,6 +70,19 @@ test("all review descriptions reserve six lines, including new and completed pos
   assert.match(rule, /resize: none/);
 });
 
+test("only description fields use normal font weight, including new and completed positions", () => {
+  for (const canEditRows of [true, false]) {
+    const textareas = render({ canEditRows }).match(/<textarea\b[^>]*>/g);
+    assert.ok(textareas.length >= 2);
+    for (const textarea of textareas) assert.match(textarea, /class="measurement-placeholder-header-input is-description"/);
+  }
+  const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  const descriptionRule = styles.match(/\.measurement-review-detail\.is-table-view textarea\.measurement-placeholder-header-input\.is-description\s*\{([^}]+)\}/)[1];
+  assert.equal(descriptionRule.trim(), "font-weight: 400;");
+  const headerRule = styles.match(/\.measurement-review-detail\.is-table-view \.measurement-placeholder-header-input\s*\{([^}]+)\}/)[1];
+  assert.match(headerRule, /font-weight: 800/);
+});
+
 test("the calendar displays only latest values in normal text, even after signing", () => {
   const changed = { ...item, position: "9.99", description: "Neuer Text", unit: "St", entries: [{ ...item.entries[0], quantity: 40.55 }] };
   const html = render({ items: [changed], canEditRows: canEditMeasurementContent({ ...batch, status: "customer_signed", customer_signed_at: "2026-09-14", has_signed_snapshot: true }, true) });
