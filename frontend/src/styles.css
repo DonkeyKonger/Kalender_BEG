@@ -32975,7 +32975,8 @@ body.mobile-modal-scroll-locked {
   max-height: var(--measurement-review-available-height, calc(100vh - 330px));
   margin-top: 8px;
   overflow: auto;
-  scrollbar-gutter: stable both-edges;
+  /* A left gutter would scroll away before the sticky axis reaches left: 0. */
+  scrollbar-gutter: stable;
   border: 0;
   border-radius: 0;
   background: var(--ct-surface);
@@ -32988,7 +32989,9 @@ body.mobile-modal-scroll-locked {
   min-width: var(--measurement-table-width);
   max-width: var(--measurement-table-width);
   table-layout: fixed;
-  border-collapse: collapse;
+  /* Keep each sticky cell's borders attached to the cell while scrolling. */
+  border-collapse: separate;
+  border-spacing: 0;
   color: var(--ct-text);
   font-size: 0.77rem;
   line-height: 1.12;
@@ -33010,9 +33013,19 @@ body.mobile-modal-scroll-locked {
   max-width: var(--measurement-position-width);
   height: 25px;
   border: 1px solid var(--ct-border-soft);
+  border-right-width: 0;
+  border-bottom-width: 0;
   padding: 3px 5px;
   background: var(--ct-table-cell);
   vertical-align: middle;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-table tr > :last-child {
+  border-right-width: 1px;
+}
+
+.measurement-review-detail.is-table-view .measurement-review-table tbody > tr:last-child > * {
+  border-bottom-width: 1px;
 }
 
 .measurement-review-detail.is-table-view .measurement-review-table thead {
@@ -33035,6 +33048,7 @@ body.mobile-modal-scroll-locked {
   min-width: var(--measurement-axis-width) !important;
   max-width: var(--measurement-axis-width) !important;
   border-right-color: #cbd5e1;
+  box-shadow: 1px 0 0 #cbd5e1;
   background: var(--ct-table-label) !important;
   color: var(--ct-text);
   font-size: 0.78rem;

@@ -81,6 +81,26 @@ test("review positions are about ten percent narrower and descriptions one pixel
   assert.match(rule, /font-size: calc\(0\.63rem \+ 1px\) !important/);
 });
 
+test("review axis stays at the scroll origin with independently painted cell borders", () => {
+  const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  const scope = ".measurement-review-detail.is-table-view";
+  const rule = selector => styles.slice(styles.indexOf(`${selector} {`)).split("}")[0];
+  const wrap = rule(`${scope} .measurement-review-table-wrap`);
+  assert.match(wrap, /scrollbar-gutter: stable;/);
+  assert.doesNotMatch(wrap, /both-edges/);
+  const table = rule(`${scope} .measurement-review-table.measurement-table-view`);
+  assert.match(table, /border-collapse: separate;/);
+  assert.match(table, /border-spacing: 0;/);
+  const axis = rule(`${scope} .measurement-review-table .measurement-matrix-axis`);
+  assert.match(axis, /position: sticky;/);
+  assert.match(axis, /left: 0;/);
+  assert.match(axis, /box-shadow: 1px 0 0 #cbd5e1;/);
+  const html = render();
+  for (const label of ["Pos.-Nr.", "Beschreibung", "Einheit", "Bauteil / Ort", "Gesamt"]) {
+    assert.ok(html.includes(`class="measurement-matrix-axis" scope="row">${label}</th>`));
+  }
+});
+
 test("only description fields use normal font weight, including new and completed positions", () => {
   for (const canEditRows of [true, false]) {
     const textareas = render({ canEditRows }).match(/<textarea\b[^>]*>/g);
