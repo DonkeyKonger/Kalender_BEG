@@ -143,8 +143,8 @@ const EXTRA_WORK_OVERVIEW_MIN_WORKSPACE_HEIGHT = 280;
 const EXTRA_WORK_OVERVIEW_VIEWPORT_GAP = 18;
 
 const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
-  { key: "timesheet", label: "Ausführungsstand" },
   { key: "review", label: "Prüfung" },
+  { key: "timesheet", label: "Ausführungsstand" },
   { key: "time-analysis", label: "Zeitauswertung" },
   { key: "bases", label: "Zeitenlisten" },
 ];
@@ -235,7 +235,7 @@ export function SiteDetailPage() {
   const [measurementImportError, setMeasurementImportError] = useState<string | null>(null);
   const [measurementHideError, setMeasurementHideError] = useState<string | null>(null);
   const [measurementHidingItemId, setMeasurementHidingItemId] = useState<number | null>(null);
-  const [measurementSubtab, setMeasurementSubtab] = useState<MeasurementSubtab>("timesheet");
+  const [measurementSubtab, setMeasurementSubtab] = useState<MeasurementSubtab>("review");
   const [measurementBatches, setMeasurementBatches] = useState<MobileMeasurementBatch[]>([]);
   const [measurementBatchesLoading, setMeasurementBatchesLoading] = useState(false);
   const [measurementBatchesLoaded, setMeasurementBatchesLoaded] = useState(false);
@@ -336,7 +336,7 @@ export function SiteDetailPage() {
     setMeasurementSubtab(
       measurementSubtabs.some((tab) => tab.key === requestedMeasurementSubtab)
         ? requestedMeasurementSubtab as MeasurementSubtab
-        : "timesheet",
+        : "review",
     );
     setEditMode(false);
     setSiteSaveError(null);
@@ -731,6 +731,9 @@ export function SiteDetailPage() {
       return;
     }
     setActiveTab(nextTab);
+    if (nextTab === "measurement") {
+      setMeasurementSubtab("review");
+    }
     if (nextTab !== "extra-work") {
       setSelectedExtraWorkTicket(null);
       setExtraWorkDocumentDirty(false);
