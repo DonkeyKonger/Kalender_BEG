@@ -75,6 +75,16 @@ test("extra-work list status keeps full menu semantics without a visible caret",
   assert.match(controlSource, /showCaret \? <span aria-hidden="true" className="measurement-review-status-caret">⌄<\/span> : null/);
 });
 
+test("measurement overview hides only the status caret and preserves menu callbacks", () => {
+  const start = pageSource.indexOf("renderStatus={(batch) =>");
+  const end = pageSource.indexOf("renderActions={(batch) =>", start);
+  const statusSource = pageSource.slice(start, end);
+  assert.match(statusSource, /showCaret=\{false\}/);
+  assert.match(statusSource, /options=\{!archiveMode && canPromoteStatus \? measurementStatusPromotionOptions/);
+  assert.match(statusSource, /onSelect=\{\(status\) => \{ setOpenStatusBatchId\(null\); onPromoteStatus\(batch, status\); \}\}/);
+  assert.match(statusSource, /onToggle=\{\(\) => setOpenStatusBatchId\(current => current === batch.id \? null : batch.id\)\}/);
+});
+
 test("extra-work editable statuses reuse static chip geometry with distinct semantic accents", () => {
   assert.match(styles, /\.project-extra-work-master-status \.measurement-review-status-trigger \{[\s\S]*border-left: 0;[\s\S]*background: transparent;[\s\S]*cursor: pointer/);
   assert.match(styles, /\.project-extra-work-master-status \.measurement-review-status-trigger:hover,[\s\S]*\[aria-expanded="true"\][\s\S]*background: rgba\(15, 23, 42, 0\.06\)/);
