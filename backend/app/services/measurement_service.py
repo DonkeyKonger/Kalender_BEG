@@ -80,7 +80,7 @@ from app.services.push_notification_service import PushNotificationService
 from app.services.time_entry_service import TimeEntryService
 from app.services.audit_service import AuditService
 from app.services.project_record_status import validate_measurement_status_promotion
-from app.services.measurement_status_history import active_transitions, record_status_transition, rollback_status, rollback_target
+from app.services.measurement_status_history import active_transitions, record_status_transition, rollback_status, rollback_target, rollback_uses_fallback
 from app.services.measurement_content import measurement_item_content, measurement_item_minutes
 
 
@@ -2935,6 +2935,7 @@ class MeasurementService:
             status=batch.status,
             is_invoiced=batch.is_invoiced,
             previous_status=rollback_target(batch),
+            status_rollback_is_fallback=rollback_uses_fallback(batch),
             status_revision=len(batch.status_history or []),
             status_path=([event["from"] for event in active_transitions(batch)] + [batch.status]) if batch.status_history else None,
             origin=batch.origin,

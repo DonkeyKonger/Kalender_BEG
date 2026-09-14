@@ -95,16 +95,91 @@ def test_invoice_completion_and_duplicate_forward_requests_do_not_duplicate_hist
     assert undo(service, site, batch, actor).status == "submitted"
 
 
-@pytest.mark.parametrize("status", ["draft", "submitted", "reviewed", "customer_signed", "billed"])
-def test_legacy_records_never_get_an_invented_previous_status(setup, status):
+@pytest.mark.parametrize("status", ["draft", "reviewed", "customer_signed", "signed", "billed", "approved", "closed", "completed"])
+def test_legacy_records_fall_back_to_submitted_without_changing_content(setup, status):
     db, service, site, batch, actor, entry = setup
     batch.status = status
+    batch.is_invoiced = True
+    batch.worker_signed_at = datetime.now(timezone.utc)
+    batch.worker_signature_name = "Monteur"
+    batch.worker_signature_strokes = [[{"x": 0.1, "y": 0.2}]]
+    entry.submitted_quantity = Decimal("10.25")
+    entry.submitted_area_or_comment = "Originalort"
     db.commit()
+    before = service._build_mobile_batch(batch)
+    assert before.previous_status == "submitted"
+    assert before.status_rollback_is_fallback is True
+    after = undo(service, site, batch, actor)
+    assert after.status == "submitted"
+    assert after.status_path == ["submitted"]
+    assert after.previous_status is None
+    assert after.status_rollback_is_fallback is False
+    assert after.status_revision == 1
+    assert batch.status_history[-1]["kind"] == "fallback"
+    assert batch.status_history[-1]["from"] == status
+    assert batch.is_invoiced is True
+    assert batch.worker_signature_name == "Monteur"
+    assert batch.worker_signature_strokes == [[{"x": 0.1, "y": 0.2}]]
+    db.refresh(entry)
+    assert entry.status == "submitted"
+    assert entry.quantity == Decimal("12.55")
+    assert entry.area_or_comment == "2. OG"
+    assert entry.submitted_quantity == Decimal("10.25")
+    assert entry.submitted_area_or_comment == "Originalort"
+    service._ensure_site_batch_can_be_edited_in_office(batch)
+    with pytest.raises(HTTPException) as stale:
+        undo(service, site, batch, actor, before.status_revision)
+    assert stale.value.status_code == 409
+    # New transitions build on the submitted baseline, never undo the fallback.
+    service.set_site_batch_reviewed(site_id=site.id, batch_id=batch.id)
+    assert undo(service, site, batch, actor).status == "submitted"
+    assert rollback_target(batch) is None
+
+
+def test_submitted_without_history_does_not_repeat_a_noop_reset(setup):
+    db, service, site, batch, actor, entry = setup
     assert service._build_mobile_batch(batch).previous_status is None
     with pytest.raises(HTTPException) as error:
         undo(service, site, batch, actor)
     assert error.value.status_code == 409
-    assert batch.status == status
+    assert batch.status_history == []
+
+
+@pytest.mark.parametrize("snapshot", [None, {"items": [{"description": "Unterschriebener Stand"}]}])
+def test_fallback_revokes_customer_approval_but_keeps_evidence_and_unblocks_editing(setup, snapshot):
+    db, service, site, batch, actor, entry = setup
+    batch.status = "billed"
+    batch.customer_signed_at = datetime.now(timezone.utc)
+    batch.customer_signature_name = "Testkunde"
+    batch.customer_signature_strokes = [[{"x": 0.1, "y": 0.2}]]
+    batch.customer_signed_snapshot = snapshot
+    db.commit()
+    undo(service, site, batch, actor)
+    assert batch.customer_signed_at is None
+    assert batch.customer_signature_name is None
+    assert batch.customer_signature_strokes is None
+    assert batch.customer_signed_snapshot is None
+    evidence = batch.status_history[-1]["signatures"]
+    assert evidence["customer_signature_name"] == "Testkunde"
+    assert evidence["customer_signature_strokes"] == [[{"x": 0.1, "y": 0.2}]]
+    assert evidence["customer_signed_snapshot"] == snapshot
+    service._ensure_site_batch_can_be_edited_in_office(batch)
+
+
+@pytest.mark.parametrize("history", [
+    [None], ["broken"], [{}], [{"kind": "advance"}],
+    [{"kind": "advance", "from": "reviewed", "to": "billed", "signature_groups": ["invalid"], "signatures": {}}],
+    [{"kind": "advance", "from": "reviewed", "to": "billed", "signature_groups": ["customer"], "signatures": {}}],
+    [{"kind": "advance", "from": "submitted", "to": "reviewed", "signature_groups": [], "signatures": {}}],
+])
+def test_incomplete_or_inconsistent_history_falls_back_instead_of_crashing(setup, history):
+    db, service, site, batch, actor, entry = setup
+    batch.status = "billed"
+    batch.status_history = history
+    db.commit()
+    assert service._build_mobile_batch(batch).status_rollback_is_fallback is True
+    assert undo(service, site, batch, actor).status == "submitted"
+    assert batch.status_history[:-1] == history
 
 
 def test_manual_status_change_is_recorded_and_rollback_preserves_snapshot_data(setup):
@@ -120,7 +195,9 @@ def test_missing_signature_cannot_be_recreated_from_a_status_name(setup):
     batch.status = "customer_signed"
     db.commit()
     service.set_site_batch_billing_status(site_id=site.id, batch_id=batch.id, billing_status="billed")
-    assert rollback_target(batch) is None
+    assert rollback_target(batch) == "submitted"
+    assert undo(service, site, batch, actor).status == "submitted"
+    assert batch.customer_signed_at is None
 
 
 def test_migration_adds_empty_history_without_guessing_or_changing_existing_status():

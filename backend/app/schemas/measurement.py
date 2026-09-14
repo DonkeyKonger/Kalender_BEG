@@ -199,6 +199,7 @@ class MobileMeasurementBatchRead(BaseModel):
     title: str
     status: str
     previous_status: str | None = None
+    status_rollback_is_fallback: bool = False
     status_revision: int = 0
     status_path: list[str] | None = None
     has_signed_snapshot: bool = False

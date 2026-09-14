@@ -801,7 +801,9 @@ export function SiteDetailPage() {
       setMeasurementReviewMessage(
         billingStatus === "billed"
           ? `${batch.title} wurde abgeschlossen.`
-          : `${batch.title}: Status wurde einen Schritt zurückgesetzt.`,
+          : batch.status_rollback_is_fallback || !batch.previous_status
+            ? `${batch.title}: Ohne verlässliche Statushistorie auf Eingereicht zurückgesetzt.`
+            : `${batch.title}: Status wurde einen Schritt zurückgesetzt.`,
       );
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Abschlussstatus konnte nicht gespeichert werden."));

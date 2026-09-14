@@ -15,6 +15,8 @@ type Props = {
 
 export function MeasurementReviewStatusBar(props: Props) {
   const { batch, busy } = props;
+  const rollbackTarget = batch.previous_status ?? (batch.status !== "submitted" ? "submitted" : null);
+  const rollbackIsFallback = batch.status_rollback_is_fallback || !batch.previous_status;
   const statusLabels: Record<string, string> = { draft: "Entwurf", submitted: "Eingereicht", reviewed: "Geprüft", customer_signed: "Unterschrieben", billed: "Abgeschlossen" };
   return (
     <div className="measurement-review-statusbar">
@@ -49,8 +51,10 @@ export function MeasurementReviewStatusBar(props: Props) {
             </button>
           </>
         ) : null}
-        <button type="button" className="secondary-action" disabled={busy || !batch.previous_status}
-          title={batch.previous_status ? `Letzten Statuswechsel rückgängig machen: ${statusLabels[batch.previous_status] ?? batch.previous_status}` : "Kein verlässlich protokollierter vorheriger Status vorhanden."}
+        <button type="button" className="secondary-action" disabled={busy || !rollbackTarget}
+          title={!rollbackTarget ? "Bereits eingereicht; kein vorheriger Status vorhanden." : rollbackIsFallback
+            ? "Keine verlässliche Statushistorie vorhanden: auf Eingereicht zurücksetzen."
+            : `Letzten Statuswechsel rückgängig machen: ${statusLabels[rollbackTarget] ?? rollbackTarget}`}
           onClick={() => props.onRollbackStatus(batch)}>
           <RotateCcw size={15} aria-hidden="true" />Status zurücksetzen
         </button>

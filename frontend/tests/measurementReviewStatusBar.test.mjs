@@ -95,14 +95,26 @@ test("page uses revision-guarded rollback instead of mark-open and preserves err
   assert.match(api, /measurement-batches\/\$\{batchId\}\/reset-to-submitted/);
 });
 
-test("reset is available at each recorded step and disabled when the real predecessor is unknown", () => {
+test("reset uses recorded predecessors, or submitted as the legacy fallback", () => {
   for (const status of ["submitted", "reviewed", "customer_signed", "billed"]) {
     const data = { ...batch, status, previous_status: "submitted" };
     const reset = buttons(tree({ ...props, batch: data, isBilled: status === "billed" })).at(-1);
     assert.equal(reset.disabled, false);
   }
   assert.equal(buttons(tree(props)).at(-1).disabled, true);
-  assert.match(render(props), /Kein verlässlich protokollierter vorheriger Status/);
+  assert.match(render(props), /Bereits eingereicht/);
+  for (const status of ["draft", "reviewed", "customer_signed", "billed"]) {
+    for (const previous_status of [null, "submitted"]) {
+      const data = { ...batch, status, previous_status, status_rollback_is_fallback: true };
+      const calls = [];
+      const reset = buttons(tree({ ...props, batch: data, onRollbackStatus: value => calls.push(value) })).at(-1);
+      assert.equal(reset.disabled, false);
+      assert.match(reset.title, /Keine verlässliche Statushistorie.*Eingereicht/);
+      reset.onClick();
+      assert.deepEqual(calls, [data]);
+      assert.equal(buttons(tree({ ...props, batch: data, busy: true })).at(-1).disabled, true);
+    }
+  }
   assert.deepEqual(states({ ...batch, status: "billed", status_path: ["submitted", "reviewed", "billed"] }), ["reached", "reached", "pending", "current"]);
   assert.deepEqual(states({ ...batch, status: "draft", status_path: ["draft"] }), ["pending", "pending", "pending", "pending"]);
 });
