@@ -45,3 +45,10 @@ test("toolbar replaces undo with a reversible read-only row filter before existi
   assert.match(source, /hasPendingMatrixSave \|\| Boolean\(activeCell && !sameEntries/);
   assert.match(source, /matrix=\{matrix\}/);
 });
+
+test("current planning hides the complete absence row only while the filter is active", () => {
+  const source = readFileSync(new URL("../src/pages/MatrixPage.tsx", import.meta.url), "utf8");
+  assert.match(source, /showAbsences=\{!isCurrentPlanningOnly\}/);
+  assert.match(source, /props\.showAbsences && <MatrixAbsencePlanningRow \{\.\.\.props\} holidayMap=\{holidayMap\} \/>/);
+  assert.match(source, /props\.visibleRowGroups\.map\(\(group\) => \(/);
+});

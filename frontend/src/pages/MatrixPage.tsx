@@ -2167,6 +2167,7 @@ export function MatrixPage() {
             </p>
           )}
           <MatrixTable
+            showAbsences={!isCurrentPlanningOnly}
             absences={absences}
             absenceOverflowDetail={absenceOverflowDetail}
             operationalAbsences={operationalAbsences}
@@ -3528,6 +3529,7 @@ function AbsenceCellEditor({
 }
 
 type MatrixTableProps = {
+  showAbsences: boolean;
   absences: Absence[];
   absenceOverflowDetail: AbsenceOverflowDetailState | null;
   operationalAbsences: OperationalAbsence[];
@@ -3662,7 +3664,7 @@ function MatrixTable(props: MatrixTableProps) {
           </tr>
         </thead>
         <tbody>
-          <MatrixAbsencePlanningRow {...props} holidayMap={holidayMap} />
+          {props.showAbsences && <MatrixAbsencePlanningRow {...props} holidayMap={holidayMap} />}
           {props.visibleRowGroups.map((group) => (
             <MatrixTableGroup group={group} holidayMap={holidayMap} key={group.key} {...props} />
           ))}
