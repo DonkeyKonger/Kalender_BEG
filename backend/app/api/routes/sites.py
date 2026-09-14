@@ -32,6 +32,7 @@ from app.schemas.measurement import (
     MeasurementWorkerOptionRead,
     MeasurementBatchManualStatusUpdate,
     MeasurementBatchInvoicedUpdate,
+    MeasurementStatusRollback,
     MeasurementTimeAnalysisRead,
     MeasurementTimesheetRead,
     MobileMeasurementBatchRead,
@@ -1150,6 +1151,16 @@ def mark_measurement_batch_billed(
         batch_id=batch_id,
         billing_status="billed",
         current_user=current_user,
+    )
+
+
+@router.post("/{site_id}/measurement-batches/{batch_id}/rollback-status", response_model=MobileMeasurementBatchRead)
+def rollback_measurement_batch_status(
+    site_id: int, batch_id: int, payload: MeasurementStatusRollback,
+    current_user: User = Depends(CAN_WRITE), db: Session = Depends(get_db),
+) -> MobileMeasurementBatchRead:
+    return MeasurementService(db).rollback_site_batch_status(
+        site_id=site_id, batch_id=batch_id, expected_revision=payload.expected_revision, current_user=current_user,
     )
 
 

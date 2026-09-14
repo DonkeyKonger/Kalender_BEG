@@ -88,6 +88,10 @@ class FakeMeasurementService:
         assert (site_id, batch_id, billing_status) == (8, 12, "submitted")
         return created_batch().model_copy(update={"status": billing_status})
 
+    def rollback_site_batch_status(self, *, site_id, batch_id, expected_revision, current_user):
+        assert (site_id, batch_id, expected_revision, current_user.id) == (8, 12, 3, 7)
+        return created_batch().model_copy(update={"status": "reviewed", "previous_status": "submitted", "status_revision": 4})
+
 
 def api_client(monkeypatch, user) -> TestClient:
     app = FastAPI()
@@ -104,6 +108,27 @@ PAYLOAD = {
     "assigned_employee_id": None,
     "request_id": "route-measurement-request",
 }
+
+
+@pytest.mark.parametrize("user", [current_user(UserRole.ADMIN), current_user(UserRole.PROJECT_MANAGER), current_user(UserRole.OFFICE, "sites"), current_user(UserRole.OFFICE, "calendar")])
+def test_history_rollback_route_uses_server_predecessor_and_revision(monkeypatch, user):
+    response = api_client(monkeypatch, user).post("/api/sites/8/measurement-batches/12/rollback-status", json={"expected_revision": 3})
+    assert response.status_code == 200
+    assert response.json()["status"] == "reviewed"
+    assert response.json()["previous_status"] == "submitted"
+    assert response.json()["status_revision"] == 4
+
+
+@pytest.mark.parametrize("user", [current_user(UserRole.MONTEUR), current_user(UserRole.OFFICE)])
+def test_history_rollback_route_requires_existing_write_permission(monkeypatch, user):
+    response = api_client(monkeypatch, user).post("/api/sites/8/measurement-batches/12/rollback-status", json={"expected_revision": 3})
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize("payload", [{}, {"expected_revision": -1}])
+def test_history_rollback_requires_valid_revision(monkeypatch, payload):
+    response = api_client(monkeypatch, current_user(UserRole.ADMIN)).post("/api/sites/8/measurement-batches/12/rollback-status", json=payload)
+    assert response.status_code == 422
 
 
 @pytest.mark.parametrize("user", [

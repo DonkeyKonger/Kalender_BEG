@@ -79,6 +79,7 @@ from app.services.push_notification_service import PushNotificationService
 from app.services.time_entry_service import TimeEntryService
 from app.services.audit_service import AuditService
 from app.services.project_record_status import validate_measurement_status_promotion
+from app.services.measurement_status_history import active_transitions, record_status_transition, rollback_status, rollback_target
 
 
 MEASUREMENT_PHOTO_FOLDER_KEY = "fotos"
@@ -959,7 +960,7 @@ class MeasurementService:
         self, *, assignment_id: int, batch_id: int, current_user: User
     ) -> MobileMeasurementBatchRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
-        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id, for_update=True)
         if batch.status != "draft":
             raise HTTPException(status.HTTP_409_CONFLICT, "Dieses Aufmaß ist kein Entwurf mehr.")
         self._ensure_mobile_batch_can_be_edited_by_worker(batch)
@@ -975,6 +976,7 @@ class MeasurementService:
             entry.submitted_quantity = entry.quantity
 
         submitted_at = datetime.now(timezone.utc)
+        record_status_transition(batch, "submitted")
         batch.status = "submitted"
         batch.submitted_by_user_id = current_user.id
         batch.submitted_at = submitted_at
@@ -999,7 +1001,7 @@ class MeasurementService:
         payload: CustomerSignatureCreate,
     ) -> MobileMeasurementBatchRead:
         assignment = self._get_user_assignment(assignment_id, current_user)
-        batch = self._get_batch_for_site(batch_id, assignment.site_id)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id, for_update=True)
         if batch.customer_signed_at is not None:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -1038,6 +1040,7 @@ class MeasurementService:
 
         signed_at = datetime.now(timezone.utc)
         site = self._get_site(assignment.site_id)
+        record_status_transition(batch, "customer_signed", signature_groups=("customer",))
         batch.customer_signature_name = customer_name
         batch.customer_signature_place = format_site_signature_location(site)
         batch.customer_signature_strokes = [
@@ -1760,6 +1763,7 @@ class MeasurementService:
         )
         batch.is_invoiced = is_invoiced
         if status_changed:
+            record_status_transition(batch, "billed")
             batch.status = "billed"
             for entry in _current_measurement_entries(list(batch.entries)):
                 entry.status = "billed"
@@ -1803,6 +1807,7 @@ class MeasurementService:
         batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
         # Status reset (mark-open) deliberately preserves quantities, snapshots,
         # signatures and invoicing. Restoring worker data is a separate endpoint.
+        record_status_transition(batch, normalized_status)
         batch.status = normalized_status
         if normalized_status == "submitted" and batch.first_submitted_at is None:
             batch.first_submitted_at = datetime.now(timezone.utc)
@@ -1839,6 +1844,7 @@ class MeasurementService:
             new_value={"status": target_status},
         )
         if target_status == "draft":
+            record_status_transition(batch, target_status, signature_groups=("customer", "worker"))
             batch.status = target_status
             batch.customer_signed_at = None
             batch.customer_signature_name = None
@@ -1865,7 +1871,7 @@ class MeasurementService:
         self, *, site_id: int, batch_id: int
     ) -> MobileMeasurementBatchRead:
         self._get_site(site_id)
-        batch = self._get_batch_for_site(batch_id, site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
         if batch.status in {"billed", "approved", "closed"}:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -1896,6 +1902,7 @@ class MeasurementService:
             notification_user_id,
         )
 
+        record_status_transition(batch, "reviewed")
         batch.status = "reviewed"
         for entry in _current_measurement_entries(list(batch.entries)):
             entry.status = "reviewed"
@@ -1922,6 +1929,22 @@ class MeasurementService:
                 batch.id,
                 notification_user_id,
             )
+        return self._build_mobile_batch(batch)
+
+    def rollback_site_batch_status(self, *, site_id: int, batch_id: int, expected_revision: int, current_user: User) -> MobileMeasurementBatchRead:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
+        previous = batch.status
+        target = rollback_status(batch, expected_revision)
+        for entry in _current_measurement_entries(list(batch.entries)):
+            entry.status = target
+        AuditService(self.db).record(
+            user_id=current_user.id, action="measurement.status_rolled_back",
+            entity_type="site_measurement_batch", entity_id=batch.id,
+            old_value={"status": previous}, new_value={"status": target},
+        )
+        self.db.commit()
+        self.db.refresh(batch)
         return self._build_mobile_batch(batch)
 
     def update_site_entry(
@@ -2875,6 +2898,9 @@ class MeasurementService:
             title=batch.title,
             status=batch.status,
             is_invoiced=batch.is_invoiced,
+            previous_status=rollback_target(batch),
+            status_revision=len(batch.status_history or []),
+            status_path=([event["from"] for event in active_transitions(batch)] + [batch.status]) if batch.status_history else None,
             origin=batch.origin,
             position_mode=batch.position_mode,
             creator_role_at_creation=batch.creator_role_at_creation,

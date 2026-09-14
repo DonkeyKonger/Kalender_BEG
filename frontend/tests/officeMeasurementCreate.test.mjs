@@ -168,7 +168,7 @@ test("closing or reopening a measurement invalidates execution progress before t
   const handlerSource = pageSource.slice(handlerStart, handlerEnd);
 
   assert.match(handlerSource, /markSiteMeasurementBatchBilled/);
-  assert.match(handlerSource, /markSiteMeasurementBatchOpen/);
+  assert.match(handlerSource, /rollbackSiteMeasurementBatchStatus/);
   assert.match(handlerSource, /setMeasurementTimesheet\(null\)/);
   assert.match(handlerSource, /setMeasurementLoaded\(false\)/);
 });

@@ -1451,6 +1451,12 @@ export const api = {
     });
   },
 
+  async rollbackSiteMeasurementBatchStatus(siteId: number, batchId: number, expectedRevision: number): Promise<MobileMeasurementBatch> {
+    return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/rollback-status`, {
+      method: "POST", body: JSON.stringify({ expected_revision: expectedRevision }),
+    });
+  },
+
   async markSiteMeasurementBatchReviewed(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
     return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/mark-reviewed`, {
       method: "POST",

@@ -97,6 +97,7 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="draft", index=True)
+    status_history: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     is_invoiced: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
     origin: Mapped[str] = mapped_column(
         String(20), nullable=False, default=MeasurementBatchOrigin.LEGACY.value, index=True

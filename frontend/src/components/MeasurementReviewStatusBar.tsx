@@ -8,13 +8,14 @@ type Props = {
   busy: boolean;
   isBilled: boolean;
   canReview: boolean;
-  onMarkOpen: (batch: MobileMeasurementBatch) => void;
+  onRollbackStatus: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
 };
 
 export function MeasurementReviewStatusBar(props: Props) {
   const { batch, busy } = props;
+  const statusLabels: Record<string, string> = { draft: "Entwurf", submitted: "Eingereicht", reviewed: "Geprüft", customer_signed: "Unterschrieben", billed: "Abgeschlossen" };
   return (
     <div className="measurement-review-statusbar">
       {batch.origin !== "OFFICE" ? (
@@ -36,11 +37,7 @@ export function MeasurementReviewStatusBar(props: Props) {
         </div>
       ) : null}
       <div className="measurement-review-process-actions">
-        {props.isBilled ? (
-          <button type="button" className="secondary-action" disabled={busy} onClick={() => props.onMarkOpen(batch)}>
-            <RotateCcw size={15} aria-hidden="true" />Status zurücksetzen
-          </button>
-        ) : (
+        {!props.isBilled ? (
           <>
             {props.canReview ? (
               <button type="button" className="primary-action" disabled={busy} onClick={() => props.onMarkReviewed(batch)}>
@@ -51,7 +48,12 @@ export function MeasurementReviewStatusBar(props: Props) {
               Aufmaß abschließen
             </button>
           </>
-        )}
+        ) : null}
+        <button type="button" className="secondary-action" disabled={busy || !batch.previous_status}
+          title={batch.previous_status ? `Letzten Statuswechsel rückgängig machen: ${statusLabels[batch.previous_status] ?? batch.previous_status}` : "Kein verlässlich protokollierter vorheriger Status vorhanden."}
+          onClick={() => props.onRollbackStatus(batch)}>
+          <RotateCcw size={15} aria-hidden="true" />Status zurücksetzen
+        </button>
       </div>
     </div>
   );

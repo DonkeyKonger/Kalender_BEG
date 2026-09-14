@@ -198,6 +198,9 @@ class MobileMeasurementBatchRead(BaseModel):
     number: int
     title: str
     status: str
+    previous_status: str | None = None
+    status_revision: int = 0
+    status_path: list[str] | None = None
     is_invoiced: bool = False
     origin: MeasurementBatchOrigin = MeasurementBatchOrigin.LEGACY
     position_mode: MeasurementPositionMode = MeasurementPositionMode.OFFER_BASED
@@ -234,6 +237,10 @@ class MobileMeasurementBatchRead(BaseModel):
     block_reasons: MobileMeasurementBatchBlockReasonsRead
     area_rows: list[MeasurementAreaRowRead] = Field(default_factory=list)
     mounting_locations: list[str] = Field(default_factory=list)
+
+
+class MeasurementStatusRollback(BaseModel):
+    expected_revision: int = Field(ge=0)
 
 
 class MeasurementBatchInvoicedUpdate(BaseModel):

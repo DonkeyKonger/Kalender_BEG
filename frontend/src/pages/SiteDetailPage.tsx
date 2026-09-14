@@ -776,7 +776,7 @@ export function SiteDetailPage() {
 
   async function setMeasurementBatchBillingStatus(
     batch: MobileMeasurementBatch,
-    billingStatus: "submitted" | "billed",
+    billingStatus: "previous" | "billed",
   ): Promise<void> {
     if (!site || measurementReviewActionLoading) {
       return;
@@ -787,7 +787,7 @@ export function SiteDetailPage() {
     try {
       const updated = billingStatus === "billed"
         ? await api.markSiteMeasurementBatchBilled(site.id, batch.id)
-        : await api.markSiteMeasurementBatchOpen(site.id, batch.id);
+        : await api.rollbackSiteMeasurementBatchStatus(site.id, batch.id, batch.status_revision ?? 0);
       setMeasurementBatches((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setSelectedMeasurementBatch(updated);
       setMeasurementTimesheet(null);
@@ -798,7 +798,7 @@ export function SiteDetailPage() {
       setMeasurementReviewMessage(
         billingStatus === "billed"
           ? `${batch.title} wurde abgeschlossen.`
-          : `${batch.title} wurde wieder als eingereicht markiert.`,
+          : `${batch.title}: Status wurde einen Schritt zurückgesetzt.`,
       );
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "Abschlussstatus konnte nicht gespeichert werden."));
@@ -1724,7 +1724,7 @@ export function SiteDetailPage() {
             setMeasurementReviewError(null);
           }}
           onMarkBilled={(batch) => void setMeasurementBatchBillingStatus(batch, "billed")}
-          onMarkOpen={(batch) => void setMeasurementBatchBillingStatus(batch, "submitted")}
+          onRollbackStatus={(batch) => void setMeasurementBatchBillingStatus(batch, "previous")}
           onMarkReviewed={(batch) => void markMeasurementBatchReviewed(batch)}
           onToggleBatchInvoiced={(batch) => void toggleMeasurementBatchInvoiced(batch)}
           onPromoteStatus={(batch, status) => void promoteMeasurementBatchStatus(batch, status)}
@@ -4864,7 +4864,7 @@ function MeasurementTab({
   onSelectBatch,
   onBackToBatchList,
   onMarkBilled,
-  onMarkOpen,
+  onRollbackStatus,
   onMarkReviewed,
   onToggleBatchInvoiced,
   onPromoteStatus,
@@ -4927,7 +4927,7 @@ function MeasurementTab({
   onSelectBatch: (batch: MobileMeasurementBatch) => void;
   onBackToBatchList: () => void;
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
-  onMarkOpen: (batch: MobileMeasurementBatch) => void;
+  onRollbackStatus: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
   onToggleBatchInvoiced: (batch: MobileMeasurementBatch) => void;
   onPromoteStatus: (batch: MobileMeasurementBatch, status: MeasurementManualStatus) => void;
@@ -5137,7 +5137,7 @@ function MeasurementTab({
           onSelectBatch={onSelectBatch}
           onBackToBatchList={onBackToBatchList}
           onMarkBilled={onMarkBilled}
-          onMarkOpen={onMarkOpen}
+          onRollbackStatus={onRollbackStatus}
           onMarkReviewed={onMarkReviewed}
           onToggleBatchInvoiced={onToggleBatchInvoiced}
           onPromoteStatus={onPromoteStatus}
@@ -6148,7 +6148,7 @@ function MeasurementReviewPanel({
   onSelectBatch,
   onBackToBatchList,
   onMarkBilled,
-  onMarkOpen,
+  onRollbackStatus,
   onMarkReviewed,
   onToggleBatchInvoiced,
   onPromoteStatus,
@@ -6188,7 +6188,7 @@ function MeasurementReviewPanel({
   onSelectBatch: (batch: MobileMeasurementBatch) => void;
   onBackToBatchList: () => void;
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
-  onMarkOpen: (batch: MobileMeasurementBatch) => void;
+  onRollbackStatus: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
   onToggleBatchInvoiced: (batch: MobileMeasurementBatch) => void;
   onPromoteStatus: (batch: MobileMeasurementBatch, status: MeasurementManualStatus) => void;
@@ -6453,7 +6453,7 @@ function MeasurementReviewPanel({
         <MeasurementReviewStatusBar
           batch={selectedBatch} busy={reviewActionLoading}
           isBilled={isBilled} canReview={!isOfficeCreatedBatch && !isReviewed && !isCustomerSigned}
-          onMarkOpen={onMarkOpen} onMarkReviewed={onMarkReviewed} onMarkBilled={onMarkBilled}
+          onRollbackStatus={onRollbackStatus} onMarkReviewed={onMarkReviewed} onMarkBilled={onMarkBilled}
         />
 
         {!isOfficeCreatedBatch && showUnsubmittedWarning ? (

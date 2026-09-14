@@ -21,7 +21,7 @@ const result = { exports: {} };
 new Function("require", "module", "exports", compiled.outputFiles[0].text)(createRequire(import.meta.url), result, result.exports);
 const { tree, render } = result.exports;
 const batch = { id: 7, origin: "MONTEUR", status: "submitted", submitted_at: "2026-09-11T12:00:00Z", customer_signed_at: null, customer_signature_name: null };
-const props = { batch, busy: false, isBilled: false, canReview: true, onMarkOpen() {}, onMarkReviewed() {}, onMarkBilled() {} };
+const props = { batch, busy: false, isBilled: false, canReview: true, onRollbackStatus() {}, onMarkReviewed() {}, onMarkBilled() {} };
 const states = data => getMeasurementReviewSteps(data).map(step => step.state);
 function buttons(node) {
   if (!node || typeof node !== "object") return [];
@@ -53,11 +53,11 @@ test("rendered steps are informative, ordered and identify exactly the current s
   }
 });
 
-test("reset invokes only the original onMarkOpen with the selected batch, not a data reset", () => {
-  const selected = { ...batch, id: 21, status: "billed" };
+test("reset invokes only the original onRollbackStatus with the selected batch, not a data reset", () => {
+  const selected = { ...batch, id: 21, status: "billed", previous_status: "reviewed", status_revision: 2 };
   const calls = [];
   const actions = buttons(tree({ ...props, batch: selected, isBilled: true,
-    onMarkOpen: value => calls.push(value),
+    onRollbackStatus: value => calls.push(value),
     onMarkBilled() { assert.fail("Wrong handler"); }, onMarkReviewed() { assert.fail("Wrong handler"); },
   }));
   assert.equal(actions.length, 1);
@@ -72,23 +72,37 @@ test("reset invokes only the original onMarkOpen with the selected batch, not a 
 test("existing review and completion actions retain callbacks, conditions and loading locks", () => {
   const calls = [];
   const actions = buttons(tree({ ...props, onMarkReviewed: value => calls.push(["review", value]), onMarkBilled: value => calls.push(["complete", value]) }));
-  actions.forEach(action => action.onClick());
+  actions.slice(0, 2).forEach(action => action.onClick());
   assert.deepEqual(calls, [["review", batch], ["complete", batch]]);
-  assert.equal(buttons(tree({ ...props, canReview: false })).length, 1);
+  assert.equal(buttons(tree({ ...props, canReview: false })).length, 2);
   assert.ok(buttons(tree({ ...props, busy: true })).every(button => button.disabled));
   const office = render({ ...props, batch: { ...batch, origin: "OFFICE" }, canReview: false });
   assert.doesNotMatch(office, /<ol|Prüfung abschließen/);
   assert.match(office, /Aufmaß abschließen/);
 });
 
-test("page keeps the mark-open API binding, removes only obsolete UI wiring and preserves error handling", () => {
+test("page uses revision-guarded rollback instead of mark-open and preserves error handling", () => {
   const page = readFileSync(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8");
   const api = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
-  assert.match(page, /onMarkOpen=\{\(batch\) => void setMeasurementBatchBillingStatus\(batch, "submitted"\)\}/);
-  assert.match(page, /onMarkOpen=\{onMarkOpen\} onMarkReviewed=\{onMarkReviewed\} onMarkBilled=\{onMarkBilled\}/);
-  assert.match(page, /await api\.markSiteMeasurementBatchOpen\(site\.id, batch\.id\)/);
+  assert.match(page, /onRollbackStatus=\{\(batch\) => void setMeasurementBatchBillingStatus\(batch, "previous"\)\}/);
+  assert.match(page, /onRollbackStatus=\{onRollbackStatus\} onMarkReviewed=\{onMarkReviewed\} onMarkBilled=\{onMarkBilled\}/);
+  assert.match(page, /await api\.rollbackSiteMeasurementBatchStatus\(site\.id, batch\.id, batch\.status_revision \?\? 0\)/);
+  assert.doesNotMatch(page, /api\.markSiteMeasurementBatchOpen/);
   assert.match(page, /setMeasurementReviewError\(readApiError\(requestError, "Abschlussstatus konnte nicht gespeichert werden\."\)\)/);
   assert.doesNotMatch(page, /undoLastEntryChange|resetMeasurementBatchToSubmitted|onResetToSubmitted/);
   assert.match(api, /measurement-batches\/\$\{batchId\}\/mark-open/);
+  assert.match(api, /measurement-batches\/\$\{batchId\}\/rollback-status/);
   assert.match(api, /measurement-batches\/\$\{batchId\}\/reset-to-submitted/);
+});
+
+test("reset is available at each recorded step and disabled when the real predecessor is unknown", () => {
+  for (const status of ["submitted", "reviewed", "customer_signed", "billed"]) {
+    const data = { ...batch, status, previous_status: "submitted" };
+    const reset = buttons(tree({ ...props, batch: data, isBilled: status === "billed" })).at(-1);
+    assert.equal(reset.disabled, false);
+  }
+  assert.equal(buttons(tree(props)).at(-1).disabled, true);
+  assert.match(render(props), /Kein verlässlich protokollierter vorheriger Status/);
+  assert.deepEqual(states({ ...batch, status: "billed", status_path: ["submitted", "reviewed", "billed"] }), ["reached", "reached", "pending", "current"]);
+  assert.deepEqual(states({ ...batch, status: "draft", status_path: ["draft"] }), ["pending", "pending", "pending", "pending"]);
 });
