@@ -135,7 +135,8 @@ def test_rollback_from_completed_restores_editability_but_not_a_fake_signature(c
     c = case
     c.service.set_site_batch_reviewed(site_id=c.site.id, batch_id=c.batch.id)
     c.service.set_site_batch_billing_status(site_id=c.site.id, batch_id=c.batch.id, billing_status="billed")
-    with pytest.raises(HTTPException): edit(c, description="Gesperrt")
+    with pytest.raises(HTTPException):
+        edit(c, description="Gesperrt")
     c.service.rollback_site_batch_status(site_id=c.site.id, batch_id=c.batch.id, current_user=c.user, expected_revision=len(c.batch.status_history))
     assert c.batch.status == "reviewed" and c.batch.customer_signed_at is None
     assert edit(c, description="Wieder bearbeitbar").description == "Wieder bearbeitbar"
@@ -164,7 +165,8 @@ def test_legacy_signature_without_snapshot_is_never_overwritten(case):
     c = case
     c.batch.customer_signed_at = datetime.now(timezone.utc)
     c.db.commit()
-    with pytest.raises(HTTPException) as error: edit(c, description="Nicht nachvollziehbar")
+    with pytest.raises(HTTPException) as error:
+        edit(c, description="Nicht nachvollziehbar")
     assert error.value.status_code == 409
     assert c.item.description == "Kabelrinne liefern und montieren"
 
@@ -205,7 +207,8 @@ def test_header_only_signed_position_survives_deletion_in_pdf_and_long_text_is_c
     pages = _header_correction_pages([MatrixPosition(item_id=1, position="9.99", description=current, unit="m", sort_order=1, original_description=original)])
     assert len(pages) > 1
     pdf = SimplePdf()
-    for page in pages: pdf.add_page(page)
+    for page in pages:
+        pdf.add_page(page)
     text = " ".join(page.extract_text() for page in PdfReader(BytesIO(pdf.build())).pages)
     assert text.count("Alter") == 80 and text.count("Neuer") == 80
 
@@ -223,5 +226,6 @@ def test_overrides_migration_preserves_existing_data():
     with create_engine("sqlite://").begin() as connection:
         connection.execute(text("CREATE TABLE site_measurement_batches (id INTEGER PRIMARY KEY, status TEXT)"))
         connection.execute(text("INSERT INTO site_measurement_batches VALUES (1, 'customer_signed')"))
-        with Operations.context(MigrationContext.configure(connection)): module.upgrade()
+        with Operations.context(MigrationContext.configure(connection)):
+            module.upgrade()
         assert tuple(connection.execute(text("SELECT status, item_overrides FROM site_measurement_batches")).one()) == ("customer_signed", "{}")
