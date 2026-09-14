@@ -52,3 +52,13 @@ test("current planning hides the complete absence row only while the filter is a
   assert.match(source, /props\.showAbsences && <MatrixAbsencePlanningRow \{\.\.\.props\} holidayMap=\{holidayMap\} \/>/);
   assert.match(source, /props\.visibleRowGroups\.map\(\(group\) => \(/);
 });
+
+test("current planning reduces manager separators by 70 percent without changing normal mode", () => {
+  const source = readFileSync(new URL("../src/pages/MatrixPage.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(source, /isCurrentPlanningOnly \? "is-current-planning" : ""/);
+  assert.match(css, /\.matrix-group-row th \{[^}]*height: 32px;/);
+  assert.match(css, /\.matrix-page\.is-current-planning \.matrix-group-row th \{[^}]*height: 9\.6px;[^}]*min-height: 0;[^}]*padding: 0 10px;/);
+  assert.match(source, /className="matrix-group-label">\{group.label\}<\/span>/);
+  assert.match(css, /\.matrix-page\.is-current-planning\.is-compact \.matrix-table tbody \.matrix-group-row,[\s\S]*?\.matrix-page\.is-current-planning\.is-compact \.matrix-group-row th \{[^}]*height: 10\.2px;[^}]*min-height: 0;/);
+});

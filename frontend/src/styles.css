@@ -4597,6 +4597,23 @@ button.person-chip:focus-visible {
   text-align: left;
 }
 
+.matrix-page.is-current-planning .matrix-group-row th {
+  height: 9.6px;
+  min-height: 0;
+  padding: 0 10px;
+  line-height: 0;
+}
+
+/* Keep the group name accessible without enlarging the compact separator. */
+.matrix-page.is-current-planning .matrix-group-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .day-col.today,
 .matrix-table thead th.today {
   background: #e5f0ff;
@@ -5115,6 +5132,13 @@ button.person-chip:focus-visible {
 
 .matrix-page.is-compact .matrix-table tbody tr {
   height: 34px;
+}
+
+.matrix-page.is-current-planning.is-compact .matrix-table tbody .matrix-group-row,
+.matrix-page.is-current-planning.is-compact .matrix-group-row th {
+  height: 10.2px;
+  min-height: 0;
+  padding: 0 10px;
 }
 
 .matrix-page.is-compact .matrix-table thead th {

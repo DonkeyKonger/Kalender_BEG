@@ -2096,7 +2096,7 @@ export function MatrixPage() {
   }, [matrix, projectManagerFilter, isCurrentPlanningOnly]);
 
   return (
-    <section className={["matrix-page", isCompactView ? "is-compact" : "", isYearView ? "is-year-view" : ""].filter(Boolean).join(" ")}>
+    <section className={["matrix-page", isCompactView ? "is-compact" : "", isYearView ? "is-year-view" : "", isCurrentPlanningOnly ? "is-current-planning" : ""].filter(Boolean).join(" ")}>
       <div className="matrix-toolbar">
         <div>
           <p className="eyebrow">Planung</p>
@@ -3983,7 +3983,7 @@ function MatrixTableGroup({ group, ...props }: MatrixTableCalendarProps & { grou
     <>
       {group.showHeading && (
         <tr className="matrix-group-row">
-          <th colSpan={5 + props.matrix.days.length}>{group.label}</th>
+          <th colSpan={5 + props.matrix.days.length}><span className="matrix-group-label">{group.label}</span></th>
         </tr>
       )}
       {group.rows.map((row) => (
