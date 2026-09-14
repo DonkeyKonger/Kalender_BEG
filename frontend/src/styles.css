@@ -33065,7 +33065,7 @@ body.mobile-modal-scroll-locked {
 .measurement-review-detail.is-table-view .measurement-matrix-description-heading {
   height: auto;
   text-align: left;
-  font-size: 0.63rem !important;
+  font-size: calc(0.63rem + 1px) !important;
   line-height: 1.08;
   padding-top: 3px !important;
   padding-bottom: 3px !important;

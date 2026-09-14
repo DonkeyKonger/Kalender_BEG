@@ -70,6 +70,17 @@ test("all review descriptions reserve six lines, including new and completed pos
   assert.match(rule, /resize: none/);
 });
 
+test("review positions are about ten percent narrower and descriptions one pixel larger", () => {
+  for (const canEditRows of [true, false]) {
+    const html = render({ canEditRows });
+    assert.match(html, /--measurement-position-width:121px/);
+    assert.match(html, /--measurement-axis-width:216px/);
+  }
+  const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  const rule = styles.match(/\.measurement-review-detail\.is-table-view \.measurement-matrix-description-heading\s*\{([^}]+)\}/)[1];
+  assert.match(rule, /font-size: calc\(0\.63rem \+ 1px\) !important/);
+});
+
 test("only description fields use normal font weight, including new and completed positions", () => {
   for (const canEditRows of [true, false]) {
     const textareas = render({ canEditRows }).match(/<textarea\b[^>]*>/g);
