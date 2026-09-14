@@ -67,6 +67,7 @@ class MatrixSite(BaseModel):
 class MatrixRow(BaseModel):
     site: MatrixSite
     cells: list[MatrixCell]
+    has_current_planning: bool = False
 
 
 class MatrixResponse(BaseModel):
@@ -75,6 +76,8 @@ class MatrixResponse(BaseModel):
     days: list[MatrixDay]
     project_managers: list[MatrixPerson] = Field(default_factory=list)
     rows: list[MatrixRow]
+    current_planning_start: Date | None = None
+    current_planning_end: Date | None = None
 
 
 class MatrixVersionResponse(BaseModel):

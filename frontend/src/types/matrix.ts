@@ -74,6 +74,7 @@ export type MatrixSite = {
 export type MatrixRow = {
   site: MatrixSite;
   cells: MatrixCell[];
+  has_current_planning?: boolean;
 };
 
 export type MatrixResponse = {
@@ -82,6 +83,8 @@ export type MatrixResponse = {
   days: MatrixDay[];
   project_managers: MatrixPerson[];
   rows: MatrixRow[];
+  current_planning_start?: string | null;
+  current_planning_end?: string | null;
 };
 
 export type MatrixVersionResponse = {

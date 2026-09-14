@@ -1,4 +1,4 @@
-import { Check, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
@@ -18,6 +18,7 @@ import {
   sortPlanningAbsenceEntries,
 } from "../lib/planningAbsenceSort";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
+import { currentlyPlannedRows } from "../lib/currentPlanning";
 import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
 import type { CurrentUser } from "../types/auth";
@@ -183,14 +184,6 @@ type MatrixNoteDraft = {
   sharedWithUserId: string;
 };
 
-type UndoItem = {
-  siteId: number;
-  date: string;
-  endDate: string;
-  before: DraftEntry[];
-  after: DraftEntry[];
-};
-
 const CELL_ERROR_MESSAGE = "Nicht möglich";
 const ERROR_AUTO_HIDE_MS = 5000;
 const MAX_VISIBLE_ABSENCES_PER_DAY = 4;
@@ -234,7 +227,7 @@ export function MatrixPage() {
   const [selectedAbsenceType, setSelectedAbsenceType] = useState<AbsenceType>("vacation");
   const [saveStatus, setSaveStatus] = useState<Record<CellKey, SaveStatus>>({});
   const [cellMessage, setCellMessage] = useState<Record<CellKey, string>>({});
-  const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
+  const [isCurrentPlanningOnly, setIsCurrentPlanningOnly] = useState(false);
   const autosaveRef = useRef<number | null>(null);
   const cellMessageTimeoutsRef = useRef<Record<CellKey, number>>({});
   const errorTimeoutRef = useRef<number | null>(null);
@@ -1309,18 +1302,6 @@ export function MatrixPage() {
             endDate: activeCell.endDate,
             entries,
           });
-      if (!sameEntries(initialEntries, entriesForSave)) {
-        setUndoStack((current) => [
-          ...current,
-          {
-            siteId: activeCell.siteId,
-            date: activeCell.date,
-            endDate: activeCell.endDate,
-            before: initialEntries,
-            after: entriesForSave,
-          },
-        ]);
-      }
       setInitialEntries(entriesForSave);
       setError(null);
       if (response.warnings[0]?.message) {
@@ -1511,32 +1492,6 @@ export function MatrixPage() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isResizingAssignment]);
-
-  async function undoLast() {
-    if (isYearView) {
-      return;
-    }
-    const item = undoStack.at(-1);
-    if (!item) {
-      return;
-    }
-    setUndoStack((current) => current.slice(0, -1));
-    const entries = item.before.map(toMatrixEntryInput);
-    try {
-      const response = item.endDate === item.date
-        ? await api.patchMatrixCell({ siteId: item.siteId, date: item.date, entries })
-        : await api.patchMatrixRange({
-            siteId: item.siteId,
-            startDate: item.date,
-            endDate: item.endDate,
-            entries,
-          });
-      replaceMatrixCells(item.siteId, response.updated_cells);
-      void syncMatrixVersionSilently();
-    } catch (requestError) {
-      setError(readApiError(requestError, "Undo konnte nicht ausgefuehrt werden."));
-    }
-  }
 
   function replaceMatrixCells(siteId: number, updatedCells: MatrixCell[]) {
     if (!updatedCells.length) {
@@ -2136,8 +2091,9 @@ export function MatrixPage() {
     if (!matrix) {
       return [];
     }
-    return groupMatrixRows(matrix.rows, projectManagerFilter);
-  }, [matrix, projectManagerFilter]);
+    const rows = isCurrentPlanningOnly ? currentlyPlannedRows(matrix) : matrix.rows;
+    return groupMatrixRows(rows, projectManagerFilter);
+  }, [matrix, projectManagerFilter, isCurrentPlanningOnly]);
 
   return (
     <section className={["matrix-page", isCompactView ? "is-compact" : "", isYearView ? "is-year-view" : ""].filter(Boolean).join(" ")}>
@@ -2186,13 +2142,17 @@ export function MatrixPage() {
             <span>Jahresansicht</span>
           </label>
           <button
-            className="icon-button secondary"
-            disabled={isYearView || !undoStack.length}
+            className="icon-button secondary matrix-current-planning-toggle"
+            aria-pressed={isCurrentPlanningOnly}
+            disabled={!matrix?.current_planning_start || hasPendingMatrixSave || Boolean(activeCell && !sameEntries(initialEntries, draftEntries)) || Boolean(activeAbsenceCell || assignmentDrag || assignmentResize)}
+            title="Nur Baustellen mit Mitarbeiter- oder Externen-Einsätzen in dieser und der nächsten Kalenderwoche anzeigen"
             type="button"
-            onClick={() => void undoLast()}
+            onClick={() => {
+              closeActiveEditor();
+              setIsCurrentPlanningOnly((current) => !current);
+            }}
           >
-            <RotateCcw aria-hidden="true" size={17} />
-            <span>Undo</span>
+            <span>Aktuelle Planung</span>
           </button>
         </div>
       </div>
@@ -2201,6 +2161,11 @@ export function MatrixPage() {
       {isLoading && <div className="matrix-state">Matrix wird geladen...</div>}
       {!isLoading && matrix && (
         <>
+          {isCurrentPlanningOnly && visibleRowGroups.length === 0 && (
+            <p className="matrix-current-planning-empty" role="status">
+              Keine Baustellen mit Planung in dieser oder der nächsten Kalenderwoche für die gewählte Projektleiter-Auswahl.
+            </p>
+          )}
           <MatrixTable
             absences={absences}
             absenceOverflowDetail={absenceOverflowDetail}

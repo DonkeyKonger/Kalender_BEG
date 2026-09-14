@@ -1,8 +1,9 @@
 from datetime import date, datetime, timedelta
 from hashlib import sha1
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.absence import Absence
@@ -59,7 +60,15 @@ class MatrixService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Matrixzeitraum ist zu gross.")
 
         all_days = self._date_range(start, end)
+        planning_start, planning_end = current_planning_range()
         assignments = self.assignments.list(start=start, end=end)
+        # Year view may omit next January (or the previous December). Keep
+        # visible cells unchanged and load only the missing planning coverage.
+        planning_assignments = (
+            assignments
+            if start <= planning_start and end >= planning_end
+            else self.assignments.list(start=planning_start, end=planning_end)
+        )
         planned_weekend_dates = {
             day
             for assignment in assignments
@@ -89,6 +98,10 @@ class MatrixService:
         site_ids = {site.id for site in visible_sites}
         open_note_counts = self._open_note_counts_by_site(site_ids=site_ids)
         assignments = [assignment for assignment in assignments if assignment.site_id in site_ids]
+        currently_planned_site_ids = {
+            assignment.site_id for assignment in planning_assignments
+            if assignment.start_date <= planning_end and assignment.end_date >= planning_start
+        }
         marks = self._list_marks(site_ids=site_ids, start=start, end=end)
         person_ids = {assignment.person_id for assignment in assignments}
         absences = [
@@ -110,12 +123,16 @@ class MatrixService:
             )
             for site in visible_sites
         ]
+        for row in rows:
+            row.has_current_planning = row.site.id in currently_planned_site_ids
         return MatrixResponse(
             start_date=start,
             end_date=end,
             days=[self._build_day(day) for day in visible_days],
             project_managers=project_managers,
             rows=rows,
+            current_planning_start=planning_start,
+            current_planning_end=planning_end,
         )
 
     def get_version(
@@ -128,6 +145,7 @@ class MatrixService:
         project_manager_person_id: int | None = None,
     ) -> MatrixVersionResponse:
         self._validate_range(start=start, end=end, year_view=year_view)
+        planning_start, planning_end = current_planning_range()
         visible_sites = (
             self.sites.list(include_closed=include_closed)
             if project_manager_person_id is None
@@ -141,8 +159,10 @@ class MatrixService:
             func.max(Assignment.updated_at),
             func.count(Assignment.id),
         ).where(
-            Assignment.start_date <= end,
-            Assignment.end_date >= start,
+            or_(
+                and_(Assignment.start_date <= end, Assignment.end_date >= start),
+                and_(Assignment.start_date <= planning_end, Assignment.end_date >= planning_start),
+            ),
         )
         mark_statement = select(
             func.max(PlanningCellMark.updated_at),
@@ -258,6 +278,8 @@ class MatrixService:
             [
                 start.isoformat(),
                 end.isoformat(),
+                planning_start.isoformat(),
+                planning_end.isoformat(),
                 str(project_manager_person_id or "all"),
                 str(include_closed),
                 str(year_view),
@@ -545,6 +567,13 @@ class MatrixService:
         max_days = MAX_MATRIX_YEAR_VIEW_DAYS if year_view else MAX_MATRIX_DAYS
         if (end - start).days + 1 > max_days:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Matrixzeitraum ist zu gross.")
+
+
+def current_planning_range(reference_date: date | None = None) -> tuple[date, date]:
+    """The current and next complete calendar week in the planning timezone."""
+    today = reference_date or datetime.now(ZoneInfo("Europe/Berlin")).date()
+    monday = today - timedelta(days=today.weekday())
+    return monday, monday + timedelta(days=13)
 
 
 def datetime_token(value: datetime | None) -> str:
