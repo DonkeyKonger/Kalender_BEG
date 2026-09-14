@@ -2171,7 +2171,7 @@ export function MatrixPage() {
             absences={absences}
             absenceOverflowDetail={absenceOverflowDetail}
             operationalAbsences={operationalAbsences}
-            canCreateSites={matrixIsEditable}
+            canCreateSites={matrixIsEditable && !isCurrentPlanningOnly}
             cellMessage={cellMessage}
             dayColumnWidth={dayColumnWidth}
             isCompactView={isCompactView}
