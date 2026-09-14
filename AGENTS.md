@@ -15,3 +15,9 @@
 - Vor jeder Übernahme `main`, `origin/main`, den Arbeitsbaum und vorhandene Stashes prüfen. Vorhandene Stashes und fremde oder uncommittete Nutzeränderungen niemals verändern, anwenden oder entfernen.
 - Bei einem schmutzigen Arbeitsbaum, unerwarteter Abweichung zwischen `main` und `origin/main` oder einem nicht eindeutig lösbaren Konflikt stoppen und eine Nutzerentscheidung anfordern. Ein durch die gerade übernommene Änderung erwartetes `main`-Ahead ist davon ausgenommen.
 - Keine History-Umschreibung und keine destruktiven Git-Befehle verwenden.
+
+## Lokaler Testkalender
+
+- Nach jedem erfolgreich geprüften und lokal übernommenen Update den lokalen Testkalender mit `python3 tools/local_calendar/manage.py rebuild` neu bauen und starten, damit der Nutzer den aktuellen Stand direkt testen kann.
+- Anschließend den Healthcheck unter `http://127.0.0.1:18727/__local-test__/health` und die ausgelieferte Build-Kennung prüfen. Ein normaler Frontend-Build allein aktualisiert den laufenden Docker-Testkalender nicht.
+- Vorhandene lokale Testdaten erhalten; keine Datenbank zurücksetzen oder neu importieren. Cloud-Deploys und Pushes bleiben ohne ausdrücklichen aktuellen Nutzerauftrag ausgeschlossen.
