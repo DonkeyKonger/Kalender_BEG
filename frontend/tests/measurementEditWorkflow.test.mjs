@@ -78,6 +78,14 @@ test("persisted empty locations are editable without duplicating locations with 
   assert.equal((html.match(/value="EG BTB"/g) ?? []).length, 1);
 });
 
+test("equivalent imported units do not create corrections merely by focusing and leaving the field", () => {
+  const html = render({ items: [{ ...item, unit: "M" }] });
+  assert.match(html, /aria-label="Einheit für Position 1.01"[^>]*value="m"/);
+  const saveText = source.slice(source.indexOf("async function saveFreeItemTextDraft"), source.indexOf("async function deleteFreeItem"));
+  assert.match(saveText, /normalizeMeasurementUnitDisplay\(item.unit\)/);
+  assert.match(saveText, /if \(nextValue === currentValue/);
+});
+
 test("the integration uses a single atomic area request and invalidates derived summaries", () => {
   assert.match(source, /api\.renameSiteMeasurementArea\(site.id, batch.id, previous, replacement\)/);
   assert.match(source, /await onRenameArea\(area.label, nextLabel\)/);

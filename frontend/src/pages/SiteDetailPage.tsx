@@ -7183,7 +7183,11 @@ function MeasurementReviewTable({
     input: HTMLInputElement | HTMLTextAreaElement,
   ): Promise<void> {
     if (!canEditRows || reviewActionLoading) return;
-    const currentValue = field === "description" ? item.description : (item.unit ?? "");
+    // Compare the same normalized representation that is displayed/accepted by
+    // the editor. Focus and blur alone must not create a signed PDF correction.
+    const currentValue = field === "description"
+      ? item.description.trim().replace(/\s+/g, " ")
+      : normalizeMeasurementUnitDisplay(item.unit);
     const nextValue = field === "description"
       ? input.value.trim().replace(/\s+/g, " ")
       : normalizeMeasurementUnitDisplay(input.value);
