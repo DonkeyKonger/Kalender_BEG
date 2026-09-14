@@ -33,6 +33,7 @@ from app.schemas.measurement import (
     MeasurementBatchManualStatusUpdate,
     MeasurementBatchInvoicedUpdate,
     MeasurementStatusRollback,
+    MeasurementAreaRename,
     MeasurementTimeAnalysisRead,
     MeasurementTimesheetRead,
     MobileMeasurementBatchRead,
@@ -1152,6 +1153,15 @@ def mark_measurement_batch_billed(
         billing_status="billed",
         current_user=current_user,
     )
+
+
+@router.patch("/{site_id}/measurement-batches/{batch_id}/area", response_model=list[MobileMeasurementItemRead])
+def rename_measurement_batch_area(
+    site_id: int, batch_id: int, payload: MeasurementAreaRename,
+    _user: User = Depends(CAN_WRITE), db: Session = Depends(get_db),
+) -> list[MobileMeasurementItemRead]:
+    return MeasurementService(db).rename_site_batch_area(site_id=site_id, batch_id=batch_id,
+        previous=payload.previous, replacement=payload.replacement)
 
 
 @router.post("/{site_id}/measurement-batches/{batch_id}/rollback-status", response_model=MobileMeasurementBatchRead)

@@ -1457,6 +1457,12 @@ export const api = {
     });
   },
 
+  async renameSiteMeasurementArea(siteId: number, batchId: number, previous: string, replacement: string): Promise<MobileMeasurementItem[]> {
+    return request(`/sites/${siteId}/measurement-batches/${batchId}/area`, {
+      method: "PATCH", body: JSON.stringify({ previous, replacement }),
+    });
+  },
+
   async markSiteMeasurementBatchReviewed(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
     return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/mark-reviewed`, {
       method: "POST",

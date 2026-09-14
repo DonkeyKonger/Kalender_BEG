@@ -180,6 +180,7 @@ def test_manual_measurement_status_promotion_only_moves_up_and_never_fakes_signa
     stored_batch.status = "customer_signed"
     stored_batch.customer_signature_name = "Kunde Beispiel"
     stored_batch.customer_signed_at = datetime.now(timezone.utc)
+    stored_batch.customer_signed_snapshot = service._build_measurement_snapshot(batch=stored_batch, version_label="customer_signed", event_at=stored_batch.customer_signed_at)
     db.commit()
 
     completed = service.promote_site_batch_status(
@@ -1234,6 +1235,7 @@ def test_mobile_measurement_photo_upload_blocks_after_five_photos():
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     assert stored_batch is not None
     stored_batch.customer_signed_at = datetime.now(timezone.utc)
+    stored_batch.customer_signed_snapshot = service._build_measurement_snapshot(batch=stored_batch, version_label="customer_signed", event_at=stored_batch.customer_signed_at)
     db.commit()
     with pytest.raises(HTTPException) as caption_error:
         service.update_mobile_batch_photo_caption(
@@ -1923,6 +1925,7 @@ def test_blank_position_persists_project_link_and_uses_it_before_position_fallba
         title="Verknüpftes Büro-Aufmaß",
         status="customer_signed",
         customer_signed_at=datetime.now(timezone.utc),
+        customer_signed_snapshot={"version": 2, "entries": [], "items": []},
         origin=MeasurementBatchOrigin.OFFICE.value,
         position_mode=MeasurementPositionMode.BLANK.value,
         creator_role_at_creation=UserRole.OFFICE.value,
@@ -2707,8 +2710,8 @@ def test_existing_free_measurement_item_keeps_matrix_totals_separate_and_aggrega
     assert updated.is_free_position is True
     assert updated.linked_measurement_item_id == target_item.id
     assert updated.position == "1.01"
-    assert updated.description == "Freie Kabelrinne"
-    assert updated.unit == "lfm"
+    assert updated.description == "Manipulierter Text"
+    assert updated.unit == "falsch"
     assert updated.sort_order == 20
     assert [(entry.id, entry.area_or_comment, entry.quantity) for entry in updated.entries] == entry_state
     assert updated.reported_quantity == Decimal("45")
@@ -2728,7 +2731,7 @@ def test_existing_free_measurement_item_keeps_matrix_totals_separate_and_aggrega
     )
     assert [(position.item_id, position.position, position.description, position.unit) for position in positions] == [
         (target_item.id, "1.01", "Kabelrinne 60/200", "m"),
-        (free_item_id, "1.01", "Freie Kabelrinne", "lfm"),
+        (free_item_id, "1.01", "Manipulierter Text", "falsch"),
     ]
     assert [area.label for area in areas] == ["EG", "1. OG", "2. OG"]
     assert totals == {
@@ -2940,6 +2943,7 @@ def test_multiple_free_measurements_can_share_a_used_target_and_keep_status_guar
 
     batch.status = "customer_signed"
     batch.customer_signed_at = datetime.now(timezone.utc)
+    batch.customer_signed_snapshot = service._build_measurement_snapshot(batch=batch, version_label="customer_signed", event_at=batch.customer_signed_at)
     db.commit()
     signed_update = service.update_site_free_item(
         site_id=site.id,

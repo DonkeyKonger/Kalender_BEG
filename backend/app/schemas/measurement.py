@@ -201,6 +201,7 @@ class MobileMeasurementBatchRead(BaseModel):
     previous_status: str | None = None
     status_revision: int = 0
     status_path: list[str] | None = None
+    has_signed_snapshot: bool = False
     is_invoiced: bool = False
     origin: MeasurementBatchOrigin = MeasurementBatchOrigin.LEGACY
     position_mode: MeasurementPositionMode = MeasurementPositionMode.OFFER_BASED
@@ -241,6 +242,11 @@ class MobileMeasurementBatchRead(BaseModel):
 
 class MeasurementStatusRollback(BaseModel):
     expected_revision: int = Field(ge=0)
+
+
+class MeasurementAreaRename(BaseModel):
+    previous: str = Field(min_length=1)
+    replacement: str = Field(min_length=1)
 
 
 class MeasurementBatchInvoicedUpdate(BaseModel):

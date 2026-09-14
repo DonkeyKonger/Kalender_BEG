@@ -92,6 +92,10 @@ class FakeMeasurementService:
         assert (site_id, batch_id, expected_revision, current_user.id) == (8, 12, 3, 7)
         return created_batch().model_copy(update={"status": "reviewed", "previous_status": "submitted", "status_revision": 4})
 
+    def rename_site_batch_area(self, *, site_id, batch_id, previous, replacement):
+        assert (site_id, batch_id, previous, replacement) == (8, 12, "EG", "1. OG")
+        return []
+
 
 def api_client(monkeypatch, user) -> TestClient:
     app = FastAPI()
@@ -108,6 +112,12 @@ PAYLOAD = {
     "assigned_employee_id": None,
     "request_id": "route-measurement-request",
 }
+
+
+@pytest.mark.parametrize("user,expected", [(current_user(UserRole.PROJECT_MANAGER), 200), (current_user(UserRole.ADMIN), 200), (current_user(UserRole.OFFICE, "sites"), 200), (current_user(UserRole.MONTEUR), 403), (current_user(UserRole.OFFICE), 403)])
+def test_atomic_area_edit_respects_office_permissions(monkeypatch, user, expected):
+    response = api_client(monkeypatch, user).patch("/api/sites/8/measurement-batches/12/area", json={"previous": "EG", "replacement": "1. OG"})
+    assert response.status_code == expected
 
 
 @pytest.mark.parametrize("user", [current_user(UserRole.ADMIN), current_user(UserRole.PROJECT_MANAGER), current_user(UserRole.OFFICE, "sites"), current_user(UserRole.OFFICE, "calendar")])

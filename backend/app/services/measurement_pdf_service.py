@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
@@ -29,6 +30,7 @@ from app.models.enums import MeasurementBatchOrigin
 from app.models.user import User
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
 from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, _current_measurement_entries
+from app.services.measurement_content import measurement_item_content
 from app.services.photo_appendix_pdf_service import (
     PhotoAppendixContext,
     PhotoAppendixPdfService,
@@ -100,7 +102,7 @@ MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
 MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
-MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-logical-row-blocks-v7-photo-uploader-role"
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-v8-header-corrections"
 OFFICE_PDF_CONTENT_Y_OFFSET = 32
 LOGGER = logging.getLogger(__name__)
 
@@ -113,6 +115,10 @@ class MatrixPosition:
     unit: str
     sort_order: int
     is_added: bool = False
+    original_position: str | None = None
+    original_description: str | None = None
+    original_unit: str | None = None
+    is_removed: bool = False
 
 
 @dataclass(frozen=True)
@@ -120,6 +126,7 @@ class MatrixArea:
     key: str
     label: str
     is_added: bool = False
+    is_removed: bool = False
 
 
 @dataclass(frozen=True)
@@ -372,6 +379,10 @@ class MeasurementPdfService:
                     logo=logo,
                 )
             )
+        # Narrow matrix columns may abbreviate long descriptions. Keep the full
+        # signed and corrected wording readable on correction continuation pages.
+        for commands in _header_correction_pages(positions):
+            pdf.add_page(commands)
         content = self._append_photo_pages(pdf.build(), batch)
         LOGGER.info(
             "Measurement PDF generated: batch_id=%s mode=%s photos=%s bytes=%s duration_ms=%.1f",
@@ -409,6 +420,8 @@ class MeasurementPdfService:
                 "worker_signature_name": batch.worker_signature_name,
                 "worker_signature_strokes": batch.worker_signature_strokes,
                 "original_submitted_snapshot": batch.original_submitted_snapshot,
+                "customer_signed_snapshot": batch.customer_signed_snapshot,
+                "item_overrides": batch.item_overrides,
             },
             "site": {
                 "id": batch.site.id if batch.site else None,
@@ -694,13 +707,14 @@ class MeasurementPdfService:
         for item in sorted(batch.free_items or [], key=lambda row: (row.sort_order, row.id)):
             if not item.is_free_position or item.is_hidden:
                 continue
+            content = measurement_item_content(item, batch)
             positions_by_id.setdefault(
                 item.id,
                 MatrixPosition(
                     item_id=item.id,
-                    position=_visible_measurement_position(item.position),
-                    description=item.description,
-                    unit=item.unit or "",
+                    position=_visible_measurement_position(content["position"]),
+                    description=content["description"],
+                    unit=content["unit"] or "",
                     sort_order=item.sort_order,
                 ),
             )
@@ -708,12 +722,13 @@ class MeasurementPdfService:
             item = entry.measurement_item
             if item is None:
                 continue
+            content = measurement_item_content(item, batch)
             if item.id not in positions_by_id:
                 positions_by_id[item.id] = MatrixPosition(
                     item_id=item.id,
-                    position=_visible_measurement_position(item.position),
-                    description=item.description,
-                    unit=item.unit or "",
+                    position=_visible_measurement_position(content["position"]),
+                    description=content["description"],
+                    unit=content["unit"] or "",
                     sort_order=item.sort_order,
                 )
             area_label = " ".join(entry.area_or_comment.split())
@@ -745,9 +760,14 @@ class MeasurementPdfService:
         original_quantities = correction_snapshot.quantities if correction_snapshot is not None else {}
         if correction_snapshot is not None:
             for item_id, position in correction_snapshot.positions_by_id.items():
-                positions_by_id.setdefault(item_id, position)
+                current = positions_by_id.get(item_id)
+                positions_by_id[item_id] = replace(current or position,
+                    original_position=position.position if current and current.position != position.position else None,
+                    original_description=position.description if current and current.description != position.description else None,
+                    original_unit=position.unit if current and current.unit != position.unit else None,
+                    is_removed=current is None)
             for area_key, area in correction_snapshot.areas_by_key.items():
-                area_by_key.setdefault(area_key, area)
+                area_by_key.setdefault(area_key, replace(area, is_removed=True))
         cells = {
             key: MatrixCellValue(
                 quantity=quantity,
@@ -956,25 +976,38 @@ def _draw_measurement_matrix(
         if index >= len(positions):
             continue
         position = positions[index]
+        header_color = _correction_color() if position.is_added or position.is_removed else None
+        if position.original_position is not None:
+            _text_centered_struck(commands, (x + column_right) / 2, TABLE_TOP - 6,
+                                  position.original_position, 5.3)
         _cell_text(
             commands,
             x,
-            _baseline_between(TABLE_TOP, MATRIX_POSITION_BOTTOM, 6.4) + 1.5,
+            MATRIX_POSITION_BOTTOM + 5 if position.original_position is not None else _baseline_between(TABLE_TOP, MATRIX_POSITION_BOTTOM, 6.4) + 1.5,
             position.position,
             width,
             6.4,
             "F2",
-            color=_correction_color() if position.is_added else None,
+            color=_correction_color() if position.original_position is not None else header_color,
+            struck=position.is_removed,
         )
+        if position.original_description is not None:
+            _rotated_cell_text(commands, x, MATRIX_DESCRIPTION_BOTTOM, width / 2,
+                MATRIX_POSITION_BOTTOM - MATRIX_DESCRIPTION_BOTTOM, position.original_description,
+                color=_correction_color(), struck=True, max_lines=2)
         _rotated_cell_text(
             commands,
-            x,
+            x + width / 2 if position.original_description is not None else x,
             MATRIX_DESCRIPTION_BOTTOM,
-            width,
+            width / 2 if position.original_description is not None else width,
             MATRIX_POSITION_BOTTOM - MATRIX_DESCRIPTION_BOTTOM,
             position.description,
-            color=_correction_color() if position.is_added else None,
+            color=_correction_color() if position.original_description is not None else header_color,
+            struck=position.is_removed,
+            max_lines=2 if position.original_description is not None else 5,
         )
+        if position.original_unit is not None:
+            _text_centered_struck(commands, (x + column_right) / 2, MATRIX_UNIT_BOTTOM + 12, position.original_unit, 6)
         _text_centered(
             commands,
             (x + column_right) / 2,
@@ -982,8 +1015,10 @@ def _draw_measurement_matrix(
             position.unit,
             8.2,
             "F2",
-            color=_correction_color() if position.is_added else None,
+            color=_correction_color() if position.original_unit is not None else header_color,
         )
+        if position.is_removed:
+            _strike_line(commands, x + 2, MATRIX_UNIT_BOTTOM + 5, column_right - 2, MATRIX_UNIT_BOTTOM + 5)
 
         for area_index, area in enumerate(areas[:MATRIX_AREA_ROW_COUNT]):
             cell = cells.get((area.key, position.item_id))
@@ -1017,8 +1052,10 @@ def _draw_measurement_matrix(
             area.label,
             7.3,
             max_width=MATRIX_AREA_LABEL_WIDTH - 4,
-            color=_correction_color() if area.is_added else None,
+            color=_correction_color() if area.is_added or area.is_removed else None,
         )
+        if area.is_removed:
+            _strike_line(commands, MATRIX_AREA_LABEL_X + 2, y + 2, MATRIX_X - 3, y + 2)
 
 
 def _signature_block(
@@ -1333,7 +1370,11 @@ def _build_logical_measurement_blocks(
         block_positions = (
             list(positions)
             if not areas
-            else [position for position in positions if position.item_id in active_position_ids]
+            else [position for position in positions if position.item_id in active_position_ids or (
+                block_index == 0 and (position.is_added or position.is_removed or position.original_description is not None
+                    or position.original_position is not None or position.original_unit is not None)
+                and not any(item_id == position.item_id and _is_relevant_measurement_cell(cell) for (_, item_id), cell in cells.items())
+            )]
         )
         block_totals = {
             position.item_id: totals_by_position.get(position.item_id, Decimal("0"))
@@ -1403,6 +1444,16 @@ def _snapshot_matrix(snapshot: dict[str, object] | None) -> SnapshotMatrix | Non
     positions_by_id: dict[int, MatrixPosition] = {}
     areas_by_key: dict[str, MatrixArea] = {}
     quantities: dict[tuple[str, int], Decimal] = {}
+    for raw_item in snapshot.get("items", []):
+        item_id = raw_item.get("measurement_item_id")
+        if isinstance(item_id, int):
+            positions_by_id[item_id] = MatrixPosition(item_id=item_id,
+                position=_visible_measurement_position(raw_item.get("position")),
+                description=raw_item.get("description", ""), unit=raw_item.get("unit") or "",
+                sort_order=raw_item.get("sort_order", 0))
+    for label in snapshot.get("areas", []):
+        key = " ".join(label.split()).casefold()
+        areas_by_key[key] = MatrixArea(key=key, label=label)
     for raw_entry in entries:
         if not isinstance(raw_entry, dict):
             continue
@@ -1585,15 +1636,20 @@ def _rotated_cell_text(
     text: str,
     *,
     color: tuple[float, float, float] | None = None,
+    struck: bool = False,
+    max_lines: int = 5,
 ) -> None:
     size = 6.8
     line_height = 7.4
     max_chars = max(16, int((height - 8) / (size * 0.48)))
-    lines = _wrap_ellipsis(text, width=max_chars, max_lines=5)
+    lines = _wrap_ellipsis(text, width=max_chars, max_lines=max_lines)
     block_width = (len(lines) - 1) * line_height
     start_x = x + (width - block_width) / 2 + 2
     for index, line in enumerate(lines):
         _text_rotated(commands, start_x + index * line_height, y + 4, line, size, color=color)
+        if struck:
+            line_x = start_x + index * line_height - size * 0.3
+            _strike_line(commands, line_x, y + 4, line_x, y + 4 + _text_width(line, size))
 
 
 def _cell_text(
@@ -1606,10 +1662,50 @@ def _cell_text(
     font: str = "F1",
     *,
     color: tuple[float, float, float] | None = None,
+    struck: bool = False,
 ) -> None:
     lines = _wrapped(text, max(4, int(width / (size * 0.55))))[:2]
     for index, line in enumerate(lines):
         _text(commands, x + 2, y - index * (size + 1.5), line, size, font, color=color)
+        if struck:
+            baseline = y - index * (size + 1.5) + size * 0.3
+            _strike_line(commands, x + 2, baseline, x + 2 + _text_width(line, size), baseline)
+
+
+def _strike_line(commands, x1, y1, x2, y2):
+    commands.append(f"q 0.8 0 0 RG 0.5 w {x1:.2f} {y1:.2f} m {x2:.2f} {y2:.2f} l S Q".encode("ascii"))
+
+
+def _header_correction_pages(positions):
+    pages = []
+    commands = None
+    y = 0
+    for position in positions:
+        original = position.original_description
+        if original is None or max(len(_wrapped(original, 34)), len(_wrapped(position.description, 34))) <= 2:
+            continue
+        old_lines = _wrapped(original, 70)
+        new_lines = _wrapped(position.description, 70)
+        for index in range(max(len(old_lines), len(new_lines))):
+            if commands is None or y < 55:
+                commands = []
+                pages.append(commands)
+                _text(commands, 40, PAGE_HEIGHT - 35, "Textkorrekturen nach Kundenunterschrift", 14, "F2")
+                _text(commands, 40, PAGE_HEIGHT - 55, "Unterschriebener Stand", 10, "F2")
+                _text(commands, 440, PAGE_HEIGHT - 55, "Aktueller Stand", 10, "F2")
+                y = PAGE_HEIGHT - 78
+            if index == 0 or y == PAGE_HEIGHT - 78:
+                _text(commands, 40, y, f"Position {position.position or '-'}", 10, "F2")
+                y -= 17
+            if index < len(old_lines):
+                line = old_lines[index]
+                _text(commands, 40, y, line, 9, color=_correction_color())
+                _strike_line(commands, 40, y + 2.7, 40 + _text_width(line, 9), y + 2.7)
+            if index < len(new_lines):
+                _text(commands, 440, y, new_lines[index], 9, color=_correction_color())
+            y -= 13
+        y -= 18
+    return pages
 
 
 def _image(commands: list[bytes], name: str, x: float, y: float, width: float, height: float) -> None:

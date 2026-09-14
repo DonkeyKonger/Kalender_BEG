@@ -33138,8 +33138,8 @@ body.mobile-modal-scroll-locked {
 
 .measurement-review-detail.is-table-view textarea.measurement-placeholder-header-input {
   min-height: 39px;
-  overflow: hidden;
-  resize: none;
+  overflow: auto;
+  resize: vertical;
 }
 
 .measurement-review-detail.is-table-view .measurement-placeholder-header-input::placeholder {

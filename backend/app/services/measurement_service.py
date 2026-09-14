@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 import logging
 import re
 from zoneinfo import ZoneInfo
@@ -80,6 +81,7 @@ from app.services.time_entry_service import TimeEntryService
 from app.services.audit_service import AuditService
 from app.services.project_record_status import validate_measurement_status_promotion
 from app.services.measurement_status_history import active_transitions, record_status_transition, rollback_status, rollback_target
+from app.services.measurement_content import measurement_item_content, measurement_item_minutes
 
 
 MEASUREMENT_PHOTO_FOLDER_KEY = "fotos"
@@ -530,7 +532,7 @@ class MeasurementService:
         payload: MeasurementEntryCreate,
     ) -> MeasurementEntryRead:
         self._get_site(site_id)
-        batch = self._get_batch_for_site(batch_id, site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
         self._ensure_site_batch_can_be_edited_in_office(batch)
 
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
@@ -561,6 +563,7 @@ class MeasurementService:
             created_by_user_id=current_user.id,
         )
         self.db.add(entry)
+        batch.updated_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(entry)
         return self._build_entry(entry)
@@ -574,7 +577,7 @@ class MeasurementService:
         payload: MobileMeasurementFreeItemCreate,
     ) -> MobileMeasurementItemRead:
         self._get_site(site_id)
-        batch = self._get_batch_for_site(batch_id, site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
         self._ensure_site_batch_can_be_edited_in_office(batch)
 
         description = " ".join(payload.description.split())
@@ -661,6 +664,7 @@ class MeasurementService:
             )
             self.db.add(entry)
 
+        batch.updated_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(item)
         return self._build_mobile_item(item, batch.id)
@@ -674,17 +678,22 @@ class MeasurementService:
         payload: MeasurementItemUpdate,
     ) -> MobileMeasurementItemRead:
         self._get_site(site_id)
-        batch = self._get_batch_for_site(batch_id, site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
         self._ensure_site_batch_can_be_edited_in_office(batch)
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
         if (
             item is None
             or item.site_id != site_id
-            or item.measurement_batch_id != batch.id
-            or item.is_hidden
-            or not item.is_free_position
+            or not self._measurement_item_is_available_for_batch(batch=batch, item=item)
         ):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Manuelle Aufmaßposition nicht gefunden.")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßposition nicht gefunden.")
+
+        # Offer positions are shared by other batches. Keep their identity (and
+        # signed snapshot references), but persist header edits only in this batch.
+        source_item = item
+        is_shared = item.measurement_batch_id != batch.id
+        if is_shared:
+            item = SimpleNamespace(id=item.id, **measurement_item_content(item, batch))
 
         measurement_base_ids = self._measurement_catalog_base_ids(batch)
         position_was_submitted = "position" in payload.model_fields_set
@@ -746,19 +755,24 @@ class MeasurementService:
             if not _is_technical_free_measurement_position(item.position):
                 item.position = self._next_free_measurement_position(batch, exclude_item_id=item.id)
 
-        if linked_measurement_item is None and payload.description is not None:
+        if payload.description is not None:
             description = " ".join(payload.description.split())
             if not description and batch.position_mode != MeasurementPositionMode.BLANK.value:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Kurztext ist erforderlich.")
             item.description = description
-        if linked_measurement_item is None and payload.unit is not None:
+        if payload.unit is not None:
             unit = payload.unit.strip()
             if not unit and batch.position_mode != MeasurementPositionMode.BLANK.value:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Einheit ist erforderlich.")
             item.unit = unit
+        if is_shared:
+            batch.item_overrides = {**(batch.item_overrides or {}), str(item.id): {
+                name: getattr(item, name) for name in ("position", "description", "unit", "linked_measurement_item_id")
+            }}
+        batch.updated_at = datetime.now(timezone.utc)
         self.db.commit()
-        self.db.refresh(item)
-        return self._build_mobile_item(item, batch.id)
+        self.db.refresh(source_item)
+        return self._build_mobile_item(source_item, batch.id)
 
     def delete_site_free_item(
         self,
@@ -768,7 +782,7 @@ class MeasurementService:
         measurement_item_id: int,
     ) -> None:
         self._get_site(site_id)
-        batch = self._get_batch_for_site(batch_id, site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
         self._ensure_site_batch_can_be_edited_in_office(batch)
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
         if (
@@ -781,6 +795,7 @@ class MeasurementService:
         ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Manuelle Aufmaßposition nicht gefunden.")
         self.db.delete(item)
+        batch.updated_at = datetime.now(timezone.utc)
         self.db.commit()
 
     def hide_item(self, *, site_id: int, measurement_item_id: int) -> MeasurementItemRead:
@@ -1166,6 +1181,7 @@ class MeasurementService:
     ) -> MobileMeasurementBatchPhotoRead:
         # Serialize uploads for this batch so concurrent requests respect the five-photo limit.
         batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
+        self._ensure_site_batch_can_be_edited_in_office(batch)
         current_photo_count = self.db.scalar(
             select(func.count(SiteMeasurementBatchPhoto.id)).where(
                 SiteMeasurementBatchPhoto.measurement_batch_id == batch.id
@@ -1484,14 +1500,15 @@ class MeasurementService:
                 source_item = entry.measurement_item
                 if source_item is None or source_item.is_hidden:
                     continue
+                content = measurement_item_content(source_item, entry.measurement_batch)
                 target_item_id = (
-                    source_item.linked_measurement_item_id
-                    if source_item.linked_measurement_item_id in target_item_ids
+                    content["linked_measurement_item_id"]
+                    if content["linked_measurement_item_id"] in target_item_ids
                     else (
                         source_item.id
-                        if source_item.id in target_item_ids
+                        if source_item.id in target_item_ids and content["position"] == source_item.position
                         else unique_target_id_by_position.get(
-                            _measurement_position_key(source_item.position)
+                            _measurement_position_key(content["position"])
                         )
                     )
                 )
@@ -1956,7 +1973,7 @@ class MeasurementService:
         payload: MeasurementEntryCreate,
     ) -> MeasurementEntryRead:
         self._get_site(site_id)
-        batch = self._get_batch_for_site(batch_id, site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
         self._ensure_site_batch_can_be_edited_in_office(batch)
 
         entry = self.db.get(SiteMeasurementEntry, entry_id)
@@ -1973,15 +1990,37 @@ class MeasurementService:
 
         entry.area_or_comment = comment
         entry.quantity = payload.quantity
+        batch.updated_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(entry)
         return self._build_entry(entry)
+
+    def rename_site_batch_area(self, *, site_id: int, batch_id: int, previous: str, replacement: str) -> list[MobileMeasurementItemRead]:
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
+        self._ensure_site_batch_can_be_edited_in_office(batch)
+        label = " ".join(replacement.split())
+        old_key = _measurement_entry_area_key(previous)
+        new_key = _measurement_entry_area_key(label)
+        if not label:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Montageort darf nicht leer sein.")
+        records = [*batch.entries, *batch.area_rows]
+        matches = [row for row in records if _measurement_entry_area_key(row.area_or_comment) == old_key]
+        if not matches:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Montageort wurde zwischenzeitlich geändert. Bitte neu laden.")
+        if old_key != new_key and any(_measurement_entry_area_key(row.area_or_comment) == new_key for row in records):
+            raise HTTPException(status.HTTP_409_CONFLICT, "Dieser Montageort existiert bereits. Orte werden nicht automatisch zusammengeführt.")
+        for row in matches:
+            row.area_or_comment = label
+        batch.updated_at = datetime.now(timezone.utc)
+        self.db.commit()
+        return self.list_site_batch_items(site_id=site_id, batch_id=batch_id)
 
     def reset_site_batch_to_submitted(
         self, *, site_id: int, batch_id: int
     ) -> list[MobileMeasurementItemRead]:
         self._get_site(site_id)
-        batch = self._get_batch_for_site(batch_id, site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
+        self._ensure_site_batch_can_be_edited_in_office(batch)
         if batch.status == "draft":
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -2774,11 +2813,6 @@ class MeasurementService:
         self,
         batch: SiteMeasurementBatch,
     ) -> None:
-        if batch.status == "draft" and batch.origin != MeasurementBatchOrigin.OFFICE.value:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Entwürfe werden mobil bearbeitet.",
-            )
         if batch.deleted_at is not None:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -2789,6 +2823,8 @@ class MeasurementService:
                 status.HTTP_409_CONFLICT,
                 "Abgeschlossene Aufmaße können nicht bearbeitet werden.",
             )
+        if batch.customer_signed_at is not None and batch.customer_signed_snapshot is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Die unterschriebene Vergleichsfassung fehlt. Eine nachvollziehbare Korrektur ist nicht möglich.")
 
     def _delete_existing_entries_for_cell(
         self,
@@ -2921,6 +2957,7 @@ class MeasurementService:
             submitted_by_name=self._format_user_display_name(batch.submitted_by),
             submitted_at=batch.submitted_at,
             customer_signed_at=batch.customer_signed_at,
+            has_signed_snapshot=batch.customer_signed_at is not None and batch.customer_signed_snapshot is not None,
             customer_signature_name=batch.customer_signature_name,
             customer_signature_place=batch.customer_signature_place,
             customer_email_sent_at=customer_email_status[0] if customer_email_status else None,
@@ -3146,14 +3183,15 @@ class MeasurementService:
             item = entry.measurement_item
             if item is None:
                 continue
+            content = measurement_item_content(item, batch)
             entries.append(
                 {
                     "entry_id": entry.id,
                     "measurement_item_id": item.id,
                     "site_id": entry.site_id,
-                    "position": "" if item.is_free_position and _is_technical_free_measurement_position(item.position) else item.position,
-                    "description": item.description,
-                    "unit": item.unit,
+                    "position": "" if _is_technical_free_measurement_position(content["position"]) else content["position"],
+                    "description": content["description"],
+                    "unit": content["unit"],
                     "sort_order": item.sort_order,
                     "area_or_comment": entry.area_or_comment,
                     "quantity": _decimal_as_string(entry.quantity),
@@ -3163,7 +3201,7 @@ class MeasurementService:
             )
 
         return {
-            "version": 1,
+            "version": 2,
             "measurement_batch_id": batch.id,
             "site_id": batch.site_id,
             "measurement_base_id": batch.measurement_base_id,
@@ -3172,6 +3210,9 @@ class MeasurementService:
             "version_label": version_label,
             "event_at": event_at.isoformat(),
             "entries": entries,
+            "items": [{"measurement_item_id": item.id, "sort_order": item.sort_order, **measurement_item_content(item, batch)}
+                      for item in batch.free_items if not item.is_hidden],
+            "areas": [row.area_or_comment for row in batch.area_rows],
         }
 
     def _build_dashboard_submission(
@@ -3226,16 +3267,19 @@ class MeasurementService:
     def _build_mobile_item(
         self, item: SiteMeasurementItem, batch_id: int
     ) -> MobileMeasurementItemRead:
+        batch = self.db.get(SiteMeasurementBatch, batch_id)
+        content = measurement_item_content(item, batch)
+        minutes_per_unit = self._measurement_item_rate(item, batch)
         entries = sorted(
             _current_measurement_entries([
-                entry for entry in item.entries if entry.measurement_batch_id == batch_id
+                entry for entry in batch.entries if entry.measurement_item_id == item.id
             ]),
             key=lambda entry: (entry.created_at, entry.id),
         )
         reported_quantity = sum((entry.quantity for entry in entries), Decimal("0"))
         reported_minutes = (
-            reported_quantity * item.minutes_per_unit
-            if item.minutes_per_unit is not None
+            reported_quantity * minutes_per_unit
+            if minutes_per_unit is not None
             else None
         )
         reported_hours = reported_minutes / Decimal("60") if reported_minutes is not None else None
@@ -3247,25 +3291,25 @@ class MeasurementService:
             id=item.id,
             site_id=item.site_id,
             measurement_base_id=item.measurement_base_id,
-            linked_measurement_item_id=item.linked_measurement_item_id,
+            linked_measurement_item_id=content["linked_measurement_item_id"],
             source_file_name=item.source_file_name,
             source_project_number=item.source_project_number,
             source_invoice_number=item.source_invoice_number,
             source_customer_name=item.source_customer_name,
             source_section_key=item.source_section_key,
             source_section_title=item.source_section_title,
-            position=item.position,
-            description=item.description,
+            position=content["position"],
+            description=content["description"],
             list_quantity=item.list_quantity,
-            unit=item.unit,
-            minutes_per_unit=item.minutes_per_unit,
+            unit=content["unit"],
+            minutes_per_unit=minutes_per_unit,
             list_minutes_total=item.list_minutes_total,
             is_nep=item.is_nep,
             is_free_position=item.is_free_position,
             sort_order=item.sort_order,
             measurement_base=self._build_measurement_base(item.measurement_base) if item.measurement_base else None,
             created_at=item.created_at,
-            updated_at=item.updated_at,
+            updated_at=batch.updated_at if str(item.id) in (batch.item_overrides or {}) else item.updated_at,
             entries=[self._build_entry(entry) for entry in entries],
             reported_quantity=reported_quantity,
             reported_minutes=reported_minutes,
@@ -3295,22 +3339,29 @@ class MeasurementService:
         if calculation_lookup is None:
             site_id = next((entry.site_id for entry in entries), None)
             calculation_lookup = self._measurement_calculation_lookup(site_id)
-        minutes_by_item_id, minutes_by_unique_position = calculation_lookup
         for entry in entries:
             item = entry.measurement_item
-            minutes_per_unit = item.minutes_per_unit
-            if minutes_per_unit is None and item.linked_measurement_item_id is not None:
-                minutes_per_unit = minutes_by_item_id.get(item.linked_measurement_item_id)
-            if minutes_per_unit is None:
-                minutes_per_unit = minutes_by_unique_position.get(
-                    _measurement_position_key(item.position)
-                )
+            minutes_per_unit = self._measurement_item_rate(item, entry.measurement_batch, calculation_lookup)
             if minutes_per_unit is None:
                 missing_item_ids.add(item.id)
                 continue
             total += entry.quantity * minutes_per_unit
             has_minutes = True
         return (total if has_minutes else None), missing_item_ids
+
+    def _measurement_item_rate(
+        self,
+        item: SiteMeasurementItem,
+        batch: SiteMeasurementBatch,
+        calculation_lookup: tuple[dict[int, Decimal], dict[str, Decimal]] | None = None,
+    ) -> Decimal | None:
+        minutes = measurement_item_minutes(item, batch)
+        if minutes is not None:
+            return minutes
+        content = measurement_item_content(item, batch)
+        by_id, by_position = calculation_lookup if calculation_lookup is not None else self._measurement_calculation_lookup(item.site_id)
+        linked_minutes = by_id.get(content["linked_measurement_item_id"])
+        return linked_minutes if linked_minutes is not None else by_position.get(_measurement_position_key(content["position"]))
 
     def _measurement_calculation_lookup(
         self,

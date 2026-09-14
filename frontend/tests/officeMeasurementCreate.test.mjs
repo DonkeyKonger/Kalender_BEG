@@ -137,7 +137,7 @@ test("existing free positions reuse the shared offer autocomplete and stay in th
 });
 
 test("signed measurements remain editable while completed measurements stay locked", () => {
-  assert.match(pageSource, /const canEditRows = \(!isDraft \|\| selectedBatch\.origin === "OFFICE"\)\s*&& !isBilled\s*&& selectedBatch\.deleted_at === null/s);
+  assert.match(pageSource, /const canEditRows = canEditMeasurementContent\(selectedBatch, canCreateBatch\)/);
   assert.doesNotMatch(pageSource, /const canEditRows[\s\S]{0,160}&& !isCustomerSigned/);
   assert.match(pageSource, /disabled=\{!canEditRows \|\| reviewActionLoading \|\| isSavingPosition\}/);
 });

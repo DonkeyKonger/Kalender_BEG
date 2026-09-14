@@ -51,7 +51,7 @@ test("measurement and extra-work photos never share metadata or thumbnail cache 
 });
 
 test("measurements reuse the existing gallery and upload slots with scoped endpoints and permissions", () => {
-  assert.match(pageSource, /renderPhotos=\{\(batch\) => <ExtraWorkOverviewPhotos[^\n]*photoKind="measurement"[^\n]*canUpload=\{canCreateBatch && !archiveMode\}[^\n]*onPhotoCountUpdated=\{onBatchPhotoCountUpdated\}/);
+  assert.match(pageSource, /renderPhotos=\{\(batch\) => <ExtraWorkOverviewPhotos[^\n]*photoKind="measurement"[^\n]*canUpload=\{!archiveMode && canEditMeasurementContent\(batch, canCreateBatch\)\}[^\n]*onPhotoCountUpdated=\{onBatchPhotoCountUpdated\}/);
   assert.match(pageSource, /photoKind === "measurement" \? api.uploadSiteMeasurementBatchPhoto : api.uploadSiteExtraWorkTicketPhoto/);
   assert.match(apiSource, /async uploadSiteMeasurementBatchPhoto[\s\S]*?measurement-batches\/\$\{batchId\}\/photos[\s\S]*?method: "POST"/);
   assert.match(pageSource, /setMeasurementBatches\(\(current\) => current.map\(\(batch\) => batch.id === batchId \? \{ ...batch, photo_count: photoCount \}/);
