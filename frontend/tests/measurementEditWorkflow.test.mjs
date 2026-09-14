@@ -55,6 +55,21 @@ test("real offer positions render all five editable fields, and all are disabled
   }
 });
 
+test("all review descriptions reserve six lines, including new and completed positions", () => {
+  for (const canEditRows of [true, false]) {
+    for (const description of ["Kurz", "Lange Positionsbeschreibung ".repeat(30)]) {
+      const textareas = render({ canEditRows, items: [{ ...item, description }] }).match(/<textarea\b[^>]*>/g);
+      assert.ok(textareas.length >= 2, "Existing and new position descriptions must be present");
+      for (const textarea of textareas) assert.match(textarea, /rows="6"/);
+    }
+  }
+  const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  const rule = styles.match(/\.measurement-review-detail\.is-table-view textarea\.measurement-placeholder-header-input\s*\{([^}]+)\}/)[1];
+  assert.match(rule, /height: calc\(6\.3em \+ 2px\)/);
+  assert.match(rule, /overflow: auto/);
+  assert.match(rule, /resize: none/);
+});
+
 test("the calendar displays only latest values in normal text, even after signing", () => {
   const changed = { ...item, position: "9.99", description: "Neuer Text", unit: "St", entries: [{ ...item.entries[0], quantity: 40.55 }] };
   const html = render({ items: [changed], canEditRows: canEditMeasurementContent({ ...batch, status: "customer_signed", customer_signed_at: "2026-09-14", has_signed_snapshot: true }, true) });

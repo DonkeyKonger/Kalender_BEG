@@ -7442,7 +7442,7 @@ function MeasurementReviewTable({
                         disabled={!canEditRows || reviewActionLoading || savingPositionItemId === column.item.id}
                         aria-label={`Beschreibung für Position ${getVisibleMeasurementPosition(column.item) || column.item.id}`}
                         placeholder="Beschreibung"
-                        rows={2}
+                        rows={6}
                         onBlur={(event) => void saveFreeItemTextDraft(column.item, "description", event.currentTarget)}
                       />
                     </th>
@@ -7462,7 +7462,7 @@ function MeasurementReviewTable({
                   disabled={!canEditRows || reviewActionLoading}
                   aria-label="Büro-Zusatzposition Beschreibung"
                   placeholder="Beschreibung"
-                  rows={2}
+                  rows={6}
                   onChange={(event) => updateManualColumnDraft(column.key, { description: event.currentTarget.value })}
                   onBlur={(event) => void createFreeItemFromHeaderDraft(column.key, { description: event.currentTarget.value })}
                 />
