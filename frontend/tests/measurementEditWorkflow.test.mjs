@@ -83,6 +83,18 @@ test("only description fields use normal font weight, including new and complete
   assert.match(headerRule, /font-weight: 800/);
 });
 
+test("review detail temporarily hides both navigation rows and uses available viewport height", () => {
+  const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  const scope = ".site-detail-page.is-measurement-review-workspace:has(.measurement-review-detail.is-table-view)";
+  assert.ok(styles.includes(`${scope} > .project-record-tabs,\n${scope} > .project-record-tab-panel > .project-record-subtab-bar {\n  display: none;\n}`));
+  assert.match(source, /if \(selectedBatch && !archiveMode\)/);
+  assert.match(source, /onBackToBatchList=\{\(\) => \{\s*setSelectedMeasurementBatch\(null\)/);
+  assert.match(styles, /max-height: var\(--measurement-review-available-height, calc\(100vh - 330px\)\)/);
+  assert.match(source, /viewportHeight - node\.getBoundingClientRect\(\)\.top - 16/);
+  assert.match(source, /observer\.observe\(workspace\)/);
+  assert.match(source, /window\.removeEventListener\("resize", updateViewportColumns\)/);
+});
+
 test("the calendar displays only latest values in normal text, even after signing", () => {
   const changed = { ...item, position: "9.99", description: "Neuer Text", unit: "St", entries: [{ ...item.entries[0], quantity: 40.55 }] };
   const html = render({ items: [changed], canEditRows: canEditMeasurementContent({ ...batch, status: "customer_signed", customer_signed_at: "2026-09-14", has_signed_snapshot: true }, true) });

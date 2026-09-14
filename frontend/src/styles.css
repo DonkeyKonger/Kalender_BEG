@@ -32509,6 +32509,12 @@ body.mobile-modal-scroll-locked {
   margin-inline: 0;
 }
 
+/* Keep the selected tabs mounted; only the opened review hides navigation. */
+.site-detail-page.is-measurement-review-workspace:has(.measurement-review-detail.is-table-view) > .project-record-tabs,
+.site-detail-page.is-measurement-review-workspace:has(.measurement-review-detail.is-table-view) > .project-record-tab-panel > .project-record-subtab-bar {
+  display: none;
+}
+
 .site-detail-page.is-measurement-review-workspace .project-record-subtabs {
   display: flex;
   box-sizing: border-box;
@@ -32966,7 +32972,7 @@ body.mobile-modal-scroll-locked {
   width: 100%;
   max-width: 100%;
   min-height: 0;
-  max-height: calc(100vh - 330px);
+  max-height: var(--measurement-review-available-height, calc(100vh - 330px));
   margin-top: 8px;
   overflow: auto;
   scrollbar-gutter: stable both-edges;

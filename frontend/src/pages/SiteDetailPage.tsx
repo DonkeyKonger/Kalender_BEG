@@ -6839,12 +6839,23 @@ function MeasurementReviewTable({
     const updateViewportColumns = () => {
       const availableWidth = Math.max(0, node.clientWidth - MEASUREMENT_TABLE_AXIS_WIDTH);
       setViewportColumnCount(Math.max(MEASUREMENT_TABLE_MIN_COLUMNS, Math.ceil(availableWidth / MEASUREMENT_TABLE_POSITION_WIDTH)));
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const availableHeight = Math.max(160, Math.floor(viewportHeight - node.getBoundingClientRect().top - 16));
+      node.style.setProperty("--measurement-review-available-height", `${availableHeight}px`);
     };
 
     updateViewportColumns();
     const observer = new ResizeObserver(updateViewportColumns);
     observer.observe(node);
-    return () => observer.disconnect();
+    const workspace = node.closest(".site-detail-page");
+    if (workspace) observer.observe(workspace);
+    window.addEventListener("resize", updateViewportColumns);
+    window.visualViewport?.addEventListener("resize", updateViewportColumns);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateViewportColumns);
+      window.visualViewport?.removeEventListener("resize", updateViewportColumns);
+    };
   }, []);
 
   useEffect(() => {
