@@ -4604,7 +4604,7 @@ button.person-chip:focus-visible {
 /* Separate managers directly on the next site row, without an empty spacer. */
 .matrix-page.is-current-planning .matrix-group-row:not(:first-child) + tr > th,
 .matrix-page.is-current-planning .matrix-group-row:not(:first-child) + tr > td {
-  border-top: 3px dashed #64748b;
+  border-top: 1px dashed #a8b5c7;
 }
 
 .day-col.today,
