@@ -22,9 +22,42 @@ from app.services.measurement_pdf_service import (
     MatrixCellValue,
     MatrixPosition,
     MeasurementPdfService,
+    SimplePdf,
     _build_logical_measurement_blocks,
     _build_measurement_pdf_pages,
+    _format_sheet_label,
+    _template_header,
 )
+
+
+@pytest.mark.parametrize(("title", "page_number", "page_count", "expected"), [
+    ("8007.08", 1, 1, "8007.08"),
+    ("8007.08", 1, 2, "8007.081"),
+    ("8007.08", 2, 2, "8007.082"),
+    ("8007.08", 9, 100, "8007.089"),
+    ("8007.08", 10, 100, "8007.0810"),
+    ("8007.08", 100, 100, "8007.08100"),
+    ("8007.123", 12, 12, "8007.12312"),
+])
+def test_sheet_labels_keep_batch_number_but_append_unpadded_page_number(title, page_number, page_count, expected):
+    assert _format_sheet_label(title, page_number, page_count) == expected
+
+
+@pytest.mark.parametrize("label", ["8007.08", "8007.081", "8007.0810", "8007.08100", "8007.12312"])
+def test_sheet_label_font_size_never_shrinks(label):
+    commands = []
+    _template_header(commands=commands, title="8007.08", customer="Testkunde", project="Testprojekt",
+                     commission="8007", date_label="14.09.2026", sheet_label=label, logo=None)
+    pdf = SimplePdf()
+    pdf.add_page(commands)
+    labels = []
+    PdfReader(BytesIO(pdf.build())).pages[0].extract_text(
+        visitor_text=lambda text, cm, tm, font, size: labels.append((text.strip(), size))
+    )
+    assert (label, 7.4) in labels
+    assert ("Datum:", 8) in labels
+    assert any(command.startswith(b"BT /F2 7.4 Tf 461 456 Td ") for command in commands)
+    assert any(command.startswith(b"BT /F2 8 Tf 510 456 Td ") for command in commands)
 
 
 def _areas(count: int) -> list[MatrixArea]:
@@ -242,8 +275,8 @@ def test_rendered_measurement_pdf_uses_block_totals_instead_of_global_total():
     page_texts = [page.extract_text() or "" for page in PdfReader(BytesIO(content)).pages]
 
     assert len(page_texts) == 2
-    assert "8007.01.01" in page_texts[0]
-    assert "8007.01.02" in page_texts[1]
+    assert "8007.011" in page_texts[0]
+    assert "8007.012" in page_texts[1]
     assert "30,00" in page_texts[0]
     assert "5,00" in page_texts[1]
     assert all("35,00" not in page_text for page_text in page_texts)

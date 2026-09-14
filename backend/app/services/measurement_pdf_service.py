@@ -102,7 +102,7 @@ MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
 MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
-MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-v8-header-corrections"
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-v9-compact-sheet-labels"
 OFFICE_PDF_CONTENT_Y_OFFSET = 32
 LOGGER = logging.getLogger(__name__)
 
@@ -919,8 +919,7 @@ def _template_header(
     _text(commands, 144, 456, project, 8)
     _text(commands, 420, 456, "Blatt-Nr.:", 8, "F2")
     _line(commands, 456, PAGE_HEIGHT - 143, 509, PAGE_HEIGHT - 143, 0.9)
-    sheet_label_size = 5.0 if len(sheet_label) > 8 else 7.4
-    _text(commands, 461, 456, sheet_label, sheet_label_size, "F2")
+    _text(commands, 461, 456, sheet_label, 7.4, "F2")
     _text(commands, 510, 456, "Datum:", 8, "F2")
     _line(commands, 553, PAGE_HEIGHT - 143, 620, PAGE_HEIGHT - 143, 0.9)
     _text(commands, 558, 456, date_label, 8)
@@ -1431,7 +1430,7 @@ def _format_batch_number(site_number: str | None, number: int) -> str:
 def _format_sheet_label(title: str, page_number: int, page_count: int) -> str:
     if page_count <= 1:
         return title
-    return f"{title}.{page_number:02d}"
+    return f"{title}{page_number}"
 
 
 def _snapshot_matrix(snapshot: dict[str, object] | None) -> SnapshotMatrix | None:
