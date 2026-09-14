@@ -6,6 +6,12 @@ import { currentlyPlannedRows } from "../src/lib/currentPlanning.ts";
 const row = (id, date, personType = "internal") => ({site: {id}, cells: [{date, assignments: personType ? [{person: {person_type: personType}}] : [], absences: [{}], mark: "orange"}]});
 const matrix = rows => ({start_date: "2026-09-01", end_date: "2026-10-31", current_planning_start: "2026-09-14", current_planning_end: "2026-09-27", rows});
 
+test("calendar toolbar omits the date range in every view while retaining the calendar heading", () => {
+  const source = readFileSync(new URL("../src/pages/MatrixPage.tsx", import.meta.url), "utf8");
+  assert.match(source, /<h1>Baustellenkalender<\/h1>/);
+  assert.doesNotMatch(source, /matrix-range|activeRange\.label/);
+});
+
 test("current planning includes both full weeks, all person types and weekends, but no empty marks or absences", () => {
   const data = matrix([
     row(1, "2026-09-13"), row(2, "2026-09-14"), row(3, "2026-09-20", "external"),

@@ -2101,7 +2101,6 @@ export function MatrixPage() {
         <div>
           <p className="eyebrow">Planung</p>
           <h1>Baustellenkalender</h1>
-          <p className="matrix-range">{activeRange.label}</p>
         </div>
         <div className="matrix-actions">
           {projectManagerOptions.length > 0 && (
