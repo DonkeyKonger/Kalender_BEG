@@ -109,9 +109,19 @@ test("only description fields use normal font weight, including new and complete
   }
   const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
   const descriptionRule = styles.match(/\.measurement-review-detail\.is-table-view textarea\.measurement-placeholder-header-input\.is-description\s*\{([^}]+)\}/)[1];
-  assert.equal(descriptionRule.trim(), "font-weight: 400;");
+  assert.match(descriptionRule, /font-weight: 400;/);
   const headerRule = styles.match(/\.measurement-review-detail\.is-table-view \.measurement-placeholder-header-input\s*\{([^}]+)\}/)[1];
   assert.match(headerRule, /font-weight: 800/);
+});
+
+test("description scrollbars are hidden without disabling scrolling or changing the six-line height", () => {
+  const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  const selector = ".measurement-review-detail.is-table-view textarea.measurement-placeholder-header-input";
+  const rule = suffix => styles.slice(styles.indexOf(`${selector}${suffix} {`)).split("}")[0];
+  assert.match(rule(""), /overflow: auto;/);
+  assert.match(rule(""), /height: calc\(6\.3em \+ 2px\);/);
+  assert.match(rule(".is-description"), /scrollbar-width: none;/);
+  assert.match(rule(".is-description::-webkit-scrollbar"), /display: none;/);
 });
 
 test("review detail temporarily hides both navigation rows and uses available viewport height", () => {
