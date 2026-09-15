@@ -3953,6 +3953,34 @@ def test_office_measurement_batch_uses_existing_model_and_is_idempotent():
     assert db.scalar(select(func.count(SiteMeasurementBatch.id))) == 1
 
 
+@pytest.mark.parametrize("hint_fields", [{}, {"area_location": None}, {"area_location": ""}, {"area_location": "  \t  "}])
+def test_office_measurement_hint_is_optional_and_blank_hints_do_not_conflict(hint_fields):
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    actor = User(username="office-optional-hint", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    db.add(actor)
+    db.commit()
+    service = MeasurementService(db)
+    payload = OfficeMeasurementBatchCreate(
+        **hint_fields, measurement_date=date(2026, 9, 15), request_id="optional-hint-first",
+    )
+    first = service.create_office_batch(site_id=site.id, current_user=actor, payload=payload)
+    second = service.create_office_batch(
+        site_id=site.id, current_user=actor,
+        payload=payload.model_copy(update={"request_id": "optional-hint-second"}),
+    )
+    assert first.area_location is None
+    assert second.area_location is None
+    assert first.id != second.id
+    assert second.number == first.number + 1
+    assert first.offer_id == second.offer_id == base.id
+    assert first.area_rows == second.area_rows == []
+    assert first.mounting_locations == second.mounting_locations == []
+    retried = service.create_office_batch(site_id=site.id, current_user=actor, payload=payload)
+    assert retried.id == first.id
+
+
 def test_office_measurement_batch_requires_explicit_duplicate_confirmation():
     db = db_session()
     site = create_site(db)

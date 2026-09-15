@@ -6,6 +6,7 @@ import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
 import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
 import { formatMeasurementCount, formatMeasurementOverviewHours, formatMeasurementDetailHours, getMeasurementOverviewWindow, getMeasurementLocationPreviewCount, getMeasurementOfferDisplay } from "../lib/measurementReviewOverview";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
+import { getMeasurementOverviewTitle } from "../lib/measurementReviewOverview";
 import "./MeasurementReviewOverview.css";
 
 type Props = {
@@ -27,7 +28,8 @@ type Props = {
 };
 
 export function MeasurementReviewOverview(props: Props) {
-  const { site, batches, state, onState, loading, error, archive, title } = props;
+  const { site, batches, state, onState, loading, error, archive } = props;
+  const title = (batch: MobileMeasurementBatch) => getMeasurementOverviewTitle(batch, props.title(batch));
   const workspaceRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLElement>(null);
   const [height, setHeight] = useState(getExtraWorkOverviewMasterHeight(EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE));
@@ -177,7 +179,7 @@ export function MeasurementReviewOverview(props: Props) {
           </dl>
           {selected.origin === "OFFICE" || selected.area_location || selected.assigned_employee_name || archive ? <p className="measurement-overview-origin">
             {selected.origin === "OFFICE" ? `Im Büro angelegt${selected.created_by_name ? ` · von ${selected.created_by_name}` : ""}` : null}
-            {[selected.area_location,selected.assigned_employee_name].filter(Boolean).map(value=><span key={value}> · {value}</span>)}
+            {[selected.origin !== "OFFICE" ? selected.area_location : null,selected.assigned_employee_name].filter(Boolean).map(value=><span key={value}> · {value}</span>)}
             {archive ? <span> · Gelöscht {selected.deleted_at ? props.dateTime(selected.deleted_at) : "ohne Datum"}{selected.deleted_by_name ? ` · von ${selected.deleted_by_name}` : ""}</span> : null}
           </p> : null}
           <section><h4>Kunde &amp; Projekt</h4><dl className="measurement-overview-project">

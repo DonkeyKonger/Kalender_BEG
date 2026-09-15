@@ -77,6 +77,29 @@ test("offer names are safely rendered in full, including long names and archived
   assert.match(styles, /\.measurement-overview-offer-name\s*\{[^}]*overflow-wrap: anywhere;/);
 });
 
+test("office hints suffix the overview number without changing other measurement titles", () => {
+  for (const archive of [false, true]) {
+    for (const hint of [null, "", "  ", "  Technik   EG  "]) {
+      const batch = {...batches[0], origin:"OFFICE", area_location:hint};
+      const html = render({...props, archive, batches:[batch]});
+      const expected = hint?.trim() ? `${title(batch)} - Technik EG` : title(batch);
+      assert.ok(html.includes(`>${expected}</button>`));
+      assert.ok(html.includes(`>${expected}</h3>`));
+      assert.doesNotMatch(html, / ·   Technik/);
+    }
+  }
+  const worker = {...batches[0],origin:"MONTEUR",area_location:"Montageort"};
+  assert.ok(!render({...props,batches:[worker]}).includes(`${title(worker)} - Montageort`));
+  const longHint = "<Hinweis> & " + "Lang".repeat(70);
+  const html = render({...props,batches:[{...batches[0],origin:"OFFICE",area_location:longHint}]});
+  assert.ok(html.includes(" - &lt;Hinweis&gt; &amp; " + "Lang".repeat(70)));
+});
+
+test("overview search finds office hints alongside their measurement numbers", () => {
+  const html = render({...props,batches:[{...batches[0],origin:"OFFICE",area_location:"Technikzentrale"}],state:{...state,query:"Technikzentrale"}});
+  assert.ok(html.includes(`${title(batches[0])} - Technikzentrale`));
+});
+
 test("initial rendered page uses the same compact row capacity as Zusatzaufträge", () => {
   const html = render(props);
   assert.equal((html.match(/class="measurement-overview-select"/g) ?? []).length,

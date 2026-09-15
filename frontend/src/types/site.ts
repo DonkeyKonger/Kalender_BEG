@@ -348,7 +348,7 @@ export type MobileMeasurementBatch = {
 };
 
 export type OfficeMeasurementBatchPayload = {
-  area_location: string;
+  area_location?: string | null;
   measurement_date: string;
   assigned_employee_id: number | null;
   request_id: string;

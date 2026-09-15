@@ -397,9 +397,7 @@ class MeasurementService:
                 active_base_id=self._get_active_measurement_base_id(site_id),
             )
 
-        area_location = " ".join(payload.area_location.split())
-        if not area_location:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bereich/Ort ist erforderlich.")
+        area_location = " ".join((payload.area_location or "").split()) or None
 
         assigned_employee = None
         if payload.assigned_employee_id is not None:
@@ -431,10 +429,10 @@ class MeasurementService:
                 SiteMeasurementBatch.measurement_date == payload.measurement_date,
             )
         )
-        if duplicate is not None and not payload.allow_duplicate:
+        if area_location and duplicate is not None and not payload.allow_duplicate:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                "Für diesen Bereich und dieses Datum besteht bereits ein offener Entwurf. "
+                "Für diesen Hinweis und dieses Datum besteht bereits ein offener Entwurf. "
                 "Die bewusste Anlage eines weiteren Aufmaßes muss bestätigt werden.",
             )
 

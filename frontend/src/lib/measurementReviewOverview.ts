@@ -3,6 +3,11 @@ import { getExtraWorkOverviewPageWindow } from "./extraWorkOverview";
 
 export type MeasurementOverviewState = { selectedId: number | null; query: string; page: number };
 
+export function getMeasurementOverviewTitle(batch: MobileMeasurementBatch, numberTitle: string): string {
+  const hint = batch.origin === "OFFICE" ? batch.area_location?.trim().replace(/\s+/g, " ") : null;
+  return hint ? `${numberTitle} - ${hint}` : numberTitle;
+}
+
 export function getMeasurementOfferDisplay(batch: MobileMeasurementBatch) {
   const offerId = batch.offer_id ?? batch.measurement_base_id;
   if (offerId == null) {

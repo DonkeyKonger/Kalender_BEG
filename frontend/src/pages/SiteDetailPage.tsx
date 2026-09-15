@@ -6273,10 +6273,6 @@ function MeasurementReviewPanel({
 
   async function submitCreateBatch(): Promise<void> {
     const areaLocation = createAreaLocation.trim().split(/\s+/).join(" ");
-    if (!areaLocation) {
-      setCreateError("Bitte einen Bereich oder Ort angeben.");
-      return;
-    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(createMeasurementDate)) {
       setCreateError("Bitte ein gültiges Aufmaßdatum angeben.");
       return;
@@ -6285,7 +6281,7 @@ function MeasurementReviewPanel({
     setCreateError(null);
     try {
       await onCreateBatch({
-        area_location: areaLocation,
+        area_location: areaLocation || null,
         measurement_date: createMeasurementDate,
         assigned_employee_id: createEmployeeId ? Number(createEmployeeId) : null,
         request_id: createRequestId,
@@ -6530,12 +6526,12 @@ function MeasurementReviewPanel({
             </header>
             <div className="measurement-create-modal-form">
               <label className="measurement-create-field" htmlFor={`${createAreaLabelId}-input`}>
-                <span id={createAreaLabelId}>Bereich/Ort *</span>
+                <span id={createAreaLabelId}>Hinweis</span>
                 <input
                   autoFocus
                   id={`${createAreaLabelId}-input`}
                   maxLength={260}
-                  placeholder="z. B. 1. Obergeschoss"
+                  placeholder="Optionaler Hinweis zum Aufmaß"
                   type="text"
                   value={createAreaLocation}
                   onChange={(event) => {
@@ -6580,7 +6576,7 @@ function MeasurementReviewPanel({
               </div>
               {matchingDraft || forceDuplicateConfirmation ? (
                 <div className="measurement-create-duplicate-note" role="note">
-                  Für diesen Bereich und dieses Datum besteht bereits ein offener Entwurf. Ein weiteres Aufmaß kann bewusst trotzdem angelegt werden.
+                  Für diesen Hinweis und dieses Datum besteht bereits ein offener Entwurf. Ein weiteres Aufmaß kann bewusst trotzdem angelegt werden.
                 </div>
               ) : null}
               {createError ? <div className="project-record-empty-state is-error"><strong>{createError}</strong></div> : null}
@@ -6598,7 +6594,6 @@ function MeasurementReviewPanel({
                 className="primary-action"
                 disabled={
                   isCreatingBatch
-                  || !createAreaLocation.trim()
                   || !createMeasurementDate
                 }
                 type="button"

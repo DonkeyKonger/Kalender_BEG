@@ -19,7 +19,10 @@ test("desktop measurement creation uses the protected shared measurement endpoin
 test("measurement review exposes the office dialog and reuses the controlled picker", () => {
   assert.match(overviewSource, /onClick=\{props.onCreate\}[^\n]*Aufmaß anlegen/);
   assert.match(pageSource, /canCreate=\{canCreateBatch\} onCreate=\{openCreateDialog\}/);
-  assert.match(pageSource, /Bereich\/Ort \*/);
+  assert.match(pageSource, />Hinweis<\/span>/);
+  assert.doesNotMatch(pageSource, /Bitte einen Bereich oder Ort angeben/);
+  assert.doesNotMatch(pageSource, /\|\| !createAreaLocation.trim\(\)/);
+  assert.match(pageSource, /area_location: areaLocation \|\| null/);
   assert.match(pageSource, /Aufmaßdatum \*/);
   assert.match(pageSource, /Verantwortlicher Monteur/);
   assert.match(pageSource, /<DashboardNotePicker/);

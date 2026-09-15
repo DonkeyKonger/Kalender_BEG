@@ -166,7 +166,9 @@ class MobileMeasurementBatchBlockReasonsRead(BaseModel):
 
 
 class OfficeMeasurementBatchCreate(BaseModel):
-    area_location: str = Field(..., min_length=1, max_length=260)
+    # Keep the existing API field for compatibility; office creation uses it as
+    # an optional display hint, not as a mounting location.
+    area_location: str | None = Field(default=None, max_length=260)
     measurement_date: date
     assigned_employee_id: int | None = Field(default=None, gt=0)
     request_id: str = Field(..., min_length=8, max_length=64)
