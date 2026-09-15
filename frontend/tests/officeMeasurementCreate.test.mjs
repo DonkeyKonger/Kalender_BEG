@@ -9,6 +9,18 @@ const overviewSource = readFileSync(new URL("../src/components/MeasurementReview
 const apiSource = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
+test("measurement action menu is heading-free, opens leftwards and offers reversible archiving", () => {
+  assert.match(pageSource, /menuLabel="Aufmaßaktionen" menuHeading="" menuAlign="end"/);
+  assert.match(pageSource, /menuHeading \? <strong>\{menuHeading\}<\/strong> : null/);
+  assert.match(pageSource, /archiveMode \? "Wiederherstellen" : "Aufmaß Archivieren"/);
+  assert.match(pageSource, /wirklich archivieren\? Das Aufmaß wird ins Archiv verschoben und kann wiederhergestellt werden/);
+  assert.match(pageSource, /wurde archiviert\./);
+  assert.doesNotMatch(pageSource, /Aufmaß löschen/);
+  assert.match(pageSource, /menuAlign === "end" \? rect.right - width : rect.left/);
+  assert.match(pageSource, /document.documentElement.clientWidth/);
+  assert.match(pageSource, /Math.max\(8, Math.min\(anchorLeft, viewportWidth - width - 8\)\)/);
+});
+
 test("desktop measurement creation uses the protected shared measurement endpoint", () => {
   assert.match(apiSource, /createOfficeMeasurementBatch/);
   assert.match(apiSource, /`\/sites\/\$\{siteId\}\/measurement-batches`/);

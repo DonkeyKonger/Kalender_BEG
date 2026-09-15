@@ -870,7 +870,7 @@ export function SiteDetailPage() {
       return;
     }
     const displayTitle = formatMeasurementPackageNumber(site.site_number, batch.number, batch.title);
-    if (!window.confirm(`${displayTitle} wirklich löschen? Das Aufmaß wird ins Archiv verschoben und kann wiederhergestellt werden.`)) {
+    if (!window.confirm(`${displayTitle} wirklich archivieren? Das Aufmaß wird ins Archiv verschoben und kann wiederhergestellt werden.`)) {
       return;
     }
 
@@ -888,9 +888,9 @@ export function SiteDetailPage() {
       setMeasurementTimeAnalysis(null);
       setMeasurementTimeAnalysisLoaded(false);
       setMeasurementTimeAnalysisError(null);
-      setMeasurementReviewMessage(`${displayTitle} wurde gelöscht.`);
+      setMeasurementReviewMessage(`${displayTitle} wurde archiviert.`);
     } catch (requestError) {
-      setMeasurementReviewError(readApiError(requestError, "Aufmaß konnte nicht gelöscht werden."));
+      setMeasurementReviewError(readApiError(requestError, "Aufmaß konnte nicht archiviert werden."));
       throw requestError;
     } finally {
       setMeasurementReviewActionLoading(false);
@@ -2960,6 +2960,7 @@ function ProjectRecordStatusControl<T extends string>({
   showCaret = true,
   menuLabel = "Status ändern",
   menuHeading = "Status setzen auf",
+  menuAlign = "start",
 }: {
   active: boolean;
   ariaLabel: string;
@@ -2972,6 +2973,7 @@ function ProjectRecordStatusControl<T extends string>({
   showCaret?: boolean;
   menuLabel?: string;
   menuHeading?: string;
+  menuAlign?: "start" | "end";
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -2985,14 +2987,17 @@ function ProjectRecordStatusControl<T extends string>({
       const trigger = triggerRef.current;
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
-      const width = 190;
-      const estimatedHeight = 34 + options.length * 32;
-      const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
-      const opensAbove = window.innerHeight - rect.bottom < estimatedHeight + 8 && rect.top > estimatedHeight;
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const width = popoverRef.current?.getBoundingClientRect().width ?? 190;
+      const estimatedHeight = popoverRef.current?.getBoundingClientRect().height ?? ((menuHeading ? 34 : 0) + options.length * 32);
+      const anchorLeft = menuAlign === "end" ? rect.right - width : rect.left;
+      const left = Math.max(8, Math.min(anchorLeft, viewportWidth - width - 8));
+      const opensAbove = viewportHeight - rect.bottom < estimatedHeight + 8 && rect.top > estimatedHeight;
       const top = opensAbove
         ? rect.top - estimatedHeight - 4
-        : Math.min(window.innerHeight - estimatedHeight - 8, rect.bottom + 4);
-      setPosition({ left, top: Math.max(8, top) });
+        : Math.min(viewportHeight - estimatedHeight - 8, rect.bottom + 4);
+      setPosition({ left, top: Math.max(8, Math.min(top, viewportHeight - estimatedHeight - 8)) });
     };
     updatePosition();
     window.addEventListener("resize", updatePosition);
@@ -3001,7 +3006,7 @@ function ProjectRecordStatusControl<T extends string>({
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [active, options.length]);
+  }, [active, options.length, menuHeading, menuAlign]);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -3051,7 +3056,7 @@ function ProjectRecordStatusControl<T extends string>({
           role="menu"
           style={{ left: position.left, top: position.top }}
         >
-          <strong>{menuHeading}</strong>
+          {menuHeading ? <strong>{menuHeading}</strong> : null}
           {options.map((option) => (
             <button key={option.value} role="menuitem" type="button" onClick={() => onSelect(option.value)}>
               {option.label}
@@ -6483,10 +6488,10 @@ function MeasurementReviewPanel({
         renderActions={(batch) => canCreateBatch ? <div className="measurement-overview-more">
           <ProjectRecordStatusControl
             active={openOverviewActionId === batch.id} label="⋯" showCaret={false}
-            menuLabel="Aufmaßaktionen" menuHeading="Weitere Aktionen"
+            menuLabel="Aufmaßaktionen" menuHeading="" menuAlign="end"
             ariaLabel={`Weitere Aktionen für ${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}`}
             busy={reviewActionLoading || deletingBatchId !== null || restoringBatchId !== null}
-            options={[{value: "action", label: archiveMode ? "Wiederherstellen" : "Aufmaß löschen"}]}
+            options={[{value: "action", label: archiveMode ? "Wiederherstellen" : "Aufmaß Archivieren"}]}
             onClose={() => setOpenOverviewActionId(null)}
             onToggle={() => setOpenOverviewActionId(current => current === batch.id ? null : batch.id)}
             onSelect={() => { setOpenOverviewActionId(null); if (archiveMode) void restoreBatch(batch); else void deleteBatch(batch); }}

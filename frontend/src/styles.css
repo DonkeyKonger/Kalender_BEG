@@ -15302,6 +15302,7 @@ body.mobile-modal-scroll-locked {
   z-index: 1400;
   display: grid;
   width: 190px;
+  max-width: calc(100vw - 16px);
   border: 1px solid #b9c7d9;
   border-radius: 0;
   background: #fff;
