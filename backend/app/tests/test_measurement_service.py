@@ -2444,14 +2444,12 @@ def test_site_free_item_creates_office_extra_position_with_entry():
     assert cleared.id == created.id
     assert cleared.position == "FREI-1"
 
-    with pytest.raises(HTTPException) as delete_error:
-        MeasurementService(db).delete_site_free_item(
-            site_id=site.id,
-            batch_id=batch.id,
-            measurement_item_id=created.id,
-        )
-    assert delete_error.value.status_code == 404
-    assert db.get(SiteMeasurementItem, created.id) is not None
+    MeasurementService(db).delete_site_free_item(
+        site_id=site.id,
+        batch_id=batch.id,
+        measurement_item_id=created.id,
+    )
+    assert db.get(SiteMeasurementItem, created.id) is None
 
 
 def test_site_free_items_append_to_persisted_batch_order_and_keep_it_when_linked():

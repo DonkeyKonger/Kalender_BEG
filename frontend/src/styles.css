@@ -32976,14 +32976,17 @@ body.mobile-modal-scroll-locked {
 
 .measurement-review-detail.is-table-view .measurement-free-position-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 22px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-items: center;
   gap: 3px;
 }
 
 .measurement-review-detail.is-table-view .measurement-free-position-delete {
-  width: 22px;
-  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
   border: 1px solid #c7d2e0;
   border-radius: 0;
   background: #ffffff;
@@ -32993,6 +32996,13 @@ body.mobile-modal-scroll-locked {
   font-weight: 900;
   line-height: 1;
   padding: 0;
+}
+
+.measurement-review-detail.is-table-view .measurement-free-position-delete svg {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  stroke-width: 3;
 }
 
 .measurement-review-detail.is-table-view .measurement-free-position-delete:hover,

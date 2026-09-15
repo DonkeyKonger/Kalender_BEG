@@ -55,6 +55,21 @@ test("real offer positions render all five editable fields, and all are disabled
   }
 });
 
+test("all persisted columns have the same small centered delete control in both modes", () => {
+  for (const freePositionOnly of [true, false]) {
+    for (const canEditRows of [true, false]) {
+      const html = render({ freePositionOnly, canEditRows });
+      const button = html.match(/<button[^>]+aria-label="Position 1.01 löschen"[^>]*>[\s\S]*?<\/button>/)?.[0];
+      assert.ok(button);
+      assert.equal(button.includes('disabled=""'), !canEditRows);
+      assert.match(button, /<svg[^>]+width="10"[^>]+height="10"/);
+    }
+  }
+  const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  const rule = styles.match(/\.measurement-review-detail\.is-table-view \.measurement-free-position-delete\s*\{([^}]+)\}/)[1];
+  for (const declaration of ["width: 16px", "height: 16px", "align-items: center", "justify-content: center"]) assert.ok(rule.includes(declaration));
+});
+
 test("all review descriptions reserve six lines, including new and completed positions", () => {
   for (const canEditRows of [true, false]) {
     for (const description of ["Kurz", "Lange Positionsbeschreibung ".repeat(30)]) {

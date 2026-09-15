@@ -1070,8 +1070,12 @@ export function SiteDetailPage() {
       await api.deleteSiteMeasurementFreeItem(site.id, batch.id, measurementItemId);
       setMeasurementBatchItems((current) => current.filter((item) => item.id !== measurementItemId));
       invalidateMeasurementContentSummary();
+      setMeasurementTimesheet(null);
+      setMeasurementLoaded(false);
+      setMeasurementTimeAnalysis(null);
+      setMeasurementTimeAnalysisLoaded(false);
     } catch (requestError) {
-      setMeasurementReviewError(readApiError(requestError, "Freie Position konnte nicht gelöscht werden."));
+      setMeasurementReviewError(readApiError(requestError, "Position konnte nicht gelöscht werden."));
       throw requestError;
     }
   }
@@ -7019,6 +7023,16 @@ function MeasurementReviewTable({
     });
   }
 
+  function removeManualColumnDraft(columnKey: string): void {
+    if (!canEditRows || reviewActionLoading || [...savingCellKeysRef.current].some(key => key.endsWith(`-${columnKey}`))) return;
+    const draft = getManualColumnDraft(columnKey);
+    if (!window.confirm(`Neue Position ${draft.position || draft.description} wirklich entfernen?`)) return;
+    tableWrapRef.current?.querySelectorAll<HTMLInputElement>(`input[data-manual-column="${columnKey}"]`)
+      .forEach(input => { input.value = ""; });
+    clearManualColumnDraft(columnKey);
+    setSuggestionState(null);
+  }
+
   async function createFreeItemFromHeaderDraft(
     columnKey: string,
     patch: Partial<MeasurementManualColumnDraft> = {},
@@ -7201,15 +7215,17 @@ function MeasurementReviewTable({
   }
 
   async function deleteFreeItem(item: MobileMeasurementItem): Promise<void> {
-    if (savingPositionItemId === item.id) {
+    if (!canEditRows || reviewActionLoading || savingPositionItemId === item.id) {
       return;
     }
-    if (!window.confirm(`Freie Position ${getVisibleMeasurementPosition(item) || item.description} wirklich löschen?`)) {
+    if (!window.confirm(`Position ${getVisibleMeasurementPosition(item) || item.description} samt Mengen wirklich aus diesem Aufmaß entfernen?`)) {
       return;
     }
     setSavingPositionItemId(item.id);
     try {
       await onFreeItemDelete(item);
+    } catch {
+      // The parent displays the API error; keep the column available for retry.
     } finally {
       setSavingPositionItemId(null);
     }
@@ -7301,19 +7317,18 @@ function MeasurementReviewTable({
                 key={column.key}
                 scope="col"
               >
-                {freePositionOnly ? (
                   <div className="measurement-free-position-head">
                     {positionInput}
                     <button
-                      aria-label={`Freie Position ${visiblePosition || column.item.description} löschen`}
+                      aria-label={`Position ${visiblePosition || column.item.description} löschen`}
                       className="measurement-free-position-delete"
                       disabled={!canEditRows || reviewActionLoading || isSavingPosition}
-                      title="Freie Position löschen"
+                      title="Position aus diesem Aufmaß entfernen"
                       type="button"
+                      onMouseDown={(event) => event.preventDefault()}
                       onClick={() => void deleteFreeItem(column.item)}
-                    >×</button>
+                    ><X size={10} aria-hidden="true" /></button>
                   </div>
-                ) : positionInput}
                 {isSuggestionOpen ? (
                   <div className={`measurement-position-suggestions is-aligned-${suggestionState.alignment}`} role="listbox">
                     {suggestionMatches.map((suggestion, index) => (
@@ -7345,6 +7360,7 @@ function MeasurementReviewTable({
                 );
               }
               const draft = getManualColumnDraft(column.key);
+              const hasDraft = Boolean(draft.position.trim() || draft.description.trim() || draft.unit.trim());
               const isSuggestionOpen = suggestionState?.columnKey === column.key && suggestionMatches.length > 0;
               return (
               <th
@@ -7353,6 +7369,7 @@ function MeasurementReviewTable({
                 key={column.key}
                 scope="col"
               >
+                <div className={hasDraft ? "measurement-free-position-head" : undefined}>
                 <input
                   className="measurement-placeholder-header-input"
                   value={draft.position}
@@ -7393,6 +7410,12 @@ function MeasurementReviewTable({
                     }
                   }}
                 />
+                {hasDraft ? <button type="button" className="measurement-free-position-delete"
+                  aria-label={`Neue Position ${draft.position || draft.description} entfernen`}
+                  title="Neue Position entfernen" disabled={!canEditRows || reviewActionLoading}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => removeManualColumnDraft(column.key)}><X size={10} aria-hidden="true" /></button> : null}
+                </div>
                 {isSuggestionOpen ? (
                   <div className={`measurement-position-suggestions is-aligned-${suggestionState.alignment}`} role="listbox">
                     {suggestionMatches.map((item, index) => (

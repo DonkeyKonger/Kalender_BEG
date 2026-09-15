@@ -238,6 +238,46 @@ def test_header_only_signed_position_survives_deletion_in_pdf_and_long_text_is_c
     assert text.count("Alter") == 80 and text.count("Neuer") == 80
 
 
+@pytest.mark.parametrize("signed", [False, True])
+def test_remove_worker_column_only_deletes_current_batch_quantities(case, signed):
+    c = case
+    if signed:
+        sign(c)
+    snapshot = deepcopy(c.batch.customer_signed_snapshot)
+    edit(c, position="9.99", description="Korrigierte Spalte")
+    c.service.create_site_entry(site_id=c.site.id, batch_id=c.batch.id, measurement_item_id=c.item.id,
+        current_user=c.user, payload=MeasurementEntryCreate(area_or_comment="OG", quantity=2))
+    item_id = c.item.id
+    c.service.delete_site_free_item(site_id=c.site.id, batch_id=c.batch.id, measurement_item_id=item_id)
+    c.db.expire_all()
+    assert not c.batch.entries
+    assert str(item_id) not in c.batch.item_overrides
+    assert c.item.position == "1.01.05.140"
+    assert not c.item.is_hidden
+    assert c.other.entries[0].quantity == Decimal("12")
+    assert c.batch.customer_signed_snapshot == snapshot
+    assert not any(item.entries for item in c.service.list_site_batch_items(site_id=c.site.id, batch_id=c.batch.id))
+    if signed:
+        positions, _, cells, _ = MeasurementPdfService(c.db)._build_matrix(c.batch, mode="checked")
+        assert next(position for position in positions if position.item_id == item_id).is_removed
+        assert cells[("eg btb", item_id)].is_removed
+
+
+def test_delete_rejects_catalog_only_and_foreign_columns(case):
+    c = case
+    catalog_only = SiteMeasurementItem(site=c.site, measurement_base=c.base, position="2", description="Katalog", unit="m", sort_order=2)
+    c.db.add(catalog_only)
+    foreign = c.service.create_site_free_item(site_id=c.site.id, batch_id=c.other.id, current_user=c.user,
+        payload=MobileMeasurementFreeItemCreate(position="3", description="Anderes Aufmaß", unit="m", quantity=1))
+    c.db.commit()
+    for item_id in [catalog_only.id, foreign.id]:
+        with pytest.raises(HTTPException) as error:
+            c.service.delete_site_free_item(site_id=c.site.id, batch_id=c.batch.id, measurement_item_id=item_id)
+        assert error.value.status_code == 404
+        assert c.db.get(SiteMeasurementItem, item_id) is not None
+    assert c.entry.quantity == Decimal("34")
+
+
 def test_overrides_migration_preserves_existing_data():
     import importlib.util
     from pathlib import Path

@@ -785,15 +785,21 @@ class MeasurementService:
         self._ensure_site_batch_can_be_edited_in_office(batch)
         item = self.db.get(SiteMeasurementItem, measurement_item_id)
         if (
-            batch.position_mode != MeasurementPositionMode.BLANK.value
-            or item is None
-            or item.site_id != site_id
-            or item.measurement_batch_id != batch.id
-            or item.is_hidden
-            or not item.is_free_position
+            item is None
+            or not self._measurement_item_is_available_for_batch(batch=batch, item=item)
         ):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Manuelle Aufmaßposition nicht gefunden.")
-        self.db.delete(item)
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßposition nicht gefunden.")
+        if item.measurement_batch_id == batch.id:
+            self.db.delete(item)
+        else:
+            # Shared offer positions must remain available in the catalog and
+            # other batches. Only remove this batch's quantities/column.
+            entries = [entry for entry in batch.entries if entry.measurement_item_id == item.id]
+            if not entries:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Position ist nicht in diesem Aufmaß enthalten.")
+            for entry in entries:
+                self.db.delete(entry)
+        batch.item_overrides = {key: value for key, value in (batch.item_overrides or {}).items() if key != str(item.id)}
         batch.updated_at = datetime.now(timezone.utc)
         self.db.commit()
 
