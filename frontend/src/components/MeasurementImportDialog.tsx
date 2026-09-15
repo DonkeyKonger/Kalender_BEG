@@ -6,6 +6,7 @@ type Props = {
   fileName: string;
   mode: "append_existing" | "create_new";
   bases: { id: number; name: string }[];
+  hasExistingBase: boolean;
   selectedBaseId: number | null;
   newBaseName: string;
   pending: boolean;
@@ -72,17 +73,19 @@ export function MeasurementImportDialog(props: Props) {
             <span><strong>Neues Aufmaßblatt erstellen</strong><small>Für ein eigenständiges Aufmaß.</small></span>
           </label>
         </div>
-        {props.mode === "append_existing" ? <div className="measurement-import-dialog-field">
-          <label htmlFor={`${id}-base`}>Aufmaßblatt</label>
-          <select id={`${id}-base`} value={props.selectedBaseId ?? ""} disabled={busy || !props.bases.length} onChange={(event) => props.onBase(Number(event.target.value) || null)}>
+        <div className="measurement-import-dialog-field">
+          <label htmlFor={`${id}-${props.mode === "append_existing" ? "base" : "name"}`}>
+            <span className={props.mode !== "append_existing" ? "is-concealed" : undefined} aria-hidden={props.mode !== "append_existing"}>Aufmaßblatt</span>
+            <span className={props.mode !== "create_new" ? "is-concealed" : undefined} aria-hidden={props.mode !== "create_new"}>Name des Aufmaßblatts</span>
+          </label>
+          {props.mode === "append_existing" ? <select id={`${id}-base`} value={props.selectedBaseId ?? ""} disabled={busy || !props.bases.length} onChange={(event) => props.onBase(Number(event.target.value) || null)}>
             {!props.bases.length ? <option value="">Kein Aufmaßblatt verfügbar</option> : null}
             {props.bases.map((base) => <option key={base.id} value={base.id}>{base.name}</option>)}
-          </select>
-        </div> : <div className="measurement-import-dialog-field">
-          <label htmlFor={`${id}-name`}>Name des Aufmaßblatts</label>
-          <input id={`${id}-name`} value={props.newBaseName} disabled={busy} onChange={(event) => props.onName(event.target.value)} placeholder="Name des Aufmaßblatts" />
-          <small>Das neue Aufmaßblatt wird nach dem Import automatisch aktiviert.</small>
-        </div>}
+          </select> : <input id={`${id}-name`} value={props.newBaseName} disabled={busy} onChange={(event) => props.onName(event.target.value)} placeholder="Name des Aufmaßblatts" />}
+          {props.hasExistingBase ? <small className={`measurement-import-dialog-warning${props.mode !== "create_new" ? " is-concealed" : ""}`} aria-hidden={props.mode !== "create_new"}>
+            Nach dem Import wird das alte Aufmaßblatt durch das neue Aufmaßblatt ersetzt
+          </small> : null}
+        </div>
         {props.error ? <p className="measurement-import-dialog-error" role="alert">{props.error}</p> : null}
       </div>
       <footer className="measurement-import-dialog-footer">

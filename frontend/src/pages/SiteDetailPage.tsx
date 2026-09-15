@@ -5216,6 +5216,7 @@ function MeasurementTab({
           fileName={pendingFile.name}
           mode={importMode}
           bases={selectableBases.map((base) => ({ id: base.id, name: formatMeasurementBaseName(base) }))}
+          hasExistingBase={bases.length > 0}
           selectedBaseId={selectedBaseId}
           newBaseName={newBaseName}
           pending={isImporting}

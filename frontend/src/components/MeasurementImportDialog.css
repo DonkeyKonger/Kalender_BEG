@@ -36,7 +36,12 @@
 .measurement-import-dialog-option.is-disabled { opacity: .55; cursor: not-allowed; }
 .measurement-import-dialog-option:focus-within { outline: 2px solid #2878e8; outline-offset: 2px; }
 .measurement-import-dialog-field { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 8px 16px; }
-.measurement-import-dialog-field label { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.measurement-import-dialog-field label { display: grid; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+/* Both labels and the conditional warning reserve their wrapped height so
+   switching modes cannot move or resize the dialog, including on mobile. */
+.measurement-import-dialog-field label > span { grid-area: 1 / 1; }
+.measurement-import-dialog-field .is-concealed { visibility: hidden; }
+.measurement-import-dialog-field .measurement-import-dialog-warning { color: #b45309; }
 .measurement-import-dialog .measurement-import-dialog-field select,
 .measurement-import-dialog .measurement-import-dialog-field input { min-width: 0; max-width: 100%; width: 100%; height: 38px; padding: 7px 10px; border: 1px solid var(--import-border); border-radius: 3px; background: #fff; color: var(--import-text); font: inherit; font-size: 14px; }
 .measurement-import-dialog-field small { grid-column: 2; font-size: 13px; color: #516681; line-height: 18px; }

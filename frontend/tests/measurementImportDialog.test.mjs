@@ -15,7 +15,7 @@ const compiled = await build({
 });
 const module = {exports:{}};
 new Function("require","module","exports",compiled.outputFiles[0].text)(createRequire(import.meta.url),module,module.exports);
-const render = overrides => module.exports.render({fileName:"Auftrag.pdf",mode:"append_existing",bases:[{id:4,name:"Bestand"}],selectedBaseId:4,newBaseName:"Hauptauftrag",pending:false,error:null,onMode(){},onBase(){},onName(){},onClose(){},onSubmit:async()=>{},...overrides});
+const render = overrides => module.exports.render({fileName:"Auftrag.pdf",mode:"append_existing",bases:[{id:4,name:"Bestand"}],hasExistingBase:true,selectedBaseId:4,newBaseName:"Hauptauftrag",pending:false,error:null,onMode(){},onBase(){},onName(){},onClose(){},onSubmit:async()=>{},...overrides});
 
 test("new imports retain Hauptauftrag default and mode-specific request parameters", () => {
   assert.match(page, /const MEASUREMENT_IMPORT_DEFAULT_NAME = "Hauptauftrag"/);
@@ -68,4 +68,17 @@ test("long file and offer names are escaped and preserved in full", () => {
   assert.doesNotMatch(html, /<script>/);
   assert.equal((html.match(/Auftrag_&lt;script&gt;&amp;_/g)||[]).length,2);
   assert.ok(html.includes('LangerName'.repeat(30)));
+});
+
+test("replacement warning only appears for a new sheet when any previous sheet exists", () => {
+  const warning = "Nach dem Import wird das alte Aufmaßblatt durch das neue Aufmaßblatt ersetzt";
+  const newSheet = render({mode:"create_new"});
+  assert.ok(newSheet.includes(warning));
+  assert.match(newSheet, /measurement-import-dialog-warning" aria-hidden="false"/);
+  assert.match(render(), /measurement-import-dialog-warning is-concealed" aria-hidden="true"/);
+  assert.ok(!render({mode:"create_new",hasExistingBase:false,bases:[]}).includes(warning));
+  // Previously stored closed/archived sheets count too, even if not appendable.
+  assert.ok(render({mode:"create_new",hasExistingBase:true,bases:[]}).includes(warning));
+  assert.match(page, /hasExistingBase=\{bases.length > 0\}/);
+  assert.doesNotMatch(newSheet, /Das neue Aufmaßblatt wird nach dem Import automatisch aktiviert/);
 });
