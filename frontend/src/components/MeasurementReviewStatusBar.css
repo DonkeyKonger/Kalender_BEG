@@ -129,6 +129,11 @@
   flex-shrink: 0;
 }
 
+.measurement-review-process-actions .secondary-action {
+  border: 1px solid var(--ct-border);
+  background: var(--ct-surface);
+}
+
 .measurement-review-statusbar button:disabled {
   cursor: not-allowed;
   opacity: 0.55;

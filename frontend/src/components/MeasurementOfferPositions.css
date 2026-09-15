@@ -1,0 +1,55 @@
+.measurement-review-content { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.measurement-review-content.has-offer { grid-template-columns: minmax(0, 4fr) minmax(260px, 1fr); gap: 12px; }
+.measurement-review-main { min-width: 0; }
+.measurement-offer-sidebar {
+  min-width: 0;
+  min-height: 0;
+  margin-top: 8px;
+  contain: size;
+  overflow: hidden;
+  border: 1px solid #c7d2e0;
+}
+
+@media (max-width: 700px) {
+  .measurement-review-content.has-offer { grid-template-columns: minmax(0, 1fr); }
+  .measurement-offer-sidebar { height: 360px; margin-top: 0; }
+}
+
+.measurement-offer-positions {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  background: #fff;
+  color: #172b49;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.measurement-offer-positions > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #d6e0ee;
+}
+
+.measurement-offer-positions h2 { margin: 0; font-size: 17px; }
+.measurement-offer-positions header p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.measurement-offer-positions header button { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; }
+.measurement-offer-positions button { border: 1px solid #c7d2e0; background: #fff; color: inherit; cursor: pointer; }
+.measurement-offer-positions button:focus-visible, .measurement-offer-search:focus-within { outline: 2px solid #3478db; outline-offset: 1px; }
+.measurement-offer-search { display: flex; align-items: center; gap: 8px; margin: 12px; padding: 8px; border: 1px solid #c7d2e0; }
+.measurement-offer-search svg { flex-shrink: 0; }
+.measurement-offer-search input { width: 100%; min-width: 0; border: 0; outline: none; font: inherit; color: inherit; background: #fff; }
+.measurement-offer-list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.measurement-offer-list > p, .measurement-offer-list > div { padding: 0 16px; }
+.measurement-offer-list table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.measurement-offer-list th, .measurement-offer-list td { padding: 9px 8px; vertical-align: top; text-align: left; overflow-wrap: anywhere; border-bottom: 1px solid #e1e7f0; }
+.measurement-offer-list thead th { position: sticky; top: 0; z-index: 1; background: #f0f4f9; color: #526278; font-size: 11px; }
+.measurement-offer-list th:first-child { width: 80px; }
+.measurement-offer-list th:last-child { width: 64px; }
+.measurement-offer-list tbody tr:nth-child(even) { background: #fafbfd; }
+.measurement-offer-positions > footer { padding: 10px 12px; border-top: 1px solid #d6e0ee; color: #526278; }

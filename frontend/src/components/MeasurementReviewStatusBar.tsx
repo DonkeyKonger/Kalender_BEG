@@ -1,4 +1,5 @@
 import { ArrowRight, Check, RotateCcw } from "lucide-react";
+import type { ReactNode } from "react";
 import type { MobileMeasurementBatch } from "../types/site";
 import { getMeasurementReviewSteps } from "../lib/measurementReviewSteps";
 import "./MeasurementReviewStatusBar.css";
@@ -8,6 +9,7 @@ type Props = {
   busy: boolean;
   isBilled: boolean;
   canReview: boolean;
+  additionalActions?: ReactNode;
   onRollbackStatus: (batch: MobileMeasurementBatch) => void;
   onMarkReviewed: (batch: MobileMeasurementBatch) => void;
   onMarkBilled: (batch: MobileMeasurementBatch) => void;
@@ -75,6 +77,7 @@ export function MeasurementReviewStatusBar(props: Props) {
             </button>
           </>
         ) : null}
+        {props.additionalActions}
       </div>
     </div>
   );

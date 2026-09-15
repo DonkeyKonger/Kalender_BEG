@@ -3,6 +3,7 @@ import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDial
 import { MeasurementReviewOverview } from "../components/MeasurementReviewOverview";
 import { MeasurementImportDialog } from "../components/MeasurementImportDialog";
 import { MeasurementReviewStatusBar } from "../components/MeasurementReviewStatusBar";
+import { MeasurementOfferViewer } from "../components/MeasurementOfferViewer";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import { canEditMeasurementContent } from "../lib/measurementReviewContent";
 import { navigateMeasurementTable } from "../lib/measurementTableNavigation";
@@ -6218,6 +6219,13 @@ function MeasurementReviewPanel({
   const [, setEntryDrafts] = useState<Record<number, MeasurementEntryDraft>>({});
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
+  const [isOfferVisible, setIsOfferVisible] = useState(false);
+  const offerTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => { setIsOfferVisible(false); }, [selectedBatch?.id]);
+  function closeOffer() {
+    setIsOfferVisible(false);
+    offerTrigger.current?.focus({ preventScroll: true });
+  }
   const [overviewState, setOverviewState] = useState<MeasurementOverviewState>({ selectedId: null, query: "", page: 1 });
   useLayoutEffect(() => {
     setOverviewState({ selectedId: null, query: "", page: 1 });
@@ -6463,6 +6471,8 @@ function MeasurementReviewPanel({
         <MeasurementReviewStatusBar
           batch={selectedBatch} busy={reviewActionLoading}
           isBilled={isBilled} canReview={!isOfficeCreatedBatch && !isReviewed && !isCustomerSigned}
+          additionalActions={<button ref={offerTrigger} type="button" className="secondary-action" aria-expanded={isOfferVisible}
+            onClick={() => isOfferVisible ? closeOffer() : setIsOfferVisible(true)}><FileText size={15} aria-hidden="true" />Angebot anzeigen</button>}
           onRollbackStatus={onRollbackStatus} onMarkReviewed={onMarkReviewed} onMarkBilled={onMarkBilled}
         />
 
@@ -6474,6 +6484,8 @@ function MeasurementReviewPanel({
         {reviewMessage ? <div className="project-record-empty-state is-success">{reviewMessage}</div> : null}
         {reviewError ? <div className="project-record-empty-state is-error"><strong>{reviewError}</strong></div> : null}
         {inlineError ? <div className="project-record-empty-state is-error"><strong>{inlineError}</strong></div> : null}
+        <div className={`measurement-review-content${isOfferVisible ? " has-offer" : ""}`}>
+        <div className="measurement-review-main">
         {batchItemsLoading ? <div className="matrix-state">Aufmaßzeilen werden geladen...</div> : null}
         {!batchItemsLoading && !isFreePositionOnlyBatch && itemsWithEntries.length === 0 ? (
           <div className="project-record-empty-state">Keine Aufmaßzeilen in diesem Paket.</div>
@@ -6496,6 +6508,11 @@ function MeasurementReviewPanel({
             onFreeItemDelete={(item) => onDeleteFreeItem(selectedBatch, item.id)}
           />
         ) : null}
+        </div>
+        {isOfferVisible ? <MeasurementOfferViewer key={selectedBatch.id} siteId={site.id}
+          baseId={selectedBatch.offer_id ?? selectedBatch.measurement_base_id ?? null}
+          name={selectedBatch.offer_name ?? selectedBatch.measurement_base_name ?? null} onClose={closeOffer} /> : null}
+        </div>
       </div>
     );
   }
