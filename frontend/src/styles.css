@@ -12667,147 +12667,6 @@ body.mobile-modal-scroll-locked {
   box-shadow: inset 0 0 0 1px #1f2f46;
 }
 
-.measurement-import-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  background: rgba(23, 32, 51, 0.38);
-  padding: 20px;
-}
-
-.measurement-import-modal {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: max-content;
-  gap: 14px;
-  min-width: 0;
-  width: min(640px, 100%);
-  max-height: calc(100vh - 48px);
-  max-height: calc(100dvh - 48px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  border: 1px solid #d6d2ca;
-  border-radius: 10px;
-  background: #ffffff;
-  color: #1f2933;
-  padding: 16px;
-  box-shadow: 0 20px 50px rgba(23, 32, 51, 0.22);
-}
-
-.measurement-import-modal > *,
-.measurement-import-modal-header > div,
-.measurement-import-modal-options > *,
-.measurement-import-modal-options label span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.measurement-import-modal-header > button,
-.measurement-import-file-row > svg,
-.measurement-import-modal-options input[type="radio"] {
-  flex-shrink: 0;
-}
-
-.measurement-import-modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.measurement-import-modal-header h3 {
-  margin: 0;
-  font-size: 1.08rem;
-}
-
-.measurement-import-modal-header p {
-  margin: 5px 0 0;
-  color: #667085;
-  font-size: 0.9rem;
-}
-
-.measurement-import-file-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  max-width: 100%;
-  border: 1px solid #d6d2ca;
-  border-radius: 6px;
-  background: #f7f4ee;
-  color: #1f2933;
-  font-weight: 800;
-  padding: 8px 10px;
-}
-
-.measurement-import-file-row span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.measurement-import-modal-options {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-}
-
-.measurement-import-modal-options label {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  border: 1px solid #d6d2ca;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #1f2933;
-  padding: 10px 12px;
-  cursor: pointer;
-}
-
-.measurement-import-modal-options label.is-selected {
-  border-color: #b9b2a7;
-  background: #f7f4ee;
-}
-
-.measurement-import-modal-options label span {
-  display: grid;
-  gap: 4px;
-}
-
-.measurement-import-modal-options label small,
-.measurement-import-modal-options > small {
-  color: #667085;
-  font-size: 0.84rem;
-  line-height: 1.35;
-}
-
-.measurement-import-modal-options select,
-.measurement-import-modal-options .measurement-base-name-input {
-  max-width: 100%;
-  width: 100%;
-}
-
-.measurement-import-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-@media (max-width: 640px) {
-  .measurement-import-modal-backdrop {
-    align-items: end;
-    padding: 10px;
-  }
-
-  .measurement-import-modal-header,
-  .measurement-import-modal-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-}
 
 .measurement-bases-panel {
   display: grid;
@@ -32066,8 +31925,6 @@ body.mobile-modal-scroll-locked {
 }
 
 .site-detail-page.is-project-file-workspace .project-document-search,
-.site-detail-page.is-project-file-workspace .measurement-import-modal-options select,
-.site-detail-page.is-project-file-workspace .measurement-import-modal-options .measurement-base-name-input,
 .site-detail-page.is-project-file-workspace .measurement-offer-note-input,
 .site-detail-page.is-project-file-workspace .measurement-review-inline-input,
 .site-detail-page.is-project-file-workspace .measurement-review-inline-quantity,
@@ -32304,7 +32161,6 @@ body.mobile-modal-scroll-locked {
 .site-detail-page.is-project-file-workspace .project-document-item-actions,
 .site-detail-page.is-project-file-workspace .project-record-edit-actions,
 .site-detail-page.is-project-file-workspace .project-placeholder-actions,
-.site-detail-page.is-project-file-workspace .measurement-import-modal-actions,
 .site-detail-page.is-project-file-workspace .measurement-base-card > div:last-child {
   gap: 8px;
 }
@@ -32393,36 +32249,6 @@ body.mobile-modal-scroll-locked {
   border-color: var(--pf-border-soft);
 }
 
-.site-detail-page.is-project-file-workspace .measurement-import-modal {
-  border-color: var(--pf-border);
-  border-radius: 2px;
-  box-shadow: 0 16px 38px rgb(15 23 42 / 16%);
-}
-
-.site-detail-page.is-project-file-workspace .measurement-import-modal-options label,
-.site-detail-page.is-project-file-workspace .measurement-import-file-row {
-  border-color: var(--pf-border);
-  border-radius: 2px;
-  background: var(--pf-surface);
-}
-
-.site-detail-page.is-project-file-workspace .measurement-import-modal-options label.is-selected {
-  border-color: var(--pf-primary);
-  background: #f8fafc;
-  box-shadow: inset 3px 0 0 var(--pf-primary);
-}
-
-.site-detail-page.is-project-file-workspace .measurement-import-modal .secondary-action,
-.site-detail-page.is-project-file-workspace .measurement-import-modal .primary-action {
-  border-radius: 2px;
-}
-
-.site-detail-page.is-project-file-workspace .measurement-import-modal-options select:focus,
-.site-detail-page.is-project-file-workspace .measurement-import-modal-options .measurement-base-name-input:focus {
-  border-color: var(--pf-primary);
-  box-shadow: 0 0 0 3px rgb(30 41 59 / 9%);
-  outline: none;
-}
 
 /* Figma-style workspace shell for the real Aufmaß review screen. */
 .site-detail-page.is-measurement-review-workspace {

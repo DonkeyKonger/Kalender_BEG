@@ -1,6 +1,7 @@
 import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
 import { MeasurementReviewOverview } from "../components/MeasurementReviewOverview";
+import { MeasurementImportDialog } from "../components/MeasurementImportDialog";
 import { MeasurementReviewStatusBar } from "../components/MeasurementReviewStatusBar";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import { canEditMeasurementContent } from "../lib/measurementReviewContent";
@@ -5211,94 +5212,20 @@ function MeasurementTab({
       ) : null}
 
       {isImportDialogOpen && pendingFile ? (
-        <div className="measurement-import-modal-backdrop" role="presentation" onMouseDown={resetImportDialog}>
-          <section
-            className="measurement-import-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="measurement-import-dialog-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="measurement-import-modal-header">
-              <div>
-                <h3 id="measurement-import-dialog-title">Zeitenliste importieren</h3>
-                <p>Wähle, ob die PDF ein bestehendes Aufmaßblatt erweitert oder ein neues Aufmaßblatt erstellt.</p>
-              </div>
-              <button type="button" className="secondary-action" onClick={resetImportDialog}>Abbrechen</button>
-            </div>
-
-            <div className="measurement-import-file-row">
-              <FileText aria-hidden="true" size={18} />
-              <span title={pendingFile.name}>{pendingFile.name}</span>
-            </div>
-
-            <div className="measurement-import-modal-options">
-              <label className={importMode === "append_existing" ? "is-selected" : ""}>
-                <input
-                  type="radio"
-                  name="measurement-import-modal-mode"
-                  checked={importMode === "append_existing"}
-                  disabled={selectableBases.length === 0}
-                  onChange={() => setImportMode("append_existing")}
-                />
-                <span>
-                  <strong>An bestehendes Aufmaßblatt anhängen</strong>
-                  <small>Für Nachträge oder Ergänzungen eines laufenden Sammelaufmaßes.</small>
-                </span>
-              </label>
-              {importMode === "append_existing" ? (
-                selectableBases.length > 0 ? (
-                  <select value={selectedBaseId ?? ""} onChange={(event) => setSelectedBaseId(Number(event.target.value) || null)}>
-                    {selectableBases.map((base) => (
-                      <option key={base.id} value={base.id}>{formatMeasurementBaseName(base)}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <small>Es gibt noch kein Aufmaßblatt zum Anhängen.</small>
-                )
-              ) : null}
-              <label className={importMode === "create_new" ? "is-selected" : ""}>
-                <input
-                  type="radio"
-                  name="measurement-import-modal-mode"
-                  checked={importMode === "create_new"}
-                  onChange={() => setImportMode("create_new")}
-                />
-                <span>
-                  <strong>Neues Aufmaßblatt erstellen</strong>
-                  <small>Für ein neues Hauptangebot oder ein getrenntes Einzelaufmaß.</small>
-                </span>
-              </label>
-              {importMode === "create_new" ? (
-                <>
-                  <input
-                    className="measurement-base-name-input"
-                    aria-label="Name des Aufmaßblatts"
-                    value={newBaseName}
-                    onChange={(event) => setNewBaseName(event.target.value)}
-                    placeholder="Name des Aufmaßblatts"
-                  />
-                  <small>Das neue Aufmaßblatt wird nach dem Import automatisch aktiviert.</small>
-                </>
-              ) : null}
-            </div>
-
-            {dialogError ? <div className="project-record-empty-state is-error"><strong>{dialogError}</strong></div> : null}
-            {importError && isImportDialogOpen ? <div className="project-record-empty-state is-error"><strong>{importError}</strong></div> : null}
-
-            <div className="measurement-import-modal-actions">
-              <button type="button" className="secondary-action" onClick={resetImportDialog}>Abbrechen</button>
-              <button
-                type="button"
-                className="primary-action"
-                disabled={isImporting || (importMode === "append_existing" && selectedBaseId === null) || (importMode === "create_new" && !newBaseName.trim())}
-                onClick={() => void submitImport()}
-              >
-                {isImporting ? "Importiert..." : "Importieren"}
-              </button>
-            </div>
-          </section>
-        </div>
+        <MeasurementImportDialog
+          fileName={pendingFile.name}
+          mode={importMode}
+          bases={selectableBases.map((base) => ({ id: base.id, name: formatMeasurementBaseName(base) }))}
+          selectedBaseId={selectedBaseId}
+          newBaseName={newBaseName}
+          pending={isImporting}
+          error={dialogError || importError}
+          onMode={setImportMode}
+          onBase={setSelectedBaseId}
+          onName={setNewBaseName}
+          onClose={resetImportDialog}
+          onSubmit={submitImport}
+        />
       ) : null}
     </div>
   );

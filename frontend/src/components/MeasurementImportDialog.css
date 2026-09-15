@@ -1,0 +1,56 @@
+.measurement-import-dialog {
+  --import-border: var(--pf-border, #d4dde7);
+  --import-text: var(--pf-text, #172b48);
+  width: min(780px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--import-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--import-text);
+  box-shadow: 0 16px 38px rgb(15 23 42 / 20%);
+}
+.measurement-import-dialog::backdrop { background: rgb(23 32 51 / 42%); }
+.measurement-import-dialog form { margin: 0; }
+.measurement-import-dialog-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 22px 24px 20px; }
+.measurement-import-dialog-content > *, .measurement-import-dialog-header > div,
+.measurement-import-dialog-option > span { min-width: 0; overflow-wrap: anywhere; }
+.measurement-import-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.measurement-import-dialog-header h2 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 700; }
+.measurement-import-dialog-header p { margin: 6px 0 0; font-size: 14px; line-height: 20px; color: #516681; }
+.measurement-import-dialog .measurement-import-dialog-close { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 2px; color: #516681; background: transparent; cursor: pointer; }
+.measurement-import-dialog-file { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 12px 16px; border: 1px solid var(--import-border); border-radius: 3px; background: #f3f6fa; }
+.measurement-import-dialog-file svg { flex-shrink: 0; }
+.measurement-import-dialog-file span { min-width: 0; overflow-wrap: anywhere; font-size: 15px; font-weight: 600; line-height: 21px; }
+.measurement-import-dialog-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.measurement-import-dialog-option { position: relative; display: flex; align-items: center; gap: 14px; min-width: 0; min-height: 112px; padding: 20px 30px 16px 16px; border: 1px solid var(--import-border); border-radius: 3px; background: #fff; cursor: pointer; }
+.measurement-import-dialog-option > svg { flex-shrink: 0; }
+.measurement-import-dialog-option input { position: absolute; top: 12px; right: 12px; width: 16px; height: 16px; margin: 0; accent-color: #2878e8; }
+.measurement-import-dialog-option strong { display: block; font-size: 15px; font-weight: 600; line-height: 21px; }
+.measurement-import-dialog-option small { display: block; margin-top: 4px; font-size: 13px; line-height: 18px; color: #516681; }
+.measurement-import-dialog-option.is-selected { border-color: #2878e8; background: #edf3fa; }
+.measurement-import-dialog-option.is-disabled { opacity: .55; cursor: not-allowed; }
+.measurement-import-dialog-option:focus-within { outline: 2px solid #2878e8; outline-offset: 2px; }
+.measurement-import-dialog-field { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 8px 16px; }
+.measurement-import-dialog-field label { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.measurement-import-dialog .measurement-import-dialog-field select,
+.measurement-import-dialog .measurement-import-dialog-field input { min-width: 0; max-width: 100%; width: 100%; height: 38px; padding: 7px 10px; border: 1px solid var(--import-border); border-radius: 3px; background: #fff; color: var(--import-text); font: inherit; font-size: 14px; }
+.measurement-import-dialog-field small { grid-column: 2; font-size: 13px; color: #516681; line-height: 18px; }
+.measurement-import-dialog-error { margin: 0; color: #b42318; font-size: 14px; line-height: 20px; }
+.measurement-import-dialog-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--import-border); padding: 18px 24px; }
+.measurement-import-dialog .measurement-import-dialog-footer button:is(.primary-action, .secondary-action) { min-height: 38px; padding: 8px 20px; border-radius: 3px; font-size: 14px; }
+.measurement-import-dialog .measurement-import-dialog-footer .primary-action { color: #fff; background: #172b48; border: 1px solid #172b48; }
+.measurement-import-dialog .measurement-import-dialog-footer .secondary-action { color: #172b48; background: #fff; border: 1px solid var(--import-border); }
+.measurement-import-dialog :is(button, input, select):focus-visible { outline: 2px solid #2878e8; outline-offset: 2px; }
+.measurement-import-dialog button:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 640px) {
+  .measurement-import-dialog-options { grid-template-columns: minmax(0, 1fr); }
+  .measurement-import-dialog-content { padding: 20px 16px; gap: 16px; }
+  .measurement-import-dialog-field { grid-template-columns: minmax(0, 1fr); }
+  .measurement-import-dialog-field small { grid-column: 1; }
+  .measurement-import-dialog-footer { padding: 16px; }
+}
