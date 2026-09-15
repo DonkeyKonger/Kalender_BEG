@@ -129,6 +129,7 @@ type ProjectFolderNavigationLevel = {
 };
 
 const MEASUREMENT_TABLE_AXIS_WIDTH = 216;
+const MEASUREMENT_IMPORT_DEFAULT_NAME = "Hauptauftrag";
 const MEASUREMENT_TABLE_POSITION_WIDTH = 121;
 const MEASUREMENT_TABLE_MIN_COLUMNS = 12;
 const MEASUREMENT_FREE_INPUT_MIN_COLUMNS = 10;
@@ -4995,10 +4996,9 @@ function MeasurementTab({
     })),
     [catalogItems],
   );
-  const suggestedBaseName = useMemo(() => getSuggestedMeasurementSheetName(siteNumber, bases.length + 1), [bases.length, siteNumber]);
   const [importMode, setImportMode] = useState<MeasurementImportOptions["importMode"]>(defaultBase ? "append_existing" : "create_new");
   const [selectedBaseId, setSelectedBaseId] = useState<number | null>(defaultBase?.id ?? null);
-  const [newBaseName, setNewBaseName] = useState(suggestedBaseName);
+  const [newBaseName, setNewBaseName] = useState(MEASUREMENT_IMPORT_DEFAULT_NAME);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isDropTargetActive, setIsDropTargetActive] = useState(false);
@@ -5032,7 +5032,7 @@ function MeasurementTab({
     setPendingFile(file);
     setImportMode(defaultBase ? "append_existing" : "create_new");
     setSelectedBaseId(defaultBase?.id ?? null);
-    setNewBaseName(getSuggestedMeasurementSheetName(siteNumber, bases.length + 1));
+    setNewBaseName(MEASUREMENT_IMPORT_DEFAULT_NAME);
     setDialogError(null);
     setFileSelectionError(null);
     setIsImportDialogOpen(true);
@@ -5229,7 +5229,7 @@ function MeasurementTab({
 
             <div className="measurement-import-file-row">
               <FileText aria-hidden="true" size={18} />
-              <span>{pendingFile.name}</span>
+              <span title={pendingFile.name}>{pendingFile.name}</span>
             </div>
 
             <div className="measurement-import-modal-options">
@@ -5273,6 +5273,7 @@ function MeasurementTab({
                 <>
                   <input
                     className="measurement-base-name-input"
+                    aria-label="Name des Aufmaßblatts"
                     value={newBaseName}
                     onChange={(event) => setNewBaseName(event.target.value)}
                     placeholder="Name des Aufmaßblatts"
@@ -9075,14 +9076,6 @@ function formatMeasurementPackageNumber(
 
 function isPdfFile(file: File): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-}
-
-function getSuggestedMeasurementSheetName(siteNumber: string | null, nextNumber: number): string {
-  const cleanSiteNumber = siteNumber?.trim();
-  if (cleanSiteNumber) {
-    return `Aufmaß ${cleanSiteNumber}.${String(nextNumber).padStart(2, "0")}`;
-  }
-  return `Aufmaßblatt ${new Date().toISOString().slice(0, 10)}`;
 }
 
 function formatMeasurementBaseName(base: MeasurementBase): string {
