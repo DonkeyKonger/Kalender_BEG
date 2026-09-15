@@ -43,6 +43,19 @@
   white-space: nowrap;
 }
 
+.measurement-review-process button.measurement-review-process-step {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.measurement-review-process button.measurement-review-process-step:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #284968;
+}
+
 .measurement-review-process-icon {
   display: inline-flex;
   align-items: center;
@@ -114,11 +127,6 @@
 
 .measurement-review-process-actions button svg {
   flex-shrink: 0;
-}
-
-.measurement-review-detail.is-table-view .measurement-review-process-actions .secondary-action {
-  border: 1px solid var(--ct-border);
-  background: var(--ct-surface);
 }
 
 .measurement-review-statusbar button:disabled {

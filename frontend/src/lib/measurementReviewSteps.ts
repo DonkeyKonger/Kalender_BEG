@@ -14,7 +14,7 @@ export function getMeasurementReviewSteps(batch: Pick<MobileMeasurementBatch, "s
   return ["Eingereicht", "Geprüft", "Unterschrieben", "Abgeschlossen"].map((label, index) => {
     const state = index === current ? "current" : evidence[index] ? "reached" : "pending";
     return {
-      label, state,
+      label, state, status: ["submitted", "reviewed", "customer_signed", "billed"][index],
       description: state === "current" ? "Aktueller Status" : state === "reached" ? "Nachgewiesen" : "Noch nicht nachgewiesen",
     };
   });

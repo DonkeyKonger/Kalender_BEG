@@ -28,6 +28,7 @@ function buttons(node) {
   if (Array.isArray(node)) return node.flatMap(buttons);
   return [...(node.type === "button" ? [node.props] : []), ...buttons(node.props?.children)];
 }
+const rollbackButtons = data => buttons(tree(data)).filter(button => button.className.includes("is-rollback"));
 
 test("workflow follows the stored status and independent evidence, never inferred signatures or review", () => {
   assert.deepEqual(states(batch), ["current", "pending", "pending", "pending"]);
@@ -64,9 +65,10 @@ test("reset invokes only the original onRollbackStatus with the selected batch, 
   actions[0].onClick();
   assert.deepEqual(calls, [selected]);
   const html = render({ ...props, batch: selected, isBilled: true });
-  assert.match(html, /Status zurücksetzen/);
+  assert.match(html, /aria-label="Auf Geprüft zurücksetzen"/);
+  assert.doesNotMatch(html, /Status zurücksetzen/);
   assert.doesNotMatch(html, /Prüfung abschließen|Aufmaß abschließen/);
-  assert.equal(buttons(tree({ ...props, isBilled: true, busy: true }))[0].disabled, true);
+  assert.equal(rollbackButtons({ ...props, batch: selected, isBilled: true, busy: true })[0].disabled, true);
 });
 
 test("existing review and completion actions retain callbacks, conditions and loading locks", () => {
@@ -74,10 +76,11 @@ test("existing review and completion actions retain callbacks, conditions and lo
   const actions = buttons(tree({ ...props, onMarkReviewed: value => calls.push(["review", value]), onMarkBilled: value => calls.push(["complete", value]) }));
   actions.slice(0, 2).forEach(action => action.onClick());
   assert.deepEqual(calls, [["review", batch], ["complete", batch]]);
-  assert.equal(buttons(tree({ ...props, canReview: false })).length, 2);
+  assert.equal(buttons(tree({ ...props, canReview: false })).length, 1);
   assert.ok(buttons(tree({ ...props, busy: true })).every(button => button.disabled));
   const office = render({ ...props, batch: { ...batch, origin: "OFFICE" }, canReview: false });
-  assert.doesNotMatch(office, /<ol|Prüfung abschließen/);
+  assert.doesNotMatch(office, /Prüfung abschließen/);
+  assert.match(office, /<ol/);
   assert.match(office, /Aufmaß abschließen/);
 });
 
@@ -98,23 +101,37 @@ test("page uses revision-guarded rollback instead of mark-open and preserves err
 test("reset uses recorded predecessors, or submitted as the legacy fallback", () => {
   for (const status of ["submitted", "reviewed", "customer_signed", "billed"]) {
     const data = { ...batch, status, previous_status: "submitted" };
-    const reset = buttons(tree({ ...props, batch: data, isBilled: status === "billed" })).at(-1);
+    const reset = rollbackButtons({ ...props, batch: data, isBilled: status === "billed" })[0];
     assert.equal(reset.disabled, false);
   }
-  assert.equal(buttons(tree(props)).at(-1).disabled, true);
-  assert.match(render(props), /Bereits eingereicht/);
+  assert.equal(rollbackButtons(props).length, 0);
   for (const status of ["draft", "reviewed", "customer_signed", "billed"]) {
     for (const previous_status of [null, "submitted"]) {
       const data = { ...batch, status, previous_status, status_rollback_is_fallback: true };
       const calls = [];
-      const reset = buttons(tree({ ...props, batch: data, onRollbackStatus: value => calls.push(value) })).at(-1);
+      const reset = rollbackButtons({ ...props, batch: data, onRollbackStatus: value => calls.push(value) })[0];
       assert.equal(reset.disabled, false);
       assert.match(reset.title, /Keine verlässliche Statushistorie.*Eingereicht/);
       reset.onClick();
       assert.deepEqual(calls, [data]);
-      assert.equal(buttons(tree({ ...props, batch: data, busy: true })).at(-1).disabled, true);
+      assert.equal(rollbackButtons({ ...props, batch: data, busy: true })[0].disabled, true);
     }
   }
   assert.deepEqual(states({ ...batch, status: "billed", status_path: ["submitted", "reviewed", "billed"] }), ["reached", "reached", "pending", "current"]);
   assert.deepEqual(states({ ...batch, status: "draft", status_path: ["draft"] }), ["pending", "pending", "pending", "pending"]);
+});
+
+test("only the actual predecessor is clickable, including office batches and non-standard stages", () => {
+  for (const origin of ["MONTEUR", "OFFICE"]) {
+    for (const [previous_status, label] of [["reviewed", "Geprüft"], ["customer_signed", "Unterschrieben"], ["draft", "Entwurf"], ["rejected", "Zurückgewiesen"], ["checked", "Geprüft"]]) {
+      const data = { ...props, batch: { ...batch, origin, status: "billed", previous_status, status_path: ["submitted", "reviewed", "billed"] }, isBilled: true };
+      const actions = rollbackButtons(data);
+      assert.equal(actions.length, 1);
+      assert.equal(actions[0]["aria-label"], `Auf ${label} zurücksetzen`);
+      assert.equal(actions[0].type, "button");
+      const html = render(data);
+      assert.match(html, /<ol[\s\S]*<button[\s\S]*<\/button>[\s\S]*<\/ol>/);
+      assert.doesNotMatch(html, /Status zurücksetzen/);
+    }
+  }
 });
