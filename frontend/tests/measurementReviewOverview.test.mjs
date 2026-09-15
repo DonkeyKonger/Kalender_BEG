@@ -29,6 +29,7 @@ const batches = Array.from({ length: 12 }, (_, i) => ({
   created_by_name: "Anna Büro", submitted_by_name: "Boris Monteur", submitted_at: "2026-08-26T19:07:00",
   measurement_date: null, entry_count: i === 0 ? 0 : 3, position_count: i === 0 ? 0 : 2,
   is_current_offer: i !== 2, has_original_worker_submission: i !== 0,
+  offer_id: i === 2 ? 1 : 2, offer_name: i === 2 ? "Angebot erster Stand" : "Angebot aktueller Stand",
   customer_email_sent_at: null, customer_email_signature_present: null, customer_signed_at: null,
 }));
 const state = { selectedId: null, query: "", page: 1 };
@@ -43,6 +44,37 @@ const props = {
   title, date: value => value.slice(0, 10), dateTime: value => value,
   renderStatus: batch => batch.status, renderActions: () => null,
 };
+
+test("offer details distinguish real current, older and unassigned office measurements", () => {
+  for (const [fields, name, status, oldBadge] of [
+    [{offer_id: 2, offer_name: "Angebot Neubau", is_current_offer: true}, "Angebot Neubau", "Aktuelles Angebot", false],
+    [{offer_id: 1, offer_name: "Angebot Altbau", is_current_offer: false}, "Angebot Altbau", "Älteres Angebot", true],
+    [{offer_id: null, measurement_base_id: null, offer_name: null, is_current_offer: false, origin: "OFFICE", position_mode: "BLANK"}, "Ohne Angebotszuordnung", "Frei angelegtes Aufmaß", false],
+    [{offer_id: null, measurement_base_id: 7, offer_name: " ", measurement_base_name: "Übernommenes Angebot", is_current_offer: false}, "Übernommenes Angebot", "Älteres Angebot", true],
+    [{offer_id: 9, offer_name: null, measurement_base_name: null, is_current_offer: true}, "Angebot #9", "Aktuelles Angebot", false],
+  ]) {
+    const batch = {...batches[0], ...fields};
+    const before = JSON.stringify(batch);
+    const html = render({...props, batches: [batch]});
+    assert.ok(html.includes(`class="measurement-overview-offer-name">${name}</p>`));
+    assert.ok(html.includes(`class="measurement-overview-offer-status">${status}</p>`));
+    assert.equal(html.includes("Altes Angebot</span>"), oldBadge);
+    assert.ok(html.indexOf("Kunde &amp; Projekt") < html.indexOf('aria-label="Zugeordnetes Angebot"'));
+    assert.ok(html.indexOf('aria-label="Zugeordnetes Angebot"') < html.indexOf("Montageorte"));
+    assert.equal(JSON.stringify(batch), before);
+  }
+});
+
+test("offer names are safely rendered in full, including long names and archived measurements", () => {
+  const name = "Angebot <script> & Projekt " + "SehrLangerDateiname".repeat(20);
+  for (const archive of [true, false]) {
+    const html = render({...props, archive, batches: [{...batches[0], offer_name: name}]});
+    assert.ok(html.includes(name.replaceAll("<", "&lt;").replaceAll(">", "&gt;").replace(" & ", " &amp; ")));
+    assert.doesNotMatch(html, /<script>/);
+  }
+  const styles = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
+  assert.match(styles, /\.measurement-overview-offer-name\s*\{[^}]*overflow-wrap: anywhere;/);
+});
 
 test("initial rendered page uses the same compact row capacity as Zusatzaufträge", () => {
   const html = render(props);

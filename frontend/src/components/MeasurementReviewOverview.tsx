@@ -4,7 +4,7 @@ import { Check, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
 import type { MobileMeasurementBatch, Site } from "../types/site";
 import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
 import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
-import { formatMeasurementCount, formatMeasurementOverviewHours, formatMeasurementDetailHours, getMeasurementOverviewWindow, getMeasurementLocationPreviewCount } from "../lib/measurementReviewOverview";
+import { formatMeasurementCount, formatMeasurementOverviewHours, formatMeasurementDetailHours, getMeasurementOverviewWindow, getMeasurementLocationPreviewCount, getMeasurementOfferDisplay } from "../lib/measurementReviewOverview";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import "./MeasurementReviewOverview.css";
 
@@ -37,6 +37,7 @@ export function MeasurementReviewOverview(props: Props) {
   const view = getMeasurementOverviewWindow(batches, state, pageSize, title);
   const selected = loading || error ? null : view.selected;
   const email = selected ? getCustomerEmailStatus(selected) : null;
+  const selectedOffer = selected ? getMeasurementOfferDisplay(selected) : null;
 
   useLayoutEffect(() => {
     const workspace = workspaceRef.current;
@@ -120,11 +121,12 @@ export function MeasurementReviewOverview(props: Props) {
               </td></tr> : view.visible.map((batch) => {
                 const creator = formatExtraWorkOverviewCreatorName(batch.created_by_name);
                 const date = batch.measurement_date ?? batch.submitted_at;
+                const offer = getMeasurementOfferDisplay(batch);
                 return <tr key={batch.id} className={selected?.id === batch.id ? "is-selected" : ""}
                   onClick={(event) => { if (!(event.target instanceof Element) || !event.target.closest("button, a, input")) onState({...state, selectedId:batch.id}); }}>
                   <td onClick={(e) => e.stopPropagation()}>{props.renderStatus(batch)}</td>
                   <td><button type="button" className="measurement-overview-select" aria-pressed={selected?.id === batch.id} onClick={() => onState({...state, selectedId:batch.id})}>{title(batch)}</button>
-                    {batch.is_current_offer === false ? <span className="measurement-status is-old-offer" title={batch.offer_name ?? undefined}>Altes Angebot</span> : null}
+                    {offer.kind === "older" ? <span className="measurement-status is-old-offer" title={offer.name}>Altes Angebot</span> : null}
                   </td>
                   <td onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
                     <label className="project-extra-work-invoiced-control measurement-overview-invoiced" title={batch.is_invoiced ? "Abrechnungsmarkierung entfernen – Aufmaß bleibt abgeschlossen" : "Als abgerechnet markieren und Aufmaß abschließen"}>
@@ -188,6 +190,11 @@ export function MeasurementReviewOverview(props: Props) {
               </span>
             </dd></div>
           </dl></section>
+          <section className="measurement-overview-offer" aria-label="Zugeordnetes Angebot">
+            <h4>Zugeordnetes Angebot</h4>
+            <p className="measurement-overview-offer-name">{selectedOffer!.name}</p>
+            <p className="measurement-overview-offer-status">{selectedOffer!.status}</p>
+          </section>
           <MeasurementMountingLocations key={selected.id} locations={selected.mounting_locations ?? []} />
           {props.renderPhotos?.(selected)}
         </>}
