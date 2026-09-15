@@ -5,6 +5,7 @@ import { MeasurementImportDialog } from "../components/MeasurementImportDialog";
 import { MeasurementReviewStatusBar } from "../components/MeasurementReviewStatusBar";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import { canEditMeasurementContent } from "../lib/measurementReviewContent";
+import { navigateMeasurementTable } from "../lib/measurementTableNavigation";
 import type { OverviewPhoto, OverviewPhotoKind } from "../lib/extraWorkPhotoPreview";
 import { ProjectNoteTextarea } from "../components/ProjectNoteTextarea";
 import { SiteProjectNotes } from "../components/SiteProjectNotes";
@@ -7223,7 +7224,8 @@ function MeasurementReviewTable({
 
   return (
     <div className="measurement-table-surface measurement-review-table-wrap" ref={tableWrapRef} role="region" aria-label="Tabellarische Aufmaßaufstellung">
-      <table className="measurement-table-view measurement-matrix-table measurement-review-table" style={tableStyle}>
+      <table className="measurement-table-view measurement-matrix-table measurement-review-table" style={tableStyle}
+        onKeyDown={(event) => navigateMeasurementTable(event.nativeEvent, event.currentTarget)}>
         <colgroup>
           <col className="measurement-matrix-label-col" />
           {displayColumns.map((column) => (
