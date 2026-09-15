@@ -128,6 +128,21 @@ test("measurement columns use only the persisted order and append new office pos
   assert.doesNotMatch(replaceSource, /position\.localeCompare/);
 });
 
+test("quantity in a suggested office column creates an appended linked item, never a catalog entry", () => {
+  const start = pageSource.indexOf('if (column.kind === "office-extra") {');
+  const end = pageSource.indexOf('const item = column.item', start);
+  const cells = pageSource.slice(start, end);
+  assert.match(cells, /saveOfficeExtraCellDraft\(column.key, area, event.currentTarget\)/);
+  assert.doesNotMatch(cells, /saveNewCellDraft/);
+  assert.doesNotMatch(pageSource, /getManualColumnItem|actualItemIds|sourceColumnKey/);
+  const saveStart = pageSource.indexOf('async function saveOfficeExtraCellDraft(');
+  const saveEnd = pageSource.indexOf('async function saveFreeItemPositionDraft(', saveStart);
+  const save = pageSource.slice(saveStart, saveEnd);
+  assert.match(save, /await onFreeItemCreate\(/);
+  assert.match(save, /linked_measurement_item_id: draft.linkedItemId \?\? null/);
+  assert.match(save, /quantity,\s*area_or_comment: areaLabel/);
+});
+
 test("mobile measurement positions place all writable office columns before viewport fillers", () => {
   const columnsStart = pageSource.indexOf("const displayColumns:");
   const columnsEnd = pageSource.indexOf("const displayAreaRows:", columnsStart);

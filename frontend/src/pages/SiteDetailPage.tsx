@@ -6707,7 +6707,6 @@ function MeasurementReviewTable({
     }
     return rows;
   }, [items, persistedAreas]);
-  const actualItemIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
   const activeManualColumnIndexes = useMemo(() => Object.entries(manualColumnDrafts)
     .filter(([columnKey, draft]) => (
       columnKey.startsWith(`${MEASUREMENT_OFFICE_EXTRA_COLUMN_KEY}-`)
@@ -6921,14 +6920,6 @@ function MeasurementReviewTable({
     return manualColumnDrafts[columnKey] ?? { position: "", description: "", unit: "", linkedItemId: null };
   }
 
-  function getManualColumnItem(columnKey: string): { id: number; position: string } | null {
-    const linkedItemId = manualColumnDrafts[columnKey]?.linkedItemId;
-    if (!linkedItemId || actualItemIds.has(linkedItemId)) {
-      return null;
-    }
-    return positionSuggestions.find((item) => item.linkedItem?.id === linkedItemId)?.linkedItem ?? null;
-  }
-
   function updateManualColumnDraft(columnKey: string, patch: Partial<MeasurementManualColumnDraft>): void {
     setManualColumnDrafts((current) => ({
       ...current,
@@ -7052,7 +7043,6 @@ function MeasurementReviewTable({
     item: { id: number; position: string },
     area: MeasurementMatrixAreaRow,
     input: HTMLInputElement,
-    sourceColumnKey?: string,
   ): Promise<void> {
     const value = input.value;
     const quantity = parseMeasurementQuantityInput(value);
@@ -7075,18 +7065,6 @@ function MeasurementReviewTable({
       input.value = "";
       if (area.key.startsWith("placeholder-area-")) {
         clearAreaLabelDraft(area.key);
-      }
-      if (sourceColumnKey) {
-        setManualColumnDrafts((current) => {
-          const next = { ...current };
-          delete next[sourceColumnKey];
-          return next;
-        });
-        setManualColumnTotals((current) => {
-          const next = { ...current };
-          delete next[sourceColumnKey];
-          return next;
-        });
       }
     } finally {
       savingCellKeysRef.current.delete(cellKey);
@@ -7533,46 +7511,12 @@ function MeasurementReviewTable({
                   );
                 }
                 if (column.kind === "office-extra") {
-                  const manualItem = getManualColumnItem(column.key);
                   const manualDraft = getManualColumnDraft(column.key);
                   const isManualColumnActive = Boolean(
-                    manualItem
-                    || manualDraft.position.trim()
+                    manualDraft.position.trim()
                     || manualDraft.description.trim()
                     || manualDraft.unit.trim(),
                   );
-                  if (manualItem) {
-                    return (
-                      <td className="measurement-matrix-empty-cell is-manual-column is-office-extra-column" key={column.key}>
-                        <input
-                          className="measurement-table-input is-quantity"
-                          data-manual-column={column.key}
-                          disabled={!canEditRows || reviewActionLoading}
-                          inputMode="decimal"
-                          aria-label={`Neue Menge ${areaLabel || "ohne Bereich"} für ${manualItem.position}`}
-                          onInput={(event) => {
-                            syncMeasurementNegativeInputClass(event.currentTarget);
-                            updateManualColumnTotal(column.key);
-                          }}
-                          onBlur={(event) => {
-                            updateManualColumnTotal(column.key);
-                            void saveNewCellDraft(manualItem, area, event.currentTarget, column.key);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              updateManualColumnTotal(column.key);
-                              void saveNewCellDraft(manualItem, area, event.currentTarget, column.key);
-                            }
-                            if (event.key === "Escape") {
-                              event.currentTarget.value = "";
-                              updateManualColumnTotal(column.key);
-                            }
-                          }}
-                        />
-                      </td>
-                    );
-                  }
                   return (
                     <td className={`measurement-matrix-empty-cell is-office-extra-column${isManualColumnActive ? " is-manual-column" : " measurement-matrix-placeholder-cell"}`} key={column.key}>
                       <input

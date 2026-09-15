@@ -45,6 +45,31 @@ def edit(c, **payload):
     return c.service.update_site_free_item(site_id=c.site.id, batch_id=c.batch.id, measurement_item_id=c.item.id, payload=MeasurementItemUpdate(**payload))
 
 
+def test_suggested_office_column_stays_right_after_first_and_subsequent_quantities(case):
+    c = case
+    c.item.sort_order = 50
+    target = SiteMeasurementItem(site=c.site, measurement_base=c.base, position="0.1",
+        description="Frühe Katalogposition", unit="m", sort_order=1, minutes_per_unit=Decimal("5"))
+    c.db.add(target)
+    c.db.commit()
+    created = c.service.create_site_free_item(site_id=c.site.id, batch_id=c.batch.id, current_user=c.user,
+        payload=MobileMeasurementFreeItemCreate(position=target.position, description=target.description,
+            unit=target.unit, linked_measurement_item_id=target.id, quantity=Decimal("2"), area_or_comment="EG BTB"))
+    assert created.id != target.id
+    assert created.linked_measurement_item_id == target.id
+    assert created.sort_order > c.item.sort_order
+    c.service.create_site_entry(site_id=c.site.id, batch_id=c.batch.id, measurement_item_id=created.id,
+        current_user=c.user, payload=MeasurementEntryCreate(quantity=Decimal("3"), area_or_comment="OG"))
+    c.service.update_site_entry(site_id=c.site.id, batch_id=c.batch.id, entry_id=created.entries[0].id,
+        payload=MeasurementEntryCreate(quantity=Decimal("4"), area_or_comment="EG BTB"))
+    c.db.expire_all()
+    rows = c.service.list_site_batch_items(site_id=c.site.id, batch_id=c.batch.id)
+    assert [item.id for item in rows if item.entries] == [c.item.id, created.id]
+    appended = next(item for item in rows if item.id == created.id)
+    assert appended.reported_quantity == Decimal("7")
+    assert next(item for item in rows if item.id == target.id).entries == []
+
+
 @pytest.mark.parametrize("workflow", ["draft", "submitted", "reviewed", "customer_signed"])
 @pytest.mark.parametrize("origin,mode", [("MONTEUR", "OFFER_BASED"), ("OFFICE", "OFFER_BASED"), ("MONTEUR", "BLANK"), ("OFFICE", "BLANK")])
 def test_every_field_editable_before_completion_without_changing_other_batches(case, workflow, origin, mode):
