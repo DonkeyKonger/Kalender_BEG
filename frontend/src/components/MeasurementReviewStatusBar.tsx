@@ -29,6 +29,13 @@ export function MeasurementReviewStatusBar(props: Props) {
   if (targetStep && !steps.some(step => step.status === targetStep)) {
     steps.unshift({ status: targetStep, label: rollbackLabel, state: "reached", description: rollbackDescription, number: 0 });
   }
+  function confirmRollback() {
+    if (busy || !rollbackTarget) return;
+    const message = `Status dieses Aufmaßes wirklich auf „${rollbackLabel}“ zurücksetzen?\n\n`
+      + (rollbackIsFallback ? "Es liegt keine verlässliche Statushistorie vor.\n\n" : "")
+      + "Mengen und Positionen bleiben erhalten.";
+    if (window.confirm(message)) props.onRollbackStatus(batch);
+  }
   return (
     <div className="measurement-review-statusbar">
         <div className="measurement-review-process-scroll" tabIndex={0} aria-label="Bearbeitungsablauf des Aufmaßes">
@@ -48,7 +55,7 @@ export function MeasurementReviewStatusBar(props: Props) {
                 {canRollback ? (
                   <button type="button" className="measurement-review-process-step is-rollback" disabled={busy}
                     aria-label={`Auf ${rollbackLabel} zurücksetzen`} title={rollbackDescription}
-                    onClick={() => props.onRollbackStatus(batch)}>{content}</button>
+                    onClick={confirmRollback}>{content}</button>
                 ) : <span className="measurement-review-process-step" title={step.description}>{content}</span>}
               </li>
               );

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import test from "node:test";
+import test, { beforeEach, afterEach } from "node:test";
 import { build } from "esbuild";
 import { getMeasurementReviewSteps } from "../src/lib/measurementReviewSteps.ts";
 
@@ -29,6 +29,38 @@ function buttons(node) {
   return [...(node.type === "button" ? [node.props] : []), ...buttons(node.props?.children)];
 }
 const rollbackButtons = data => buttons(tree(data)).filter(button => button.className.includes("is-rollback"));
+const originalWindow = globalThis.window;
+beforeEach(() => { globalThis.window = { confirm: () => true }; });
+afterEach(() => {
+  if (originalWindow === undefined) delete globalThis.window;
+  else globalThis.window = originalWindow;
+});
+
+test("rollback asks for confirmation with the target and cancellation changes nothing", () => {
+  const selected = { ...batch, status: "billed", previous_status: "reviewed", status_revision: 2 };
+  const calls = [], messages = [];
+  let confirmed = false;
+  globalThis.window.confirm = message => { messages.push(message); return confirmed; };
+  const action = rollbackButtons({ ...props, batch: selected, onRollbackStatus: value => calls.push(value) })[0];
+  action.onClick();
+  assert.deepEqual(calls, []);
+  assert.match(messages[0], /wirklich auf „Geprüft“ zurücksetzen/);
+  assert.match(messages[0], /Mengen und Positionen bleiben erhalten/);
+  confirmed = true;
+  action.onClick();
+  assert.deepEqual(calls, [selected]);
+});
+
+test("fallback is explained before confirmation and busy actions do not open a dialog", () => {
+  const selected = { ...batch, status: "billed", previous_status: null, status_rollback_is_fallback: true };
+  const messages = [];
+  globalThis.window.confirm = message => { messages.push(message); return false; };
+  rollbackButtons({ ...props, batch: selected })[0].onClick();
+  assert.match(messages[0], /„Eingereicht“/);
+  assert.match(messages[0], /keine verlässliche Statushistorie/);
+  rollbackButtons({ ...props, batch: selected, busy: true })[0].onClick();
+  assert.equal(messages.length, 1);
+});
 
 test("workflow follows the stored status and independent evidence, never inferred signatures or review", () => {
   assert.deepEqual(states(batch), ["current", "pending", "pending", "pending"]);
