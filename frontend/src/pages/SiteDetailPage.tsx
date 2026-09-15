@@ -6692,12 +6692,29 @@ function MeasurementReviewTable({
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const areaLabelDraftsRef = useRef<Record<string, string>>({});
   const savingCellKeysRef = useRef<Set<string>>(new Set());
+  const pendingCreatedCellFocusRef = useRef<{ cellKey: string; source: HTMLInputElement } | null>(null);
   const [viewportColumnCount, setViewportColumnCount] = useState(MEASUREMENT_TABLE_MIN_COLUMNS);
   const [manualColumnDrafts, setManualColumnDrafts] = useState<Record<string, MeasurementManualColumnDraft>>({});
   const [manualColumnTotals, setManualColumnTotals] = useState<Record<string, number>>({});
   const [suggestionState, setSuggestionState] = useState<MeasurementSuggestionState>(null);
   const [areaDraftVersion, setAreaDraftVersion] = useState(0);
   const [savingPositionItemId, setSavingPositionItemId] = useState<number | null>(null);
+  // The draft input is reused for the next empty column after creation. Move
+  // Enter's focus to the persisted cell instead, once React has rendered it.
+  useLayoutEffect(() => {
+    const pending = pendingCreatedCellFocusRef.current;
+    if (!pending) return;
+    const focused = document.activeElement;
+    if (focused !== pending.source && !(focused === document.body && !pending.source.isConnected)) {
+      pendingCreatedCellFocusRef.current = null;
+      return;
+    }
+    const target = Array.from(tableWrapRef.current?.querySelectorAll<HTMLInputElement>("input[data-measurement-cell]") ?? [])
+      .find(input => input.dataset.measurementCell === pending.cellKey);
+    if (!target || target.disabled) return;
+    pendingCreatedCellFocusRef.current = null;
+    target.focus({ preventScroll: true });
+  });
   const areaRows = useMemo(() => {
     const rows = buildMeasurementMatrixAreaRows(items);
     for (const area of persistedAreas ?? []) {
@@ -7075,6 +7092,7 @@ function MeasurementReviewTable({
     columnKey: string,
     area: MeasurementMatrixAreaRow,
     input: HTMLInputElement,
+    keepCellFocus = false,
   ): Promise<void> {
     const value = input.value;
     const quantity = parseMeasurementQuantityInput(value);
@@ -7102,7 +7120,7 @@ function MeasurementReviewTable({
     }
     savingCellKeysRef.current.add(cellKey);
     try {
-      await onFreeItemCreate({
+      const createdItem = await onFreeItemCreate({
         position: position || null,
         description,
         unit,
@@ -7110,6 +7128,12 @@ function MeasurementReviewTable({
         quantity,
         area_or_comment: areaLabel,
       });
+      if (keepCellFocus) {
+        pendingCreatedCellFocusRef.current = {
+          cellKey: `${createdItem.id}:${getMeasurementAreaKey(areaLabel)}`,
+          source: input,
+        };
+      }
       input.value = "";
       if (area.key.startsWith("placeholder-area-")) {
         clearAreaLabelDraft(area.key);
@@ -7538,7 +7562,7 @@ function MeasurementReviewTable({
                           if (event.key === "Enter") {
                             event.preventDefault();
                             updateManualColumnTotal(column.key);
-                            void saveOfficeExtraCellDraft(column.key, area, event.currentTarget);
+                            void saveOfficeExtraCellDraft(column.key, area, event.currentTarget, true);
                           }
                           if (event.key === "Escape") {
                             event.currentTarget.value = "";
@@ -7593,6 +7617,7 @@ function MeasurementReviewTable({
                       disabled={!canEditRows || reviewActionLoading || isSaving}
                       inputMode="decimal"
                       aria-label={`Menge ${areaLabel || "ohne Bereich"} für ${item.position}`}
+                      data-measurement-cell={`${item.id}:${area.key}`}
                       onInput={(event) => syncMeasurementNegativeInputClass(event.currentTarget)}
                       onBlur={(event) => saveExistingQuantityDraft(entry, event.currentTarget)}
                       onKeyDown={(event) => {
