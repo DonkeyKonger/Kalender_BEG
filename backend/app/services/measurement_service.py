@@ -7,8 +7,8 @@ import re
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import Session, selectinload, with_loader_criteria
+from sqlalchemy import String, and_, cast, func, or_, select
+from sqlalchemy.orm import Session, defer, selectinload, with_loader_criteria
 
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
@@ -1329,9 +1329,19 @@ class MeasurementService:
             measurement_base_id = active_base_id
             if measurement_base_id is None:
                 return []
+        # List consumers need existence flags, never the full immutable PDF
+        # snapshots or signature strokes. Handle both SQL NULL and JSON null.
         statement = (
-            select(SiteMeasurementBatch)
+            select(
+                SiteMeasurementBatch,
+                func.coalesce(cast(SiteMeasurementBatch.original_submitted_snapshot, String) != "null", False),
+                func.coalesce(cast(SiteMeasurementBatch.customer_signed_snapshot, String) != "null", False),
+            )
             .options(
+                defer(SiteMeasurementBatch.original_submitted_snapshot, raiseload=True),
+                defer(SiteMeasurementBatch.customer_signed_snapshot, raiseload=True),
+                defer(SiteMeasurementBatch.customer_signature_strokes, raiseload=True),
+                defer(SiteMeasurementBatch.worker_signature_strokes, raiseload=True),
                 selectinload(SiteMeasurementBatch.entries).selectinload(
                     SiteMeasurementEntry.measurement_item
                 ),
@@ -1351,11 +1361,14 @@ class MeasurementService:
             statement = statement.where(SiteMeasurementBatch.deleted_at.is_(None))
         if measurement_base_id is not None:
             statement = statement.where(SiteMeasurementBatch.measurement_base_id == measurement_base_id)
-        batches = list(
-            self.db.scalars(
+        batch_rows = list(
+            self.db.execute(
                 statement.order_by(SiteMeasurementBatch.number, SiteMeasurementBatch.id)
             ).all()
         )
+        batches = [batch for batch, _, _ in batch_rows]
+        if not batches:
+            return []
         customer_email_statuses = self._latest_customer_email_statuses(
             entity_type="measurement_batch",
             action="measurement.email_sent",
@@ -1370,8 +1383,9 @@ class MeasurementService:
                 customer_email_status=customer_email_statuses.get(batch.id),
                 photo_count=photo_counts.get(batch.id, 0),
                 calculation_lookup=calculation_lookup,
+                snapshot_presence=(has_original, has_signed),
             )
-            for batch in batches
+            for batch, has_original, has_signed in batch_rows
         ]
 
     def list_site_batch_items(
@@ -2877,6 +2891,7 @@ class MeasurementService:
         current_user: User | None = None,
         photo_count: int | None = None,
         calculation_lookup: tuple[dict[int, Decimal], dict[str, Decimal]] | None = None,
+        snapshot_presence: tuple[bool, bool] | None = None,
     ) -> MobileMeasurementBatchRead:
         visible_entries = [
             entry
@@ -2949,7 +2964,7 @@ class MeasurementService:
             has_original_worker_submission=(
                 batch.origin != MeasurementBatchOrigin.OFFICE.value
                 and batch.submitted_at is not None
-                and batch.original_submitted_snapshot is not None
+                and (snapshot_presence[0] if snapshot_presence is not None else batch.original_submitted_snapshot is not None)
             ),
             created_by_user_id=batch.created_by_user_id,
             created_by_name=self._format_user_display_name(batch.created_by),
@@ -2957,7 +2972,7 @@ class MeasurementService:
             submitted_by_name=self._format_user_display_name(batch.submitted_by),
             submitted_at=batch.submitted_at,
             customer_signed_at=batch.customer_signed_at,
-            has_signed_snapshot=batch.customer_signed_at is not None and batch.customer_signed_snapshot is not None,
+            has_signed_snapshot=batch.customer_signed_at is not None and (snapshot_presence[1] if snapshot_presence is not None else batch.customer_signed_snapshot is not None),
             customer_signature_name=batch.customer_signature_name,
             customer_signature_place=batch.customer_signature_place,
             customer_email_sent_at=customer_email_status[0] if customer_email_status else None,
@@ -3370,8 +3385,8 @@ class MeasurementService:
         if site_id is None:
             return {}, {}
         items = list(
-            self.db.scalars(
-                select(SiteMeasurementItem).where(
+            self.db.execute(
+                select(SiteMeasurementItem.id, SiteMeasurementItem.position, SiteMeasurementItem.minutes_per_unit).where(
                     SiteMeasurementItem.site_id == site_id,
                     SiteMeasurementItem.measurement_base_id.is_not(None),
                     SiteMeasurementItem.measurement_batch_id.is_(None),

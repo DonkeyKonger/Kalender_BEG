@@ -479,9 +479,10 @@ export function SiteDetailPage() {
     if (
       !site
       || activeTab !== "measurement"
-      || (measurementSubtab !== "timesheet" && measurementSubtab !== "review")
-      || measurementLoaded
+      || (measurementSubtab !== "timesheet" && measurementSubtab !== "review" && measurementSubtab !== "bases")
+      || (measurementLoaded && (measurementSubtab !== "timesheet" || measurementTimesheet !== null))
       || measurementLoading
+      || measurementError !== null
     ) {
       return;
     }
@@ -493,27 +494,27 @@ export function SiteDetailPage() {
       const loadStartedAt = startMeasurementTimesheetPerformanceTiming();
       setMeasurementLoading(true);
       setMeasurementError(null);
-      setMeasurementBatchesError(null);
       try {
         const initialRequestsStartedAt = startMeasurementTimesheetPerformanceTiming();
         const [bases, catalogItems, timesheet] = await Promise.all([
-          api.measurementBases(site.id),
-          api.measurementItems(site.id, { activeOnly: true }),
-          api.measurementTimesheet(site.id),
+          measurementLoaded ? Promise.resolve(measurementBases) : api.measurementBases(site.id),
+          measurementLoaded ? Promise.resolve(measurementCatalogItems) : api.measurementItems(site.id, { activeOnly: true }),
+          // The overview and import dialog do not consume the aggregated matrix.
+          measurementSubtab === "timesheet" ? api.measurementTimesheet(site.id) : Promise.resolve(null),
         ]);
         logMeasurementTimesheetPerformance("API Zeitenliste aggregiert", initialRequestsStartedAt, {
           bases: bases.length,
           catalogItems: catalogItems.length,
-          activeBatches: timesheet.active_batch_ids.length,
-          rows: timesheet.rows.length,
+          activeBatches: timesheet?.active_batch_ids.length ?? 0,
+          rows: timesheet?.rows.length ?? 0,
         });
         setMeasurementBases(bases);
         setMeasurementCatalogItems(catalogItems);
-        setMeasurementTimesheet(timesheet);
+        if (timesheet) setMeasurementTimesheet(timesheet);
         setMeasurementLoaded(true);
         logMeasurementTimesheetPerformance("Erstladen gesamt", loadStartedAt, {
-          activeBatches: timesheet.active_batch_ids.length,
-          rows: timesheet.rows.length,
+          activeBatches: timesheet?.active_batch_ids.length ?? 0,
+          rows: timesheet?.rows.length ?? 0,
         });
       } catch (requestError) {
         setMeasurementError(readApiError(requestError, "Aufmaßpositionen konnten nicht geladen werden."));
@@ -523,7 +524,7 @@ export function SiteDetailPage() {
     }
 
     void loadMeasurementItems();
-  }, [activeTab, measurementLoaded, measurementLoading, measurementSubtab, site]);
+  }, [activeTab, measurementLoaded, measurementLoading, measurementSubtab, measurementTimesheet, measurementError, site]);
 
   useEffect(() => {
     const currentSiteId = site?.id;
@@ -563,12 +564,13 @@ export function SiteDetailPage() {
       || measurementSubtab !== "review"
       || measurementBatchesLoaded
       || measurementBatchesLoading
+      || measurementBatchesError !== null
     ) {
       return;
     }
 
     void loadMeasurementBatches();
-  }, [activeTab, measurementArchiveMode, measurementBatchesLoaded, measurementBatchesLoading, measurementSubtab, site]);
+  }, [activeTab, measurementArchiveMode, measurementBatchesLoaded, measurementBatchesLoading, measurementBatchesError, measurementSubtab, site]);
 
   useEffect(() => {
     if (

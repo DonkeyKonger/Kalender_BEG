@@ -11917,7 +11917,6 @@ body.mobile-modal-scroll-locked {
 .site-detail-page .project-document-browser,
 .site-detail-page .project-record-empty-state,
 .site-detail-page .project-placeholder-card,
-.site-detail-page .measurement-review-position,
 .site-detail-page .measurement-review-detail,
 .site-detail-page .measurement-evaluation-grid > div {
   border-color: var(--project-border);
@@ -15225,13 +15224,6 @@ body.mobile-modal-scroll-locked {
   opacity: 0.65;
 }
 
-.measurement-review-positions,
-.measurement-review-entry-list {
-  display: grid;
-  gap: 8px;
-}
-
-.measurement-review-position,
 .measurement-review-detail,
 .measurement-evaluation-grid > div {
   border: 1px solid #dbe7f5;
@@ -15368,15 +15360,10 @@ body.mobile-modal-scroll-locked {
   font-size: 0.72rem;
 }
 
-.measurement-review-position strong,
-.measurement-review-entry strong,
 .measurement-evaluation-grid strong {
   color: #111827;
 }
 
-.measurement-review-position small,
-.measurement-review-position span,
-.measurement-review-entry span,
 .measurement-evaluation-grid span {
   color: #65738a;
   font-size: 0.88rem;
@@ -15389,91 +15376,6 @@ body.mobile-modal-scroll-locked {
   gap: 12px;
   background: #f8fafc;
   padding: 14px;
-}
-
-.measurement-review-header,
-.measurement-review-position-head,
-.measurement-review-entry {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.measurement-review-header h2,
-.measurement-review-header p {
-  margin: 8px 0 0;
-}
-
-.measurement-review-position {
-  display: grid;
-  gap: 7px;
-  padding: 10px 12px;
-}
-
-.measurement-review-position-title {
-  overflow: hidden;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-}
-
-
-.measurement-review-entry {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(120px, auto);
-  align-items: center;
-  border-top: 1px solid #edf2f7;
-  gap: 10px;
-  padding-top: 7px;
-}
-
-.measurement-review-inline-input,
-.measurement-review-inline-quantity {
-  width: 100%;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #172033;
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 750;
-  padding: 7px 9px;
-}
-
-.measurement-review-inline-input:focus,
-.measurement-review-inline-quantity:focus {
-  border-color: #8bb4e8;
-  background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-  outline: none;
-}
-
-.measurement-review-inline-input:disabled,
-.measurement-review-inline-quantity:disabled {
-  color: #64748b;
-  opacity: 1;
-}
-
-.measurement-review-quantity-group {
-  display: grid;
-  grid-template-columns: minmax(86px, 1fr) auto;
-  align-items: center;
-  gap: 7px;
-}
-
-.measurement-review-quantity-group span {
-  color: #475569;
-  font-size: 0.86rem;
-  font-weight: 850;
-}
-
-.measurement-review-inline-quantity {
-  text-align: right;
-}
-
-.measurement-review-entry:first-child {
-  border-top: 0;
-  padding-top: 0;
 }
 
 .measurement-evaluation-grid {
@@ -31673,7 +31575,6 @@ body.mobile-modal-scroll-locked {
 .site-detail-page.is-project-file-workspace .project-document-browser,
 .site-detail-page.is-project-file-workspace .project-record-empty-state,
 .site-detail-page.is-project-file-workspace .project-placeholder-card,
-.site-detail-page.is-project-file-workspace .measurement-review-position,
 .site-detail-page.is-project-file-workspace .measurement-review-detail,
 .site-detail-page.is-project-file-workspace .measurement-timesheet-workspace,
 .site-detail-page.is-project-file-workspace .measurement-timesheet-table-panel,
@@ -31927,8 +31828,6 @@ body.mobile-modal-scroll-locked {
 
 .site-detail-page.is-project-file-workspace .project-document-search,
 .site-detail-page.is-project-file-workspace .measurement-offer-note-input,
-.site-detail-page.is-project-file-workspace .measurement-review-inline-input,
-.site-detail-page.is-project-file-workspace .measurement-review-inline-quantity,
 .site-detail-page.is-project-file-workspace .measurement-table-input {
   border-color: var(--pf-border);
   border-radius: 2px;
@@ -32138,8 +32037,6 @@ body.mobile-modal-scroll-locked {
 
 .site-detail-page.is-project-file-workspace .project-document-search:focus-within,
 .site-detail-page.is-project-file-workspace .measurement-offer-note-input:focus,
-.site-detail-page.is-project-file-workspace .measurement-review-inline-input:focus,
-.site-detail-page.is-project-file-workspace .measurement-review-inline-quantity:focus,
 .site-detail-page.is-project-file-workspace .measurement-table-input:focus {
   border-color: var(--pf-primary);
   box-shadow: 0 0 0 3px rgb(30 41 59 / 9%);
