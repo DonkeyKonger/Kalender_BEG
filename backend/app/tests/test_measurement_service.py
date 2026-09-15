@@ -2634,6 +2634,69 @@ def test_site_free_items_append_to_persisted_batch_order_and_keep_it_when_linked
     ]
 
 
+@pytest.mark.parametrize("has_original_base", [True, False])
+def test_office_column_appends_after_positions_from_current_and_historical_offers(has_original_base):
+    from app.schemas.measurement import MeasurementItemUpdate
+
+    db = db_session()
+    site = create_site(db)
+    original_base = create_measurement_base(db, site)
+    original_base.status = "draft"
+    original_base.released_to_mobile = False
+    active_base = create_measurement_base(db, site)
+    batch = SiteMeasurementBatch(
+        site=site, measurement_base=original_base if has_original_base else None,
+        number=1, title="Aufmaß", status="reviewed",
+        origin=MeasurementBatchOrigin.MONTEUR.value,
+        position_mode=MeasurementPositionMode.OFFER_BASED.value,
+    )
+    office_user = User(username="mixed-offer-order", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    db.add_all([batch, office_user])
+    original_item = SiteMeasurementItem(
+        site=site, measurement_base=original_base, position="9.1", description="Bestand",
+        unit="m", sort_order=1,
+    )
+    current_items = [SiteMeasurementItem(
+        site=site, measurement_base=active_base, position=f"N3.1.{i}",
+        description=f"Aktuelles Angebot {i}", unit="m", sort_order=i * 10,
+    ) for i in range(1, 10)]
+    db.add_all([original_item, *current_items])
+    db.flush()
+    for item in [original_item, *current_items]:
+        db.add(SiteMeasurementEntry(
+            site=site, measurement_batch=batch, measurement_item=item,
+            quantity=Decimal("1"), area_or_comment="EG", status="submitted",
+        ))
+    db.commit()
+    service = MeasurementService(db)
+    before = service.list_site_batch_items(site_id=site.id, batch_id=batch.id)
+    before_ids = [item.id for item in before if item.entries or item.is_free_position]
+    assert len(before_ids) == 10
+
+    appended = service.create_site_free_item(
+        site_id=site.id, batch_id=batch.id, current_user=office_user,
+        payload=MobileMeasurementFreeItemCreate(
+            position="0.1", description="Büro rechts", unit="m",
+        ),
+    )
+    assert appended.sort_order > max(item.sort_order for item in before)
+    # Linking to a numerically earlier catalog position must not move the column.
+    linked = service.update_site_free_item(
+        site_id=site.id, batch_id=batch.id, measurement_item_id=appended.id,
+        payload=MeasurementItemUpdate(linked_measurement_item_id=current_items[0].id),
+    )
+    assert linked.sort_order == appended.sort_order
+    second = service.create_site_free_item(
+        site_id=site.id, batch_id=batch.id, current_user=office_user,
+        payload=MobileMeasurementFreeItemCreate(description="Noch eine rechts", unit="m"),
+    )
+    db.expire_all()
+    after = service.list_site_batch_items(site_id=site.id, batch_id=batch.id)
+    assert [item.id for item in after if item.entries or item.is_free_position] == [
+        *before_ids, appended.id, second.id,
+    ]
+
+
 def test_existing_free_measurement_item_keeps_matrix_totals_separate_and_aggregates_timesheet():
     from app.schemas.measurement import MeasurementItemUpdate
     from app.services.measurement_pdf_service import MeasurementPdfService
