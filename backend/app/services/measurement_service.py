@@ -448,7 +448,8 @@ class MeasurementService:
         ) + 1
         batch = SiteMeasurementBatch(
             site_id=site_id,
-            measurement_base_id=None,
+            # Persist the offer active at creation; free position entry remains blank.
+            measurement_base_id=self._get_active_measurement_base_id(site_id),
             number=next_number,
             title=f"Aufmaß {next_number}",
             status="draft",
@@ -2911,7 +2912,7 @@ class MeasurementService:
             can_sign_immediately=_can_sign_measurements_immediately(current_user),
         )
         is_current_offer = bool(
-            batch.position_mode == MeasurementPositionMode.OFFER_BASED.value
+            batch.measurement_base_id is not None
             and (
                 batch.measurement_base_id == active_base_id
                 if active_base_id is not None

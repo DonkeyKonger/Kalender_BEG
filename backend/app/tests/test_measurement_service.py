@@ -3936,8 +3936,10 @@ def test_office_measurement_batch_uses_existing_model_and_is_idempotent():
     assert created.status == "draft"
     assert created.origin == MeasurementBatchOrigin.OFFICE
     assert created.position_mode == MeasurementPositionMode.BLANK
-    assert created.measurement_base_id is None
-    assert created.offer_id is None
+    assert created.measurement_base_id == base.id
+    assert created.offer_id == base.id
+    assert created.offer_name == base.name
+    assert created.is_current_offer is True
     assert created.creator_role_at_creation == UserRole.OFFICE.value
     assert created.area_location == "1. Obergeschoss"
     assert created.measurement_date == date(2026, 7, 16)
@@ -3992,10 +3994,14 @@ def test_office_measurement_batch_requires_explicit_duplicate_confirmation():
     assert db.scalar(select(func.count(SiteMeasurementBatch.id))) == 2
 
 
-def test_office_measurement_batch_stays_blank_when_several_offers_exist():
+def test_office_measurement_batch_links_active_offer_but_stays_blank():
     db = db_session()
     site = create_site(db)
     first_base = create_measurement_base(db, site)
+    db.add(SiteMeasurementItem(
+        site_id=site.id, measurement_base_id=first_base.id,
+        position="1.01", description="Vorhandene Angebotsposition", unit="m", sort_order=1,
+    ))
     second_base = SiteMeasurementBase(
         site=site,
         name="Nachtragsangebot",
@@ -4015,6 +4021,8 @@ def test_office_measurement_batch_stays_blank_when_several_offers_exist():
         area_location="Bauteil A",
         measurement_date=date(2026, 7, 16),
         request_id="office-measurement-request-3",
+        # Legacy clients cannot override the server-side active-offer selection.
+        offer_id=second_base.id,
     )
 
     created = service.create_office_batch(
@@ -4023,10 +4031,57 @@ def test_office_measurement_batch_stays_blank_when_several_offers_exist():
         payload=payload,
     )
     assert created.position_mode == MeasurementPositionMode.BLANK
-    assert created.offer_id is None
-    assert created.offer_id != first_base.id
+    assert created.offer_id == first_base.id
     assert created.offer_id != second_base.id
+    assert created.is_current_offer is True
+    assert service.list_site_batch_items(site_id=site.id, batch_id=created.id) == []
+
+    # A changed active offer must never move an existing batch, including retries.
+    service.activate_measurement_base(site_id=site.id, measurement_base_id=second_base.id)
+    db.expire_all()
+    retried = service.create_office_batch(site_id=site.id, current_user=office_user, payload=payload)
+    assert retried.id == created.id
+    assert retried.offer_id == first_base.id
+    assert retried.offer_name == first_base.name
+    assert retried.is_current_offer is False
+    listed = service.list_site_batches(site.id)
+    assert listed[0].offer_id == first_base.id
+    assert listed[0].is_current_offer is False
+
+    # The entered measurement date is not the creation time; even a backdated
+    # new batch gets the offer active now, not the previous offer.
+    newer = service.create_office_batch(
+        site_id=site.id, current_user=office_user,
+        payload=payload.model_copy(update={"request_id": "office-new-active-offer", "area_location": "Bauteil B"}),
+    )
+    assert newer.offer_id == second_base.id
+    assert newer.is_current_offer is True
+    assert db.scalar(select(func.count(SiteMeasurementBatch.id))) == 2
+
+
+def test_office_measurement_without_active_offer_stays_unassigned_even_after_activation():
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    base.status = "draft"
+    base.released_to_mobile = False
+    # An active offer belonging to another site must not leak into this batch.
+    create_measurement_base(db, create_site(db))
+    actor = User(username="office-no-offer", display_name="Büro", password_hash="x", role=UserRole.OFFICE)
+    db.add(actor)
+    db.commit()
+    service = MeasurementService(db)
+    payload = OfficeMeasurementBatchCreate(
+        area_location="EG", measurement_date=date(2026, 7, 16), request_id="office-no-active-offer",
+    )
+    created = service.create_office_batch(site_id=site.id, current_user=actor, payload=payload)
+    assert created.offer_id is None
     assert created.is_current_offer is False
+    service.activate_measurement_base(site_id=site.id, measurement_base_id=base.id)
+    retried = service.create_office_batch(site_id=site.id, current_user=actor, payload=payload)
+    assert retried.id == created.id
+    assert retried.offer_id is None
+    assert retried.is_current_offer is False
 
 
 def test_office_measurement_worker_options_only_contain_active_internal_monteurs():
