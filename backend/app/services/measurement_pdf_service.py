@@ -596,6 +596,7 @@ class MeasurementPdfService:
                 .where(
                     SiteMeasurementItem.site_id == site_id,
                     SiteMeasurementItem.measurement_base_id == measurement_base.id,
+                    SiteMeasurementItem.is_hidden.is_(False),
                 )
                 .order_by(SiteMeasurementItem.sort_order, SiteMeasurementItem.id)
             )
