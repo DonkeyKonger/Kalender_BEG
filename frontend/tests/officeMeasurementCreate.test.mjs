@@ -11,6 +11,9 @@ const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8
 
 test("measurement action menu is heading-free, opens leftwards and offers reversible archiving", () => {
   assert.match(pageSource, /menuLabel="Aufmaßaktionen" menuHeading="" menuAlign="end"/);
+  assert.match(pageSource, /menuWidthAnchor="\.measurement-overview-detail-head > div"/);
+  assert.match(pageSource, /trigger.closest\(menuWidthAnchor\)\?\.getBoundingClientRect\(\).width/);
+  assert.match(pageSource, /width: position.width/);
   assert.match(pageSource, /menuHeading \? <strong>\{menuHeading\}<\/strong> : null/);
   assert.match(pageSource, /archiveMode \? "Wiederherstellen" : "Aufmaß Archivieren"/);
   assert.match(pageSource, /wirklich archivieren\? Das Aufmaß wird ins Archiv verschoben und kann wiederhergestellt werden/);

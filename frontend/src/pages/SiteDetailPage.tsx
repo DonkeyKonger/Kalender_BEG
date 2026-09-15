@@ -2963,6 +2963,7 @@ function ProjectRecordStatusControl<T extends string>({
   menuLabel = "Status ändern",
   menuHeading = "Status setzen auf",
   menuAlign = "start",
+  menuWidthAnchor,
 }: {
   active: boolean;
   ariaLabel: string;
@@ -2976,10 +2977,11 @@ function ProjectRecordStatusControl<T extends string>({
   menuLabel?: string;
   menuHeading?: string;
   menuAlign?: "start" | "end";
+  menuWidthAnchor?: string;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState({ left: 0, top: 0 });
+  const [position, setPosition] = useState<{ left: number; top: number; width?: number }>({ left: 0, top: 0 });
 
   useLayoutEffect(() => {
     if (!active) {
@@ -2991,7 +2993,8 @@ function ProjectRecordStatusControl<T extends string>({
       const rect = trigger.getBoundingClientRect();
       const viewportWidth = document.documentElement.clientWidth;
       const viewportHeight = document.documentElement.clientHeight;
-      const width = popoverRef.current?.getBoundingClientRect().width ?? 190;
+      const anchorWidth = menuWidthAnchor ? trigger.closest(menuWidthAnchor)?.getBoundingClientRect().width : undefined;
+      const width = Math.min(anchorWidth ?? popoverRef.current?.getBoundingClientRect().width ?? 190, viewportWidth - 16);
       const estimatedHeight = popoverRef.current?.getBoundingClientRect().height ?? ((menuHeading ? 34 : 0) + options.length * 32);
       const anchorLeft = menuAlign === "end" ? rect.right - width : rect.left;
       const left = Math.max(8, Math.min(anchorLeft, viewportWidth - width - 8));
@@ -2999,16 +3002,20 @@ function ProjectRecordStatusControl<T extends string>({
       const top = opensAbove
         ? rect.top - estimatedHeight - 4
         : Math.min(viewportHeight - estimatedHeight - 8, rect.bottom + 4);
-      setPosition({ left, top: Math.max(8, Math.min(top, viewportHeight - estimatedHeight - 8)) });
+      setPosition({ left, top: Math.max(8, Math.min(top, viewportHeight - estimatedHeight - 8)), width: anchorWidth === undefined ? undefined : width });
     };
     updatePosition();
+    const widthAnchor = menuWidthAnchor ? triggerRef.current?.closest(menuWidthAnchor) : null;
+    const observer = widthAnchor ? new ResizeObserver(updatePosition) : null;
+    if (widthAnchor) observer?.observe(widthAnchor);
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
+      observer?.disconnect();
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [active, options.length, menuHeading, menuAlign]);
+  }, [active, options.length, menuHeading, menuAlign, menuWidthAnchor]);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -3056,7 +3063,7 @@ function ProjectRecordStatusControl<T extends string>({
           aria-label={menuLabel}
           className="project-record-status-popover"
           role="menu"
-          style={{ left: position.left, top: position.top }}
+          style={{ left: position.left, top: position.top, width: position.width }}
         >
           {menuHeading ? <strong>{menuHeading}</strong> : null}
           {options.map((option) => (
@@ -6491,6 +6498,7 @@ function MeasurementReviewPanel({
           <ProjectRecordStatusControl
             active={openOverviewActionId === batch.id} label="⋯" showCaret={false}
             menuLabel="Aufmaßaktionen" menuHeading="" menuAlign="end"
+            menuWidthAnchor=".measurement-overview-detail-head > div"
             ariaLabel={`Weitere Aktionen für ${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}`}
             busy={reviewActionLoading || deletingBatchId !== null || restoringBatchId !== null}
             options={[{value: "action", label: archiveMode ? "Wiederherstellen" : "Aufmaß Archivieren"}]}
