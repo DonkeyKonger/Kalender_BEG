@@ -45,6 +45,21 @@ const props = {
   renderStatus: batch => batch.status, renderActions: () => null,
 };
 
+test("archive switch preserves layout, marks pending state and disables stale content", () => {
+  const pending = render({...props, switchingArchive:true, busy:true});
+  assert.match(pending, /aria-busy="true"/);
+  assert.match(pending, /measurement-overview-master" inert=""/);
+  assert.match(pending, /measurement-overview-detail" inert=""/);
+  assert.match(pending, /Archiv wird geladen/);
+  const archived = render({...props, archive:true});
+  assert.match(archived, /measurement-overview-create-placeholder" aria-hidden="true"/);
+  assert.doesNotMatch(archived, /Aufmaß anlegen/);
+  const css = readFileSync(new URL("../src/components/MeasurementReviewOverview.css", import.meta.url), "utf8");
+  assert.match(css, /html:has\(\.measurement-overview\) \{ scrollbar-gutter: stable/);
+  assert.match(css, /measurement-overview-create-placeholder \{[^}]*height: 32px/);
+  assert.match(css, /measurement-overview-switch-pending \{ position: absolute/);
+});
+
 test("offer details distinguish real current, older and unassigned office measurements", () => {
   for (const [fields, name, status, oldBadge] of [
     [{offer_id: 2, offer_name: "Angebot Neubau", is_current_offer: true}, "Angebot Neubau", "Aktuelles Angebot", false],

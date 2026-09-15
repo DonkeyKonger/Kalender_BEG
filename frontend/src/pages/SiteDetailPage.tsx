@@ -240,6 +240,8 @@ export function SiteDetailPage() {
   const [measurementSubtab, setMeasurementSubtab] = useState<MeasurementSubtab>("review");
   const [measurementBatches, setMeasurementBatches] = useState<MobileMeasurementBatch[]>([]);
   const [measurementBatchesLoading, setMeasurementBatchesLoading] = useState(false);
+  const [measurementArchiveSwitching, setMeasurementArchiveSwitching] = useState(false);
+  const measurementBatchesRequestRef = useRef(0);
   const [measurementBatchesLoaded, setMeasurementBatchesLoaded] = useState(false);
   const [measurementBatchesError, setMeasurementBatchesError] = useState<string | null>(null);
   const [measurementArchiveMode, setMeasurementArchiveMode] = useState(false);
@@ -369,6 +371,8 @@ export function SiteDetailPage() {
     setMeasurementImportError(null);
     setMeasurementBatches([]);
     setMeasurementBatchesLoading(false);
+    setMeasurementArchiveSwitching(false);
+    measurementBatchesRequestRef.current += 1;
     setMeasurementBatchesLoaded(false);
     setMeasurementBatchesError(null);
     setSelectedMeasurementBatch(null);
@@ -564,13 +568,14 @@ export function SiteDetailPage() {
       || measurementSubtab !== "review"
       || measurementBatchesLoaded
       || measurementBatchesLoading
+      || measurementArchiveSwitching
       || measurementBatchesError !== null
     ) {
       return;
     }
 
     void loadMeasurementBatches();
-  }, [activeTab, measurementArchiveMode, measurementBatchesLoaded, measurementBatchesLoading, measurementBatchesError, measurementSubtab, site]);
+  }, [activeTab, measurementArchiveMode, measurementBatchesLoaded, measurementBatchesLoading, measurementArchiveSwitching, measurementBatchesError, measurementSubtab, site]);
 
   useEffect(() => {
     if (
@@ -616,21 +621,42 @@ export function SiteDetailPage() {
     void loadExtraWorkTickets();
   }, [activeTab, extraWorkArchiveMode, extraWorkLoaded, extraWorkLoading, site]);
 
-  async function loadMeasurementBatches(archivedOnly = measurementArchiveMode): Promise<void> {
+  async function loadMeasurementBatches(archivedOnly = measurementArchiveMode, switchArchive = false): Promise<void> {
     if (!site) {
       return;
     }
-    setMeasurementBatchesLoading(true);
+    const requestId = ++measurementBatchesRequestRef.current;
+    if (switchArchive) {
+      setMeasurementArchiveSwitching(true);
+      setMeasurementReviewError(null);
+    } else {
+      setMeasurementBatchesLoading(true);
+    }
     setMeasurementBatchesError(null);
     try {
       const batches = await api.siteMeasurementBatches(site.id, { archivedOnly });
+      if (requestId !== measurementBatchesRequestRef.current) return;
       setMeasurementBatches(batches);
-      setSelectedMeasurementBatch(current => current ? batches.find(batch => batch.id === current.id) ?? current : current);
+      if (switchArchive) {
+        // Commit mode and result together. Never flash an empty intermediate list.
+        setMeasurementArchiveMode(archivedOnly);
+        setSelectedMeasurementBatch(null);
+        setMeasurementBatchItems([]);
+        setMeasurementReviewMessage(null);
+      } else {
+        setSelectedMeasurementBatch(current => current ? batches.find(batch => batch.id === current.id) ?? current : current);
+      }
       setMeasurementBatchesLoaded(true);
     } catch (requestError) {
-      setMeasurementBatchesError(readApiError(requestError, "Aufmaßpakete konnten nicht geladen werden."));
+      if (requestId !== measurementBatchesRequestRef.current) return;
+      const message = readApiError(requestError, "Aufmaßpakete konnten nicht geladen werden.");
+      if (switchArchive) setMeasurementReviewError(message);
+      else setMeasurementBatchesError(message);
     } finally {
-      setMeasurementBatchesLoading(false);
+      if (requestId === measurementBatchesRequestRef.current) {
+        setMeasurementBatchesLoading(false);
+        setMeasurementArchiveSwitching(false);
+      }
     }
   }
 
@@ -1728,6 +1754,7 @@ export function SiteDetailPage() {
           measurementWorkersError={measurementWorkersError}
           workerHeadCount={measurementWorkerHeadCount}
           batchesLoading={measurementBatchesLoading}
+          archiveSwitching={measurementArchiveSwitching}
           batchesError={measurementBatchesError}
           selectedBatch={selectedMeasurementBatch}
           batchItems={measurementBatchItems}
@@ -1744,15 +1771,9 @@ export function SiteDetailPage() {
           onLoadMeasurementWorkers={() => void loadMeasurementWorkers()}
           onCreateBatch={createOfficeMeasurementBatch}
           onToggleArchive={() => {
-            const nextArchiveMode = !measurementArchiveMode;
-            setMeasurementArchiveMode(nextArchiveMode);
-            setMeasurementBatches([]);
-            setMeasurementBatchesLoaded(false);
-            setMeasurementBatchesError(null);
-            setSelectedMeasurementBatch(null);
-            setMeasurementBatchItems([]);
-            setMeasurementReviewMessage(null);
-            setMeasurementReviewError(null);
+            if (!measurementBatchesLoading && !measurementArchiveSwitching) {
+              void loadMeasurementBatches(!measurementArchiveMode, true);
+            }
           }}
           onSelectBatch={(batch) => void selectMeasurementBatch(batch)}
           onBackToBatchList={() => {
@@ -4899,6 +4920,7 @@ function MeasurementTab({
   measurementWorkersError,
   workerHeadCount,
   batchesLoading,
+  archiveSwitching,
   batchesError,
   selectedBatch,
   batchItems,
@@ -4963,6 +4985,7 @@ function MeasurementTab({
   measurementWorkersError: string | null;
   workerHeadCount: number;
   batchesLoading: boolean;
+  archiveSwitching?: boolean;
   batchesError: string | null;
   selectedBatch: MobileMeasurementBatch | null;
   batchItems: MobileMeasurementItem[];
@@ -5173,6 +5196,7 @@ function MeasurementTab({
           measurementWorkersLoading={measurementWorkersLoading}
           measurementWorkersError={measurementWorkersError}
           batchesLoading={batchesLoading}
+          archiveSwitching={archiveSwitching}
           batchesError={batchesError}
           selectedBatch={selectedBatch}
           batchItems={batchItems}
@@ -6113,6 +6137,7 @@ function MeasurementReviewPanel({
   measurementWorkersLoading,
   measurementWorkersError,
   batchesLoading,
+  archiveSwitching = false,
   batchesError,
   selectedBatch,
   batchItems,
@@ -6154,6 +6179,7 @@ function MeasurementReviewPanel({
   measurementWorkersLoading: boolean;
   measurementWorkersError: string | null;
   batchesLoading: boolean;
+  archiveSwitching?: boolean;
   batchesError: string | null;
   selectedBatch: MobileMeasurementBatch | null;
   batchItems: MobileMeasurementItem[];
@@ -6188,6 +6214,9 @@ function MeasurementReviewPanel({
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [savingEntryId, setSavingEntryId] = useState<number | null>(null);
   const [overviewState, setOverviewState] = useState<MeasurementOverviewState>({ selectedId: null, query: "", page: 1 });
+  useLayoutEffect(() => {
+    setOverviewState({ selectedId: null, query: "", page: 1 });
+  }, [archiveMode]);
   const [openOverviewActionId, setOpenOverviewActionId] = useState<number | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<number | null>(null);
   const [restoringBatchId, setRestoringBatchId] = useState<number | null>(null);
@@ -6471,10 +6500,10 @@ function MeasurementReviewPanel({
       <MeasurementReviewOverview
         site={site} batches={batches} state={overviewState} onState={(state) => { setOverviewState(state); setOpenStatusBatchId(null); setOpenOverviewActionId(null); }}
         loading={batchesLoading} error={batchesError} message={reviewMessage} actionError={reviewError}
-        archive={archiveMode} busy={reviewActionLoading || statusActionId !== null || isCreatingBatch}
+        archive={archiveMode} switchingArchive={archiveSwitching} busy={reviewActionLoading || statusActionId !== null || isCreatingBatch || archiveSwitching}
         canCreate={canCreateBatch} onCreate={openCreateDialog} onRetry={onRetryBatches}
         canMarkInvoiced={canPromoteStatus} onToggleInvoiced={onToggleBatchInvoiced}
-        onToggleArchive={() => { setOverviewState({ selectedId: null, query: "", page: 1 }); setOpenStatusBatchId(null); setOpenOverviewActionId(null); onToggleArchive(); }}
+        onToggleArchive={() => { setOpenStatusBatchId(null); setOpenOverviewActionId(null); onToggleArchive(); }}
         onOpen={onSelectBatch} onExport={onExportPdf} canExport={isMeasurementBatchPdfExportable}
         renderPhotos={(batch) => <ExtraWorkOverviewPhotos key={`measurement:${site.id}:${batch.id}:${archiveMode}`} siteId={site.id} ticket={batch} photoKind="measurement" includeDeleted={archiveMode} canUpload={!archiveMode && canEditMeasurementContent(batch, canCreateBatch)} onPhotoCountUpdated={onBatchPhotoCountUpdated} />}
         title={(batch) => formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}

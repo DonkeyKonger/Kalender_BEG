@@ -14,6 +14,7 @@ type Props = {
   onState: (state: MeasurementOverviewState) => void;
   loading: boolean; error: string | null; message: string | null; actionError: string | null;
   archive: boolean; busy: boolean; canCreate: boolean;
+  switchingArchive?: boolean;
   canMarkInvoiced: boolean;
   onToggleInvoiced: (batch: MobileMeasurementBatch) => void;
   onToggleArchive: () => void; onRetry: () => void; onCreate: () => void;
@@ -44,7 +45,7 @@ export function MeasurementReviewOverview(props: Props) {
   useLayoutEffect(() => {
     const workspace = workspaceRef.current;
     if (!workspace) return;
-    const update = () => setHeight(Math.max(280, Math.floor((window.visualViewport?.height ?? window.innerHeight) - workspace.getBoundingClientRect().top - 18)));
+    const update = () => setHeight(Math.max(280, Math.floor((window.visualViewport?.height ?? window.innerHeight) - (workspace.getBoundingClientRect().top + window.scrollY) - 18)));
     update();
     const observer = new ResizeObserver(update);
     observer.observe(workspace.parentElement!);
@@ -92,7 +93,7 @@ export function MeasurementReviewOverview(props: Props) {
     finally { pdfPending.current = false; setPdfAction(null); }
   }
 
-  return <section className="measurement-overview">
+  return <section className="measurement-overview" aria-busy={loading || props.switchingArchive || false}>
     <header className="measurement-overview-toolbar">
       <div className="measurement-overview-toolbar-left">
         <h2><Ruler size={18} aria-hidden="true" />Prüfung</h2>
@@ -104,16 +105,16 @@ export function MeasurementReviewOverview(props: Props) {
       </div>
       <div className="measurement-overview-toolbar-right">
         <label className="measurement-overview-search"><span className="sr-only">Aufmaße durchsuchen</span>
-          <input type="search" placeholder="Suche…" value={state.query} onChange={(e) => onState({ selectedId: null, page: 1, query: e.target.value })} />
+          <input type="search" placeholder="Suche…" disabled={props.switchingArchive} value={state.query} onChange={(e) => onState({ selectedId: null, page: 1, query: e.target.value })} />
           <Search size={16} aria-hidden="true" />
         </label>
-        {!archive && props.canCreate ? <button type="button" className="primary-action" disabled={loading || props.busy} onClick={props.onCreate}><Plus size={18} aria-hidden="true" />Aufmaß anlegen</button> : null}
+        {!archive && props.canCreate ? <button type="button" className="primary-action" disabled={loading || props.busy} onClick={props.onCreate}><Plus size={18} aria-hidden="true" />Aufmaß anlegen</button> : props.canCreate ? <span className="measurement-overview-create-placeholder" aria-hidden="true" /> : null}
       </div>
     </header>
     <div role="status" className="sr-only">{props.message ?? ""}</div>
     {props.actionError ? <div role="alert" className="project-record-empty-state is-error">{props.actionError}</div> : null}
     <div className="measurement-overview-workspace" ref={workspaceRef} style={{ "--measurement-overview-height": `${height}px`, "--measurement-overview-master-height": `${getExtraWorkOverviewMasterHeight(pageSize)}px` } as CSSProperties}>
-      <div className="measurement-overview-master">
+      <div className="measurement-overview-master" inert={props.switchingArchive || undefined}>
         <div className="measurement-overview-list" role="region" aria-label="Aufmaßliste">
           <table><colgroup><col className="measurement-overview-status-col"/><col/><col className="measurement-overview-invoiced-col"/><col className="measurement-overview-date-col"/><col className="measurement-overview-creator-col"/><col className="measurement-overview-hours-col"/></colgroup>
             <thead><tr>{["Status", "Titel / Nummer", "Abgerechnet", "Datum", "Ersteller", "Umfang"].map((label) => <th key={label} scope="col" className={label === "Umfang" ? "measurement-overview-hours" : undefined}>{label}</th>)}</tr></thead>
@@ -160,7 +161,7 @@ export function MeasurementReviewOverview(props: Props) {
           </nav> : null}
         </footer>
       </div>
-      <aside className="measurement-overview-detail" ref={detailRef} aria-label={selected ? `Details zu ${title(selected)}` : "Aufmaßdetails"}>
+      <aside className="measurement-overview-detail" ref={detailRef} inert={props.switchingArchive || undefined} aria-label={selected ? `Details zu ${title(selected)}` : "Aufmaßdetails"}>
         {!selected ? <p className="measurement-overview-empty">{loading ? "Aufmaße werden geladen…" : "Kein Aufmaß ausgewählt"}</p> : <>
           <header className="measurement-overview-detail-head"><h3>{title(selected)}</h3><div>
             <button type="button" className="secondary-action" disabled={archive || props.busy} title={archive ? "Aufmaß vor dem Öffnen wiederherstellen" : undefined} onClick={() => props.onOpen(selected)}>Öffnen</button>
@@ -200,6 +201,9 @@ export function MeasurementReviewOverview(props: Props) {
           {props.renderPhotos?.(selected)}
         </>}
       </aside>
+      {props.switchingArchive ? <div className="measurement-overview-switch-pending" role="status">
+        <span>{archive ? "Aktive Aufmaße werden geladen…" : "Archiv wird geladen…"}</span>
+      </div> : null}
     </div>
   </section>;
 }
