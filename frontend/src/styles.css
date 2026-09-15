@@ -32987,10 +32987,10 @@ body.mobile-modal-scroll-locked {
   justify-content: center;
   width: 16px;
   height: 16px;
-  border: 1px solid #c7d2e0;
+  border: 1px solid #dce3ec;
   border-radius: 0;
-  background: #ffffff;
-  color: #8f3038;
+  background: transparent;
+  color: #7d8b9e;
   cursor: pointer;
   font: inherit;
   font-weight: 900;
@@ -33005,10 +33005,11 @@ body.mobile-modal-scroll-locked {
   stroke-width: 3;
 }
 
-.measurement-review-detail.is-table-view .measurement-free-position-delete:hover,
+.measurement-review-detail.is-table-view .measurement-free-position-delete:hover:not(:disabled),
 .measurement-review-detail.is-table-view .measurement-free-position-delete:focus-visible {
-  border-color: #a66b70;
-  background: #fff6f6;
+  border-color: #c5a5a8;
+  background: #fbf5f5;
+  color: #9b6268;
   outline: none;
 }
 

@@ -68,6 +68,9 @@ test("all persisted columns have the same small centered delete control in both 
   const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
   const rule = styles.match(/\.measurement-review-detail\.is-table-view \.measurement-free-position-delete\s*\{([^}]+)\}/)[1];
   for (const declaration of ["width: 16px", "height: 16px", "align-items: center", "justify-content: center"]) assert.ok(rule.includes(declaration));
+  for (const declaration of ["color: #7d8b9e", "background: transparent", "border: 1px solid #dce3ec"]) assert.ok(rule.includes(declaration));
+  const highlight = styles.match(/\.measurement-free-position-delete:focus-visible\s*\{([^}]+)\}/)[1];
+  assert.match(highlight, /color: #9b6268/);
 });
 
 test("all review descriptions reserve six lines, including new and completed positions", () => {
