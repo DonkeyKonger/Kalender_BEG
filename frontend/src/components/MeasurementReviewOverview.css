@@ -73,7 +73,6 @@
 .measurement-overview-detail h4 { font-size: .875rem; font-weight: 750; line-height: normal; margin: 0 0 10px; color: #15253f; }
 .measurement-overview-project { grid-template-columns: minmax(0, 1fr) 180px var(--measurement-overview-summary-tail); }
 .measurement-overview-offer-name { margin: 0; color: #142842; font-size: .82rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
-.measurement-overview-offer-status { margin: 4px 0 0; color: #58708e; font-size: .75rem; line-height: 1.35; }
 .site-detail-page.is-project-file-workspace .measurement-overview button.secondary-action:hover:not(:disabled) { background: #f6f9fc; border-color: #30577d; }
 .site-detail-page.is-project-file-workspace .measurement-overview button.primary-action:hover:not(:disabled) { background: #174678; }
 .measurement-overview-origin { margin: 0; padding: 8px 22px; font-size: .78rem; color: #526a86; border-bottom: 1px solid var(--measurement-overview-border); }

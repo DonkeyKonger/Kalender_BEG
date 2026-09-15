@@ -193,7 +193,6 @@ export function MeasurementReviewOverview(props: Props) {
           <section className="measurement-overview-offer" aria-label="Zugeordnetes Angebot">
             <h4>Zugeordnetes Angebot</h4>
             <p className="measurement-overview-offer-name">{selectedOffer!.name}</p>
-            <p className="measurement-overview-offer-status">{selectedOffer!.status}</p>
           </section>
           <MeasurementMountingLocations key={selected.id} locations={selected.mounting_locations ?? []} />
           {props.renderPhotos?.(selected)}

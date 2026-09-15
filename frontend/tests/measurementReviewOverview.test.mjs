@@ -57,7 +57,8 @@ test("offer details distinguish real current, older and unassigned office measur
     const before = JSON.stringify(batch);
     const html = render({...props, batches: [batch]});
     assert.ok(html.includes(`class="measurement-overview-offer-name">${name}</p>`));
-    assert.ok(html.includes(`class="measurement-overview-offer-status">${status}</p>`));
+    assert.ok(!html.includes(status));
+    assert.ok(!html.includes('class="measurement-overview-offer-status"'));
     assert.equal(html.includes("Altes Angebot</span>"), oldBadge);
     assert.ok(html.indexOf("Kunde &amp; Projekt") < html.indexOf('aria-label="Zugeordnetes Angebot"'));
     assert.ok(html.indexOf('aria-label="Zugeordnetes Angebot"') < html.indexOf("Montageorte"));

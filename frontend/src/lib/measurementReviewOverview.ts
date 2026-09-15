@@ -6,12 +6,11 @@ export type MeasurementOverviewState = { selectedId: number | null; query: strin
 export function getMeasurementOfferDisplay(batch: MobileMeasurementBatch) {
   const offerId = batch.offer_id ?? batch.measurement_base_id;
   if (offerId == null) {
-    return { kind: "none" as const, name: "Ohne Angebotszuordnung", status: "Frei angelegtes Aufmaß" };
+    return { kind: "none" as const, name: "Ohne Angebotszuordnung" };
   }
   return {
     kind: batch.is_current_offer ? "current" as const : "older" as const,
     name: batch.offer_name?.trim() || batch.measurement_base_name?.trim() || `Angebot #${offerId}`,
-    status: batch.is_current_offer ? "Aktuelles Angebot" : "Älteres Angebot",
   };
 }
 
