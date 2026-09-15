@@ -6514,6 +6514,7 @@ function MeasurementReviewPanel({
             <ProjectRecordStatusControl
               active={openStatusBatchId === batch.id} label={badge.label}
               showCaret={false}
+              menuHeading=""
               ariaLabel={`${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}: Status ${badge.label}`}
               busy={reviewActionLoading || statusActionId !== null}
               options={!archiveMode && canPromoteStatus ? measurementStatusPromotionOptions(batch.status, batch.customer_signed_at) : []}

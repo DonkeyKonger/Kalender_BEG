@@ -9,6 +9,18 @@ const overviewSource = readFileSync(new URL("../src/components/MeasurementReview
 const apiSource = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
+test("measurement status dropdown hides only its heading and preserves status actions", () => {
+  const statusControl = pageSource.slice(
+    pageSource.indexOf('active={openStatusBatchId === batch.id}'),
+    pageSource.indexOf('renderActions={(batch) => canCreateBatch'),
+  );
+  assert.match(statusControl, /menuHeading=""/);
+  assert.match(statusControl, /measurementStatusPromotionOptions\(batch.status, batch.customer_signed_at\)/);
+  assert.match(statusControl, /onPromoteStatus\(batch, status\)/);
+  // The shared control keeps its default for other record types.
+  assert.match(pageSource, /menuHeading = "Status setzen auf"/);
+});
+
 test("measurement action menu is heading-free, opens leftwards and offers reversible archiving", () => {
   assert.match(pageSource, /menuLabel="Aufmaßaktionen" menuHeading="" menuAlign="end"/);
   assert.match(pageSource, /menuWidthAnchor="\.measurement-overview-detail-head > div"/);
