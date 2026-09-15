@@ -2302,20 +2302,26 @@ class MeasurementService:
             source_invoice_number=parsed.source_invoice_number,
         )
 
-        if parsed.source_invoice_number and self._invoice_already_imported(
-            site_id, parsed.source_invoice_number, measurement_base.id
-        ):
-            raise HTTPException(status.HTTP_409_CONFLICT, "Zeitenliste wurde für dieses Aufmaßblatt bereits importiert.")
-
-        duplicate_position = self._find_duplicate_position_in_base(
-            site_id=site_id,
-            measurement_base_id=measurement_base.id,
-            positions=[item.position for item in parsed.items],
+        # A revised timesheet may reuse its invoice number and contain both old
+        # and new positions. Only the position within this base is a duplicate.
+        known_positions = set(
+            self.db.scalars(
+                select(SiteMeasurementItem.position).where(
+                    SiteMeasurementItem.site_id == site_id,
+                    SiteMeasurementItem.measurement_base_id == measurement_base.id,
+                )
+            ).all()
         )
-        if duplicate_position is not None:
+        new_positions = []
+        for item in parsed.items:
+            if item.position in known_positions:
+                continue
+            new_positions.append(item)
+            known_positions.add(item.position)
+        if not new_positions:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                f"Position {duplicate_position} existiert bereits in diesem Aufmaßblatt. Bitte ein neues Aufmaßblatt erstellen oder das bestehende prüfen.",
+                "Keine neuen Positionen: Alle Positionen dieser Zeitenliste sind bereits in diesem Aufmaßblatt vorhanden.",
             )
 
         sort_offset = (
@@ -2346,7 +2352,7 @@ class MeasurementService:
                 is_nep=item.is_nep,
                 sort_order=sort_offset + item.sort_order,
             )
-            for item in parsed.items
+            for item in new_positions
         ]
         self.db.add_all(items)
         self.db.commit()
@@ -2489,22 +2495,6 @@ class MeasurementService:
         if base is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufmaßblatt nicht gefunden.")
         return base
-
-    def _find_duplicate_position_in_base(
-        self, *, site_id: int, measurement_base_id: int, positions: list[str]
-    ) -> str | None:
-        if not positions:
-            return None
-        existing = self.db.scalar(
-            select(SiteMeasurementItem.position)
-            .where(
-                SiteMeasurementItem.site_id == site_id,
-                SiteMeasurementItem.measurement_base_id == measurement_base_id,
-                SiteMeasurementItem.position.in_(positions),
-            )
-            .limit(1)
-        )
-        return existing
 
     def _get_user_assignment(self, assignment_id: int, current_user: User) -> Assignment:
         if current_user.person_id is None:
@@ -3580,22 +3570,6 @@ class MeasurementService:
         if site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
         return site
-
-    def _invoice_already_imported(
-        self, site_id: int, invoice_number: str, measurement_base_id: int
-    ) -> bool:
-        return (
-            self.db.scalar(
-                select(SiteMeasurementItem.id)
-                .where(
-                    SiteMeasurementItem.site_id == site_id,
-                    SiteMeasurementItem.measurement_base_id == measurement_base_id,
-                    SiteMeasurementItem.source_invoice_number == invoice_number,
-                )
-                .limit(1)
-            )
-            is not None
-        )
 
 
 def _decimal_as_string(value: Decimal) -> str:

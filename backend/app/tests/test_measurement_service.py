@@ -349,7 +349,7 @@ def parsed_timesheet_position(
 
 def parsed_timesheet_positions(
     *,
-    invoice_number: str,
+    invoice_number: str | None,
     positions: list[str],
     description_prefix: str,
 ) -> MeasurementTimesheetParseResult:
@@ -407,7 +407,7 @@ def test_measurement_archive_filename_sanitizes_forbidden_file_characters():
     assert filename == "260611_Aufmaß_Projekt_Nord_A_B_Test_80_07.pdf"
 
 
-def test_import_timesheet_stores_zero_quantity_and_blocks_same_invoice(monkeypatch):
+def test_import_timesheet_stores_zero_quantity_and_rejects_only_existing_positions(monkeypatch):
     db = db_session()
     site = create_site(db)
     create_measurement_base(db, site)
@@ -432,6 +432,105 @@ def test_import_timesheet_stores_zero_quantity_and_blocks_same_invoice(monkeypat
         MeasurementService(db).import_timesheet(site.id, file_name="Zeitvorgabe.pdf", pdf_content=b"pdf")
 
     assert error.value.status_code == 409
+    assert "Keine neuen Positionen" in error.value.detail
+
+
+@pytest.mark.parametrize("second_invoice", ["invoice-1", "invoice-2", None])
+def test_import_timesheet_appends_new_positions_without_changing_existing(monkeypatch, second_invoice):
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    parsed_by_content = {
+        b"first": parsed_timesheet_positions(
+            invoice_number="invoice-1", positions=["1.1"], description_prefix="Original"
+        ),
+        b"extended": parsed_timesheet_positions(
+            invoice_number=second_invoice, positions=["1.1", "1.2"], description_prefix="Revision"
+        ),
+    }
+    monkeypatch.setattr(
+        "app.services.measurement_service.parse_measurement_timesheet_pdf",
+        lambda content: parsed_by_content[content],
+    )
+    service = MeasurementService(db)
+    _, original_items = service.import_timesheet(
+        site.id, file_name="Zeitenliste.pdf", pdf_content=b"first",
+        import_mode="append_existing", measurement_base_id=base.id,
+    )
+    original = original_items[0]
+    # Office edits must survive a revised upload, including quantities and times.
+    original.list_quantity = Decimal("7.00")
+    original.minutes_per_unit = Decimal("12.00")
+    db.commit()
+    original_values = {
+        column.name: getattr(original, column.name)
+        for column in SiteMeasurementItem.__table__.columns
+    }
+
+    summary, added = service.import_timesheet(
+        site.id, file_name="Zeitenliste.pdf", pdf_content=b"extended",
+        import_mode="append_existing", measurement_base_id=base.id,
+    )
+
+    assert summary["imported_count"] == 1
+    assert [item.position for item in added] == ["1.2"]
+    assert added[0].source_invoice_number == second_invoice
+    assert added[0].description == "Revision 1.2"
+    assert added[0].measurement_base_id == base.id
+    assert added[0].sort_order > original.sort_order
+    db.refresh(original)
+    assert {column.name: getattr(original, column.name)
+            for column in SiteMeasurementItem.__table__.columns} == original_values
+    assert list(db.scalars(select(SiteMeasurementItem.position).where(
+        SiteMeasurementItem.measurement_base_id == base.id
+    ).order_by(SiteMeasurementItem.sort_order))) == ["1.1", "1.2"]
+
+    with pytest.raises(HTTPException, match="Keine neuen Positionen"):
+        service.import_timesheet(
+            site.id, file_name="Zeitenliste.pdf", pdf_content=b"extended",
+            measurement_base_id=base.id,
+        )
+
+
+def test_import_timesheet_skips_duplicate_positions_within_uploaded_file(monkeypatch):
+    db = db_session()
+    site = create_site(db)
+    monkeypatch.setattr(
+        "app.services.measurement_service.parse_measurement_timesheet_pdf",
+        lambda _content: parsed_timesheet_positions(
+            invoice_number="invoice-1", positions=["1.1", "1.1", "1.2", "1.2"],
+            description_prefix="Position",
+        ),
+    )
+
+    summary, items = MeasurementService(db).import_timesheet(
+        site.id, file_name="Zeitenliste.pdf", pdf_content=b"pdf"
+    )
+
+    assert summary["imported_count"] == 2
+    assert [item.position for item in items] == ["1.1", "1.2"]
+
+
+@pytest.mark.parametrize("base_status", ["closed", "archived"])
+def test_import_timesheet_still_rejects_locked_base(monkeypatch, base_status):
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    base.status = base_status
+    db.commit()
+    monkeypatch.setattr(
+        "app.services.measurement_service.parse_measurement_timesheet_pdf",
+        lambda _content: parsed_timesheet(),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        MeasurementService(db).import_timesheet(
+            site.id, file_name="Zeitenliste.pdf", pdf_content=b"pdf",
+            measurement_base_id=base.id,
+        )
+
+    assert error.value.status_code == 409
+    assert db.scalar(select(SiteMeasurementItem.id)) is None
 
 
 def test_import_timesheet_allows_same_position_in_new_measurement_base(monkeypatch):
