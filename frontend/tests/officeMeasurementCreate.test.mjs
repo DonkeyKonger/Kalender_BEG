@@ -162,7 +162,7 @@ test("office origin does not create a special presentation and never offers a fa
   assert.match(overviewSource, /await props.onExport\(batch, "checked"\)/);
   assert.doesNotMatch(overviewSource, /Originales Monteur-Aufmaß|measurement-overview-documents/);
   assert.doesNotMatch(styles, /\.measurement-review-origin-note/);
-  assert.match(styles, /\.measurement-create-modal\s*\{[^}]*border-radius:\s*0/s);
+  assert.match(styles, /\.measurement-create-modal\s*\{[^}]*border-radius:\s*3px/s);
 });
 
 test("closing or reopening a measurement invalidates execution progress before the tab is revisited", () => {

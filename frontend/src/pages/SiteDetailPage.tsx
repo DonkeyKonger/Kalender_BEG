@@ -6521,7 +6521,7 @@ function MeasurementReviewPanel({
                 type="button"
                 onClick={() => setIsCreateDialogOpen(false)}
               >
-                ×
+                <X aria-hidden="true" size={18} />
               </button>
             </header>
             <div className="measurement-create-modal-form">
