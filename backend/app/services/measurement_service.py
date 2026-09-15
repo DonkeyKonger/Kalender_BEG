@@ -2309,6 +2309,7 @@ class MeasurementService:
                 select(SiteMeasurementItem.position).where(
                     SiteMeasurementItem.site_id == site_id,
                     SiteMeasurementItem.measurement_base_id == measurement_base.id,
+                    SiteMeasurementItem.is_hidden.is_(False),
                 )
             ).all()
         )
@@ -2355,6 +2356,14 @@ class MeasurementService:
             for item in new_positions
         ]
         self.db.add_all(items)
+        # Insert first so replacement IDs are distinct even on SQLite. Never
+        # reactivate old content or transfer its quantities to the new position.
+        self.db.flush()
+        self._remove_unreferenced_hidden_import_positions(
+            site_id=site_id,
+            measurement_base_id=measurement_base.id,
+            positions=[item.position for item in new_positions],
+        )
         self.db.commit()
         for item in items:
             self.db.refresh(item)
@@ -2367,6 +2376,62 @@ class MeasurementService:
             "measurement_base": self._build_measurement_base(measurement_base),
         }
         return summary, items
+
+    def _remove_unreferenced_hidden_import_positions(
+        self, *, site_id: int, measurement_base_id: int, positions: list[str]
+    ) -> None:
+        candidates = list(self.db.scalars(
+            select(SiteMeasurementItem).where(
+                SiteMeasurementItem.site_id == site_id,
+                SiteMeasurementItem.measurement_base_id == measurement_base_id,
+                SiteMeasurementItem.position.in_(positions),
+                SiteMeasurementItem.is_hidden.is_(True),
+                SiteMeasurementItem.measurement_batch_id.is_(None),
+                SiteMeasurementItem.linked_measurement_item_id.is_(None),
+                ~SiteMeasurementItem.entries.any(),
+            )
+        ))
+        if not candidates:
+            return
+
+        candidate_ids = {item.id for item in candidates}
+        protected_ids = set(self.db.scalars(
+            select(SiteMeasurementItem.linked_measurement_item_id).where(
+                SiteMeasurementItem.linked_measurement_item_id.in_(candidate_ids)
+            )
+        ))
+
+        def protect_snapshot_references(value: object) -> None:
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    if key in {"measurement_item_id", "linked_measurement_item_id"}:
+                        if isinstance(child, (int, str)) and str(child).isdigit():
+                            protected_ids.add(int(child))
+                    else:
+                        protect_snapshot_references(child)
+            elif isinstance(value, list):
+                for child in value:
+                    protect_snapshot_references(child)
+
+        # References in immutable snapshots / overrides are not foreign keys.
+        # Keep historical rows, including archived batches, completely intact.
+        for overrides, submitted, signed, history in self.db.execute(
+            select(
+                SiteMeasurementBatch.item_overrides,
+                SiteMeasurementBatch.original_submitted_snapshot,
+                SiteMeasurementBatch.customer_signed_snapshot,
+                SiteMeasurementBatch.status_history,
+            ).where(SiteMeasurementBatch.site_id == site_id)
+        ):
+            protected_ids.update(
+                int(key) for key in (overrides or {}) if str(key).isdigit()
+            )
+            for value in (overrides, submitted, signed, history):
+                protect_snapshot_references(value)
+
+        for item in candidates:
+            if item.id not in protected_ids:
+                self.db.delete(item)
 
     def _resolve_import_measurement_base(
         self,
