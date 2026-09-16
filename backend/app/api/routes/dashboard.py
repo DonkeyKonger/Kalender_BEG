@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import require_business_page
 from app.core.database import get_db
+from app.schemas.dashboard_billing import DashboardBillingRead
 from app.schemas.dashboard_note import (
     DashboardNoteCreate,
     DashboardNoteRead,
@@ -20,6 +21,7 @@ from app.schemas.person import PersonRead
 from app.schemas.site import SiteSummary
 from app.schemas.weather import WeatherSummary
 from app.services.dashboard_note_service import DashboardNoteService
+from app.services.dashboard_billing_service import DashboardBillingService
 from app.services.dashboard_message_service import DashboardMessageService
 from app.services.dashboard_service import DashboardService
 from app.services.measurement_service import MeasurementService
@@ -32,6 +34,14 @@ CAN_READ_DASHBOARD_NOTES = require_business_page(
     "overview",
     "calendar",
 )
+
+
+@router.get("/billing", response_model=DashboardBillingRead)
+def get_dashboard_billing(
+    user=Depends(CAN_READ_DASHBOARD),
+    db: Session = Depends(get_db),
+) -> DashboardBillingRead:
+    return DashboardBillingService(db).get_overview(current_user=user)
 
 
 @router.get("/weather", response_model=WeatherSummary)

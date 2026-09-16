@@ -1,9 +1,10 @@
-import { AlertTriangle, BriefcaseBusiness, Check, ClipboardList, Clock, CloudSun, Inbox, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, BriefcaseBusiness, Check, ClipboardList, Clock, CloudSun, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { DashboardInbox } from "../components/DashboardInbox";
 import {
   DashboardNoteEmployeeSelect,
   DashboardNoteShareUserSelect,
@@ -856,11 +857,10 @@ export function DashboardPage() {
               ) : <EmptyDashboardText text="Heute sind keine Baustellen besetzt." />}
             </DashboardCard>
 
-            <DashboardCard
-              title="Eingang / Meldungen"
-              icon={<Inbox aria-hidden="true" size={20} />}
+            <DashboardInbox
+              key={user?.id}
+              canViewBilling={user?.role === "project_manager"}
               badge={dashboardMessageCount > 0 ? String(dashboardMessageCount) : undefined}
-              className="dashboard-card-messages dashboard-section--messages"
             >
               {dashboardMessages.length > 0 ? (
                 <div className="dashboard-alert-list">
@@ -933,7 +933,7 @@ export function DashboardPage() {
                   <strong>Keine neuen Meldungen</strong>
                 </div>
               )}
-            </DashboardCard>
+            </DashboardInbox>
 
             <DashboardCard
               title="Notizen"

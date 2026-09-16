@@ -91,6 +91,26 @@ export type DashboardMessagesSummary = {
   latest_messages: DashboardMessage[];
 };
 
+export type DashboardBillingItem = {
+  id: number;
+  kind: "measurement" | "extra_work";
+  title: string;
+  status: string;
+  status_label: string;
+  date: string | null;
+};
+
+export type DashboardBilling = {
+  open_count: number;
+  sites: Array<{
+    site_id: number;
+    site_number: string | null;
+    site_name: string;
+    project_manager_name: string | null;
+    items: DashboardBillingItem[];
+  }>;
+};
+
 export type DashboardMessageCount = {
   count: number;
 };
@@ -520,6 +540,10 @@ export const api = {
 
   async dashboardMessageUnreadCount(): Promise<DashboardMessageCount> {
     return request<DashboardMessageCount>("/dashboard/messages/unread-count");
+  },
+
+  async dashboardBilling(): Promise<DashboardBilling> {
+    return request<DashboardBilling>("/dashboard/billing");
   },
 
   async dismissDashboardMessage(messageKey: string): Promise<void> {
