@@ -61,6 +61,7 @@ import { useMobileModalStack } from "../lib/useMobileModalStack";
 import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobile";
 import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkMaterialItem, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileExtraWorkWorkerHours, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
 import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear, toDateInputValue } from "../utils/dateRange";
+import "./MobileMeasurementPositions.css";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -5840,6 +5841,7 @@ function MeasurementBatchDetail({
     <div className="mobile-measurement-search">
       <Search aria-hidden="true" size={17} />
       <input
+        aria-label="Position oder Leistung suchen"
         type="text"
         placeholder="Position oder Leistung suchen..."
         value={searchTerm}
@@ -5848,29 +5850,77 @@ function MeasurementBatchDetail({
     </div>
   );
 
+  if (viewMode === "list") {
+    return (
+      <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page is-list-view">
+        <header className="mobile-measurement-list-header">
+          <div className="mobile-measurement-list-title">
+            <MobileBackButton label="Zurück zum Aufmaß" onClick={onBack} />
+            <h1>Aufmaß</h1>
+          </div>
+          {searchControl}
+        </header>
+        <section className="mobile-measurement-list-content" aria-labelledby="mobile-measurement-positions-title">
+          <div className="mobile-measurement-list-actions">
+            <h2 id="mobile-measurement-positions-title">Positionen</h2>
+            <button
+              className="mobile-measurement-create-position-button"
+              type="button"
+              onClick={onCreatePosition}
+              disabled={batch.is_locked_for_worker}
+            >
+              <Plus aria-hidden="true" size={17} />
+              <span>Position erstellen</span>
+            </button>
+          </div>
+          {batch.is_locked_for_worker ? (
+            <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
+          ) : null}
+          {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
+          {error ? <div className="form-error">{error}</div> : null}
+          {!isItemsLoading && !error && allItems.length === 0 ? (
+            <div className="empty-panel">Noch keine Aufmaßpositionen importiert.</div>
+          ) : null}
+          {!isItemsLoading && !error && allItems.length > 0 && items.length === 0 ? (
+            <div className="empty-panel">Keine Aufmaßposition gefunden.</div>
+          ) : null}
+          {!isItemsLoading && !error && items.length > 0 ? (
+            <div className="mobile-measurement-position-list">
+              {items.filter((item) => !isInlineFreePositionDraftItem(item)).map((item) => {
+                const positionLabel = getMeasurementPositionDisplayLabel(item);
+                return (
+                  <button className="mobile-measurement-position-row" key={item.id} type="button" onClick={() => onSelectItem(item)}>
+                    <span className="mobile-measurement-position-copy">
+                      {positionLabel ? <strong>{positionLabel}</strong> : null}
+                      {item.is_free_position ? <span className="mobile-measurement-free-badge">Zusatzposition</span> : null}
+                      <span className="mobile-measurement-position-description">{item.description}</span>
+                    </span>
+                    <span className="mobile-measurement-position-amount">
+                      <strong className={Number(item.reported_quantity) < 0 ? "measurement-negative-quantity" : undefined}>{formatMeasurementNumber(item.reported_quantity)}</strong>
+                      <span>{item.unit ?? ""}</span>
+                    </span>
+                    <ChevronRight aria-hidden="true" size={18} />
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div className={`mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page${viewMode === "table" ? " is-table-view" : ""}`}>
+    <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page is-table-view">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
           <ArrowLeft aria-hidden="true" size={17} />
           <span>Aufmaß</span>
         </button>
-        {viewMode === "list" ? (
-          <button className="mobile-measurement-create-position-button" type="button" onClick={onCreatePosition}>
-            <Plus aria-hidden="true" size={15} />
-            <span>Position erstellen</span>
-          </button>
-        ) : null}
-        {viewMode === "table" ? searchControl : null}
+        {searchControl}
       </div>
       {batch.is_locked_for_worker ? (
         <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
-      ) : null}
-
-      {viewMode === "list" ? (
-        <div className="mobile-measurement-toolbar">
-          {searchControl}
-        </div>
       ) : null}
 
       {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
@@ -5881,32 +5931,7 @@ function MeasurementBatchDetail({
       {!isItemsLoading && !error && allItems.length > 0 && items.length === 0 ? (
         <div className="empty-panel">Keine Aufmaßposition gefunden.</div>
       ) : null}
-      {!isItemsLoading && !error && items.length > 0 && viewMode === "list" ? (
-        <div className="mobile-measurement-list">
-          {items.filter((item) => !isInlineFreePositionDraftItem(item)).map((item) => {
-            const isCaptured = isMobileMeasurementItemCaptured(item);
-            const positionLabel = getMeasurementPositionDisplayLabel(item);
-            return (
-              <button
-                className={isCaptured ? "mobile-measurement-card is-captured-position" : "mobile-measurement-card is-empty-position"}
-                key={item.id}
-                type="button"
-                onClick={() => onSelectItem(item)}
-              >
-                <div className="mobile-measurement-row-top">
-                  <span className="mobile-measurement-row-position-wrap">
-                    {positionLabel ? <strong className="mobile-measurement-row-position">{positionLabel}</strong> : null}
-                    {item.is_free_position ? <span className="mobile-measurement-free-badge">Zusatzposition</span> : null}
-                  </span>
-                  <strong className={`mobile-measurement-row-quantity${Number(item.reported_quantity) < 0 ? " measurement-negative-quantity" : ""}`}>{formatMeasurementNumber(item.reported_quantity)} {item.unit ?? ""}</strong>
-                </div>
-                <span className="mobile-measurement-row-description">{item.description}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-      {!isItemsLoading && !error && items.length > 0 && viewMode === "table" ? (
+      {!isItemsLoading && !error && items.length > 0 ? (
         <>
           {positionGroups.length > 0 ? (
             <div className="mobile-measurement-position-groups" aria-label="Positionsbereich auswählen">
