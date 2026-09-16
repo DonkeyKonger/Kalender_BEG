@@ -190,7 +190,27 @@ class MeasurementWorkerOptionRead(BaseModel):
     display_name: str
 
 
+class MeasurementGroupCreate(BaseModel):
+    batch_ids: list[int] = Field(min_length=2, max_length=100)
+
+
+class MeasurementGroupSourceRead(BaseModel):
+    id: int
+    number_label: str
+
+
+class MeasurementGroupRead(BaseModel):
+    id: int
+    number_label: str
+    created_at: datetime
+    sources: list[MeasurementGroupSourceRead]
+    position_count: int
+    worker_signature_count: int
+    has_customer_signature: bool
+
+
 class MobileMeasurementBatchRead(BaseModel):
+    combined_measurement: MeasurementGroupRead | None = None
     id: int
     site_id: int
     measurement_base_id: int | None

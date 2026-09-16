@@ -1,12 +1,13 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Check, MailCheck, MailX, Plus, Ruler, Search } from "lucide-react";
-import type { MobileMeasurementBatch, Site } from "../types/site";
+import type { MeasurementGroup, MobileMeasurementBatch, Site } from "../types/site";
 import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
 import { calculateExtraWorkOverviewPageSize, EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, formatExtraWorkOverviewCreatorName, getExtraWorkOverviewMasterHeight, getExtraWorkOverviewPageItems } from "../lib/extraWorkOverview";
 import { formatMeasurementCount, formatMeasurementOverviewHours, formatMeasurementDetailHours, getMeasurementOverviewWindow, getMeasurementLocationPreviewCount, getMeasurementOfferDisplay } from "../lib/measurementReviewOverview";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import { getMeasurementOverviewTitle } from "../lib/measurementReviewOverview";
+import { getMeasurementGroups, isMeasurementCompleted } from "../lib/measurementReviewOverview";
 import "./MeasurementReviewOverview.css";
 
 type Props = {
@@ -26,6 +27,8 @@ type Props = {
   renderStatus: (batch: MobileMeasurementBatch) => ReactNode;
   renderActions: (batch: MobileMeasurementBatch) => ReactNode;
   renderPhotos?: (batch: MobileMeasurementBatch) => ReactNode;
+  onCombine?: (ids: number[]) => Promise<MeasurementGroup>;
+  onExportGroup?: (group: MeasurementGroup) => Promise<void>;
 };
 
 export function MeasurementReviewOverview(props: Props) {
@@ -36,11 +39,28 @@ export function MeasurementReviewOverview(props: Props) {
   const [height, setHeight] = useState(getExtraWorkOverviewMasterHeight(EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE));
   const [pdfAction, setPdfAction] = useState<string | null>(null);
   const pdfPending = useRef(false);
+  const [choosing, setChoosing] = useState(false);
+  const [chosen, setChosen] = useState<number[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const [combining, setCombining] = useState(false);
+  const combinePending = useRef(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const [groupMessage, setGroupMessage] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const pageSize = calculateExtraWorkOverviewPageSize(height);
   const view = getMeasurementOverviewWindow(batches, state, pageSize, title);
+  const currentGroups = getMeasurementGroups(batches);
+  const eligible = batches.filter(batch => isMeasurementCompleted(batch) && !currentGroups.has(batch.combined_measurement?.id ?? -1));
+  const chosenBatches = eligible.filter(batch => chosen.includes(batch.id));
+  const selectedGroup = !loading && !error && !archive && view.visible.some(batch => batch.combined_measurement?.id === selectedGroupId)
+    ? view.groups.get(selectedGroupId!) : undefined;
+  const busy = props.busy || combining;
+  const changeState = (next: MeasurementOverviewState) => { setSelectedGroupId(null); onState(next); };
   const selected = loading || error ? null : view.selected;
   const email = selected ? getCustomerEmailStatus(selected) : null;
   const selectedOffer = selected ? getMeasurementOfferDisplay(selected) : null;
+
+  useEffect(() => { setChoosing(false); setChosen([]); setConfirming(false); setSelectedGroupId(null); setGroupMessage(null); setGroupError(null); }, [archive, site.id]);
 
   useLayoutEffect(() => {
     const workspace = workspaceRef.current;
@@ -61,7 +81,7 @@ export function MeasurementReviewOverview(props: Props) {
     }
   }, [loading, error, state, view.selected, view.page, onState]);
 
-  useLayoutEffect(() => { if (detailRef.current) detailRef.current.scrollTop = 0; }, [selected?.id]);
+  useLayoutEffect(() => { if (detailRef.current) detailRef.current.scrollTop = 0; }, [selected?.id, selectedGroup?.id]);
 
   useLayoutEffect(() => {
     const detail = detailRef.current;
@@ -93,24 +113,52 @@ export function MeasurementReviewOverview(props: Props) {
     finally { pdfPending.current = false; setPdfAction(null); }
   }
 
+  async function combine() {
+    if (!props.onCombine || combinePending.current || chosenBatches.length < 2) return;
+    combinePending.current = true; setCombining(true); setGroupError(null);
+    try {
+      const group = await props.onCombine(chosenBatches.map(batch => batch.id));
+      setConfirming(false); setChoosing(false); setChosen([]); setSelectedGroupId(group.id);
+      onState({ ...state, query: "", page: 1, selectedId: group.sources[0].id });
+      setGroupMessage(`Gesamtaufmaß ${group.number_label} erstellt.`);
+    } catch (error) { setGroupError(error instanceof Error ? error.message : "Zusammenfassen fehlgeschlagen."); }
+    finally { combinePending.current = false; setCombining(false); }
+  }
+
+  async function exportGroup(group: MeasurementGroup) {
+    if (!props.onExportGroup || pdfPending.current) return;
+    pdfPending.current = true; setPdfAction(`group:${group.id}`); setGroupError(null);
+    try { await props.onExportGroup(group); }
+    catch (error) { setGroupError(error instanceof Error ? error.message : "PDF konnte nicht geladen werden."); props.onRetry(); }
+    finally { pdfPending.current = false; setPdfAction(null); }
+  }
+
   return <section className="measurement-overview" aria-busy={loading || props.switchingArchive || false}>
     <header className="measurement-overview-toolbar">
       <div className="measurement-overview-toolbar-left">
         <h2><Ruler size={18} aria-hidden="true" />Prüfung</h2>
         <div className="measurement-overview-modes" role="group" aria-label="Aufmaßansicht">
-          <button type="button" aria-pressed={!archive} disabled={loading || props.busy} onClick={() => archive && props.onToggleArchive()}>Aktiv</button>
+          <button type="button" aria-pressed={!archive} disabled={loading || busy} onClick={() => archive && props.onToggleArchive()}>Aktiv</button>
           <span aria-hidden="true">·</span>
-          <button type="button" aria-pressed={archive} disabled={loading || props.busy} onClick={() => !archive && props.onToggleArchive()}>Archiv</button>
+          <button type="button" aria-pressed={archive} disabled={loading || busy} onClick={() => !archive && props.onToggleArchive()}>Archiv</button>
         </div>
       </div>
       <div className="measurement-overview-toolbar-right">
         <label className="measurement-overview-search"><span className="sr-only">Aufmaße durchsuchen</span>
-          <input type="search" placeholder="Suche…" disabled={props.switchingArchive} value={state.query} onChange={(e) => onState({ selectedId: null, page: 1, query: e.target.value })} />
+          <input type="search" placeholder="Suche…" disabled={props.switchingArchive || combining} value={state.query} onChange={(e) => changeState({ selectedId: null, page: 1, query: e.target.value })} />
           <Search size={16} aria-hidden="true" />
         </label>
-        {!archive && props.canCreate ? <button type="button" className="primary-action" disabled={loading || props.busy} onClick={props.onCreate}><Plus size={18} aria-hidden="true" />Aufmaß anlegen</button> : props.canCreate ? <span className="measurement-overview-create-placeholder" aria-hidden="true" /> : null}
+        {!archive && props.onCombine ? <button type="button" className="secondary-action measurement-group-toggle" aria-pressed={choosing} disabled={loading || busy} onClick={() => { setChoosing(!choosing); setChosen([]); setGroupError(null); setGroupMessage(null); }}>Aufmaße zusammenfassen</button> : null}
+        {!archive && props.canCreate ? <button type="button" className="primary-action" disabled={loading || busy} onClick={props.onCreate}><Plus size={18} aria-hidden="true" />Aufmaß anlegen</button> : props.canCreate ? <span className="measurement-overview-create-placeholder" aria-hidden="true" /> : null}
       </div>
     </header>
+    {choosing && !archive ? <div className="measurement-group-selection">
+      <span>{chosenBatches.length} ausgewählt · Nur abgeschlossene Aufmaße</span>
+      <button type="button" className="secondary-action" disabled={busy} onClick={() => { setChoosing(false); setChosen([]); }}>Abbrechen</button>
+      <button type="button" className="primary-action" disabled={busy || chosenBatches.length < 2} onClick={() => setConfirming(true)}>Auswahl zusammenfassen</button>
+    </div> : null}
+    {groupMessage ? <p role="status" className="measurement-group-message">{groupMessage}</p> : null}
+    {groupError && !confirming ? <p role="alert" className="project-record-empty-state is-error">{groupError}</p> : null}
     <div role="status" className="sr-only">{props.message ?? ""}</div>
     {props.actionError ? <div role="alert" className="project-record-empty-state is-error">{props.actionError}</div> : null}
     <div className="measurement-overview-workspace" ref={workspaceRef} style={{ "--measurement-overview-height": `${height}px`, "--measurement-overview-master-height": `${getExtraWorkOverviewMasterHeight(pageSize)}px` } as CSSProperties}>
@@ -121,14 +169,27 @@ export function MeasurementReviewOverview(props: Props) {
             <tbody>
               {loading || error || view.visible.length === 0 ? <tr className="measurement-overview-state"><td colSpan={6}>
                 {loading ? "Aufmaße werden geladen…" : error ? <><p role="alert">{error}</p><button type="button" className="secondary-action" onClick={props.onRetry}>Erneut laden</button></> : state.query.trim() ? "Keine Aufmaße gefunden" : archive ? "Keine archivierten Aufmaße vorhanden" : "Noch keine Aufmaße vorhanden"}
-              </td></tr> : view.visible.map((batch) => {
+              </td></tr> : view.visible.map((batch, index) => {
                 const creator = formatExtraWorkOverviewCreatorName(batch.created_by_name);
                 const date = batch.measurement_date ?? batch.submitted_at;
                 const offer = getMeasurementOfferDisplay(batch);
-                return <tr key={batch.id} className={selected?.id === batch.id ? "is-selected" : ""}
-                  onClick={(event) => { if (!(event.target instanceof Element) || !event.target.closest("button, a, input")) onState({...state, selectedId:batch.id}); }}>
-                  <td onClick={(e) => e.stopPropagation()}>{props.renderStatus(batch)}</td>
-                  <td><button type="button" className="measurement-overview-select" aria-pressed={selected?.id === batch.id} onClick={() => onState({...state, selectedId:batch.id})}>{title(batch)}</button>
+                const group = view.groups.get(batch.combined_measurement?.id ?? -1);
+                const showHeader = group && view.visible[index - 1]?.combined_measurement?.id !== group.id;
+                return <Fragment key={batch.id}>
+                  {showHeader ? <tr className={`measurement-group-header ${selectedGroup?.id === group.id ? "is-selected" : ""}`}><td colSpan={6}>
+                    <button type="button" aria-pressed={selectedGroup?.id === group.id} onClick={() => { setSelectedGroupId(group.id); onState({ ...state, selectedId: batch.id }); }}>
+                      <span>Gesamtaufmaß {group.number_label}</span><small>{group.sources.length} Aufmaße</small>
+                    </button>
+                  </td></tr> : null}
+                  <tr className={`${!selectedGroup && selected?.id === batch.id ? "is-selected" : ""} ${group ? "measurement-group-child" : ""}`}
+                  onClick={(event) => { if (!(event.target instanceof Element) || !event.target.closest("button, a, input")) changeState({...state, selectedId:batch.id}); }}>
+                  <td onClick={(e) => e.stopPropagation()}><div className="measurement-group-status">
+                    {choosing ? <input type="checkbox" className="measurement-group-checkbox" aria-label={`${title(batch)} auswählen`}
+                      title={group ? "Bereits zusammengefasst" : !isMeasurementCompleted(batch) ? "Nur abgeschlossene Aufmaße" : "Für Gesamtaufmaß auswählen"}
+                      disabled={busy || Boolean(group) || !isMeasurementCompleted(batch)} checked={chosenBatches.some(row => row.id === batch.id)}
+                      onChange={event => setChosen(current => event.target.checked ? [...current, batch.id] : current.filter(id => id !== batch.id))} /> : null}
+                    {props.renderStatus(batch)}</div></td>
+                  <td><button type="button" className="measurement-overview-select" aria-pressed={!selectedGroup && selected?.id === batch.id} onClick={() => changeState({...state, selectedId:batch.id})}>{title(batch)}</button>
                     {offer.kind === "older" ? <span className="measurement-status is-old-offer" title={offer.name}>Altes Angebot</span> : null}
                   </td>
                   <td onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
@@ -145,7 +206,7 @@ export function MeasurementReviewOverview(props: Props) {
                   <td className="measurement-overview-hours" title="Arbeitsstunden der Aufmaßpositionen laut hinterlegter Zeitkalkulation">
                     {formatMeasurementOverviewHours(batch.reported_hours)}
                   </td>
-                </tr>;
+                </tr></Fragment>;
               })}
             </tbody>
           </table>
@@ -153,16 +214,25 @@ export function MeasurementReviewOverview(props: Props) {
         <footer className="measurement-overview-pagination">
           <span>{loading ? "Wird geladen…" : error ? "—" : formatMeasurementCount(view.filtered.length,"Aufmaß","Aufmaße")}</span>
           {!loading && !error && view.pageCount > 1 ? <nav aria-label="Seiten der Aufmaße">
-            <button type="button" aria-label="Erste Seite" disabled={view.page===1} onClick={()=>onState({...state,page:1,selectedId:null})}>«</button>
-            <button type="button" aria-label="Vorherige Seite" disabled={view.page===1} onClick={()=>onState({...state,page:view.page-1,selectedId:null})}>‹</button>
-            {getExtraWorkOverviewPageItems(view.pageCount,view.page).map((page) => typeof page === "number" ? <button type="button" key={page} aria-current={page===view.page?"page":undefined} aria-label={`Seite ${page}`} onClick={()=>onState({...state,page,selectedId:null})}>{page}</button> : <span key={page}>…</span>)}
-            <button type="button" aria-label="Nächste Seite" disabled={view.page===view.pageCount} onClick={()=>onState({...state,page:view.page+1,selectedId:null})}>›</button>
-            <button type="button" aria-label="Letzte Seite" disabled={view.page===view.pageCount} onClick={()=>onState({...state,page:view.pageCount,selectedId:null})}>»</button>
+            <button type="button" aria-label="Erste Seite" disabled={view.page===1} onClick={()=>changeState({...state,page:1,selectedId:null})}>«</button>
+            <button type="button" aria-label="Vorherige Seite" disabled={view.page===1} onClick={()=>changeState({...state,page:view.page-1,selectedId:null})}>‹</button>
+            {getExtraWorkOverviewPageItems(view.pageCount,view.page).map((page) => typeof page === "number" ? <button type="button" key={page} aria-current={page===view.page?"page":undefined} aria-label={`Seite ${page}`} onClick={()=>changeState({...state,page,selectedId:null})}>{page}</button> : <span key={page}>…</span>)}
+            <button type="button" aria-label="Nächste Seite" disabled={view.page===view.pageCount} onClick={()=>changeState({...state,page:view.page+1,selectedId:null})}>›</button>
+            <button type="button" aria-label="Letzte Seite" disabled={view.page===view.pageCount} onClick={()=>changeState({...state,page:view.pageCount,selectedId:null})}>»</button>
           </nav> : null}
         </footer>
       </div>
-      <aside className="measurement-overview-detail" ref={detailRef} inert={props.switchingArchive || undefined} aria-label={selected ? `Details zu ${title(selected)}` : "Aufmaßdetails"}>
-        {!selected ? <p className="measurement-overview-empty">{loading ? "Aufmaße werden geladen…" : "Kein Aufmaß ausgewählt"}</p> : <>
+      <aside className="measurement-overview-detail" ref={detailRef} inert={props.switchingArchive || undefined} aria-label={selectedGroup ? `Details zu Gesamtaufmaß ${selectedGroup.number_label}` : selected ? `Details zu ${title(selected)}` : "Aufmaßdetails"}>
+        {selectedGroup ? <>
+          <header className="measurement-overview-detail-head measurement-group-detail-head"><h3>Gesamtaufmaß {selectedGroup.number_label}</h3>
+            <button type="button" className="secondary-action" disabled={busy || pdfAction !== null || !props.onExportGroup} onClick={() => void exportGroup(selectedGroup)}>{pdfAction ? "PDF…" : "PDF herunterladen"}</button>
+          </header>
+          <section><h4>Fester Gesamtstand</h4><p className="measurement-group-explanation">Die Mengen der enthaltenen Aufmaße sind gemeinsam zusammengefasst. Änderungen an einem Einzelaufmaß lösen diese Zusammenfassung automatisch auf.</p>
+            <dl className="measurement-group-meta"><div><dt>Erstellt</dt><dd>{props.dateTime(selectedGroup.created_at)}</dd></div><div><dt>Positionen</dt><dd>{selectedGroup.position_count}</dd></div></dl>
+          </section>
+          <section><h4>Enthaltene Aufmaße</h4><ul className="measurement-group-sources">{selectedGroup.sources.map(source => <li key={source.id}><button type="button" onClick={() => changeState({ ...state, selectedId: source.id })}>Aufmaß {source.number_label}</button></li>)}</ul></section>
+          <section><h4>Übernommene Unterschriften</h4><p className="measurement-group-explanation">{selectedGroup.worker_signature_count} Monteursunterschriften<br />{selectedGroup.has_customer_signature ? `Kundenunterschrift aus Aufmaß ${selectedGroup.sources[0].number_label} (in allen Einzelaufmaßen vorhanden)` : "Keine Kundenunterschrift – nicht in allen Einzelaufmaßen vorhanden"}</p></section>
+        </> : !selected ? <p className="measurement-overview-empty">{loading ? "Aufmaße werden geladen…" : "Kein Aufmaß ausgewählt"}</p> : <>
           <header className="measurement-overview-detail-head"><h3>{title(selected)}</h3><div>
             <button type="button" className="secondary-action" disabled={archive || props.busy} title={archive ? "Aufmaß vor dem Öffnen wiederherstellen" : undefined} onClick={() => props.onOpen(selected)}>Öffnen</button>
             <button type="button" className="secondary-action measurement-overview-pdf"
@@ -205,7 +275,25 @@ export function MeasurementReviewOverview(props: Props) {
         <span>{archive ? "Aktive Aufmaße werden geladen…" : "Archiv wird geladen…"}</span>
       </div> : null}
     </div>
+    {confirming ? <MeasurementGroupConfirmation batches={chosenBatches} title={title} busy={combining} error={groupError}
+      onCancel={() => { if (!combining) { setConfirming(false); setGroupError(null); } }} onConfirm={() => void combine()} /> : null}
   </section>;
+}
+
+function MeasurementGroupConfirmation({ batches, title, busy, error, onCancel, onConfirm }: {
+  batches: MobileMeasurementBatch[]; title: (batch: MobileMeasurementBatch) => string;
+  busy: boolean; error: string | null; onCancel: () => void; onConfirm: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { const element = dialog.current!; element.showModal(); return () => element.close(); }, []);
+  return <dialog ref={dialog} className="measurement-group-dialog" aria-labelledby="measurement-group-dialog-title" onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}>
+    <h3 id="measurement-group-dialog-title">Aufmaße zusammenfassen?</h3>
+    <p>Es wird ein fester Gesamtstand erstellt. Die Einzelaufmaße bleiben erhalten. Sobald eines davon geändert wird, wird die Zusammenfassung wieder entfernt.</p>
+    <ul>{batches.map(batch => <li key={batch.id}>{title(batch)}{batch.is_invoiced ? " · bereits abgerechnet" : ""}</li>)}</ul>
+    <p>Vorhandene Monteursunterschriften werden übernommen. Die Kundenunterschrift des Aufmaßes mit der höchsten Nummer wird nur übernommen, wenn alle ausgewählten Aufmaße eine Kundenunterschrift haben.</p>
+    {error ? <p role="alert" className="is-error">{error}</p> : null}
+    <footer><button autoFocus type="button" className="secondary-action" disabled={busy} onClick={onCancel}>Abbrechen</button><button type="button" className="primary-action" disabled={busy || batches.length < 2} onClick={onConfirm}>{busy ? "Wird erstellt…" : `${batches.length} Aufmaße zusammenfassen`}</button></footer>
+  </dialog>;
 }
 
 function MeasurementMountingLocations({ locations }: { locations: string[] }) {

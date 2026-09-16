@@ -1752,7 +1752,7 @@ export function SiteDetailPage() {
           }}
           batches={measurementBatches}
           onBatchPhotoCountUpdated={(batchId, photoCount) => {
-            setMeasurementBatches((current) => current.map((batch) => batch.id === batchId ? { ...batch, photo_count: photoCount } : batch));
+            setMeasurementBatches((current) => current.map((batch) => batch.id === batchId ? { ...batch, photo_count: photoCount, combined_measurement: batch.photo_count === photoCount ? batch.combined_measurement : null } : batch));
             setSelectedMeasurementBatch((current) => current?.id === batchId ? { ...current, photo_count: photoCount } : current);
           }}
           measurementWorkers={measurementWorkers}
@@ -6527,6 +6527,15 @@ function MeasurementReviewPanel({
         canMarkInvoiced={canPromoteStatus} onToggleInvoiced={onToggleBatchInvoiced}
         onToggleArchive={() => { setOpenStatusBatchId(null); setOpenOverviewActionId(null); onToggleArchive(); }}
         onOpen={onSelectBatch} onExport={onExportPdf} canExport={isMeasurementBatchPdfExportable}
+        onCombine={canCreateBatch ? async (ids) => {
+          const group = await api.combineSiteMeasurements(site.id, ids);
+          onRetryBatches();
+          return group;
+        } : undefined}
+        onExportGroup={async (group) => {
+          const blob = await api.downloadSiteMeasurementGroupPdf(site.id, group.id);
+          triggerBrowserDownload(blob, `Gesamtaufmass_${group.number_label.replace(/[/\\]/g, "-")}.pdf`);
+        }}
         renderPhotos={(batch) => <ExtraWorkOverviewPhotos key={`measurement:${site.id}:${batch.id}:${archiveMode}`} siteId={site.id} ticket={batch} photoKind="measurement" includeDeleted={archiveMode} canUpload={!archiveMode && canEditMeasurementContent(batch, canCreateBatch)} onPhotoCountUpdated={onBatchPhotoCountUpdated} />}
         title={(batch) => formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}
         date={(value) => value.length === 10 ? formatDateOnly(value) : formatExtraWorkOverviewCreatedDate(value)} dateTime={formatDateTime}

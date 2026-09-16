@@ -22,6 +22,8 @@ from app.schemas.extra_work import (
     ExtraWorkTicketRead,
 )
 from app.schemas.measurement import (
+    MeasurementGroupCreate,
+    MeasurementGroupRead,
     MeasurementBaseRead,
     MeasurementBaseUpdate,
     MeasurementEntryCreate,
@@ -67,6 +69,7 @@ from app.services.document_thumbnail_service import (
     is_pdf_document,
 )
 from app.services.extra_work_service import ExtraWorkService
+from app.services.measurement_group_service import MeasurementGroupService
 from app.services.document_photo_optimizer import create_document_photo_thumbnail, OPTIMIZED_PHOTO_CONTENT_TYPE
 from app.services.extra_work_archive_service import (
     archive_completed_extra_work_ticket_after_response,
@@ -998,6 +1001,22 @@ def download_measurement_batch_photo_thumbnail(site_id: int, batch_id: int, phot
     # Reuse the document-photo thumbnail renderer without changing persisted photos.
     thumbnail = create_document_photo_thumbnail(bytes(content))
     return Response(content=thumbnail, media_type=OPTIMIZED_PHOTO_CONTENT_TYPE, headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.post("/{site_id}/measurement-groups", response_model=MeasurementGroupRead, status_code=status.HTTP_201_CREATED)
+def combine_measurement_batches(site_id: int, payload: MeasurementGroupCreate,
+                                current_user: User = Depends(CAN_WRITE), db: Session = Depends(get_db)):
+    return MeasurementGroupService(db).create(site_id, payload.batch_ids, current_user)
+
+
+@router.get("/{site_id}/measurement-groups/{group_id}/pdf")
+def download_measurement_group_pdf(site_id: int, group_id: int,
+                                  _user: User = Depends(CAN_READ), db: Session = Depends(get_db)):
+    content, filename = MeasurementGroupService(db).pdf(site_id, group_id)
+    return Response(content=content, media_type="application/pdf", headers={
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+        "Cache-Control": "no-store",
+    })
 
 
 @router.get("/{site_id}/measurement-batches", response_model=list[MobileMeasurementBatchRead])

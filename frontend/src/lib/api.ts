@@ -1,4 +1,4 @@
-import type { SiteNotes, SiteNoteBlock, SiteNoteBlockUpdate } from "../types/site";
+import type { MeasurementGroup, SiteNotes, SiteNoteBlock, SiteNoteBlockUpdate } from "../types/site";
 import type { Absence, AbsenceCreate, AbsenceUpdate, VacationCarryover, VacationCarryoverUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { PayrollRemarks } from "./payrollRemarks";
@@ -1500,6 +1500,16 @@ export const api = {
 
   async downloadSiteMeasurementBatchPdf(siteId: number, batchId: number, mode: "checked" | "original" = "checked"): Promise<Blob> {
     return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/pdf?mode=${mode}`);
+  },
+
+  async combineSiteMeasurements(siteId: number, batchIds: number[]): Promise<MeasurementGroup> {
+    return request<MeasurementGroup>(`/sites/${siteId}/measurement-groups`, {
+      method: "POST", body: JSON.stringify({ batch_ids: batchIds }),
+    });
+  },
+
+  async downloadSiteMeasurementGroupPdf(siteId: number, groupId: number): Promise<Blob> {
+    return requestBlob(`/sites/${siteId}/measurement-groups/${groupId}/pdf`);
   },
 
   async siteExtraWorkTickets(

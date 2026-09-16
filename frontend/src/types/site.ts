@@ -289,7 +289,18 @@ export type MobileMeasurementFreeItemPayload = {
   area_or_comment?: string | null;
 };
 
+export type MeasurementGroup = {
+  id: number;
+  number_label: string;
+  created_at: string;
+  sources: { id: number; number_label: string }[];
+  position_count: number;
+  worker_signature_count: number;
+  has_customer_signature: boolean;
+};
+
 export type MobileMeasurementBatch = {
+  combined_measurement?: MeasurementGroup | null;
   has_signed_snapshot?: boolean;
   previous_status?: string | null;
   status_rollback_floor?: "draft" | "customer_signed";

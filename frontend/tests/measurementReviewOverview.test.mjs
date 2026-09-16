@@ -45,6 +45,56 @@ const props = {
   renderStatus: batch => batch.status, renderActions: () => null,
 };
 
+const combined = {
+  id: 42, number_label: "9999.25G", created_at: "2026-09-16T10:00:00Z",
+  sources: [{id: 1, number_label: "9999.25"}, {id: 5, number_label: "9999.21"}],
+  position_count: 2, worker_signature_count: 2, has_customer_signature: true,
+};
+const groupedBatches = batches.map(batch => ({...batch, status: "billed",
+  combined_measurement: combined.sources.some(source => source.id === batch.id) ? combined : null}));
+
+test("combined header keeps nonadjacent originals together, counts originals only", () => {
+  const view = windowFor(groupedBatches, state, 4, title);
+  assert.deepEqual(view.visible.map(batch => batch.id), [1, 5, 2]);
+  assert.equal(view.filtered.length, batches.length);
+  assert.equal(view.groups.get(42).number_label, "9999.25G");
+  const html = render({...props, batches: groupedBatches});
+  assert.match(html, /Gesamtaufmaß 9999.25G/);
+  assert.equal((html.match(/measurement-group-child/g) || []).length, 2);
+});
+
+test("searching a group or child retains all original rows and their context", () => {
+  for (const query of ["9999.25G", "9999.21"]) {
+    const view = windowFor(groupedBatches, {...state, query}, 4, title);
+    assert.deepEqual(view.visible.map(batch => batch.id), [1, 5]);
+  }
+});
+
+test("a changed member immediately dissolves the visual group", () => {
+  const changed = groupedBatches.map(batch => batch.id === 5 ? {...batch, combined_measurement: null} : batch);
+  const view = windowFor(changed, state, 4, title);
+  assert.equal(view.groups.size, 0);
+  assert.deepEqual(view.visible.map(batch => batch.id), [1, 2, 3, 4]);
+});
+
+test("groups are never split across page boundaries, including oversized groups", () => {
+  const bigGroup = {...combined, sources: groupedBatches.slice(0, 7).map(batch => ({id: batch.id, number_label: title(batch)}))};
+  const bigBatches = groupedBatches.map(batch => ({...batch, combined_measurement: batch.id <= 7 ? bigGroup : null}));
+  const first = windowFor(bigBatches, state, 4, title);
+  const second = windowFor(bigBatches, {...state, page: 2}, 4, title);
+  assert.deepEqual(first.visible.map(batch => batch.id), [1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(second.visible[0].id, 8);
+  assert.equal(windowFor(bigBatches, {...state, selectedId: 7, page: 3}, 4, title).page, 1);
+});
+
+test("combine action is between search and create, omitted in archive or without permission", () => {
+  const html = render({...props, onCombine: async () => combined});
+  assert.ok(html.indexOf("Suche…") < html.indexOf("Aufmaße zusammenfassen"));
+  assert.ok(html.indexOf("Aufmaße zusammenfassen") < html.indexOf("Aufmaß anlegen"));
+  assert.doesNotMatch(render({...props, archive: true, onCombine: async () => combined}), /Aufmaße zusammenfassen/);
+  assert.doesNotMatch(render(props), /Aufmaße zusammenfassen/);
+});
+
 test("archive switch preserves layout, marks pending state and disables stale content", () => {
   const pending = render({...props, switchingArchive:true, busy:true});
   assert.match(pending, /aria-busy="true"/);

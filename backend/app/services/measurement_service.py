@@ -1382,6 +1382,8 @@ class MeasurementService:
         )
         photo_counts = self._photo_counts_by_batch_id(batch_ids=[batch.id for batch in batches])
         calculation_lookup = self._measurement_calculation_lookup(site_id)
+        from app.services.measurement_group_service import groups_for_overview
+        groups = groups_for_overview(self.db, site_id, batches)
         return [
             self._build_mobile_batch(
                 batch,
@@ -1390,7 +1392,7 @@ class MeasurementService:
                 photo_count=photo_counts.get(batch.id, 0),
                 calculation_lookup=calculation_lookup,
                 snapshot_presence=(has_original, has_signed),
-            )
+            ).model_copy(update={"combined_measurement": groups.get(batch.id)})
             for batch, has_original, has_signed in batch_rows
         ]
 

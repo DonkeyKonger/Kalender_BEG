@@ -1346,6 +1346,7 @@ def _build_logical_measurement_blocks(
     positions: list[MatrixPosition],
     areas: list[MatrixArea],
     cells: dict[tuple[str, int], MatrixCellValue],
+    include_zero_positions: bool = False,
 ) -> list[LogicalMeasurementBlock]:
     area_blocks = _chunk(areas, MAX_MEASUREMENT_ROWS_PER_LOGICAL_BLOCK) or [[]]
     cells_by_area: dict[str, list[tuple[int, MatrixCellValue]]] = {}
@@ -1371,7 +1372,7 @@ def _build_logical_measurement_blocks(
             list(positions)
             if not areas
             else [position for position in positions if position.item_id in active_position_ids or (
-                block_index == 0 and (position.is_added or position.is_removed or position.original_description is not None
+                block_index == 0 and (include_zero_positions or position.is_added or position.is_removed or position.original_description is not None
                     or position.original_position is not None or position.original_unit is not None)
                 and not any(item_id == position.item_id and _is_relevant_measurement_cell(cell) for (_, item_id), cell in cells.items())
             )]
@@ -1379,7 +1380,7 @@ def _build_logical_measurement_blocks(
         block_totals = {
             position.item_id: totals_by_position.get(position.item_id, Decimal("0"))
             for position in block_positions
-            if position.item_id in active_position_ids
+            if include_zero_positions or position.item_id in active_position_ids
         }
         logical_blocks.append(
             LogicalMeasurementBlock(

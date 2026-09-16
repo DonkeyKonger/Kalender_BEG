@@ -40,6 +40,7 @@ from app.models.site_measurement_item import (
     SiteMeasurementItem,
 )
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
+from app.models.measurement_group import MeasurementGroup, MeasurementGroupMember
 from app.models.tool_material_item import ToolMaterialItem
 from app.models.tool_issue_report import ToolIssueReport
 from app.models.tool_material_settings import ToolMaterialSettings
@@ -94,6 +95,8 @@ __all__ = [
     "SiteMeasurementBatchPhoto",
     "SiteMeasurementEntry",
     "SiteMeasurementItem",
+    "MeasurementGroup",
+    "MeasurementGroupMember",
     "SiteVehicleAssignment",
     "TimeEntryWeeklyReview",
     "ToolMaterialItem",

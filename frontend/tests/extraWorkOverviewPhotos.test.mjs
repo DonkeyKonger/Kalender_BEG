@@ -54,7 +54,8 @@ test("measurements reuse the existing gallery and upload slots with scoped endpo
   assert.match(pageSource, /renderPhotos=\{\(batch\) => <ExtraWorkOverviewPhotos[^\n]*photoKind="measurement"[^\n]*canUpload=\{!archiveMode && canEditMeasurementContent\(batch, canCreateBatch\)\}[^\n]*onPhotoCountUpdated=\{onBatchPhotoCountUpdated\}/);
   assert.match(pageSource, /photoKind === "measurement" \? api.uploadSiteMeasurementBatchPhoto : api.uploadSiteExtraWorkTicketPhoto/);
   assert.match(apiSource, /async uploadSiteMeasurementBatchPhoto[\s\S]*?measurement-batches\/\$\{batchId\}\/photos[\s\S]*?method: "POST"/);
-  assert.match(pageSource, /setMeasurementBatches\(\(current\) => current.map\(\(batch\) => batch.id === batchId \? \{ ...batch, photo_count: photoCount \}/);
+  assert.match(pageSource, /setMeasurementBatches\(\(current\) => current.map\(\(batch\) => batch.id === batchId \? \{ ...batch, photo_count: photoCount,/);
+  assert.match(pageSource, /combined_measurement: batch.photo_count === photoCount \? batch.combined_measurement : null/);
   assert.match(pageSource, /photoKind === "measurement" \? api.siteMeasurementBatchPhotos/);
   assert.match(pageSource, /photoKind === "measurement" \? api.siteMeasurementBatchPhotoThumbnail/);
   assert.match(pageSource, /photoKind === "measurement" \? api.siteMeasurementBatchPhotoContent/);
