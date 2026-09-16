@@ -226,7 +226,7 @@ def test_manual_measurement_status_promotion_only_moves_up_and_never_fakes_signa
         "abgeschlossen",
     ],
 )
-def test_manual_measurement_status_reset_to_draft_is_allowed_from_every_workflow_state(initial_status):
+def test_manual_measurement_status_reset_to_draft_cannot_remove_a_signature(initial_status):
     db = db_session()
     site = create_site(db)
     actor = User(
@@ -273,33 +273,27 @@ def test_manual_measurement_status_reset_to_draft_is_allowed_from_every_workflow
     db.add_all([actor, batch, item, entry])
     db.commit()
 
-    reset = MeasurementService(db).promote_site_batch_status(
-        site_id=site.id,
-        batch_id=batch.id,
-        target_status="draft",
-        current_user=actor,
-    )
+    with pytest.raises(HTTPException) as error:
+        MeasurementService(db).promote_site_batch_status(
+            site_id=site.id, batch_id=batch.id, target_status="draft", current_user=actor,
+        )
 
-    assert reset.status == "draft"
+    assert error.value.status_code == 409
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     assert stored_batch is not None
     assert stored_batch.first_submitted_at.date() == date(2026, 8, 1)
-    assert db.get(SiteMeasurementEntry, entry.id).status == "draft"
-    assert stored_batch.customer_signed_at is None
-    assert stored_batch.customer_signature_name is None
-    assert stored_batch.customer_signature_place is None
-    assert stored_batch.customer_signature_strokes is None
-    assert stored_batch.worker_signed_at is None
-    assert stored_batch.worker_signature_name is None
-    assert stored_batch.worker_signature_strokes is None
+    assert db.get(SiteMeasurementEntry, entry.id).status == initial_status
+    assert stored_batch.status == initial_status
+    assert stored_batch.customer_signed_at is not None
+    assert stored_batch.customer_signature_name == "Kunde Beispiel"
+    assert stored_batch.customer_signed_snapshot == {"version": "customer_signed"}
+    assert stored_batch.worker_signature_name == "Monteur Beispiel"
     audit_log = db.scalar(
         select(AuditLog)
         .where(AuditLog.action == "measurement.status_reset_to_draft")
         .where(AuditLog.entity_id == batch.id)
     )
-    assert audit_log is not None
-    assert audit_log.old_value_json == {"status": initial_status}
-    assert audit_log.new_value_json == {"status": "draft"}
+    assert audit_log is None
 
 
 def parsed_timesheet() -> MeasurementTimesheetParseResult:
@@ -2213,11 +2207,16 @@ def test_status_reset_preserves_reviewed_content_signatures_and_invoicing(initia
 
     # Repeated requests remain a status operation, never a worker-data reset.
     for _ in range(2):
-        result = service.set_site_batch_billing_status(site_id=site.id, batch_id=batch.id, billing_status="submitted")
+        if signed:
+            with pytest.raises(HTTPException) as error:
+                service.set_site_batch_billing_status(site_id=site.id, batch_id=batch.id, billing_status="submitted")
+            assert error.value.status_code == 409
+        else:
+            service.set_site_batch_billing_status(site_id=site.id, batch_id=batch.id, billing_status="submitted")
         db.expire_all()
         stored = db.get(SiteMeasurementBatch, batch.id)
         stored_entry = db.get(SiteMeasurementEntry, saved_id)
-        assert result.status == stored.status == stored_entry.status == "submitted"
+        assert stored.status == stored_entry.status == (initial_status if signed else "submitted")
         assert stored_entry.quantity == Decimal("12.55")
         assert stored_entry.area_or_comment == "2. OG Büroänderung"
         assert stored.original_submitted_snapshot == {"worker": "original, not restored"}

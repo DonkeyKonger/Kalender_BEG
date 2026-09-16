@@ -17,14 +17,14 @@ type Props = {
 
 export function MeasurementReviewStatusBar(props: Props) {
   const { batch, busy } = props;
-  const rollbackTarget = batch.previous_status ?? (batch.status !== "submitted" ? "submitted" : null);
+  const rollbackTarget = batch.previous_status ?? null;
   const rollbackIsFallback = batch.status_rollback_is_fallback || !batch.previous_status;
   const statusLabels: Record<string, string> = { draft: "Entwurf", rejected: "Zurückgewiesen", in_review: "In Prüfung", submitted: "Eingereicht", reviewed: "Geprüft", customer_signed: "Unterschrieben", billed: "Abgeschlossen" };
   const statusAliases: Record<string, string> = { checked: "reviewed", signed: "customer_signed", approved: "billed", closed: "billed", completed: "billed", finalized: "billed" };
   const targetStep = rollbackTarget ? statusAliases[rollbackTarget] ?? rollbackTarget : null;
   const rollbackLabel = targetStep ? statusLabels[targetStep] ?? targetStep : "";
   const rollbackDescription = rollbackIsFallback
-    ? "Keine verlässliche Statushistorie vorhanden: auf Eingereicht zurücksetzen."
+    ? `Keine verlässliche Statushistorie vorhanden: auf ${rollbackLabel} zurücksetzen.`
     : `Letzten Statuswechsel rückgängig machen: ${rollbackLabel}`;
   const steps = getMeasurementReviewSteps(batch).map((step, index) => ({ ...step, number: index + 1 }));
   // Keep real predecessors outside the usual four stages reachable, too (e.g. draft).

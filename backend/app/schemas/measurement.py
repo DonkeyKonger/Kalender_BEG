@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -201,6 +202,7 @@ class MobileMeasurementBatchRead(BaseModel):
     title: str
     status: str
     previous_status: str | None = None
+    status_rollback_floor: Literal["draft", "customer_signed"] = "draft"
     status_rollback_is_fallback: bool = False
     status_revision: int = 0
     status_path: list[str] | None = None

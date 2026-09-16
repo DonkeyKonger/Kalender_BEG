@@ -10,6 +10,34 @@ SIGNATURE_FIELDS = {
     "worker": ("worker_signed_at", "worker_signature_name", "worker_signature_strokes"),
 }
 
+SIGNED_STATUSES = {"customer_signed", "signed"}
+COMPLETED_STATUSES = {"billed", "approved", "closed", "completed", "finalized", "abgeschlossen"}
+
+
+def has_signature_barrier(batch, *, signed_snapshot_present=None):
+    """Once signed, even legacy records may never regress below that stage."""
+    if batch.status in SIGNED_STATUSES or batch.customer_signed_at or batch.customer_signature_name:
+        return True
+    # List queries pass an existence flag rather than loading the large snapshot.
+    if signed_snapshot_present is None:
+        signed_snapshot_present = batch.customer_signed_snapshot is not None
+    if signed_snapshot_present:
+        return True
+    for event in batch.status_history or []:
+        if not isinstance(event, dict):
+            continue
+        if event.get("from") in ("customer_signed", "signed") or event.get("to") in ("customer_signed", "signed"):
+            return True
+        signatures = event.get("signatures")
+        if isinstance(signatures, dict) and any(signatures.get(field) for field in SIGNATURE_FIELDS["customer"]):
+            return True
+    return False
+
+
+def ensure_signature_barrier(batch, target):
+    if has_signature_barrier(batch) and target not in SIGNED_STATUSES | COMPLETED_STATUSES:
+        raise HTTPException(409, "Unterschriebene Aufmaße können nicht unter den Status Unterschrieben zurückgesetzt werden.")
+
 
 def _signature_state(batch):
     return {
@@ -71,18 +99,28 @@ def _recorded_rollback_transition(batch):
     return stack[-1]
 
 
-def rollback_uses_fallback(batch):
-    return batch.status != "submitted" and _recorded_rollback_transition(batch) is None
+def rollback_uses_fallback(batch, *, signature_barrier=None):
+    target = rollback_target(batch, signature_barrier=signature_barrier)
+    transition = _recorded_rollback_transition(batch)
+    return target is not None and (transition is None or transition["from"] != target)
 
 
-def rollback_target(batch):
+def rollback_target(batch, *, signature_barrier=None):
+    if signature_barrier is None:
+        signature_barrier = has_signature_barrier(batch)
+    if signature_barrier:
+        # Never invent a missing signature from a status label or old history.
+        return "customer_signed" if batch.status in COMPLETED_STATUSES and batch.customer_signed_at else None
+    if batch.status == "draft":
+        return None
     transition = _recorded_rollback_transition(batch)
     if transition:
         return transition["from"]
-    return "submitted" if rollback_uses_fallback(batch) else None
+    return "draft" if batch.status == "submitted" else "submitted"
 
 
 def record_status_transition(batch, target, *, signature_groups=()):
+    ensure_signature_barrier(batch, target)
     if batch.status == target:
         return
     history = list(batch.status_history or [])
@@ -104,17 +142,20 @@ def rollback_status(batch, expected_revision):
     if target is None:
         raise HTTPException(409, "Kein verlässlich protokollierter vorheriger Status vorhanden.")
     transition = _recorded_rollback_transition(batch)
-    # Keep the superseded signature in the append-only history, not as an active
-    # approval. Quantities, locations, worker submissions and invoicing stay intact.
+    if transition and transition["from"] != target:
+        transition = None
+    # Preserve the audit trail. Quantities, locations and invoicing stay intact.
     history.append({
         "kind": "rollback" if transition else "fallback", "from": batch.status, "to": target,
         "at": datetime.now(timezone.utc).isoformat(), "signatures": _signature_state(batch),
         **({"reason": "missing_reliable_history"} if transition is None else {}),
     })
-    # Without a trustworthy predecessor, start at submitted without an active
-    # customer approval. Its evidence stays in the history above; worker proof,
-    # submission snapshots, quantities and invoicing are not reset.
-    for group in transition["signature_groups"] if transition else ("customer",):
+    # A signed batch always retains its active signature and signed snapshot.
+    # Only unsigned batches may restore signature fields from their predecessor.
+    groups_to_restore = transition["signature_groups"] if transition else ("customer",)
+    if has_signature_barrier(batch):
+        groups_to_restore = ()
+    for group in groups_to_restore:
         for field in SIGNATURE_FIELDS[group]:
             value = deepcopy(transition["signatures"][field]) if transition else None
             if field.endswith("_at") and value:

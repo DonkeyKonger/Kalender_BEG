@@ -292,6 +292,7 @@ export type MobileMeasurementFreeItemPayload = {
 export type MobileMeasurementBatch = {
   has_signed_snapshot?: boolean;
   previous_status?: string | null;
+  status_rollback_floor?: "draft" | "customer_signed";
   status_rollback_is_fallback?: boolean;
   status_revision?: number;
   status_path?: string[] | null;

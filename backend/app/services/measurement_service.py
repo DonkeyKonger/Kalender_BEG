@@ -80,7 +80,7 @@ from app.services.push_notification_service import PushNotificationService
 from app.services.time_entry_service import TimeEntryService
 from app.services.audit_service import AuditService
 from app.services.project_record_status import validate_measurement_status_promotion
-from app.services.measurement_status_history import active_transitions, record_status_transition, rollback_status, rollback_target, rollback_uses_fallback
+from app.services.measurement_status_history import active_transitions, ensure_signature_barrier, has_signature_barrier, record_status_transition, rollback_status, rollback_target, rollback_uses_fallback
 from app.services.measurement_content import measurement_item_content, measurement_item_minutes
 
 
@@ -1867,6 +1867,7 @@ class MeasurementService:
         batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
         previous_status = batch.status
         target_status = validate_measurement_status_promotion(previous_status, target_status)
+        ensure_signature_barrier(batch, target_status)
         AuditService(self.db).record(
             user_id=current_user.id,
             action=(
@@ -1908,6 +1909,7 @@ class MeasurementService:
     ) -> MobileMeasurementBatchRead:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
+        ensure_signature_barrier(batch, "reviewed")
         if batch.status in {"billed", "approved", "closed"}:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -2039,6 +2041,7 @@ class MeasurementService:
     ) -> list[MobileMeasurementItemRead]:
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
+        ensure_signature_barrier(batch, "submitted")
         self._ensure_site_batch_can_be_edited_in_office(batch)
         if batch.status == "draft":
             raise HTTPException(
@@ -2970,6 +2973,7 @@ class MeasurementService:
                 )
             )
         )
+        signature_barrier = has_signature_barrier(batch, signed_snapshot_present=snapshot_presence[1] if snapshot_presence is not None else None)
         return MobileMeasurementBatchRead(
             id=batch.id,
             site_id=batch.site_id,
@@ -2982,8 +2986,9 @@ class MeasurementService:
             title=batch.title,
             status=batch.status,
             is_invoiced=batch.is_invoiced,
-            previous_status=rollback_target(batch),
-            status_rollback_is_fallback=rollback_uses_fallback(batch),
+            previous_status=rollback_target(batch, signature_barrier=signature_barrier),
+            status_rollback_floor="customer_signed" if signature_barrier else "draft",
+            status_rollback_is_fallback=rollback_uses_fallback(batch, signature_barrier=signature_barrier),
             status_revision=len(batch.status_history or []),
             status_path=([event["from"] for event in active_transitions(batch)] + [batch.status]) if batch.status_history else None,
             origin=batch.origin,

@@ -23,10 +23,13 @@ test("measurement status control preserves forward transitions and offers a draf
     "draft",
   ]);
   assert.deepEqual(measurementStatusPromotionOptions("reviewed", null).map(({ value }) => value), ["billed", "draft"]);
-  assert.deepEqual(measurementStatusPromotionOptions("customer_signed", "2026-08-12T08:00:00Z").map(({ value }) => value), ["billed", "draft"]);
+  assert.deepEqual(measurementStatusPromotionOptions("customer_signed", "2026-08-12T08:00:00Z").map(({ value }) => value), ["billed"]);
   assert.deepEqual(measurementStatusPromotionOptions("billed", null).map(({ value }) => value), ["draft"]);
   assert.deepEqual(measurementStatusPromotionOptions("completed", null).map(({ value }) => value), ["draft"]);
-  assert.deepEqual(measurementStatusPromotionOptions("billed", "2026-08-12T08:00:00Z").map(({ value }) => value), ["draft"]);
+  assert.deepEqual(measurementStatusPromotionOptions("billed", "2026-08-12T08:00:00Z").map(({ value }) => value), []);
+  assert.deepEqual(measurementStatusPromotionOptions("signed", null).map(({ value }) => value), ["billed"]);
+  assert.deepEqual(measurementStatusPromotionOptions("billed", null, "customer_signed"), []);
+  assert.deepEqual(measurementStatusPromotionOptions("submitted", null, "customer_signed").map(({ value }) => value), ["billed"]);
 });
 
 test("extra-work status control skips the protected signature state", () => {

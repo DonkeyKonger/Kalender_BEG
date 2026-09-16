@@ -6539,7 +6539,7 @@ function MeasurementReviewPanel({
               menuHeading=""
               ariaLabel={`${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}: Status ${badge.label}`}
               busy={reviewActionLoading || statusActionId !== null}
-              options={!archiveMode && canPromoteStatus ? measurementStatusPromotionOptions(batch.status, batch.customer_signed_at) : []}
+              options={!archiveMode && canPromoteStatus ? measurementStatusPromotionOptions(batch.status, batch.customer_signed_at, batch.status_rollback_floor) : []}
               onClose={() => setOpenStatusBatchId(null)}
               onSelect={(status) => { setOpenStatusBatchId(null); onPromoteStatus(batch, status); }}
               onToggle={() => setOpenStatusBatchId(current => current === batch.id ? null : batch.id)}

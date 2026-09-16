@@ -38,9 +38,11 @@ _EXTRA_WORK_STATUS_RANK = {
 
 def validate_measurement_status_promotion(current_status: str, target_status: str) -> str:
     normalized_target = (target_status or "").strip().lower()
-    # Returning an Aufmaß to draft is an intentional exception to the otherwise
-    # forward-only manual status workflow. It must also work after completion.
+    # Unsigned batches may return to draft. The service additionally enforces
+    # the permanent signature barrier using the batch's evidence and history.
     if normalized_target == "draft":
+        if current_status in {"customer_signed", "signed"}:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Unterschriebene Aufmaße können nicht auf Entwurf zurückgesetzt werden.")
         return normalized_target
     return _validate_promotion(
         current_status=current_status,

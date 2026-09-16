@@ -15,7 +15,7 @@ test("measurement status dropdown hides only its heading and preserves status ac
     pageSource.indexOf('renderActions={(batch) => canCreateBatch'),
   );
   assert.match(statusControl, /menuHeading=""/);
-  assert.match(statusControl, /measurementStatusPromotionOptions\(batch.status, batch.customer_signed_at\)/);
+  assert.match(statusControl, /measurementStatusPromotionOptions\(batch.status, batch.customer_signed_at, batch.status_rollback_floor\)/);
   assert.match(statusControl, /onPromoteStatus\(batch, status\)/);
   // The shared control keeps its default for other record types.
   assert.match(pageSource, /menuHeading = "Status setzen auf"/);

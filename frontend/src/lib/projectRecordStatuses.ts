@@ -34,17 +34,19 @@ const extraWorkTargets: Array<ProjectRecordStatusOption<ExtraWorkManualStatus> &
 export function measurementStatusPromotionOptions(
   status: string,
   customerSignedAt: string | null,
+  rollbackFloor: "draft" | "customer_signed" = "draft",
 ): ProjectRecordStatusOption<MeasurementManualStatus>[] {
   const normalizedStatus = status.trim().toLowerCase();
+  const signed = rollbackFloor === "customer_signed" || Boolean(customerSignedAt) || ["customer_signed", "signed"].includes(normalizedStatus);
   const statusRank = measurementStatusRank(normalizedStatus);
   const rank = statusRank === null
-    ? (customerSignedAt ? 3 : null)
-    : Math.max(statusRank, customerSignedAt ? 3 : statusRank);
+    ? (signed ? 3 : null)
+    : Math.max(statusRank, signed ? 3 : statusRank);
   if (rank === null) return [];
   const forwardOptions = measurementTargets
     .filter((target) => target.rank > rank)
     .map(({ value, label }) => ({ value, label }));
-  return normalizedStatus === "draft"
+  return normalizedStatus === "draft" || signed
     ? forwardOptions
     : [...forwardOptions, measurementDraftResetOption];
 }

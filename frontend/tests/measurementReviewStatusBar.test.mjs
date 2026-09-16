@@ -52,7 +52,7 @@ test("rollback asks for confirmation with the target and cancellation changes no
 });
 
 test("fallback is explained before confirmation and busy actions do not open a dialog", () => {
-  const selected = { ...batch, status: "billed", previous_status: null, status_rollback_is_fallback: true };
+  const selected = { ...batch, status: "billed", previous_status: "submitted", status_rollback_is_fallback: true };
   const messages = [];
   globalThis.window.confirm = message => { messages.push(message); return false; };
   rollbackButtons({ ...props, batch: selected })[0].onClick();
@@ -130,7 +130,7 @@ test("page uses revision-guarded rollback instead of mark-open and preserves err
   assert.match(api, /measurement-batches\/\$\{batchId\}\/reset-to-submitted/);
 });
 
-test("reset uses recorded predecessors, or submitted as the legacy fallback", () => {
+test("reset uses only server-provided predecessors, including legacy fallbacks", () => {
   for (const status of ["submitted", "reviewed", "customer_signed", "billed"]) {
     const data = { ...batch, status, previous_status: "submitted" };
     const reset = rollbackButtons({ ...props, batch: data, isBilled: status === "billed" })[0];
@@ -138,7 +138,7 @@ test("reset uses recorded predecessors, or submitted as the legacy fallback", ()
   }
   assert.equal(rollbackButtons(props).length, 0);
   for (const status of ["draft", "reviewed", "customer_signed", "billed"]) {
-    for (const previous_status of [null, "submitted"]) {
+    for (const previous_status of ["submitted"]) {
       const data = { ...batch, status, previous_status, status_rollback_is_fallback: true };
       const calls = [];
       const reset = rollbackButtons({ ...props, batch: data, onRollbackStatus: value => calls.push(value) })[0];
@@ -151,6 +151,20 @@ test("reset uses recorded predecessors, or submitted as the legacy fallback", ()
   }
   assert.deepEqual(states({ ...batch, status: "billed", status_path: ["submitted", "reviewed", "billed"] }), ["reached", "reached", "pending", "current"]);
   assert.deepEqual(states({ ...batch, status: "draft", status_path: ["draft"] }), ["pending", "pending", "pending", "pending"]);
+});
+
+test("an explicit rollback barrier never falls back to submitted in the UI", () => {
+  for (const status of ["draft", "customer_signed", "signed", "billed"]) {
+    for (const origin of ["OFFICE", "MONTEUR"]) {
+      assert.equal(rollbackButtons({ ...props, batch: { ...batch, origin, status, previous_status: null } }).length, 0);
+    }
+  }
+  const signed = { ...batch, status: "billed", previous_status: "customer_signed", customer_signed_at: "2026-09-16", status_rollback_floor: "customer_signed", status_rollback_is_fallback: true };
+  const action = rollbackButtons({ ...props, batch: signed })[0];
+  assert.equal(action["aria-label"], "Auf Unterschrieben zurücksetzen");
+  assert.match(action.title, /auf Unterschrieben zurücksetzen/);
+  const draft = rollbackButtons({ ...props, batch: { ...batch, previous_status: "draft", status_rollback_is_fallback: true } })[0];
+  assert.equal(draft["aria-label"], "Auf Entwurf zurücksetzen");
 });
 
 test("only the actual predecessor is clickable, including office batches and non-standard stages", () => {
