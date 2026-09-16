@@ -1,9 +1,10 @@
-import { AlertTriangle, BriefcaseBusiness, Check, ClipboardList, Clock, CloudSun, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, BriefcaseBusiness, Check, ClipboardList, CloudSun, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { DashboardMessageCard } from "../components/DashboardMessageCard";
 import { DashboardInbox } from "../components/DashboardInbox";
 import {
   DashboardNoteEmployeeSelect,
@@ -100,11 +101,6 @@ type DashboardDateRangeGroup<T> = {
 type DashboardAlertListItem =
   | { kind: "conflict"; range: DashboardDateRangeGroup<DashboardConflict> }
   | { kind: "need"; range: DashboardDateRangeGroup<StaffingNeed> };
-
-type DashboardMessageMetaItem = {
-  key: string;
-  label: string;
-};
 
 type DashboardData = {
   todayAssignedSites: AssignedSiteSummary[];
@@ -864,69 +860,13 @@ export function DashboardPage() {
             >
               {dashboardMessages.length > 0 ? (
                 <div className="dashboard-alert-list">
-                  {dashboardMessages.map((message) => {
-                    const metaItems = getDashboardMessageMetaItems(message);
-                    const messageContent = (
-                      <div className="dashboard-message-content">
-                        <strong>{formatDashboardMessageTitle(message)}</strong>
-                        {message.note_preview || message.message_text ? (
-                          <span className="dashboard-message-preview">{message.note_preview ?? message.message_text}</span>
-                        ) : null}
-                        <span className="dashboard-message-meta">
-                          <Clock aria-hidden="true" size={13} />
-                          {metaItems.map((item, index) => (
-                            <span className="dashboard-message-meta-part" key={item.key}>
-                              {index > 0 ? <span className="dashboard-message-meta-separator" aria-hidden="true">·</span> : null}
-                              {item.label}
-                            </span>
-                          ))}
-                        </span>
-                      </div>
-                    );
-                    return (
-                      <div className="dashboard-alert-row dashboard-message-row" key={message.message_key}>
-                        <span className="dashboard-message-accent" aria-hidden="true" />
-                        <div className="dashboard-message-stack">
-                          {message.message_type === "dashboard_note_shared" ? (
-                            <button
-                              className="dashboard-message-link is-button"
-                              disabled={dismissingMessageKey === message.message_key}
-                              type="button"
-                              onClick={() => void openSharedDashboardNoteMessage(message)}
-                            >
-                              {messageContent}
-                            </button>
-                          ) : message.message_type === "tool_issue_reported" ? (
-                            <button
-                              className="dashboard-message-link is-button"
-                              disabled={dismissingMessageKey === message.message_key}
-                              type="button"
-                              onClick={() => void openToolIssueMessage(message)}
-                            >
-                              {messageContent}
-                            </button>
-                          ) : (
-                            <Link className="dashboard-message-link" to={getDashboardMessageLink(message)}>
-                              {messageContent}
-                            </Link>
-                          )}
-                          <button
-                            type="button"
-                            className="dashboard-message-read-button"
-                            aria-label={message.message_type === "tool_issue_reported"
-                              ? "Werkzeugmeldung als erledigt markieren"
-                              : "Meldung als gelesen markieren"}
-                            disabled={dismissingMessageKey === message.message_key}
-                            onClick={() => void dismissDashboardMessage(message)}
-                          >
-                            {message.message_type === "tool_issue_reported"
-                              ? "Als erledigt markieren"
-                              : "Als gelesen markieren"}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {dashboardMessages.map(message => (
+                    <DashboardMessageCard key={message.message_key} message={message}
+                      busy={dismissingMessageKey === message.message_key}
+                      onOpenNote={message => void openSharedDashboardNoteMessage(message)}
+                      onOpenToolIssue={message => void openToolIssueMessage(message)}
+                      onDismiss={message => void dismissDashboardMessage(message)} />
+                  ))}
                 </div>
               ) : (
                 <div className="dashboard-message-box">
@@ -1941,71 +1881,6 @@ function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {
   const workerCount = siteSummary.internalCount + siteSummary.externalCount;
   const workerLabel = formatCount(workerCount, "Monteur", "Monteure");
   return siteSummary.site.site_number ? `${workerLabel} · ${siteSummary.site.site_number}` : workerLabel;
-}
-
-function formatDashboardMessageTitle(message: DashboardMessage): string {
-  if (message.message_type === "dashboard_note_shared" || message.message_type === "tool_issue_reported") {
-    return message.title;
-  }
-  if (message.message_type === "measurement_customer_signed") {
-    return `${message.title} für ${message.site_name} wurde vom Kunden unterschrieben. Bitte prüfen.`;
-  }
-  return `${message.title} für ${message.site_name} wurde zur Prüfung eingereicht.`;
-}
-
-function getDashboardMessageLink(message: DashboardMessage): string {
-  if (message.site_id === null) {
-    return "/";
-  }
-  if (message.message_type === "extra_work_submitted") {
-    return `/sites/${message.site_id}?tab=extra-work`;
-  }
-  return `/sites/${message.site_id}?tab=measurement&measurementSubtab=review`;
-}
-
-function getDashboardMessageMetaItems(message: DashboardMessage): DashboardMessageMetaItem[] {
-  if (message.message_type === "tool_issue_reported") {
-    const eventAt = message.event_at ?? message.submitted_at;
-    return [
-      { key: "time", label: eventAt ? formatDashboardDateTime(eventAt) : "Zeitpunkt unbekannt" },
-      { key: "reporter", label: message.submitted_by_name ?? "Monteur" },
-    ];
-  }
-  if (message.message_type === "dashboard_note_shared") {
-    const createdAt = message.note_created_at ?? message.submitted_at;
-    const items: DashboardMessageMetaItem[] = [{
-      key: "created",
-      label: createdAt ? `Erstellt ${formatDashboardDateTime(createdAt)}` : "Erstellungszeit unbekannt",
-    }];
-    if (message.note_due_date) {
-      items.push({ key: "due", label: `Fällig ${formatShortDate(message.note_due_date)}` });
-    }
-    items.push({
-      key: "site",
-      label: message.site_name
-        ? `Baustelle ${message.site_number ? `${message.site_number} · ` : ""}${message.site_name}`
-        : "Allgemeine Notiz",
-    });
-    return items;
-  }
-  const eventAt = message.event_at ?? message.customer_signed_at ?? message.submitted_at;
-  const timeLabel = eventAt ? formatDashboardDateTime(eventAt) : "Zeitpunkt unbekannt";
-  const items: DashboardMessageMetaItem[] = [{ key: "time", label: timeLabel }];
-
-  if (message.message_type === "measurement_customer_signed") {
-    const signerLabel = message.customer_signature_name
-      ? `Unterschrieben von ${message.customer_signature_name}`
-      : "Kundenunterschrift";
-    items.push({ key: "context", label: signerLabel });
-  } else if (message.submitted_by_name) {
-    items.push({ key: "context", label: message.submitted_by_name });
-  }
-
-  if (message.site_number) {
-    items.push({ key: "site", label: message.site_number });
-  }
-
-  return items;
 }
 
 function formatDashboardDateTime(value: string): string {

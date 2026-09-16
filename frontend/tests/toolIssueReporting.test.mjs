@@ -10,12 +10,13 @@ import {
 } from "../src/lib/toolMaterialRouting.ts";
 
 
-const [mobileSource, dashboardSource, toolsSource, apiSource, styles] = await Promise.all([
+const [mobileSource, dashboardSource, toolsSource, apiSource, styles, messageCardSource] = await Promise.all([
   readFile(new URL("../src/pages/MobilePersonalFilePage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/DashboardPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/MiscellaneousPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
+  readFile(new URL("../src/components/DashboardMessageCard.tsx", import.meta.url), "utf8"),
 ]);
 
 
@@ -64,8 +65,8 @@ test("message navigation and API filtering use the stable tool ID", () => {
   assert.match(dashboardSource, /await api\.dismissDashboardMessage\(message\.message_key\)[\s\S]*navigate\(buildToolMaterialIssuePath\(message\.tool_id\)\)/);
   assert.match(toolsSource, /Werkzeug-ID \{toolIdFilter\}/);
   assert.match(toolsSource, /Das gemeldete Werkzeug ist nicht mehr verfügbar/);
-  assert.match(dashboardSource, /Werkzeugmeldung als erledigt markieren/);
-  assert.match(dashboardSource, /Als erledigt markieren/);
+  assert.match(messageCardSource, /Werkzeugmeldung als erledigt markieren/);
+  assert.match(messageCardSource, /Als erledigt markieren/);
 });
 
 

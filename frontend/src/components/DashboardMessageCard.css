@@ -1,0 +1,48 @@
+.dashboard-message-card {
+  min-width: 0;
+  border: 1px solid #cfdfef;
+  border-radius: 2px;
+  background: #fff;
+  color: #172b4b;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-message-card-open {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.dashboard-message-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #dce9f5;
+  background: #edf6ff;
+  font-size: .78rem;
+  line-height: 1.35;
+}
+.dashboard-message-card-heading svg { flex-shrink: 0; }
+.dashboard-message-card-heading strong { min-width: 0; font-weight: 800; }
+.dashboard-message-card-status { margin-left: auto; flex-shrink: 0; color: #526b8b; font-size: .72rem; font-weight: 650; }
+.dashboard-message-card-body { display: grid; gap: 4px; padding: 10px; font-size: .78rem; line-height: 1.35; color: #5f7390; }
+.dashboard-message-card-body > strong { color: #172b4b; font-size: .86rem; font-weight: 800; }
+.dashboard-message-card-preview { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.dashboard-message-card-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 8px 10px; border-top: 1px solid #e4edf6; }
+.dashboard-message-card-date { display: flex; align-items: center; gap: 6px; color: #617897; font-size: .72rem; line-height: 1.4; }
+.dashboard-message-card-date svg { flex-shrink: 0; }
+.dashboard-message-card-read { margin-left: auto; border: 0; background: transparent; padding: 2px 0; color: #2563eb; font: inherit; font-size: .72rem; font-weight: 750; cursor: pointer; }
+.dashboard-message-card-open:hover .dashboard-message-card-body { background: #f8fbff; }
+.dashboard-message-card-read:hover { color: #1d4ed8; text-decoration: underline; }
+.dashboard-message-card :is(button, a):focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.dashboard-message-card button:disabled { cursor: wait; opacity: .55; }
