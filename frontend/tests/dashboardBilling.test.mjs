@@ -20,8 +20,8 @@ const render = module.exports.render;
 const source = readFileSync(new URL("../src/components/DashboardInbox.tsx", import.meta.url), "utf8");
 const page = readFileSync(new URL("../src/pages/DashboardPage.tsx", import.meta.url), "utf8");
 
-test("only project managers get billing tabs; office/admin retain the existing inbox", () => {
-  assert.match(page, /canViewBilling=\{user\?\.role === "project_manager"\}/);
+test("project managers and admins get billing tabs; office retains the existing inbox", () => {
+  assert.match(page, /canViewBilling=\{user\?\.role === "project_manager" \|\| user\?\.role === "admin"\}/);
   assert.match(page, /key=\{user\?\.id\}/);
   const hidden = render("inbox", {canViewBilling:false,badge:"23",children:"Meldung"});
   assert.doesNotMatch(hidden, /Abrechnung|role="tab"/);

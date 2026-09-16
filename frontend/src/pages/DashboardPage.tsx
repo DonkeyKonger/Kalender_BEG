@@ -859,7 +859,7 @@ export function DashboardPage() {
 
             <DashboardInbox
               key={user?.id}
-              canViewBilling={user?.role === "project_manager"}
+              canViewBilling={user?.role === "project_manager" || user?.role === "admin"}
               badge={dashboardMessageCount > 0 ? String(dashboardMessageCount) : undefined}
             >
               {dashboardMessages.length > 0 ? (

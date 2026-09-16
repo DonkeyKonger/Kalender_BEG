@@ -33,10 +33,10 @@ class DashboardBillingService:
         self.db = db
 
     def get_overview(self, *, current_user: User) -> DashboardBillingRead:
-        if current_user.role != UserRole.PROJECT_MANAGER:
+        if current_user.role not in {UserRole.ADMIN, UserRole.PROJECT_MANAGER}:
             raise HTTPException(403, "Keine Berechtigung für die Abrechnungsübersicht.")
         # An unlinked manager must never see unassigned sites as their own.
-        if current_user.person_id is None:
+        if current_user.role == UserRole.PROJECT_MANAGER and current_user.person_id is None:
             return DashboardBillingRead(open_count=0, sites=[])
 
         groups: dict[int, DashboardBillingSiteRead] = {}
@@ -59,7 +59,8 @@ class DashboardBillingService:
                        func.lower(func.trim(model.status)).in_(BILLING_STATUSES))
                 .order_by(Site.id, number_column.desc(), model.id.desc())
             )
-            statement = statement.where(Site.project_manager_person_id == current_user.person_id)
+            if current_user.role == UserRole.PROJECT_MANAGER:
+                statement = statement.where(Site.project_manager_person_id == current_user.person_id)
             for row in self.db.execute(statement).mappings():
                 group = groups.setdefault(row["site_id"], DashboardBillingSiteRead(
                     site_id=row["site_id"], site_number=row["site_number"], site_name=row["site_name"],

@@ -121,7 +121,7 @@ def test_manager_only_sees_currently_assigned_sites_and_no_unassigned_sites(data
     assert service.get_overview(current_user=user).sites == []
 
 
-@pytest.mark.parametrize("role", [UserRole.ADMIN, UserRole.OFFICE, UserRole.MONTEUR])
+@pytest.mark.parametrize("role", [UserRole.OFFICE, UserRole.MONTEUR])
 def test_billing_is_not_available_to_other_roles_even_if_linked_to_manager(data, role):
     db, user, site = data
     add_record(db, site, "measurement")
@@ -129,6 +129,26 @@ def test_billing_is_not_available_to_other_roles_even_if_linked_to_manager(data,
     with pytest.raises(HTTPException) as error:
         DashboardBillingService(db).get_overview(current_user=user)
     assert error.value.status_code == 403
+
+
+@pytest.mark.parametrize("linked_to_person", [True, False])
+def test_admin_sees_all_sites_independently_of_person_link(data, linked_to_person):
+    db, user, site = data
+    other_manager = Person(first_name="Andere", last_name="Leitung", display_name="Andere Leitung", short_code="AL")
+    foreign = Site(site_number="8008", name="Andere Baustelle", project_manager=other_manager)
+    unassigned = Site(site_number="8009", name="Ohne Zuordnung")
+    db.add_all([foreign, unassigned])
+    db.commit()
+    for target in (site, foreign, unassigned):
+        for kind in ("measurement", "extra_work"):
+            add_record(db, target, kind)
+    user.role = UserRole.ADMIN
+    if not linked_to_person:
+        user.person_id = None
+    db.commit()
+    result = DashboardBillingService(db).get_overview(current_user=user)
+    assert result.open_count == 6
+    assert {row.site_id for row in result.sites} == {site.id, foreign.id, unassigned.id}
 
 
 def test_constant_two_lightweight_queries_for_many_records(data):
@@ -175,4 +195,7 @@ def test_api_is_read_only_and_enforces_project_manager_scope(data):
     user.office_page_permissions = ["overview", "sites"]
     assert client.get("/api/dashboard/billing").status_code == 403
     user.role = UserRole.ADMIN
-    assert client.get("/api/dashboard/billing").status_code == 403
+    user.person_id = None
+    response = client.get("/api/dashboard/billing")
+    assert response.status_code == 200
+    assert response.json()["open_count"] == 1
