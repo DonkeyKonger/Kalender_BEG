@@ -33,11 +33,11 @@ def test_existing_regular_empty_zero_account_remains_known_through_manual_month_
     assert monthly.transition(person.id).source_payload["baseline_minutes"] == 0
     assert updated.current_balance_minutes == 120
     approve(close, person, user)
-    assert monthly.current_balance(person.id) == 240
+    assert monthly.current_balance(person.id) == -80  # +120 manual, -200 fixed month delta.
     close.reopen_person_month(year=2026, month=8, person_id=person.id, reason="Recheck", current_user=user)
     assert monthly.current_balance(person.id) == 120
     approve(close, person, user)
-    assert monthly.current_balance(person.id) == 240
+    assert monthly.current_balance(person.id) == -80
 
 
 def test_previously_misclassified_empty_zero_transition_recovers_without_rewriting_history():
@@ -58,13 +58,13 @@ def test_previously_misclassified_empty_zero_transition_recovers_without_rewriti
     monthly = PayrollMonthAccountService(db)
     assert PersonHoursAccountService(db).get_account(person_id=person.id).current_balance_minutes == 120
     approve(close, person, user)
-    assert monthly.current_balance(person.id) == 240
+    assert monthly.current_balance(person.id) == -80
     close.reopen_person_month(year=2026, month=8, person_id=person.id, reason="Recheck", current_user=user)
     assert monthly.current_balance(person.id) == 120
     assert transition.source_payload == old_payload
     assert transition.balance_after_minutes is None and manual.balance_after_minutes is None
     approve(close, person, user)
-    assert monthly.current_balance(person.id) == 240
+    assert monthly.current_balance(person.id) == -80
 
 
 @pytest.mark.parametrize("global_close", [False, True])
@@ -88,7 +88,7 @@ def test_manual_adjustment_and_payout_in_locked_month_are_independent_of_payroll
                                      note="Independent -0.5", current_user=user)
     result = account.create_payout(person_id=person.id, hours=1, effective_date=date(2026, 8, 31),
                                   note="Independent payout", current_user=user)
-    assert result.current_balance_minutes == 6030  # Monthly surplus is paid; manual +120 -30 -60 remains.
+    assert result.current_balance_minutes == 5830  # Monthly -200 and independent manual +120 -30 -60.
     assert [(db.get(Entry, identifier).id, db.get(Entry, identifier).minutes_delta,
              db.get(Entry, identifier).balance_after_minutes, db.get(Entry, identifier).is_active,
              db.get(Entry, identifier).note) for identifier, *_ in entries_before] == entries_before
@@ -108,7 +108,7 @@ def test_manual_adjustment_and_payout_in_locked_month_are_independent_of_payroll
     approve(close, person, user)
     if global_close:
         close.lock_month(year=2026, month=8, confirmed=True, current_user=user)
-    assert account.get_account(person_id=person.id).current_balance_minutes == 6030
+    assert account.get_account(person_id=person.id).current_balance_minutes == 5890
     assert bytes(artifact.content) == retained
     manual_rows = list(db.scalars(select(Entry).where(Entry.ledger_system == "daily",
                                                     Entry.entry_type.in_(["manual_adjustment", "payout"]))))

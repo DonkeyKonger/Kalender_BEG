@@ -56,6 +56,7 @@ DISTRIBUTED_WORK_DAYS = 5
 DISTRIBUTED_DAILY_BREAK_MINUTES = 45
 VACATION_DAY_MINUTES = 8 * 60
 SICK_DAY_HOURS = 8
+PAYROLL_MONTH_WEEK_FACTOR = Decimal("4.3335")
 PAYROLL_COMPACT_EURO_FORMAT = '#,##0.00 "€"'
 GERMAN_MONTH_NAMES = (
     "",
@@ -992,7 +993,7 @@ def calculate_payroll_month_totals(
     month: int,
     non_working_dates: Collection[date],
 ) -> PayrollMonthTotals:
-    """The existing Excel month convention, independent of individual day plans.
+    """Fixed contractual month basis, independent of month length and holidays.
 
     A missing contractual weekly total is unknown, never a target of zero.
     Redistribution only changes the display days; their monthly sum is retained.
@@ -1008,7 +1009,7 @@ def calculate_payroll_month_totals(
     normal_minutes = None
     if person.weekly_hours is not None:
         normal_minutes = int(
-            (Decimal(str(person.weekly_hours)) / 5 * workday_count * 60).quantize(
+            (PAYROLL_MONTH_WEEK_FACTOR * Decimal(str(person.weekly_hours)) * 60).quantize(
                 Decimal("1"), rounding=ROUND_HALF_UP
             )
         ) - sick_minutes
@@ -1061,7 +1062,7 @@ def _write_month_totals(
     _set_cell_formula(
         sheet,
         layout.normal_hours_cell,
-        f"ROUND({weekly_hours_decimal}/5*{totals.workday_count}*60,0)/1440-{layout.sick_hours_cell}",
+        f"ROUND({PAYROLL_MONTH_WEEK_FACTOR}*{weekly_hours_decimal}*60,0)/1440-{layout.sick_hours_cell}",
         totals.normal_minutes / 1440,
     )
     overtime_minutes = totals.overtime_minutes

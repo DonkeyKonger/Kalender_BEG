@@ -103,7 +103,7 @@ def test_september_manual_correction_is_excluded_from_reclosed_august_and_used_i
 
 
 @pytest.mark.parametrize('opening,credit,payout,closing', [
-    (5400,489,0,5889), (5820,180,309,6000), (6000,0,489,6000),
+    (5400,105,0,5505), (5940,60,45,6000), (6000,0,105,6000),
 ])
 def test_real_48_hour_month_exports_only_surplus_and_preserves_approved_workbook(opening,credit,payout,closing):
     db, person, user, service = context()
@@ -119,7 +119,7 @@ def test_real_48_hour_month_exports_only_surplus_and_preserves_approved_workbook
     db.commit()
     approve(service,person,user)
     posting = db.scalar(select(Entry).where(Entry.entry_type == MONTHLY))
-    assert posting.source_payload['movement_minutes'] == 489
+    assert posting.source_payload['movement_minutes'] == 105
     assert posting.minutes_delta == credit
     assert posting.source_payload['payout_minutes'] == payout
     assert posting.balance_after_minutes == closing
@@ -128,7 +128,7 @@ def test_real_48_hour_month_exports_only_surplus_and_preserves_approved_workbook
     content = bytes(artifact.content)
     sheet = workbook_sheet(content)
     assert float(cell_text(sheet,'E41')) * 1440 == pytest.approx(12585)
-    assert float(cell_text(sheet,'D46')) * 1440 == pytest.approx(12096)
+    assert float(cell_text(sheet,'D46')) * 1440 == pytest.approx(12480)
     assert float(cell_text(sheet,'D47')) * 1440 == pytest.approx(payout)
     assert float(cell_text(sheet,'K50')) * 1440 == pytest.approx(opening)
     assert float(cell_text(sheet,'K51')) * 1440 == pytest.approx(closing)
@@ -148,13 +148,13 @@ def test_real_48_hour_month_exports_only_surplus_and_preserves_approved_workbook
 
 def test_negative_month_debits_account_but_never_exports_negative_paid_overtime():
     db, person, user, service = context()
-    person.weekly_hours = 48  # 170h work minus 201:36 target = -31:36.
+    person.weekly_hours = 48  # 170h work minus 208:00 fixed target = -38:00.
     db.commit()
     approve(service,person,user)
     posting = db.scalar(select(Entry).where(Entry.entry_type == MONTHLY))
-    assert posting.minutes_delta == -1896
+    assert posting.minutes_delta == -2280
     artifact = db.scalar(select(PayrollMonthPersonApprovalArtifact))
     sheet = workbook_sheet(artifact.content)
     assert float(cell_text(sheet,'D47')) == 0
     assert all(cell_text(sheet, f'I{row}') == '' for row in range(46, 50))
-    assert float(cell_text(sheet,'K51')) * 1440 == pytest.approx(4104)
+    assert float(cell_text(sheet,'K51')) * 1440 == pytest.approx(3720)

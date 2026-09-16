@@ -514,21 +514,25 @@ def test_all_workers_workbook_clones_the_master_sheet_for_every_worker():
 
 
 @pytest.mark.parametrize(
-    ("year", "month", "weekly_hours", "holidays", "normal_hours"),
+    ("year", "month", "weekly_hours", "holidays", "normal_minutes"),
     [
-        (2026, 8, 40, set(), 168),
-        (2026, 4, 40, {date(2026, 4, 3), date(2026, 4, 6)}, 160),
-        # Feiertage am Wochenende werden nicht nochmals abgezogen.
-        (2026, 10, 40, {date(2026, 10, 3), date(2026, 10, 31)}, 176),
-        (2028, 2, 40, set(), 168),
-        (2026, 2, 40, set(), 160),
-        (2026, 8, 37.5, set(), 157.5),
+        (2026, 8, 40, set(), 10400),
+        (2026, 4, 40, {date(2026, 4, 3), date(2026, 4, 6)}, 10400),
+        # Auch Wochenendfeiertage und Schaltjahre verändern den Faktor nicht.
+        (2026, 10, 40, {date(2026, 10, 3), date(2026, 10, 31)}, 10400),
+        (2028, 2, 40, set(), 10400),
+        (2026, 2, 40, set(), 10400),
+        (2026, 8, 37.5, set(), 9750),
+        (2026, 8, 30, set(), 7800),
+        (2026, 8, 38.75, set(), 10075),
+        (2026, 8, 39, set(), 10140),
+        (2026, 8, 50, set(), 13001),  # Halbe Minuten werden aufgerundet.
         (2026, 8, 0, set(), 0),
-        (2026, 8, 40, {date(2026, 7, 31), date(2026, 9, 1)}, 168),
+        (2026, 8, 40, {date(2026, 7, 31), date(2026, 9, 1)}, 10400),
     ],
 )
-def test_normal_hours_use_person_weekly_hours_and_month_weekdays_without_holidays(
-    monkeypatch, year, month, weekly_hours, holidays, normal_hours
+def test_normal_hours_use_fixed_factor_and_stored_weekly_hours_regardless_of_month(
+    monkeypatch, year, month, weekly_hours, holidays, normal_minutes
 ):
     monkeypatch.setattr(PERSON, "weekly_hours", weekly_hours)
     result = build_payroll_month_xlsx(
@@ -537,9 +541,10 @@ def test_normal_hours_use_person_weekly_hours_and_month_weekdays_without_holiday
     with ZipFile(BytesIO(result.content)) as workbook:
         sheet = ET.fromstring(workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path))
     assert float(cell_text(sheet, "E41")) == 0
-    assert float(cell_text(sheet, "D46")) == pytest.approx(normal_hours / 24)
-    if normal_hours:
-        hours, minutes = divmod(round(normal_hours * 60), 60)
+    assert float(cell_text(sheet, "D46")) == pytest.approx(normal_minutes / 1440)
+    assert sheet.find('.//main:c[@r="D46"]/main:f', NS).text == f"ROUND(4.3335*{weekly_hours}*60,0)/1440-G48"
+    if normal_minutes:
+        hours, minutes = divmod(normal_minutes, 60)
         assert cell_text(sheet, "D47") == f"-{hours}:{minutes:02d}"
         assert sheet.find('.//main:c[@r="D47"]', NS).attrib["t"] == "str"
     else:
@@ -560,8 +565,8 @@ def test_totals_sum_distributed_days_and_keep_positive_overtime(monkeypatch):
     ]
     assert sum(daily_values) == pytest.approx(40 / 24)
     assert float(cell_text(sheet, "E41")) == pytest.approx(sum(daily_values))
-    assert float(cell_text(sheet, "D46")) == pytest.approx(22 / 24)
-    assert float(cell_text(sheet, "D47")) == pytest.approx(18 / 24)
+    assert float(cell_text(sheet, "D46")) == pytest.approx(1300 / 1440)
+    assert float(cell_text(sheet, "D47")) == pytest.approx(1100 / 1440)
     assert sheet.find('.//main:c[@r="E41"]/main:f', NS).text == "SUM(E10:E40)"
     assert "E41-D46" in sheet.find('.//main:c[@r="D47"]/main:f', NS).text
 
@@ -580,7 +585,7 @@ def test_month_total_excludes_entries_outside_month(monkeypatch):
     with ZipFile(BytesIO(result.content)) as workbook:
         sheet = ET.fromstring(workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path))
     assert float(cell_text(sheet, "E41")) == pytest.approx(8 / 24)
-    assert cell_text(sheet, "D47") == "-160:00"
+    assert cell_text(sheet, "D47") == "-165:20"
 
 
 def test_missing_weekly_hours_does_not_invent_a_target_or_overtime():
@@ -595,15 +600,15 @@ def test_missing_weekly_hours_does_not_invent_a_target_or_overtime():
     assert cell_text(sheet, "D47") == "–"
 
 
-@pytest.mark.parametrize(("last_day_end", "total_minutes", "overtime"), [
-    ("10:30", 9870, "-3:30"),
-    ("14:00", 10080, 0),
-    ("14:30", 10110, 30 / 1440),
+@pytest.mark.parametrize(("weekly_hours", "normal_minutes", "last_day_end", "total_minutes", "overtime"), [
+    (40, 10400, "10:30", 9870, "-8:50"),
+    (37.5, 9750, "08:30", 9750, 0),
+    (37.5, 9750, "09:00", 9780, 30 / 1440),
 ])
 def test_month_totals_preserve_minutes_and_zero_balance(
-    monkeypatch, last_day_end, total_minutes, overtime
+    monkeypatch, weekly_hours, normal_minutes, last_day_end, total_minutes, overtime
 ):
-    monkeypatch.setattr(PERSON, "weekly_hours", 40)
+    monkeypatch.setattr(PERSON, "weekly_hours", weekly_hours)
     weekdays = [date(2026, 8, day) for day in range(1, 32)
                 if date(2026, 8, day).weekday() < 5]
     entries = [
@@ -618,7 +623,7 @@ def test_month_totals_preserve_minutes_and_zero_balance(
         sheet = ET.fromstring(workbook.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path))
     assert sum(day.net_work_minutes for day in result.plan.days) == total_minutes
     assert float(cell_text(sheet, "E41")) == pytest.approx(total_minutes / 1440)
-    assert float(cell_text(sheet, "D46")) == 7
+    assert float(cell_text(sheet, "D46")) == pytest.approx(normal_minutes / 1440)
     if isinstance(overtime, str):
         assert cell_text(sheet, "D47") == overtime
     else:
