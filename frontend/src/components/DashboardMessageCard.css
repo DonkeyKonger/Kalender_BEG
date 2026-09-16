@@ -27,8 +27,9 @@
   align-items: center;
   gap: 7px;
   padding: 8px 10px;
-  border-bottom: 1px solid #dce9f5;
-  background: #edf6ff;
+  border-bottom: 1px solid #e1e7ee;
+  background: #f4f7fa;
+  color: #53677e;
   font-size: .78rem;
   line-height: 1.35;
 }
@@ -41,8 +42,8 @@
 .dashboard-message-card-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 8px 10px; border-top: 1px solid #e4edf6; }
 .dashboard-message-card-date { display: flex; align-items: center; gap: 6px; color: #617897; font-size: .72rem; line-height: 1.4; }
 .dashboard-message-card-date svg { flex-shrink: 0; }
-.dashboard-message-card-read { margin-left: auto; border: 0; background: transparent; padding: 2px 0; color: #2563eb; font: inherit; font-size: .72rem; font-weight: 750; cursor: pointer; }
+.dashboard-message-card-read { margin-left: auto; border: 0; background: transparent; padding: 2px 0; color: #61758d; font: inherit; font-size: .72rem; font-weight: 750; cursor: pointer; }
 .dashboard-message-card-open:hover .dashboard-message-card-body { background: #f8fbff; }
-.dashboard-message-card-read:hover { color: #1d4ed8; text-decoration: underline; }
+.dashboard-message-card-read:hover { color: #344e70; text-decoration: underline; }
 .dashboard-message-card :is(button, a):focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
 .dashboard-message-card button:disabled { cursor: wait; opacity: .55; }
