@@ -2117,9 +2117,10 @@ class MeasurementService:
         return filters
 
     def list_dashboard_submissions(
-        self, *, limit: int = 6, current_user: User | None = None
+        self, *, limit: int | None = 6, current_user: User | None = None
     ) -> list[MeasurementDashboardSubmissionRead]:
         dismissed_keys = self._dashboard_dismissed_keys(current_user)
+        query_limit = None if limit is None else limit + len(dismissed_keys)
 
         statement = (
             select(SiteMeasurementBatch)
@@ -2146,7 +2147,7 @@ class MeasurementService:
                         SiteMeasurementBatch.updated_at,
                     ).desc(),
                     SiteMeasurementBatch.updated_at.desc(),
-                ).limit(limit + len(dismissed_keys))
+                ).limit(query_limit)
             ).all()
         )
         extra_work_statement = (
@@ -2165,7 +2166,7 @@ class MeasurementService:
                 extra_work_statement.order_by(
                     ExtraWorkTicket.submitted_at.desc(),
                     ExtraWorkTicket.updated_at.desc(),
-                ).limit(limit + len(dismissed_keys))
+                ).limit(query_limit)
             ).all()
         )
         messages: list[MeasurementDashboardSubmissionRead] = []

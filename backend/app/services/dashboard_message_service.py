@@ -23,7 +23,7 @@ class DashboardMessageService:
         self.db = db
         self.measurements = MeasurementService(db)
 
-    def get_summary(self, *, limit: int, current_user: User) -> DashboardMessagesSummaryRead:
+    def get_summary(self, *, limit: int | None, current_user: User) -> DashboardMessagesSummaryRead:
         return DashboardMessagesSummaryRead(
             open_count=self.count_open_messages(current_user=current_user),
             latest_messages=self.list_messages(limit=limit, current_user=current_user),
@@ -36,7 +36,7 @@ class DashboardMessageService:
             + self._count_tool_issue_messages(current_user=current_user)
         )
 
-    def list_messages(self, *, limit: int, current_user: User) -> list[DashboardMessageRead]:
+    def list_messages(self, *, limit: int | None, current_user: User) -> list[DashboardMessageRead]:
         measurement_messages = [
             DashboardMessageRead.model_validate(message.model_dump())
             for message in self.measurements.list_dashboard_submissions(

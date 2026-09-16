@@ -163,7 +163,8 @@ def delete_dashboard_note(
 
 @router.get("/messages/summary", response_model=DashboardMessagesSummaryRead)
 def get_dashboard_messages_summary(
-    limit: int = Query(default=6, ge=1, le=20),
+    # The inbox needs every unread message; only explicit preview requests are capped.
+    limit: int | None = Query(default=None, ge=1, le=20),
     user=Depends(CAN_READ_MESSAGES),
     db: Session = Depends(get_db),
 ) -> DashboardMessagesSummaryRead:

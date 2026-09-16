@@ -7,6 +7,7 @@ from app.api.dependencies import get_current_app_user
 from app.core.database import get_db
 from app.main import create_app
 from app.models.enums import UserRole
+from app.models.dashboard_note import DashboardNote
 from app.models.extra_work_ticket import ExtraWorkTicket
 from app.models.person import Person
 from app.models.site import Site
@@ -134,3 +135,41 @@ def test_summary_and_live_count_endpoints_both_exclude_archived_measurements(dat
     client = TestClient(app)
     assert client.get("/api/dashboard/messages/summary").json() == {"open_count": 0, "latest_messages": []}
     assert client.get("/api/dashboard/messages/unread-count").json() == {"count": 0}
+
+
+@pytest.mark.parametrize("total", [18, 27])
+def test_default_summary_returns_all_unread_messages_not_just_six_or_twenty(data, total):
+    db, user, site = data
+    for number in range(1, total - 7):
+        batch(db, site, number, signed=number % 2 == 0)
+    for number in range(1, 7):
+        db.add(ExtraWorkTicket(site=site, sequence_number=number, display_number=f"8007.Z{number:02d}",
+                               status="submitted", submitted_at=NOW))
+    for number in range(1, 3):
+        db.add(DashboardNote(text=f"Geteilte Notiz {number}", created_by_user_id=user.id,
+                             shared_with_user_id=user.id, shared_at=NOW, share_revision=1))
+    db.commit()
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_app_user] = lambda: user
+    client = TestClient(app)
+
+    response = client.get("/api/dashboard/messages/summary")
+    assert response.status_code == 200
+    summary = response.json()
+    assert summary["open_count"] == total
+    assert len(summary["latest_messages"]) == total
+    assert len({row["message_key"] for row in summary["latest_messages"]}) == total
+    assert {row["message_type"] for row in summary["latest_messages"]} == {
+        "measurement_submitted", "measurement_customer_signed", "extra_work_submitted", "dashboard_note_shared",
+    }
+
+    # Optional, explicit previews still work for other consumers.
+    preview = client.get("/api/dashboard/messages/summary?limit=6").json()
+    assert preview["open_count"] == total
+    assert len(preview["latest_messages"]) == 6
+    key = summary["latest_messages"][-1]["message_key"]
+    DashboardMessageService(db).dismiss_message(message_key=key, current_user=user)
+    remaining = client.get("/api/dashboard/messages/summary").json()
+    assert remaining["open_count"] == len(remaining["latest_messages"]) == total - 1
+    assert key not in {row["message_key"] for row in remaining["latest_messages"]}

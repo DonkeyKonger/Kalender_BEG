@@ -530,6 +530,7 @@ export const api = {
   },
 
   async dashboardMessagesSummary(params: { limit?: number } = {}): Promise<DashboardMessagesSummary> {
+    // Omitting limit returns the complete inbox, not a six-message preview.
     const search = new URLSearchParams();
     if (params.limit !== undefined) {
       search.set("limit", String(params.limit));
