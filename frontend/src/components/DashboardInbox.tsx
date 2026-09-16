@@ -112,7 +112,6 @@ export function DashboardBillingList({ billing }: { billing: DashboardBilling })
   return (
     <>
       <p className="dashboard-billing-summary">
-        <strong>{billing.open_count} offen</strong>
         <span>Abgerechnet wird direkt in der Baustelle markiert.</span>
       </p>
       {billing.sites.length ? (

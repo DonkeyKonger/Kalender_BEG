@@ -55,7 +55,6 @@
 .dashboard-inbox-panel > .dashboard-message-box { margin: 12px; }
 .dashboard-billing-summary, .dashboard-billing-feedback { margin: 0; padding: 12px; font-size: .78rem; color: #53677e; }
 .dashboard-billing-summary { display: grid; gap: 4px; }
-.dashboard-billing-summary strong { color: #233b59; }
 .dashboard-billing-feedback p { margin: 6px 0; }
 .dashboard-billing-feedback button { border: 1px solid #c8d6e6; background: #fff; padding: 6px 10px; color: #233b59; cursor: pointer; }
 .dashboard-billing-sites { display: grid; align-content: start; gap: 8px; padding: 0 9px 10px; }

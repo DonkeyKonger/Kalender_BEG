@@ -58,6 +58,8 @@ test("billing renders collapsible site groups with both types, status/date and r
   assert.match(html, /<summary/);
   assert.match(html, /Klinik &lt;Test&gt;/);
   assert.match(html, /Geprüft/);
+  assert.doesNotMatch(html, />2 offen</);
+  assert.match(html, /Abgerechnet wird direkt in der Baustelle markiert\./);
   assert.match(html, /Abgeschlossen/);
   assert.match(html, /16.09.2026/);
   assert.match(html, /\/sites\/7\?tab=measurement&amp;measurementSubtab=review/);
