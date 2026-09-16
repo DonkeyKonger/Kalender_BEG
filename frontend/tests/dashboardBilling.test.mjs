@@ -8,8 +8,8 @@ import { build, transformSync } from "esbuild";
 const compiled = await build({
   stdin: { contents: `import React from 'react'; import {renderToStaticMarkup} from 'react-dom/server';
     import {MemoryRouter} from 'react-router-dom';
-    import {DashboardInbox,DashboardBillingList} from './src/components/DashboardInbox';
-    export const render = (name, props) => renderToStaticMarkup(React.createElement(MemoryRouter,{},React.createElement(name === 'list' ? DashboardBillingList : DashboardInbox,props)));`,
+    import {DashboardInbox,DashboardBillingList,DashboardBillingCount} from './src/components/DashboardInbox';
+    export const render = (name, props) => renderToStaticMarkup(React.createElement(MemoryRouter,{},React.createElement(name === 'list' ? DashboardBillingList : name === 'count' ? DashboardBillingCount : DashboardInbox,props)));`,
     resolveDir: fileURLToPath(new URL("..", import.meta.url)), loader: "tsx" },
   bundle: true, write: false, format: "cjs", platform: "node", packages: "external", jsx: "automatic",
   loader: { ".css": "empty" }, define: { "import.meta.env": "{}" },
@@ -25,12 +25,28 @@ test("project managers and admins get billing tabs; office retains the existing 
   assert.match(page, /key=\{user\?\.id\}/);
   const hidden = render("inbox", {canViewBilling:false,badge:"23",children:"Meldung"});
   assert.doesNotMatch(hidden, /Abrechnung|role="tab"/);
-  assert.match(hidden, /Eingang \/ Meldungen/);
+  assert.match(hidden, /<h2>Meldungen<\/h2>/);
+  assert.doesNotMatch(hidden, /Eingang/);
   assert.match(hidden, /23/);
   const allowed = render("inbox", {canViewBilling:true,badge:"23",children:"Meldung"});
   assert.equal((allowed.match(/role="tab"/g) || []).length, 2);
   assert.match(allowed, /aria-selected="true"/);
   assert.match(allowed, /hidden=""/);
+  assert.doesNotMatch(allowed, /Eingang/);
+});
+
+test("billing tab counts sites rather than documents and shares the smaller message badge", () => {
+  const html = render("count", {billing:{open_count:63,sites:[{},{}]},error:false});
+  assert.match(html, /2 Baustellen mit offenen Abrechnungen/);
+  assert.match(html, />2<\/strong>/);
+  assert.doesNotMatch(html, /63/);
+  assert.match(render("count", {billing:{open_count:0,sites:[]},error:false}), />0<\/strong>/);
+  assert.match(render("count", {billing:null,error:false}), /wird geladen/);
+  const failed = render("count", {billing:{open_count:63,sites:[{},{}]},error:true});
+  assert.match(failed, /nicht verfügbar/);
+  assert.doesNotMatch(failed, />2<\/strong>/);
+  const styles = readFileSync(new URL("../src/components/DashboardInbox.css", import.meta.url), "utf8");
+  assert.match(styles, /\.dashboard-card\.dashboard-inbox \.dashboard-card-badge\s*\{[^}]*height: 16px/s);
 });
 
 test("billing renders collapsible site groups with both types, status/date and read-only navigation", () => {
@@ -69,8 +85,10 @@ function setup({mode="billing", canViewBilling=true} = {}) {
 }
 const flush = () => new Promise(resolve=>setImmediate(resolve));
 
-test("billing loads lazily, refreshes on focus, suppresses concurrent and hidden-tab requests", async () => {
-  assert.equal(setup({mode:"messages"}).calls, 0);
+test("billing count loads on messages tab, refreshes on focus, suppresses concurrent and hidden-tab requests", async () => {
+  const messages = setup({mode:"messages"});
+  assert.equal(messages.calls, 1);
+  messages.cleanup();
   assert.equal(setup({canViewBilling:false}).calls, 0);
   const state = setup();
   assert.equal(state.calls,1);

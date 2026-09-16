@@ -20,7 +20,8 @@ export function DashboardInbox({ badge, children, canViewBilling }: {
   const id = useId();
 
   useEffect(() => {
-    if (mode !== "billing" || !canViewBilling) return;
+    // Keep the site counter current even while the messages tab is selected.
+    if (!canViewBilling) return;
     let active = true;
     let pending = false;
     async function refresh() {
@@ -53,7 +54,7 @@ export function DashboardInbox({ badge, children, canViewBilling }: {
   return (
     <article className="dashboard-card dashboard-card-messages dashboard-section--messages dashboard-inbox">
       {canViewBilling ? (
-        <div className="dashboard-inbox-tabs" role="tablist" aria-label="Eingang und Abrechnung" ref={tabsRef}>
+        <div className="dashboard-inbox-tabs" role="tablist" aria-label="Meldungen und Abrechnung" ref={tabsRef}>
           {modes.map((value, index) => (
             <button key={value} type="button" role="tab" id={`${id}-${value}-tab`}
               aria-controls={`${id}-${value}-panel`} aria-selected={mode === value}
@@ -66,15 +67,16 @@ export function DashboardInbox({ badge, children, canViewBilling }: {
                 tabsRef.current?.querySelectorAll<HTMLButtonElement>("button")[next]?.focus();
               }}>
               {value === "messages" ? <Inbox size={15} aria-hidden="true" /> : <ReceiptText size={15} aria-hidden="true" />}
-              <span>{value === "messages" ? "Eingang / Meldungen" : "Abrechnung"}</span>
+              <span>{value === "messages" ? "Meldungen" : "Abrechnung"}</span>
               {value === "messages" && badge ? <strong className="dashboard-card-badge">{badge}</strong> : null}
+              {value === "billing" ? <DashboardBillingCount billing={billing} error={error} /> : null}
             </button>
           ))}
         </div>
       ) : (
         <div className="dashboard-card-header">
           <span><Inbox aria-hidden="true" size={20} /></span>
-          <div><h2>Eingang / Meldungen</h2></div>
+          <div><h2>Meldungen</h2></div>
           {badge ? <strong className="dashboard-card-badge">{badge}</strong> : null}
         </div>
       )}
@@ -96,6 +98,14 @@ export function DashboardInbox({ badge, children, canViewBilling }: {
       )}
     </article>
   );
+}
+
+export function DashboardBillingCount({ billing, error }: { billing: DashboardBilling | null; error: boolean }) {
+  const count = !error && billing ? billing.sites.length : null;
+  const label = count === null
+    ? error ? "Baustellenanzahl derzeit nicht verfügbar" : "Baustellenanzahl wird geladen"
+    : `${count} ${count === 1 ? "Baustelle" : "Baustellen"} mit offenen Abrechnungen`;
+  return <strong className="dashboard-card-badge" title={label} aria-label={label}>{count ?? "–"}</strong>;
 }
 
 export function DashboardBillingList({ billing }: { billing: DashboardBilling }) {

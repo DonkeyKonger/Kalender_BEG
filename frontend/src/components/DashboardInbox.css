@@ -31,6 +31,15 @@
 }
 
 .dashboard-inbox-tabs svg { flex-shrink: 0; }
+.dashboard-card.dashboard-inbox .dashboard-card-badge {
+  flex-shrink: 0;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: .625rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
 .dashboard-inbox :is(button, summary, a):focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
 .dashboard-inbox-panel {
   flex: 1 1 auto;
