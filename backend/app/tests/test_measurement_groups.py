@@ -121,10 +121,14 @@ def test_invalid_selection_is_rejected_without_partial_group(kind):
     with db_session() as db:
         site, user, batches = setup_group(db, 3)
         selected = batches[:2]
-        if kind == "single": selected = batches[:1]
-        if kind == "duplicate": selected = [batches[0], batches[0]]
-        if kind == "wrong_site": batches[0].site = create_site(db)
-        if kind == "archived": batches[0].deleted_at = datetime.now(timezone.utc)
+        if kind == "single":
+            selected = batches[:1]
+        if kind == "duplicate":
+            selected = [batches[0], batches[0]]
+        if kind == "wrong_site":
+            batches[0].site = create_site(db)
+        if kind == "archived":
+            batches[0].deleted_at = datetime.now(timezone.utc)
         if kind == "overlap":
             create_group(db, site, user, batches[1:])
         db.commit()
@@ -140,19 +144,32 @@ def test_any_source_change_atomically_dissolves_group_without_deleting_originals
         group = create_group(db, site, user, batches)
         before = group.snapshot
         batch = batches[0]
-        if change == "quantity": batch.entries[0].quantity = Decimal("2.75")
-        if change == "area": batch.entries[0].area_or_comment = "OG"
-        if change == "new_entry": db.add(SiteMeasurementEntry(site=site, measurement_batch_id=batch.id, measurement_item=batch.free_items[0], quantity=3, area_or_comment="OG", status="billed"))
-        if change == "new_entry_relationship": db.add(SiteMeasurementEntry(site=site, measurement_batch=batch, measurement_item=batch.free_items[0], quantity=3, area_or_comment="OG", status="billed"))
-        if change == "delete_entry": db.delete(batch.entries[0])
-        if change == "item": batch.free_items[0].description = "Neu"
-        if change == "override": batch.item_overrides = {str(batch.free_items[0].id): {"description": "Neu"}}
-        if change == "status": batch.status = "customer_signed"
-        if change == "invoice": batch.is_invoiced = False
-        if change == "archive": batch.deleted_at = datetime.now(timezone.utc)
-        if change == "signature": batch.customer_signature_strokes = []
-        if change == "area_row": db.add(SiteMeasurementAreaRow(site=site, measurement_batch_id=batch.id, area_or_comment="Dach", sort_order=1))
-        if change == "photo": db.add(SiteMeasurementBatchPhoto(site=site, measurement_batch=batch, external_drive_id="test", external_item_id="test-photo", filename="test.jpg", content_type="image/jpeg"))
+        if change == "quantity":
+            batch.entries[0].quantity = Decimal("2.75")
+        if change == "area":
+            batch.entries[0].area_or_comment = "OG"
+        if change == "new_entry":
+            db.add(SiteMeasurementEntry(site=site, measurement_batch_id=batch.id, measurement_item=batch.free_items[0], quantity=3, area_or_comment="OG", status="billed"))
+        if change == "new_entry_relationship":
+            db.add(SiteMeasurementEntry(site=site, measurement_batch=batch, measurement_item=batch.free_items[0], quantity=3, area_or_comment="OG", status="billed"))
+        if change == "delete_entry":
+            db.delete(batch.entries[0])
+        if change == "item":
+            batch.free_items[0].description = "Neu"
+        if change == "override":
+            batch.item_overrides = {str(batch.free_items[0].id): {"description": "Neu"}}
+        if change == "status":
+            batch.status = "customer_signed"
+        if change == "invoice":
+            batch.is_invoiced = False
+        if change == "archive":
+            batch.deleted_at = datetime.now(timezone.utc)
+        if change == "signature":
+            batch.customer_signature_strokes = []
+        if change == "area_row":
+            db.add(SiteMeasurementAreaRow(site=site, measurement_batch_id=batch.id, area_or_comment="Dach", sort_order=1))
+        if change == "photo":
+            db.add(SiteMeasurementBatchPhoto(site=site, measurement_batch=batch, external_drive_id="test", external_item_id="test-photo", filename="test.jpg", content_type="image/jpeg"))
         db.commit()
         db.expire_all()
         assert group.invalidated_at is not None
@@ -184,8 +201,10 @@ def test_empty_completed_measurements_can_be_combined_and_exported():
     with db_session() as db:
         site, user, batches = setup_group(db)
         for batch in batches:
-            for entry in list(batch.entries): db.delete(entry)
-            for item in list(batch.free_items): db.delete(item)
+            for entry in list(batch.entries):
+                db.delete(entry)
+            for item in list(batch.free_items):
+                db.delete(item)
         db.commit()
         group = create_group(db, site, user, batches)
         assert group.position_count == 0
