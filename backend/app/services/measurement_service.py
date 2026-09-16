@@ -2093,6 +2093,29 @@ class MeasurementService:
         self.db.commit()
         return self.list_site_batch_items(site_id=site_id, batch_id=batch_id)
 
+    @staticmethod
+    def _dashboard_batch_filters(current_user: User | None) -> list:
+        # Share eligibility between the list and its independently polled counter.
+        # Archived batches must not remain as invisible unread notifications.
+        filters = [
+            SiteMeasurementBatch.status.notin_(("billed", "approved", "closed")),
+            SiteMeasurementBatch.deleted_at.is_(None),
+        ]
+        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
+            filters.append(Site.project_manager_person_id == current_user.person_id)
+        return filters
+
+    @staticmethod
+    def _dashboard_extra_work_filters(current_user: User | None) -> list:
+        filters = [
+            ExtraWorkTicket.status == "submitted",
+            ExtraWorkTicket.submitted_at.is_not(None),
+            ExtraWorkTicket.deleted_at.is_(None),
+        ]
+        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
+            filters.append(Site.project_manager_person_id == current_user.person_id)
+        return filters
+
     def list_dashboard_submissions(
         self, *, limit: int = 6, current_user: User | None = None
     ) -> list[MeasurementDashboardSubmissionRead]:
@@ -2107,17 +2130,13 @@ class MeasurementService:
                 selectinload(SiteMeasurementBatch.submitted_by).selectinload(User.person),
             )
             .where(
-                SiteMeasurementBatch.status.notin_(("billed", "approved", "closed")),
-                SiteMeasurementBatch.deleted_at.is_(None),
+                *self._dashboard_batch_filters(current_user),
                 or_(
                     SiteMeasurementBatch.status.in_(("submitted", "rejected")),
                     SiteMeasurementBatch.customer_signed_at.is_not(None),
                 ),
             )
         )
-        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
-            statement = statement.where(Site.project_manager_person_id == current_user.person_id)
-
         batches = list(
             self.db.scalars(
                 statement.order_by(
@@ -2138,16 +2157,8 @@ class MeasurementService:
                 selectinload(ExtraWorkTicket.entries),
                 selectinload(ExtraWorkTicket.submitted_by).selectinload(User.person),
             )
-            .where(
-                ExtraWorkTicket.status == "submitted",
-                ExtraWorkTicket.submitted_at.is_not(None),
-                ExtraWorkTicket.deleted_at.is_(None),
-            )
+            .where(*self._dashboard_extra_work_filters(current_user))
         )
-        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
-            extra_work_statement = extra_work_statement.where(
-                Site.project_manager_person_id == current_user.person_id
-            )
 
         extra_work_tickets = list(
             self.db.scalars(
@@ -2190,11 +2201,7 @@ class MeasurementService:
 
     def count_dashboard_submissions(self, *, current_user: User | None = None) -> int:
         dismissed_ids = self._dashboard_dismissed_ids_by_type(current_user)
-        batch_base_filters = [
-            SiteMeasurementBatch.status.notin_(("billed", "approved", "closed")),
-        ]
-        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
-            batch_base_filters.append(Site.project_manager_person_id == current_user.person_id)
+        batch_base_filters = self._dashboard_batch_filters(current_user)
 
         submitted_batch_filters = [
             *batch_base_filters,
@@ -2223,13 +2230,7 @@ class MeasurementService:
             .where(*signed_batch_filters)
         ) or 0
 
-        extra_work_filters = [
-            ExtraWorkTicket.status == "submitted",
-            ExtraWorkTicket.submitted_at.is_not(None),
-            ExtraWorkTicket.deleted_at.is_(None),
-        ]
-        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
-            extra_work_filters.append(Site.project_manager_person_id == current_user.person_id)
+        extra_work_filters = self._dashboard_extra_work_filters(current_user)
         extra_work_dismissed_ids = dismissed_ids.get("extra_work_submitted", set())
         if extra_work_dismissed_ids:
             extra_work_filters.append(ExtraWorkTicket.id.notin_(extra_work_dismissed_ids))
