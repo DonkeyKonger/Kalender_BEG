@@ -117,14 +117,15 @@
   width: 44px;
   height: 44px;
   border-radius: 9px;
-  background: #eef0f3;
-  color: #575b61;
+  background: #f0f1f3;
+  color: #60656c;
 }
 
-.is-folders .mobile-project-file-icon { background: #fff4dc; color: #95630c; }
-.is-measurement .mobile-project-file-icon { background: #e5f8f3; color: #16867b; }
-.is-extra-work .mobile-project-file-icon { background: #eaf4ff; color: #286398; }
-.is-timesheet .mobile-project-file-icon { background: #f1edff; color: #6552a5; }
+/* Muted category accents keep the menu distinct without competing with actions. */
+.is-folders .mobile-project-file-icon { background: #f6f2e9; color: #806a43; }
+.is-measurement .mobile-project-file-icon { background: #edf5f2; color: #4d7973; }
+.is-extra-work .mobile-project-file-icon { background: #f0f4f8; color: #506e89; }
+.is-timesheet .mobile-project-file-icon { background: #f3f1f7; color: #746886; }
 
 .mobile-project-file-copy {
   display: grid;
@@ -181,8 +182,8 @@
   height: 44px;
   padding: 10px;
   border-radius: 9px;
-  background: #faece9;
-  color: #ac4c31;
+  background: #f7f0ee;
+  color: #946e63;
 }
 
 .app-shell.is-mobile-workspace .is-project-file .mobile-project-photo-action .mobile-camera-button {

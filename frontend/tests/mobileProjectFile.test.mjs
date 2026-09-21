@@ -26,6 +26,28 @@ new Function('require','module','exports',compiled.outputFiles[0].text)(createRe
 const assignment={id:1,site:{id:1,name:'Testbaustelle Finienweg',site_number:'9999',customer:'Kunde GmbH',status:'paused'}};
 const collect=node=>!node||typeof node!=='object'?[]:Array.isArray(node)?node.flatMap(collect):[node,...collect(node.props?.children)];
 
+test('menu accents are muted while keeping icon contrast and the blue camera action',()=>{
+  const rgb=hex=>hex.match(/[a-f\d]{2}/gi).map(value=>parseInt(value,16));
+  const chroma=hex=>Math.max(...rgb(hex))-Math.min(...rgb(hex));
+  const luminance=hex=>rgb(hex).map(value=>value/255).map(value=>value<=0.04045?value/12.92:((value+0.055)/1.055)**2.4).reduce((sum,value,index)=>sum+value*[0.2126,0.7152,0.0722][index],0);
+  const accents=[
+    ['.is-folders .mobile-project-file-icon','#95630c','#fff4dc'],
+    ['.is-measurement .mobile-project-file-icon','#16867b','#e5f8f3'],
+    ['.is-extra-work .mobile-project-file-icon','#286398','#eaf4ff'],
+    ['.is-timesheet .mobile-project-file-icon','#6552a5','#f1edff'],
+    ['.is-project-file .mobile-project-photo-action .mobile-measurement-photo-main-action > svg','#ac4c31','#faece9'],
+  ];
+  for(const [selector,oldColor,oldBackground] of accents){
+    const rule=styles.slice(styles.indexOf(selector)).split('}')[0];
+    const color=rule.match(/\bcolor: (#[a-f\d]{6})/)[1];
+    const background=rule.match(/\bbackground: (#[a-f\d]{6})/)[1];
+    assert.ok(chroma(color)<=chroma(oldColor)*0.65,`${selector}: muted icon`);
+    assert.ok(chroma(background)<chroma(oldBackground),`${selector}: muted background`);
+    assert.ok((luminance(background)+0.05)/(luminance(color)+0.05)>=3,`${selector}: readable icon`);
+  }
+  assert.match(styles,/\.mobile-camera-button \{[^}]*background: #315f91;[^}]*color: #ffffff;/);
+});
+
 test('project file renders compact summary and all six destinations in one menu',()=>{
   const html=module.exports.render(assignment);
   assert.match(html,/<h1>Projektakte<\/h1>/);
