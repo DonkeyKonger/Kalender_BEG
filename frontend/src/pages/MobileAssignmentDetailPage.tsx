@@ -857,7 +857,7 @@ function ExtraWorkOrderOverview({
     allowMissingCustomerSignature: true,
   });
   const emailSendStatusTitle = emailSendError ?? emailSendHint ?? undefined;
-  const hasEmailSendInlineStatus = shouldWarnMissingCustomerSignatureForEmail || Boolean(emailSendError);
+  const emailDeliveryStatus = getMobileCustomerEmailStatus(order);
 
   useEffect(() => {
     let isActive = true;
@@ -932,7 +932,7 @@ function ExtraWorkOrderOverview({
   }
 
   return (
-    <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel">
+    <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel is-measurement-overview is-extra-work-overview">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
           <ArrowLeft aria-hidden="true" size={17} />
@@ -958,11 +958,10 @@ function ExtraWorkOrderOverview({
           onClick={() => setIsEditingDetails(true)}
           aria-label="Stundenzettel-Details öffnen"
         />
-        <span className="mobile-measurement-summary-status-row">
+        <span className="mobile-measurement-summary-heading">
+          <span className="mobile-measurement-card-date">{kindLabel}</span>
           <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
-          <MobileCustomerEmailStatus item={order} />
         </span>
-        <span className="mobile-measurement-card-date">{kindLabel}</span>
         <span className="mobile-extra-work-title-line">
           <h2>{formatMobileExtraWorkOrderTitle(order)}</h2>
           {canRename ? (
@@ -1036,7 +1035,7 @@ function ExtraWorkOrderOverview({
           <span>Kunden-E-Mail</span>
         </button>
         <button
-          className={`mobile-measurement-overview-action${hasEmailSendInlineStatus ? " has-inline-status" : ""}${shouldWarnMissingCustomerSignatureForEmail ? " is-email-warning" : ""}`}
+          className={`mobile-measurement-overview-action has-inline-status${shouldWarnMissingCustomerSignatureForEmail ? " is-email-warning" : ""}`}
           type="button"
           title={emailSendStatusTitle}
           onClick={() => {
@@ -1047,9 +1046,16 @@ function ExtraWorkOrderOverview({
         >
           <Mail aria-hidden="true" size={18} />
           <span>{isSendingEmail ? "Wird gesendet..." : "Per E-Mail senden"}</span>
-          {shouldWarnMissingCustomerSignatureForEmail || emailSendError ? (
-            <AlertTriangle className="mobile-action-warning-icon" aria-hidden="true" size={18} />
-          ) : null}
+          <span
+            className={`mobile-measurement-email-indicator ${emailSendError ? "is-not-sent" : emailDeliveryStatus.className}`}
+            role="img"
+            aria-label={emailSendError ?? emailDeliveryStatus.label}
+            title={emailSendStatusTitle ?? emailDeliveryStatus.label}
+          >
+            {emailSendError ? <AlertTriangle aria-hidden="true" size={22} />
+              : emailDeliveryStatus.className === "is-not-sent" ? <MailX aria-hidden="true" size={22} />
+                : <MailCheck aria-hidden="true" size={22} />}
+          </span>
         </button>
         <MobileOverviewPhotoAction
           count={order.photo_count}
