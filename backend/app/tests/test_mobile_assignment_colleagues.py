@@ -13,7 +13,8 @@ def test_upcoming_team_includes_internal_and_external_workers_only_during_own_ov
     own = add_history_assignment(db, person=worker, site_number="1001", work_date=date(2026, 9, 21), end_date=date(2026, 9, 25))
     external = Person(first_name="Jan", last_name="Tietz", display_name="Jan Tietz", short_code="JT", person_type=PersonType.EXTERNAL)
     temp = Person(first_name="Jens", last_name="Koehle", display_name="Jens Koehle", short_code="JK", person_type=PersonType.EXTERNAL_TEMP)
-    db.add_all([external, temp]); db.flush()
+    db.add_all([external, temp])
+    db.flush()
 
     def plan(person, start, end):
         db.add(Assignment(site_id=own.site_id, person_id=person.id, start_date=date(2026, 9, start), end_date=date(2026, 9, end), assignment_type=AssignmentType.REGULAR))
