@@ -1536,7 +1536,7 @@ function ProjectEmailRecipientsModal({
       >
         <div className="mobile-project-email-dialog-head">
           <h2 id="mobile-project-email-dialog-title">E-Mail-Empfänger</h2>
-          <p>Projektbezogene Kundenempfänger für spätere Dokumente und Mails.</p>
+          <p>Hier siehst du nur die Empfänger dieser Baustelle. Hinzugefügte Adressen werden auch beim Kunden gespeichert.</p>
         </div>
 
         {isLoading ? <div className="empty-panel">Empfänger werden geladen...</div> : null}
@@ -1544,7 +1544,7 @@ function ProjectEmailRecipientsModal({
           <>
             <div className="mobile-project-email-list">
               {suggestions.length === 0 ? (
-                <p className="mobile-project-email-empty">Noch keine Kunden-E-Mail bekannt. Du kannst unten eine Adresse hinzufügen.</p>
+                <p className="mobile-project-email-empty">Für diese Baustelle ist noch keine E-Mail-Adresse gespeichert. Du kannst unten eine Adresse hinzufügen – auch wenn sie beim Kunden bereits bekannt ist.</p>
               ) : null}
               {suggestions.map((recipient) => (
                 <label className="mobile-project-email-option" key={recipient.email}>

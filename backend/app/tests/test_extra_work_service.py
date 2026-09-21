@@ -113,7 +113,7 @@ def test_extra_work_daily_limit_does_not_cap_week_or_cross_worker_totals():
     assert payload.worker_rows[1].monday_hours == 20
 
 
-def test_mobile_assignment_email_recipients_use_customer_suggestions_and_persist_selection():
+def test_mobile_assignment_email_recipients_only_show_site_addresses_and_persist_selection():
     db = db_session()
     person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
     site = Site(site_number="8007", name="Schüchtermann Klinik", customer="Klinik GmbH")
@@ -152,10 +152,12 @@ def test_mobile_assignment_email_recipients_use_customer_suggestions_and_persist
         select(CustomerContact).where(CustomerContact.customer_id == customer.id)
     ).all()
 
-    assert suggestion_emails == {"leitung@klinik.example", "kontakt@klinik.example"}
+    assert suggestion_emails == set()
     assert {recipient.email for recipient in updated.recipients} == {"leitung@klinik.example", "neu@kunde.example"}
     assert {recipient.email for recipient in reloaded.recipients} == {"leitung@klinik.example", "neu@kunde.example"}
-    assert "neu@kunde.example" in {recipient.email for recipient in reloaded.suggestions}
+    assert {recipient.email for recipient in reloaded.suggestions} == {
+        "leitung@klinik.example", "neu@kunde.example",
+    }
     assert sum(contact.email == "neu@kunde.example" for contact in customer_contacts) == 1
 
     service.update_for_assignment(

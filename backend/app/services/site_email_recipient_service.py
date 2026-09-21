@@ -32,7 +32,7 @@ class SiteEmailRecipientService:
         payload: SiteEmailRecipientsUpdate,
     ) -> SiteEmailRecipientsResponse:
         assignment = self._get_user_assignment(assignment_id, current_user)
-        site = self._get_site(assignment.site_id)
+        site = self._get_site(assignment.site_id, for_update=True)
         existing = {
             recipient.email: recipient
             for recipient in self.db.scalars(
@@ -75,58 +75,29 @@ class SiteEmailRecipientService:
             for recipient in stored
             if recipient.is_selected
         ]
-        suggestion_by_email = {
-            suggestion.email: suggestion
-            for suggestion in self._customer_suggestions(site)
-        }
-        for recipient in stored:
-            suggestion_by_email.setdefault(recipient.email, self._read_recipient(recipient))
-        for recipient in selected:
-            if recipient.email in suggestion_by_email:
-                suggestion_by_email[recipient.email].is_selected = True
-                suggestion_by_email[recipient.email].id = recipient.id
-
+        # Mobile users only see addresses explicitly saved for this site, including
+        # previously deselected recipients. Customer-wide contacts stay in the office.
         return SiteEmailRecipientsResponse(
             site_id=site.id,
             recipients=selected,
-            suggestions=sorted(suggestion_by_email.values(), key=lambda item: item.email),
+            suggestions=[self._read_recipient(recipient) for recipient in stored],
         )
-
-    def _customer_suggestions(self, site: Site) -> list[SiteEmailRecipientRead]:
-        suggestions: dict[str, SiteEmailRecipientRead] = {}
-        for customer in self._matching_customers(site):
-            if customer.project_lead_email:
-                try:
-                    email = normalize_email(customer.project_lead_email)
-                    suggestions[email] = SiteEmailRecipientRead(
-                        email=email,
-                        label=customer.project_lead_name or customer.company_name,
-                        source="customer_project_lead",
-                    )
-                except HTTPException:
-                    pass
-            for contact in customer.contacts:
-                if not contact.email:
-                    continue
-                try:
-                    email = normalize_email(contact.email)
-                    suggestions.setdefault(
-                        email,
-                        SiteEmailRecipientRead(
-                            email=email,
-                            label=contact.name,
-                            source="customer_contact",
-                        ),
-                    )
-                except HTTPException:
-                    continue
-        return list(suggestions.values())
 
     def _ensure_customer_contact(self, site: Site, recipient: SiteEmailRecipientPayload) -> None:
         matching_customers = self._matching_customers(site)
         if len(matching_customers) != 1:
             return
-        customer = matching_customers[0]
+        # Serialize mobile additions across sites of the same customer. Reload the
+        # contacts after acquiring the lock so simultaneous entries cannot duplicate it.
+        customer = self.db.scalar(
+            select(Customer)
+            .where(Customer.id == matching_customers[0].id)
+            .with_for_update()
+            .options(selectinload(Customer.contacts))
+            .execution_options(populate_existing=True)
+        )
+        if customer is None:
+            return
         known_emails = set()
         if customer.project_lead_email:
             try:
@@ -180,8 +151,11 @@ class SiteEmailRecipientService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Einsatz nicht gefunden.")
         return assignment
 
-    def _get_site(self, site_id: int) -> Site:
-        site = self.db.get(Site, site_id)
+    def _get_site(self, site_id: int, *, for_update: bool = False) -> Site:
+        statement = select(Site).where(Site.id == site_id)
+        if for_update:
+            statement = statement.with_for_update()
+        site = self.db.scalar(statement)
         if site is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Baustelle nicht gefunden.")
         return site
