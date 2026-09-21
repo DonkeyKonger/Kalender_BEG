@@ -1,4 +1,4 @@
-/* Position capture only; free-position creation and the tablet keypad stay unchanged. */
+/* Shared presentation for position capture and free-position creation. */
 @media (max-width: 699px) {
   body:has(.mobile-measurement-capture-page) {
     min-width: 0;
@@ -76,15 +76,19 @@
   font-weight: 600;
 }
 
-.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-form input {
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-form input,
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-form textarea,
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-form select {
   min-width: 0;
   min-height: 44px;
   border-color: #d7e3f0;
   border-radius: 7px;
+  font-size: 1rem;
   font-weight: 400;
 }
 
-.mobile-measurement-capture-page input::placeholder {
+.mobile-measurement-capture-page input::placeholder,
+.mobile-measurement-capture-page textarea::placeholder {
   color: #8599b2;
 }
 
@@ -234,7 +238,36 @@
 }
 
 .mobile-measurement-capture-page button:focus-visible,
-.mobile-measurement-capture-page input:focus-visible {
+.mobile-measurement-capture-page input:focus-visible,
+.mobile-measurement-capture-page textarea:focus-visible,
+.mobile-measurement-capture-page select:focus-visible {
   outline: 2px solid #315f91;
   outline-offset: 2px;
+}
+
+.app-shell.is-mobile-workspace .mobile-measurement-capture-page.mobile-measurement-free-position-page {
+  padding: 0 0 calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+.app-shell.is-mobile-workspace .mobile-measurement-capture-page.mobile-measurement-free-position-page.is-dialog {
+  max-width: none;
+  padding: 14px;
+}
+
+.mobile-measurement-capture-page.mobile-measurement-free-position-page .mobile-entry-head {
+  margin: 0;
+}
+
+.mobile-measurement-capture-page.mobile-measurement-free-position-page textarea {
+  min-height: 80px;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-free-position-actions .secondary-action {
+  border: 0;
+  background: transparent;
+  color: #647d9a;
+  font-weight: 400;
+  box-shadow: none;
 }

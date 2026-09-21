@@ -49,7 +49,7 @@ test("keypad preserves decimal, negative, backspace and clear behavior", () => {
   assert.ok(tree({variant: "entry", disabled: true}).props.children.every(button => button.props.disabled));
 });
 
-test("free-position keypad retains its default layout and text actions", () => {
+test("default keypad retains its existing layout and text actions", () => {
   const html = render({disabled: false, onKeyPress: () => {}});
   assert.match(html, />Zurück</);
   assert.match(html, />Leeren</);

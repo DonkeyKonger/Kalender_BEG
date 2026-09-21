@@ -133,7 +133,7 @@ const EMPTY_MEASUREMENT_FREE_POSITION_DRAFT: MeasurementFreePositionDraft = {
   position: "",
   description: "",
   unit: "st",
-  quantity: "0,00",
+  quantity: "",
   areaOrComment: "",
 };
 
@@ -6047,23 +6047,17 @@ function MeasurementFreePositionForm({
   const quantityLabel = `Menge (${draft.unit || "Einheit"})`;
 
   return (
-    <div className={`mobile-detail-panel mobile-measurement-panel mobile-measurement-free-position-page${variant === "dialog" ? " is-dialog" : ""}`}>
-      <div className="mobile-measurement-detail-topbar">
-        <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={17} />
-          <span>Positionen</span>
-        </button>
-      </div>
-
-      <header className="mobile-entry-head">
-        <div>
-          <span>Aufmaß</span>
-          <h1 id={variant === "dialog" ? "mobile-measurement-position-dialog-title" : undefined}>Position erstellen</h1>
-          <p>Freie Zusatzposition nur für dieses Aufmaß anlegen.</p>
-        </div>
+    <div className={`mobile-measurement-entry-page mobile-measurement-capture-page mobile-measurement-free-position-page${variant === "dialog" ? " is-dialog" : ""}`}>
+      <header className="mobile-measurement-capture-title">
+        <MobileBackButton label="Zurück zu den Positionen" onClick={onBack} />
+        <h1 id={variant === "dialog" ? "mobile-measurement-position-dialog-title" : undefined}>Position erstellen</h1>
       </header>
 
-      <div className="mobile-measurement-form mobile-measurement-free-position-form">
+      <header className="mobile-entry-head">
+        <p>Freie Zusatzposition nur für dieses Aufmaß anlegen.</p>
+      </header>
+
+      <div className="mobile-measurement-form mobile-measurement-entry-form mobile-measurement-free-position-form">
         <label>
           <span>Positionsnummer / Kennung</span>
           <input
@@ -6078,25 +6072,24 @@ function MeasurementFreePositionForm({
           <span>Kurztext / Leistungsbeschreibung</span>
           <textarea
             required
+            rows={3}
             value={draft.description}
             onChange={(event) => onChange({ description: event.target.value })}
             placeholder="Leistung beschreiben"
           />
         </label>
 
-        <div className="mobile-measurement-form-grid">
-          <label>
-            <span>Einheit</span>
-            <select value={draft.unit} onChange={(event) => onChange({ unit: event.target.value })}>
-              {MOBILE_MEASUREMENT_FREE_UNITS.map((unit) => (
-                <option key={unit} value={unit}>{unit}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-
         <label>
-          <span>Bereich / Ort</span>
+          <span>Einheit</span>
+          <select value={draft.unit} onChange={(event) => onChange({ unit: event.target.value })}>
+            {MOBILE_MEASUREMENT_FREE_UNITS.map((unit) => (
+              <option key={unit} value={unit}>{unit}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="mobile-measurement-capture-area">
+          <label htmlFor="mobile-free-position-area">Bereich / Ort</label>
           {areaSuggestions.length > 0 ? (
             <div className="mobile-area-tag-list" aria-label="Bereichsvorschläge">
               {areaSuggestions.map((area) => (
@@ -6115,41 +6108,47 @@ function MeasurementFreePositionForm({
             </div>
           ) : null}
           <input
+            id="mobile-free-position-area"
             type="text"
             required
             value={draft.areaOrComment}
             onChange={(event) => onChange({ areaOrComment: normalizeMeasurementAreaInput(event.target.value) })}
-            placeholder="z. B. 2. OG"
+            placeholder="z. B. Halle A, Raum 681"
             autoCapitalize="characters"
             autoCorrect="off"
             spellCheck={false}
           />
-        </label>
+        </div>
 
-        <label>
-          <span>{quantityLabel}</span>
-          <input
-            type="text"
-            inputMode="none"
-            readOnly
-            value={draft.quantity || "0,00"}
-            aria-label={quantityLabel}
-            placeholder="0,00"
-            className={Number(parseOptionalMeasurementQuantity(draft.quantity)) < 0 ? "measurement-negative-quantity" : undefined}
-          />
+        <div className="mobile-measurement-capture-quantity">
+          <label htmlFor="mobile-free-position-quantity">{quantityLabel}</label>
+          <div className="mobile-measurement-quantity-input">
+            <input
+              id="mobile-free-position-quantity"
+              type="text"
+              inputMode="none"
+              readOnly
+              value={draft.quantity}
+              aria-label={quantityLabel}
+              placeholder="0"
+              className={Number(parseOptionalMeasurementQuantity(draft.quantity)) < 0 ? "measurement-negative-quantity" : undefined}
+            />
+            <span aria-hidden="true">{draft.unit}</span>
+          </div>
           <MeasurementQuantityKeypad
+            variant="entry"
             disabled={isSaving}
             onKeyPress={(key) => onChange({ quantity: applyMeasurementQuantityKey(draft.quantity, key) })}
           />
-        </label>
+        </div>
 
         {error ? <p className="form-error">{error}</p> : null}
 
         <div className="mobile-form-actions mobile-measurement-free-position-actions">
-          <button className="secondary-action" type="button" onClick={onCancel} disabled={isSaving}>Abbrechen</button>
           <button className="primary-action" type="button" onClick={onSave} disabled={isSaving}>
             {isSaving ? "Speichert..." : "Speichern"}
           </button>
+          <button className="secondary-action" type="button" onClick={onCancel} disabled={isSaving}>Abbrechen</button>
         </div>
       </div>
     </div>
