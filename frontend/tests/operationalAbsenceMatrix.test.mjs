@@ -55,6 +55,13 @@ test("operational entries use stable priority ordering and collision-free keys",
   assert.match(matrixSource, /`absence-\$\{item\.absence\.id\}`/);
 });
 
+test("project manager bubbles show the abbreviation without changing employee labels", () => {
+  assert.match(matrixSource, /personLabel: absence\.project_manager\.display_name,/);
+  assert.doesNotMatch(matrixSource, /personLabel: calendarPersonCode\(absence\.project_manager\)/);
+  assert.match(matrixSource, /personLabel: absencePersonLabel\(person\)/);
+  assert.match(matrixSource, /return person \? calendarPersonCode\(person\) : "Person"/);
+});
+
 test("left click opens a read-only viewport-aware detail popup with optional sections", () => {
   assert.match(matrixSource, /function OperationalAbsenceDetailPopup/);
   assert.match(matrixSource, /role="dialog"/);

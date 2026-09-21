@@ -5398,7 +5398,7 @@ function buildAbsencePlanningItemsByDate(
       .map((absence) => ({
         kind: "operational",
         operationalAbsence: absence,
-        personLabel: calendarPersonCode(absence.project_manager),
+        personLabel: absence.project_manager.display_name,
         personName: absence.project_manager.display_name,
       }));
     const items = sortPlanningAbsenceEntries([...operationalItems, ...classicItems]);

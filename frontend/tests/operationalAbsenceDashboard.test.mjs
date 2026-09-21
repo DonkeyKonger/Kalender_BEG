@@ -151,6 +151,9 @@ test("project manager options come from the backend and are not hardcoded", () =
   assert.match(loader, /setOperationalAbsenceProjectManagers\(projectManagers\)/);
   assert.match(picker, /people[\s\S]*\.sort\([\s\S]*\.map\(\(person\) => \(\{/);
   assert.match(picker, /value: String\(person\.id\)/);
+  assert.match(picker, /label: person\.display_name,/);
+  assert.match(picker, /searchText: `\$\{person\.short_code\} \$\{person\.display_name\}`/);
+  assert.doesNotMatch(picker, /label: person\.short_code/);
   assert.doesNotMatch(loader, /\b(?:AB|CE|KE|TW)\b/);
   assert.doesNotMatch(picker, /\b(?:AB|CE|KE|TW)\b/);
 });

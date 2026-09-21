@@ -94,9 +94,7 @@ export function DashboardOperationalAbsenceProjectManagerSelect({
     ))
     .map((person) => ({
       value: String(person.id),
-      label: person.short_code
-        ? `${person.short_code} · ${person.display_name}`
-        : person.display_name,
+      label: person.display_name,
       searchText: `${person.short_code} ${person.display_name}`,
     })), [people]);
 
