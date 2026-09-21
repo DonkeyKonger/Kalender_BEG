@@ -438,6 +438,7 @@ function MobileExtraWorkTab({
   const [photoGalleryOrder, setPhotoGalleryOrder] = useState<MobileExtraWorkTicket | null>(null);
   const [photoUploadOrder, setPhotoUploadOrder] = useState<MobileExtraWorkTicket | null>(null);
   const [photoGalleryVersion, setPhotoGalleryVersion] = useState(0);
+  const [isPhotoSourceDialogOpen, setIsPhotoSourceDialogOpen] = useState(false);
   const [isEditingEntry, setIsEditingEntry] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -511,6 +512,9 @@ function MobileExtraWorkTab({
     order: MobileExtraWorkTicket,
     inputRef: { current: HTMLInputElement | null },
   ): void {
+    if (isUploadingPhoto) {
+      return;
+    }
     if ((order.photo_count ?? 0) >= MOBILE_DOCUMENT_PHOTO_LIMIT) {
       setMessage("Maximal 5 Fotos pro Stundenzettel erlaubt.");
       setPhotoMessageTone("error");
@@ -528,6 +532,20 @@ function MobileExtraWorkTab({
 
   function openPhotoLibrary(order: MobileExtraWorkTicket): void {
     openPhotoInput(order, photoLibraryInputRef);
+  }
+
+  function openPhotoSourceSelection(order: MobileExtraWorkTicket): void {
+    if (isUploadingPhoto) {
+      return;
+    }
+    if ((order.photo_count ?? 0) >= MOBILE_DOCUMENT_PHOTO_LIMIT) {
+      setMessage("Maximal 5 Fotos pro Stundenzettel erlaubt.");
+      setPhotoMessageTone("error");
+      return;
+    }
+    setMessage(null);
+    setPhotoMessageTone("info");
+    setIsPhotoSourceDialogOpen(true);
   }
 
   async function handlePhotoInputChange(event: ReactChangeEvent<HTMLInputElement>): Promise<void> {
@@ -653,7 +671,7 @@ function MobileExtraWorkTab({
             setMessage(null);
             setIsEditingEntry(true);
           }}
-          onTakePhoto={() => openPhotoCapture(selectedOrder)}
+          onTakePhoto={() => openPhotoSourceSelection(selectedOrder)}
           onOpenPhotos={() => setPhotoGalleryOrder(selectedOrder)}
           onCustomerSigned={(updatedOrder) => {
             mergeUpdatedOrder(updatedOrder);
@@ -702,12 +720,33 @@ function MobileExtraWorkTab({
             }
           }}
         />
+        {isPhotoSourceDialogOpen ? (
+          <ExtraWorkPhotoSourceDialog
+            isUploading={isUploadingPhoto}
+            onClose={() => setIsPhotoSourceDialogOpen(false)}
+            onTakePhoto={() => {
+              setIsPhotoSourceDialogOpen(false);
+              openPhotoCapture(selectedOrder);
+            }}
+            onChoosePhoto={() => {
+              setIsPhotoSourceDialogOpen(false);
+              openPhotoLibrary(selectedOrder);
+            }}
+          />
+        ) : null}
         <input
           ref={photoInputRef}
           className="visually-hidden"
           type="file"
           accept="image/*"
           capture="environment"
+          onChange={(event) => void handlePhotoInputChange(event)}
+        />
+        <input
+          ref={photoLibraryInputRef}
+          className="visually-hidden"
+          type="file"
+          accept="image/*"
           onChange={(event) => void handlePhotoInputChange(event)}
         />
       </>
