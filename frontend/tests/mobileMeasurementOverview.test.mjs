@@ -1,0 +1,74 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import test from "node:test";
+import { build } from "esbuild";
+
+const source = await readFile(new URL("../src/pages/MobileAssignmentDetailPage.tsx", import.meta.url), "utf8");
+const styles = await readFile(new URL("../src/pages/MobileMeasurementOverview.css", import.meta.url), "utf8");
+const overview = source.slice(source.indexOf("function MeasurementBatchOverview("), source.indexOf("type MeasurementPhotoPreview"));
+const helpers = ["MobileOverviewPhotoAction", "MobileCameraButton", "formatMeasurementNumber", "formatMobileMeasurementBatchTitle", "getMobileMeasurementPdfFilename", "getDocumentEmailSendHint", "getMobileCustomerEmailStatus"]
+  .map(name => source.match(new RegExp(`^function ${name}\\([^]*?^}\\n`, "m"))[0]).join("\n");
+const compiled = await build({
+  stdin: {
+    contents: `import React,{useState,useEffect} from 'react'; import {renderToStaticMarkup} from 'react-dom/server';
+      import {ArrowLeft,Send,ClipboardList,FileText,UserRound,CheckCircle2,Mail,MailCheck,MailX,AlertTriangle,Images,Camera} from 'lucide-react';
+      const getMobileMeasurementBatchStatusBadge = batch => ({label:batch.status,className:'test-status'});
+      const formatMobileMeasurementBatchDate = () => '21.09.2026';
+      ${helpers}\n${overview}
+      export const render = props => renderToStaticMarkup(React.createElement(MeasurementBatchOverview,props));`,
+    resolveDir: fileURLToPath(new URL("..", import.meta.url)), loader: "tsx",
+  },
+  bundle: true, write: false, format: "cjs", platform: "node", packages: "external", jsx: "automatic",
+});
+const module = { exports: {} };
+new Function("require", "module", "exports", compiled.outputFiles[0].text)(createRequire(import.meta.url), module, module.exports);
+const render = (batch = {}, props = {}) => module.exports.render({
+  assignmentId: 1, siteNumber: "9999", photoLimit: 5,
+  batch: { id: 1, number: 28, status: "draft", entry_count: 1, position_count: 1, reported_hours: "0", photo_count: 0, ...batch },
+  customerSignatureDisabled: true, customerSignatureHint: "Prüfung durch Projektleiter erforderlich.",
+  ...props,
+});
+
+test("measurement overview uses one joined action list and a compact title/status heading", () => {
+  const html = render();
+  assert.match(html, /is-measurement-overview/);
+  assert.match(html, /mobile-measurement-summary-heading"><h2>Aufmaß 9999.28<\/h2><span/);
+  assert.doesNotMatch(html, /mobile-customer-email-status|mobile-measurement-summary-status-row/);
+  for (const title of ["Aufmaßpositionen erfassen", "Aufmaß anzeigen (PDF)", "Kundenunterschrift einfügen", "Monteursunterschrift einfügen", "Kunden-E-Mail", "Per E-Mail senden", "Hinterlegte Fotos"]) {
+    assert.ok(html.includes(title));
+  }
+  assert.match(html, /<small>Prüfung durch Projektleiter erforderlich\.<\/small>/);
+  assert.match(styles, /mobile-measurement-overview-actions \{\s*grid-template-columns: minmax\(0, 1fr\);\s*gap: 0;/);
+  assert.match(styles, /mobile-measurement-summary-card \{[^}]*border: 0;[^}]*box-shadow: none;/s);
+});
+
+test("overview preserves submission restrictions, loading states and completed signatures", () => {
+  const submitTag = html => html.match(/<button[^>]*mobile-measurement-submit-action[^>]*>/)[0];
+  assert.doesNotMatch(submitTag(render()), /disabled/);
+  for (const batch of [{ entry_count: 0 }, { status: "submitted" }, { is_locked_for_worker: true }]) {
+    assert.match(submitTag(render(batch)), /disabled/);
+  }
+  assert.match(submitTag(render({}, { isSaving: true })), /disabled/);
+  const signed = render({ customer_signed_at: "2026-09-21", worker_signed_at: "2026-09-21", photo_count: 5 });
+  assert.match(signed, /Kundenunterschrift vorhanden/);
+  assert.match(signed, /Monteursunterschrift vorhanden/);
+  assert.doesNotMatch(signed, /Prüfung durch Projektleiter erforderlich/);
+  assert.match(signed, /aria-label="Foto aufnehmen"[^>]*disabled/);
+  assert.match(render({}, { isItemsLoading: true, isOpeningPdf: true }), /Positionen laden/);
+  assert.match(render({}, { isItemsLoading: true, isOpeningPdf: true }), /PDF wird geöffnet/);
+});
+
+test("email status remains accessible at the send action in all delivery states", () => {
+  assert.match(render(), /mobile-measurement-email-indicator is-not-sent" role="img" aria-label="Mail nicht an Kunden gesendet"/);
+  assert.match(render({ customer_email_sent_at: "2026-09-21" }), /mobile-measurement-email-indicator is-signature-open/);
+  assert.match(render({ customer_email_sent_at: "2026-09-21", customer_signed_at: "2026-09-21" }), /mobile-measurement-email-indicator is-complete/);
+  assert.match(overview, /disabled=\{!emailSendPrerequisitesMet \|\| isSendingEmail \|\| isLoadingEmailRecipients\}/);
+  assert.match(overview, /<DocumentEmailSendDialog/);
+  for (const handler of ["onBack", "onSubmit", "onOpenPositions", "onOpenPdf", "onCustomerSignature", "onWorkerSignature"]) {
+    assert.ok(overview.includes(`onClick={${handler}}`));
+  }
+  assert.match(overview, /onOpenPhotos=\{onOpenPhotos\}/);
+  assert.match(overview, /onTakePhoto=\{onTakePhoto\}/);
+});

@@ -1,0 +1,209 @@
+/* Measurement overview only: shared extra-work actions retain their layout. */
+@media (max-width: 699px) {
+  body:has(.is-measurement-overview) {
+    min-width: 0;
+  }
+}
+
+.app-shell.is-mobile-workspace .mobile-measurement-overview-panel.is-measurement-overview {
+  width: 100%;
+  max-width: 560px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 0 0 calc(20px + env(safe-area-inset-bottom, 0px));
+  gap: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-detail-topbar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-detail-topbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 44px;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  box-shadow: none;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-detail-topbar button svg {
+  flex-shrink: 0;
+  width: 19px;
+  height: 19px;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-back-button {
+  border: 1px solid #d7e3f0;
+  background: #ffffff;
+  color: #143c6d;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-submit-action {
+  flex: 0 1 auto;
+  border: 1px solid #315f91;
+  background: #315f91;
+  color: #ffffff;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-submit-action:disabled {
+  border-color: #d7e3f0;
+  background: #e8eef5;
+  color: #65738a;
+  opacity: 1;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-summary-card {
+  gap: 6px;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 10px;
+  box-shadow: none;
+  color: #425b7a;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-summary-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-summary-heading h2 {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #102b50;
+  font-size: 1.125rem;
+  line-height: 1.35;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .measurement-status {
+  flex-shrink: 0;
+  min-height: 0;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-card-date,
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-card-meta {
+  color: #425b7a;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-overview-actions {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #d7e3f0;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-overview-actions > * + * {
+  border-top: 1px solid #e2eaf3;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-overview-action {
+  gap: 12px;
+  min-width: 0;
+  min-height: 60px;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+  padding: 16px 14px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+  box-shadow: none;
+  transform: none;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-overview-action:first-child {
+  border-top: 0;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-overview-action > svg {
+  width: 21px;
+  height: 21px;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-overview-action.is-primary {
+  background: #eef6ff;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-action-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-action-copy small {
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-photo-action-row {
+  grid-template-columns: minmax(0, 1fr) 60px;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-photo-main-action strong {
+  font-weight: inherit;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-inline-camera-button {
+  width: 60px;
+  min-height: 60px;
+  border: 0;
+  border-radius: 0;
+  background: #315f91;
+  box-shadow: none;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-email-indicator {
+  display: inline-flex;
+  justify-self: end;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-email-indicator.is-not-sent svg {
+  color: #c53045;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-email-indicator.is-signature-open svg {
+  color: #a56b16;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-email-indicator.is-complete svg {
+  color: #2f8050;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview button:focus-visible {
+  outline: 2px solid #315f91;
+  outline-offset: -3px;
+  box-shadow: none;
+}

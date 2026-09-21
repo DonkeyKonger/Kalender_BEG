@@ -21,6 +21,8 @@ import {
   Layers3,
   MapPin,
   Mail,
+  MailCheck,
+  MailX,
   MessageSquare,
   Package,
   Pencil,
@@ -64,6 +66,7 @@ import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, Measure
 import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear, toDateInputValue } from "../utils/dateRange";
 import "./MobileMeasurementPositions.css";
 import "./MobileMeasurementEntry.css";
+import "./MobileMeasurementOverview.css";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -5173,7 +5176,6 @@ function MeasurementBatchOverview({
     allowMissingCustomerSignature: true,
   });
   const emailSendStatusTitle = emailSendError ?? emailSendMessage ?? emailSendHint ?? undefined;
-  const hasEmailSendInlineStatus = shouldWarnMissingCustomerSignatureForEmail || Boolean(emailSendError) || Boolean(emailSendMessage);
 
   useEffect(() => {
     let isActive = true;
@@ -5222,8 +5224,12 @@ function MeasurementBatchOverview({
     }
   }
 
+  const emailDeliveryStatus = emailSendMessage
+    ? { label: emailSendMessage, className: hasCustomerSignature ? "is-complete" : "is-signature-open" }
+    : getMobileCustomerEmailStatus(batch);
+
   return (
-    <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel">
+    <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel is-measurement-overview">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
           <ArrowLeft aria-hidden="true" size={17} />
@@ -5241,11 +5247,10 @@ function MeasurementBatchOverview({
       </div>
 
       <div className="mobile-measurement-summary-card">
-        <span className="mobile-measurement-summary-status-row">
+        <div className="mobile-measurement-summary-heading">
+          <h2>{formatMobileMeasurementBatchTitle(batch, siteNumber)}</h2>
           <span className={`measurement-status ${statusBadge.className}`}>{statusBadge.label}</span>
-          <MobileCustomerEmailStatus item={batch} />
-        </span>
-        <h2>{formatMobileMeasurementBatchTitle(batch, siteNumber)}</h2>
+        </div>
         <span className="mobile-measurement-card-date">Datum: {displayDate}</span>
         <span className="mobile-measurement-card-meta">
           <span>Positionen: {batch.position_count}</span>
@@ -5276,10 +5281,12 @@ function MeasurementBatchOverview({
             disabled={hasCustomerSignature || customerSignatureDisabled}
           >
             <UserRound aria-hidden="true" size={18} />
-            <span>{hasCustomerSignature ? "Kundenunterschrift vorhanden" : "Kundenunterschrift einfügen"}</span>
+            <span className="mobile-measurement-action-copy">
+              <span>{hasCustomerSignature ? "Kundenunterschrift vorhanden" : "Kundenunterschrift einfügen"}</span>
+              {!hasCustomerSignature && customerSignatureHint ? <small>{customerSignatureHint}</small> : null}
+            </span>
             {hasCustomerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
           </button>
-          {!hasCustomerSignature && customerSignatureHint ? <p className="mobile-measurement-action-hint">{customerSignatureHint}</p> : null}
           <button
             className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
             type="button"
@@ -5304,7 +5311,7 @@ function MeasurementBatchOverview({
             <span>Kunden-E-Mail</span>
           </button>
           <button
-            className={`mobile-measurement-overview-action${hasEmailSendInlineStatus ? " has-inline-status" : ""}${shouldWarnMissingCustomerSignatureForEmail ? " is-email-warning" : ""}`}
+            className={`mobile-measurement-overview-action has-inline-status${shouldWarnMissingCustomerSignatureForEmail ? " is-email-warning" : ""}`}
             type="button"
             title={emailSendStatusTitle}
             onClick={() => {
@@ -5316,11 +5323,16 @@ function MeasurementBatchOverview({
           >
             <Mail aria-hidden="true" size={18} />
             <span>{isSendingEmail ? "Wird gesendet..." : "Per E-Mail senden"}</span>
-            {shouldWarnMissingCustomerSignatureForEmail || emailSendError ? (
-              <AlertTriangle className="mobile-action-warning-icon" aria-hidden="true" size={18} />
-            ) : emailSendMessage ? (
-              <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={18} />
-            ) : null}
+            <span
+              className={`mobile-measurement-email-indicator ${emailSendError ? "is-not-sent" : emailDeliveryStatus.className}`}
+              role="img"
+              aria-label={emailSendError ?? emailDeliveryStatus.label}
+              title={emailSendStatusTitle ?? emailDeliveryStatus.label}
+            >
+              {emailSendError ? <AlertTriangle aria-hidden="true" size={22} />
+                : emailDeliveryStatus.className === "is-not-sent" ? <MailX aria-hidden="true" size={22} />
+                  : <MailCheck aria-hidden="true" size={22} />}
+            </span>
           </button>
 
           <MobileOverviewPhotoAction
