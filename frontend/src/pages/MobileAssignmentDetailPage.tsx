@@ -300,8 +300,8 @@ export function MobileAssignmentDetailPage() {
     <section className={`mobile-page mobile-detail-page${isFocusedEntry ? " is-entry-mode" : ""}${activeTab === null || activeTab === "tools" ? " is-project-file" : ""}`}>
       {isOverviewFlow ? (
         <>
-          <button className="icon-button secondary mobile-back-button mobile-site-overview-back" type="button" onClick={() => setActiveTab(null)}>
-            <ArrowLeft aria-hidden="true" size={17} />
+          <button className="icon-button secondary mobile-back-button mobile-site-overview-back mobile-project-back-button" type="button" onClick={() => setActiveTab(null)}>
+            <ArrowLeft aria-hidden="true" size={25} />
             <span>Projektakte</span>
           </button>
         </>
@@ -407,8 +407,8 @@ function MobileProjectFoldersHeader({
 }) {
   return (
     <>
-      <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" size={17} />
+      <button className="icon-button secondary mobile-back-button mobile-project-back-button" type="button" onClick={onBack}>
+        <ArrowLeft aria-hidden="true" size={25} />
         <span>Projektakte</span>
       </button>
 
@@ -760,8 +760,8 @@ function MobileExtraWorkTab({
     <div className="mobile-measurement-page mobile-measurement-panel">
       <header className="mobile-measurement-page-header">
         <div className="mobile-measurement-page-topbar">
-          <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-            <ArrowLeft aria-hidden="true" size={17} />
+          <button className="icon-button secondary mobile-back-button mobile-project-back-button" type="button" onClick={onBack}>
+            <ArrowLeft aria-hidden="true" size={25} />
             <span>Projektakte</span>
           </button>
           <button
@@ -5190,8 +5190,8 @@ function MobileMeasurementTab({
     <div className="mobile-measurement-page mobile-measurement-panel">
       <header className="mobile-measurement-page-header">
         <div className="mobile-measurement-page-topbar">
-          <button className="icon-button secondary mobile-back-button" type="button" onClick={onBackToProject}>
-            <ArrowLeft aria-hidden="true" size={17} />
+          <button className="icon-button secondary mobile-back-button mobile-project-back-button" type="button" onClick={onBackToProject}>
+            <ArrowLeft aria-hidden="true" size={25} />
             <span>Projektakte</span>
           </button>
           <button

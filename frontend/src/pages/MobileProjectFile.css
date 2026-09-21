@@ -19,6 +19,39 @@
   line-height: 1.3;
 }
 
+/* Match the project-file heading on every return link, including document lists. */
+.app-shell.is-mobile-workspace .mobile-detail-page .mobile-project-back-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 0 0 auto;
+  gap: 14px;
+  width: fit-content;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  padding: 8px 10px;
+  color: #14243f;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.app-shell.is-mobile-workspace .mobile-project-back-button > svg {
+  flex-shrink: 0;
+  width: 25px;
+  height: 25px;
+  color: #243f5f;
+}
+
+.app-shell.is-mobile-workspace .mobile-project-back-button:focus-visible {
+  outline: 2px solid #315f91;
+  outline-offset: 2px;
+}
+
 .mobile-project-file-summary {
   position: relative;
   border: 1px solid #d7e3f0;

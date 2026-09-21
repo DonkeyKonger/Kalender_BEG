@@ -19,6 +19,12 @@
   min-width: 0;
 }
 
+@media (max-width: 359px) {
+  .mobile-measurement-page-topbar {
+    flex-wrap: wrap;
+  }
+}
+
 .app-shell.is-mobile-workspace .mobile-measurement-page-topbar button {
   display: inline-flex;
   align-items: center;
@@ -46,6 +52,7 @@
 
 .app-shell.is-mobile-workspace .mobile-measurement-page-topbar .mobile-measurement-new-action {
   flex: 0 1 auto;
+  margin-left: auto;
   border: 1px solid #315f91;
   background: #315f91;
   color: #ffffff;
