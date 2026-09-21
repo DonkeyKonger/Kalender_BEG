@@ -1,11 +1,28 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { stripTypeScriptTypes } from "node:module";
 import test from "node:test";
 
 const source = await readFile(new URL("../src/pages/MobileAssignmentDetailPage.tsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/pages/MobileMeasurementPositions.css", import.meta.url), "utf8");
 const detail = source.slice(source.indexOf("function MeasurementBatchDetail("), source.indexOf("function MeasurementFreePositionForm("));
 const list = detail.slice(detail.indexOf('if (viewMode === "list")'), detail.indexOf('className="mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page is-table-view"'));
+
+test("only captured positions show quantity and unit, including zero totals with entries", () => {
+  const helper = source.match(/function isMobileMeasurementItemCaptured\([^]*?\n\}/)[0];
+  const isCaptured = new Function(`${stripTypeScriptTypes(helper)}; return isMobileMeasurementItemCaptured;`)();
+  assert.equal(isCaptured({ entries: [], reported_quantity: "0" }), false);
+  assert.equal(isCaptured({ entries: [], reported_quantity: null }), false);
+  assert.equal(isCaptured({ entries: [], reported_quantity: "invalid" }), false);
+  assert.equal(isCaptured({ entries: [], reported_quantity: "55" }), true);
+  assert.equal(isCaptured({ entries: [], reported_quantity: "-2.5" }), true);
+  assert.equal(isCaptured({ entries: [{ quantity: 2 }, { quantity: -2 }], reported_quantity: "0" }), true);
+  assert.match(list, /const isCaptured = isMobileMeasurementItemCaptured\(item\)/);
+  assert.match(list, /isCaptured \? "is-captured" : "is-uncaptured"/);
+  assert.match(list, /\{isCaptured \? \(\s*<span className="mobile-measurement-position-amount">[^]*?\{item.unit \?\? ""\}[^]*?\) : null\}/);
+  assert.match(styles, /mobile-measurement-position-row.is-captured \{\s*background: #ffffff;/);
+  assert.match(styles, /mobile-measurement-position-row.is-uncaptured \{\s*grid-template-columns: minmax\(0, 1fr\) 18px;\s*background: #f1f3f6;/);
+});
 
 test("mobile positions keep create beside the title and search underneath without a redundant heading", () => {
   assert.match(list, /<header className="mobile-measurement-list-header">[\s\S]*<MobileBackButton label="Zurück zum Aufmaß" onClick=\{onBack\} \/>[\s\S]*<h1>Aufmaß<\/h1>[\s\S]*\{searchControl\}[\s\S]*<\/header>/);

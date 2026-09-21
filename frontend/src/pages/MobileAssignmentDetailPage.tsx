@@ -5887,17 +5887,20 @@ function MeasurementBatchDetail({
               <div className="mobile-measurement-position-list">
                 {items.filter((item) => !isInlineFreePositionDraftItem(item)).map((item) => {
                   const positionLabel = getMeasurementPositionDisplayLabel(item);
+                  const isCaptured = isMobileMeasurementItemCaptured(item);
                   return (
-                    <button className="mobile-measurement-position-row" key={item.id} type="button" onClick={() => onSelectItem(item)}>
+                    <button className={`mobile-measurement-position-row ${isCaptured ? "is-captured" : "is-uncaptured"}`} key={item.id} type="button" onClick={() => onSelectItem(item)}>
                       <span className="mobile-measurement-position-copy">
                         {positionLabel ? <strong>{positionLabel}</strong> : null}
                         {item.is_free_position ? <span className="mobile-measurement-free-badge">Zusatzposition</span> : null}
                         <span className="mobile-measurement-position-description">{item.description}</span>
                       </span>
-                      <span className="mobile-measurement-position-amount">
-                        <strong className={Number(item.reported_quantity) < 0 ? "measurement-negative-quantity" : undefined}>{formatMeasurementNumber(item.reported_quantity)}</strong>
-                        <span>{item.unit ?? ""}</span>
-                      </span>
+                      {isCaptured ? (
+                        <span className="mobile-measurement-position-amount">
+                          <strong className={Number(item.reported_quantity) < 0 ? "measurement-negative-quantity" : undefined}>{formatMeasurementNumber(item.reported_quantity)}</strong>
+                          <span>{item.unit ?? ""}</span>
+                        </span>
+                      ) : null}
                       <ChevronRight aria-hidden="true" size={18} />
                     </button>
                   );
