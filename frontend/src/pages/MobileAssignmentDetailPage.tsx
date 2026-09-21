@@ -1234,8 +1234,8 @@ function ExtraWorkTitleDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mobile-extra-work-title-dialog-head">
-          <p>{getMobileExtraWorkOrderFixedTitle(order)}</p>
           <h2 id="mobile-extra-work-title-dialog-title">Stundenzettel benennen</h2>
+          <p>{getMobileExtraWorkOrderFixedTitle(order)}</p>
         </div>
         {canRename ? (
           <label>
