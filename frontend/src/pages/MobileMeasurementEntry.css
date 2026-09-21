@@ -1,0 +1,226 @@
+/* Position capture only; free-position creation and the tablet keypad stay unchanged. */
+@media (max-width: 699px) {
+  body:has(.mobile-measurement-capture-page) {
+    min-width: 0;
+  }
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page,
+.app-shell.is-mobile-workspace .mobile-measurement-entry-page.mobile-measurement-capture-page {
+  align-content: start;
+  gap: 10px;
+  width: 100%;
+  max-width: 480px;
+  min-height: 0;
+  margin: 0 auto;
+  color: #102b50;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-capture-title {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  min-height: 44px;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-capture-title h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-back-icon-button {
+  width: 44px;
+  height: 44px;
+  color: #315f91;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-entry-head,
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-entry-form,
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-entries {
+  border: 1px solid #dce7f2;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: none;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-entry-head {
+  background: #f7faff;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-entry-head h2 {
+  margin: 6px 0 3px;
+  font-size: 1.125rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-entry-head p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  color: #425b7a;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .measurement-status {
+  min-height: 0;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-form-grid {
+  gap: 12px;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-form label {
+  color: #253f60;
+  font-weight: 600;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-form input {
+  min-width: 0;
+  min-height: 44px;
+  border-color: #d7e3f0;
+  border-radius: 7px;
+  font-weight: 400;
+}
+
+.mobile-measurement-capture-page input::placeholder {
+  color: #8599b2;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-capture-area,
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-capture-quantity {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-quantity-input {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid #d7e3f0;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-quantity-input input {
+  flex: 1 1 auto;
+  width: 0;
+  border: 0;
+  background: transparent;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-quantity-input > span {
+  flex: 0 0 auto;
+  max-width: 35%;
+  padding: 0 10px;
+  color: #647d9a;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-quantity-keypad.is-entry-keypad {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(44px, 1fr));
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-quantity-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 44px;
+  border-color: #e3edf7;
+  border-radius: 7px;
+  background: #f4f8fc;
+  color: #27486e;
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-quantity-key.is-backspace,
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-quantity-key.is-clear {
+  grid-column: 4;
+  background: #eaf1f8;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-quantity-key.is-backspace {
+  grid-row: 1 / span 2;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-quantity-key.is-clear {
+  grid-row: 3 / span 2;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-quantity-key:active:not(:disabled) {
+  background: #dce9f6;
+}
+
+.app-shell.is-mobile-workspace .mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-form-actions {
+  grid-template-columns: minmax(0, 1fr);
+  position: static;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-form-actions .primary-action {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #315575;
+  border-radius: 7px;
+  background: #315575;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-entries h3 {
+  margin: 0;
+  color: #24538c;
+  font-size: 1rem;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-capture-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 68px;
+  border: 1px dashed #dce7f2;
+  border-radius: 8px;
+  background: #f7faff;
+  padding: 12px;
+  color: #647d9a;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-capture-empty svg {
+  flex-shrink: 0;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-capture-empty p {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-measurement-entry {
+  background: #f7faff;
+  box-shadow: none;
+}
+
+.mobile-measurement-capture-page button:focus-visible,
+.mobile-measurement-capture-page input:focus-visible {
+  outline: 2px solid #315f91;
+  outline-offset: 2px;
+}

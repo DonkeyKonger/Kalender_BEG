@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Delete,
   DoorOpen,
   Download,
   ExternalLink,
@@ -62,6 +63,7 @@ import type { MobileAssignment, MobileAssignmentsResponse } from "../types/mobil
 import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, MeasurementAreaRow, MeasurementEntry, MobileExtraWorkMaterialItem, MobileExtraWorkTicket, MobileExtraWorkTicketEntry, MobileExtraWorkTicketPhoto, MobileExtraWorkWorkerHours, MobileMeasurementBatch, MobileMeasurementBatchPhoto, MobileMeasurementItem, ProjectFolder, ProjectFolderDocumentItem, ProjectFolderDocumentList, SiteEmailRecipient } from "../types/site";
 import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear, toDateInputValue } from "../utils/dateRange";
 import "./MobileMeasurementPositions.css";
+import "./MobileMeasurementEntry.css";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -6739,16 +6741,16 @@ function MeasurementDetail({
   }, [batch.id, item.id]);
 
   return (
-    <div className="mobile-measurement-entry-page">
-      <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" size={17} />
-        <span>Positionen</span>
-      </button>
+    <div className="mobile-measurement-entry-page mobile-measurement-capture-page">
+      <header className="mobile-measurement-capture-title">
+        <MobileBackButton label="Zurück zu den Positionen" onClick={onBack} />
+        <h1>Position erfassen</h1>
+      </header>
 
       <header className="mobile-entry-head">
         <div>
           <span className={`measurement-status mobile-status-${item.mobile_status}`}>{mobileStatusLabel(item.mobile_status)}</span>
-          <h1>{positionLabel ? `Pos. ${positionLabel}` : "Freie Position"}</h1>
+          <h2>{positionLabel ? `Pos. ${positionLabel}` : "Freie Position"}</h2>
           <p>{item.description}</p>
         </div>
       </header>
@@ -6760,8 +6762,8 @@ function MeasurementDetail({
       {isEditable ? (
         <div className="mobile-measurement-form mobile-measurement-entry-form">
           <div className="mobile-measurement-form-grid">
-            <label>
-              <span>Bereich / Ort</span>
+            <div className="mobile-measurement-capture-area">
+              <label htmlFor="mobile-measurement-entry-area">Bereich / Ort</label>
               {areaSuggestions.length > 0 ? (
                 <div className="mobile-area-tag-list" aria-label="Bereichsvorschläge">
                   {areaSuggestions.map((area) => (
@@ -6780,30 +6782,37 @@ function MeasurementDetail({
                 </div>
               ) : null}
               <input
+                id="mobile-measurement-entry-area"
                 ref={areaInputRef}
                 value={formComment}
                 onChange={(event) => onCommentChange(normalizeMeasurementAreaInput(event.target.value))}
-                placeholder="z. B. 1. OG"
+                placeholder="z. B. Halle A, Raum 681"
                 autoCapitalize="characters"
                 autoCorrect="off"
                 spellCheck={false}
               />
-            </label>
-            <label>
-              <span>Menge ({item.unit ?? "Einheit"})</span>
-              <input
-                type="text"
-                inputMode="none"
-                readOnly
-                value={formQuantity}
-                aria-label={`Menge in ${item.unit ?? "Einheit"}`}
-                className={Number(parseOptionalMeasurementQuantity(formQuantity)) < 0 ? "measurement-negative-quantity" : undefined}
-              />
+            </div>
+            <div className="mobile-measurement-capture-quantity">
+              <label htmlFor="mobile-measurement-entry-quantity">Menge ({item.unit ?? "Einheit"})</label>
+              <div className="mobile-measurement-quantity-input">
+                <input
+                  id="mobile-measurement-entry-quantity"
+                  type="text"
+                  inputMode="none"
+                  readOnly
+                  placeholder="0"
+                  value={formQuantity}
+                  aria-label={`Menge in ${item.unit ?? "Einheit"}`}
+                  className={Number(parseOptionalMeasurementQuantity(formQuantity)) < 0 ? "measurement-negative-quantity" : undefined}
+                />
+                <span aria-hidden="true">{item.unit ?? ""}</span>
+              </div>
               <MeasurementQuantityKeypad
+                variant="entry"
                 disabled={isSaving}
                 onKeyPress={(key) => onQuantityChange(applyMeasurementQuantityKey(formQuantity, key))}
               />
-            </label>
+            </div>
           </div>
 
           {formError ? <p className="form-error">{formError}</p> : null}
@@ -6820,7 +6829,12 @@ function MeasurementDetail({
           <h3>Bisher erfasst</h3>
         </div>
 
-        {measuredAreas.length === 0 ? <p className="empty-inline">Noch keine Aufmaßzeilen erfasst.</p> : null}
+        {measuredAreas.length === 0 ? (
+          <div className="mobile-measurement-capture-empty">
+            <Package aria-hidden="true" size={28} />
+            <p>Noch keine Einträge erfasst.</p>
+          </div>
+        ) : null}
         {measuredAreas.map((area) => (
           <article className="mobile-measurement-entry" key={area.key}>
             <strong>{area.label}</strong>
@@ -6869,9 +6883,11 @@ type MeasurementQuantityKey = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8
 function MeasurementQuantityKeypad({
   disabled,
   onKeyPress,
+  variant = "default",
 }: {
   disabled: boolean;
   onKeyPress: (key: MeasurementQuantityKey) => void;
+  variant?: "default" | "entry";
 }) {
   const keys: Array<{ key: MeasurementQuantityKey; label: string; className?: string; ariaLabel?: string }> = [
     { key: "1", label: "1" },
@@ -6883,26 +6899,28 @@ function MeasurementQuantityKeypad({
     { key: "7", label: "7" },
     { key: "8", label: "8" },
     { key: "9", label: "9" },
-    { key: "0", label: "0" },
-    { key: ",", label: "," },
-    { key: ".", label: "." },
+    ...(variant === "entry"
+      ? [{ key: "," as const, label: "," }, { key: "0" as const, label: "0" }]
+      : [{ key: "0" as const, label: "0" }, { key: "," as const, label: "," }, { key: "." as const, label: "." }]),
     { key: "minus", label: "−", ariaLabel: "Vorzeichen wechseln" },
     { key: "backspace", label: "Zurück", className: "is-muted", ariaLabel: "Letzte Ziffer entfernen" },
     { key: "clear", label: "Leeren", className: "is-muted", ariaLabel: "Menge leeren" },
   ];
 
   return (
-    <div className="mobile-quantity-keypad" aria-label="Menge eingeben">
+    <div className={`mobile-quantity-keypad${variant === "entry" ? " is-entry-keypad" : ""}`} aria-label="Menge eingeben">
       {keys.map((keyConfig) => (
         <button
           aria-label={keyConfig.ariaLabel}
-          className={keyConfig.className ? `mobile-quantity-key ${keyConfig.className}` : "mobile-quantity-key"}
+          className={`mobile-quantity-key${keyConfig.className ? ` ${keyConfig.className}` : ""}${variant === "entry" ? ` is-${keyConfig.key}` : ""}`}
           disabled={disabled}
           key={keyConfig.key}
           type="button"
           onClick={() => onKeyPress(keyConfig.key)}
         >
-          {keyConfig.label}
+          {variant === "entry" && keyConfig.key === "backspace" ? <Delete aria-hidden="true" size={22} />
+            : variant === "entry" && keyConfig.key === "clear" ? <Trash2 aria-hidden="true" size={22} />
+              : keyConfig.label}
         </button>
       ))}
     </div>
