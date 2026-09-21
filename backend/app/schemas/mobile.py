@@ -32,6 +32,11 @@ class MobileSite(BaseModel):
     name: str
     location: str | None = None
     address: str | None = None
+    street: str | None = None
+    house_number: str | None = None
+    postal_code: str | None = None
+    city: str | None = None
+    address_extra: str | None = None
     customer: str | None = None
     project_manager: MobilePerson | None = None
     status: SiteStatus

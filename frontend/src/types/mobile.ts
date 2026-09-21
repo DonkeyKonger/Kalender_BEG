@@ -17,6 +17,11 @@ export type MobileSite = {
   name: string;
   location: string | null;
   address: string | null;
+  street?: string | null;
+  house_number?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  address_extra?: string | null;
   customer: string | null;
   project_manager: MobilePerson | null;
   status: SiteStatus;

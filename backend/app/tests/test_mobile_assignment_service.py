@@ -670,6 +670,30 @@ def mobile_site(site_id, status=SiteStatus.ACTIVE):
     )
 
 
+def test_mobile_site_exposes_structured_address_without_changing_legacy_address():
+    service = MobileAssignmentService.__new__(MobileAssignmentService)
+    site = mobile_site(17)
+    site.street = "Finienweg"
+    site.house_number = "12a"
+    site.postal_code = "28832"
+    site.city = "Achim"
+    site.address_extra = "Zufahrt über den Hof"
+    site.address = "Finienweg 12a, 28832 Achim, Deutschland"
+    result = service._build_site(site).model_dump()
+    for field in ("street", "house_number", "postal_code", "city", "address_extra", "address"):
+        assert result[field] == getattr(site, field)
+
+
+def test_mobile_site_allows_missing_structured_address():
+    service = MobileAssignmentService.__new__(MobileAssignmentService)
+    result = service._build_site(mobile_site(17))
+    assert result.street is None
+    assert result.house_number is None
+    assert result.postal_code is None
+    assert result.city is None
+    assert result.address_extra is None
+
+
 def test_mobile_self_plan_requires_monteur_person():
     service = MobileAssignmentService.__new__(MobileAssignmentService)
     service.db = FakeScalarDb([])

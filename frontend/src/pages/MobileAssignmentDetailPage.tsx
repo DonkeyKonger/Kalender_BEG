@@ -71,6 +71,7 @@ import "./MobileProjectEmailRecipients.css";
 import "./MobileMeasurementEmailSend.css";
 import "./MobileMeasurementList.css";
 import "./MobileProjectFile.css";
+import "./MobileSiteOverview.css";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -299,7 +300,7 @@ export function MobileAssignmentDetailPage() {
     <section className={`mobile-page mobile-detail-page${isFocusedEntry ? " is-entry-mode" : ""}${activeTab === null || activeTab === "tools" ? " is-project-file" : ""}`}>
       {isOverviewFlow ? (
         <>
-          <button className="icon-button secondary mobile-back-button" type="button" onClick={() => setActiveTab(null)}>
+          <button className="icon-button secondary mobile-back-button mobile-site-overview-back" type="button" onClick={() => setActiveTab(null)}>
             <ArrowLeft aria-hidden="true" size={17} />
             <span>Projektakte</span>
           </button>
@@ -3177,34 +3178,50 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
   const directionsUrl = buildGoogleMapsDirectionsUrl(assignment.site);
 
   return (
-    <div className="mobile-detail-panel">
-      <h2>Übersicht</h2>
-      <div className="assignment-detail-list">
-        {addressLabel && (
-          directionsUrl ? (
+    <div className="mobile-site-overview">
+      <header className="mobile-site-overview-heading">
+        <p>Baustellenübersicht</p>
+        <h1>{assignment.site.name}</h1>
+      </header>
+      <section className="mobile-site-address-card" aria-labelledby="mobile-site-address-heading">
+        <div className="mobile-site-address-heading">
+          <h2 id="mobile-site-address-heading"><MapPin aria-hidden="true" size={20} />Adresse</h2>
+          {directionsUrl ? (
             <a
-              className="assignment-address-link"
+              className="mobile-site-route-link"
               href={directionsUrl}
               target="_blank"
               rel="noreferrer"
               aria-label={`Route zu ${addressLabel} in Google Maps öffnen`}
             >
-              <MapPin aria-hidden="true" size={16} />
-              <span>{addressLabel}</span>
+              <span>Route</span><ExternalLink aria-hidden="true" size={16} />
             </a>
-          ) : (
-            <p><MapPin aria-hidden="true" size={16} /><span>{addressLabel}</span></p>
-          )
-        )}
-        {assignment.site.project_manager && (
-          <p><UserRound aria-hidden="true" size={16} /><span>{assignment.site.project_manager.display_name}</span></p>
-        )}
-        {assignment.site.customer && (
-          <p><ClipboardList aria-hidden="true" size={16} /><span>Kunde: {assignment.site.customer}</span></p>
-        )}
-      </div>
-      <MobileProjectNotes assignment={assignment} />
-      {assignment.note && <p className="assignment-note">{assignment.note}</p>}
+          ) : null}
+        </div>
+        <dl className="mobile-site-address-grid">
+          {([
+            ["Straße", assignment.site.street],
+            ["Hausnummer", assignment.site.house_number],
+            ["PLZ", assignment.site.postal_code],
+            ["Stadt", assignment.site.city],
+          ] as const).map(([label, value]) => (
+            <div key={label}><dt>{label}</dt><dd className={value?.trim() ? "" : "is-missing"}>{value?.trim() || "Nicht hinterlegt"}</dd></div>
+          ))}
+        </dl>
+        {assignment.site.address_extra?.trim() ? <p className="mobile-site-address-extra">{assignment.site.address_extra}</p> : null}
+        {![assignment.site.street, assignment.site.house_number, assignment.site.postal_code, assignment.site.city].every((value) => value?.trim()) && addressLabel ? (
+          <p className="mobile-site-address-fallback"><span>Vorhandene Adressangabe</span>{addressLabel}</p>
+        ) : null}
+      </section>
+      <section className="mobile-site-contacts" aria-label="Projektkontakte">
+        <div><UserRound aria-hidden="true" size={22} /><dl><dt>Projektleiter</dt><dd>{assignment.site.project_manager?.display_name || "Nicht hinterlegt"}</dd></dl></div>
+        <div><Building2 aria-hidden="true" size={22} /><dl><dt>Kunde</dt><dd>{assignment.site.customer || "Nicht hinterlegt"}</dd></dl></div>
+      </section>
+      <section className="mobile-site-information" aria-labelledby="mobile-site-information-heading">
+        <h2 id="mobile-site-information-heading"><MessageSquare aria-hidden="true" size={20} />Informationen</h2>
+        <MobileProjectNotes assignment={assignment} />
+        {assignment.note && <section className="mobile-site-note-bubble is-assignment" aria-label="Einsatzhinweis"><strong>Einsatzhinweis</strong><p>{assignment.note}</p></section>}
+      </section>
     </div>
   );
 }
@@ -3243,15 +3260,17 @@ function MobileProjectNotes({ assignment }: { assignment: MobileAssignment }) {
     assignment.site.general_info !== undefined ? assignment.site.general_info : assignment.site.info
   );
   return <>
-    {general && <p className="assignment-note">{general}</p>}
+    {general && <section className="mobile-site-note-bubble is-general" aria-label="Allgemeine Information"><strong>Allgemeine Information</strong><p>{general}</p></section>}
     {notes?.note_blocks.map((note) => (
-      <section className="assignment-note assignment-project-note" key={note.id} aria-label={note.title}>
+      <section className="mobile-site-note-bubble" key={note.id} aria-label={note.title}>
         <strong>{note.title}</strong>
-        <small>Stand {note.number} · {new Date(note.updated_at).toLocaleDateString("de-DE")}</small>
         <p>{note.content}</p>
+        <small>Stand {note.number} · {new Date(note.updated_at).toLocaleDateString("de-DE")}</small>
       </section>
     ))}
-    {error && <div className="assignment-note" role="alert">Aktuelle Notizstände konnten nicht geladen werden. <button type="button" onClick={() => setRetry((value) => value + 1)}>Erneut laden</button></div>}
+    {!notes && !error && <p className="mobile-site-notes-status" role="status">Informationen werden geladen…</p>}
+    {notes && !general && notes.note_blocks.length === 0 && !assignment.note && <p className="mobile-site-notes-status">Noch keine Informationen hinterlegt.</p>}
+    {error && <div className="mobile-site-notes-error" role="alert">Aktuelle Notizstände konnten nicht geladen werden. <button type="button" onClick={() => setRetry((value) => value + 1)}>Erneut laden</button></div>}
   </>;
 }
 
@@ -8964,13 +8983,20 @@ function formatMobileSignatureLocation(site: MobileAssignment["site"]): string {
 }
 
 function formatMobileSiteAddressLabel(site: MobileAssignment["site"]): string {
-  return [site.location, site.address].map((part) => part?.trim()).filter(Boolean).join(" - ");
+  const legacyAddress = [site.location, site.address].map((part) => part?.trim()).filter(Boolean).join(" - ");
+  return legacyAddress || [site.street, site.house_number, site.postal_code, site.city].map((part) => part?.trim()).filter(Boolean).join(" ");
 }
 
 function buildGoogleMapsDirectionsUrl(site: MobileAssignment["site"]): string | null {
   const address = site.address?.trim();
   const location = site.location?.trim();
-  const destination = address || location;
+  const structuredAddress = [
+    [site.street, site.house_number].map((part) => part?.trim()).filter(Boolean).join(" "),
+    [site.postal_code, site.city].map((part) => part?.trim()).filter(Boolean).join(" "),
+  ].filter(Boolean).join(", ");
+  const destination = site.street?.trim() && (site.postal_code?.trim() || site.city?.trim())
+    ? structuredAddress
+    : address || location || structuredAddress;
   if (!destination) {
     return null;
   }
