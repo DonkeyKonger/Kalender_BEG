@@ -204,7 +204,7 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
 
 .is-list-view .mobile-measurement-position-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) fit-content(35%) 18px;
+  grid-template-columns: minmax(0, 1fr) 5rem 18px;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -227,7 +227,6 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
 }
 
 .is-list-view .mobile-measurement-position-row.is-uncaptured {
-  grid-template-columns: minmax(0, 1fr) 18px;
   background: #f1f3f6;
 }
 
@@ -299,5 +298,6 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
 }
 
 .is-list-view .mobile-measurement-position-row > svg {
+  grid-column: 3;
   color: var(--mobile-action-time-icon);
 }

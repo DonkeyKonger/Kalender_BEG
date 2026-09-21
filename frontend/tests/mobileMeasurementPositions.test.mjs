@@ -21,7 +21,13 @@ test("only captured positions show quantity and unit, including zero totals with
   assert.match(list, /isCaptured \? "is-captured" : "is-uncaptured"/);
   assert.match(list, /\{isCaptured \? \(\s*<span className="mobile-measurement-position-amount">[^]*?\{item.unit \?\? ""\}[^]*?\) : null\}/);
   assert.match(styles, /mobile-measurement-position-row.is-captured \{\s*background: #ffffff;/);
-  assert.match(styles, /mobile-measurement-position-row.is-uncaptured \{\s*grid-template-columns: minmax\(0, 1fr\) 18px;\s*background: #f1f3f6;/);
+  assert.match(styles, /mobile-measurement-position-row.is-uncaptured \{\s*background: #f1f3f6;/);
+});
+
+test("all position descriptions reserve the same amount column even when quantity is hidden", () => {
+  assert.match(styles, /mobile-measurement-position-row \{[^}]*grid-template-columns: minmax\(0, 1fr\) 5rem 18px;/s);
+  assert.match(styles, /mobile-measurement-position-row > svg \{[^}]*grid-column: 3;/s);
+  assert.doesNotMatch(styles, /mobile-measurement-position-row\.is-(?:un)?captured \{[^}]*grid-template-columns:/s);
 });
 
 test("mobile positions keep create beside the title and search underneath without a redundant heading", () => {
