@@ -7,7 +7,7 @@ import { build } from "esbuild";
 
 const source=await readFile(new URL('../src/pages/MobileAssignmentDetailPage.tsx',import.meta.url),'utf8');
 const styles=await readFile(new URL('../src/pages/MobileMeasurementList.css',import.meta.url),'utf8');
-const header=source.match(/<header className="mobile-measurement-page-header">[^]*?<\/header>/)[0];
+const header=source.slice(source.indexOf('function MobileMeasurementTab(')).match(/<header className="mobile-measurement-page-header">[^]*?<\/header>/)[0];
 const compiled=await build({stdin:{contents:`import React from 'react'; import {renderToStaticMarkup} from 'react-dom/server'; import {ArrowLeft,Plus} from 'lucide-react';
   export function tree({assignment,isSaving=false,onBackToProject,setIsSaving,setError,api,loadBatches,setSelectedBatch,setIsBatchPositionOverviewOpen,loadBatchItems}) {
     const readApiError=(_error,fallback)=>fallback;

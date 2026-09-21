@@ -755,26 +755,26 @@ function MobileExtraWorkTab({
 
   return (
     <div className="mobile-measurement-page mobile-measurement-panel">
-      <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" size={17} />
-        <span>Projektakte</span>
-      </button>
-
-      <div className="mobile-panel-title-row">
-        <div className="mobile-measurement-page-title">
-          <h1>Stundenzettel</h1>
-          <p>{[assignment.site.site_number, assignment.site.name].filter(Boolean).join(" · ")}</p>
+      <header className="mobile-measurement-page-header">
+        <div className="mobile-measurement-page-topbar">
+          <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
+            <ArrowLeft aria-hidden="true" size={17} />
+            <span>Projektakte</span>
+          </button>
+          <button
+            className="primary-action mobile-measurement-new-action"
+            type="button"
+            onClick={() => void createOrder()}
+            disabled={isSaving}
+          >
+            <Plus aria-hidden="true" size={15} />
+            <span>{isSaving ? "Erstelle..." : requiresApproval ? "Neue Stundenfreigabe" : "Neuer Stundenzettel"}</span>
+          </button>
         </div>
-        <button
-          className="primary-action mobile-measurement-new-action"
-          type="button"
-          onClick={() => void createOrder()}
-          disabled={isSaving}
-        >
-          <Plus aria-hidden="true" size={15} />
-          <span>{isSaving ? "Erstelle..." : requiresApproval ? "Neue Stundenfreigabe" : "Neuer Stundenzettel"}</span>
-        </button>
-      </div>
+        <div className="mobile-measurement-page-title">
+          <p>{assignment.site.name}</p>
+        </div>
+      </header>
 
       {requiresApproval ? (
         <p className="form-info">
