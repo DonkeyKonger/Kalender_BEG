@@ -326,6 +326,7 @@ export function MobileAssignmentDetailPage() {
               }
             }}
           >
+            <MobileProjectInformationCount assignmentId={assignment.id} />
             <div className="assignment-card-main">
               <div>
                 <h2>{assignment.site.name}</h2>
@@ -3226,7 +3227,7 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
   );
 }
 
-function MobileProjectNotes({ assignment }: { assignment: MobileAssignment }) {
+function useMobileProjectNotes(assignmentId: number) {
   const [notes, setNotes] = useState<Awaited<ReturnType<typeof api.mobileProjectNotes>> | null>(null);
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -3238,7 +3239,7 @@ function MobileProjectNotes({ assignment }: { assignment: MobileAssignment }) {
       setNotes(null);
       setError(false);
       try {
-        const value = await api.mobileProjectNotes(assignment.id);
+        const value = await api.mobileProjectNotes(assignmentId);
         if (active && current === requestNumber) setNotes(value);
       } catch {
         if (active && current === requestNumber) setError(true);
@@ -3253,7 +3254,20 @@ function MobileProjectNotes({ assignment }: { assignment: MobileAssignment }) {
       window.removeEventListener("focus", onVisible);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [assignment.id, retry]);
+  }, [assignmentId, retry]);
+  return { notes, error, reload: () => setRetry((value) => value + 1) };
+}
+
+function MobileProjectInformationCount({ assignmentId }: { assignmentId: number }) {
+  const { notes } = useMobileProjectNotes(assignmentId);
+  if (!notes) return null;
+  const count = Math.min(4, (notes.info?.trim() ? 1 : 0) + notes.note_blocks.filter((note) => note.content.trim()).length);
+  const label = `${count} ${count === 1 ? "Information" : "Informationen"} hinterlegt`;
+  return <span className="mobile-project-information-count" aria-label={label} title={label}>{count}</span>;
+}
+
+function MobileProjectNotes({ assignment }: { assignment: MobileAssignment }) {
+  const { notes, error, reload } = useMobileProjectNotes(assignment.id);
   // Never show cached legacy hint text while current publication is being checked.
   // Older cached payloads have no general_info and contain only the general note.
   const general = notes ? notes.info : (
@@ -3270,7 +3284,7 @@ function MobileProjectNotes({ assignment }: { assignment: MobileAssignment }) {
     ))}
     {!notes && !error && <p className="mobile-site-notes-status" role="status">Informationen werden geladen…</p>}
     {notes && !general && notes.note_blocks.length === 0 && !assignment.note && <p className="mobile-site-notes-status">Noch keine Informationen hinterlegt.</p>}
-    {error && <div className="mobile-site-notes-error" role="alert">Aktuelle Notizstände konnten nicht geladen werden. <button type="button" onClick={() => setRetry((value) => value + 1)}>Erneut laden</button></div>}
+    {error && <div className="mobile-site-notes-error" role="alert">Aktuelle Notizstände konnten nicht geladen werden. <button type="button" onClick={reload}>Erneut laden</button></div>}
   </>;
 }
 

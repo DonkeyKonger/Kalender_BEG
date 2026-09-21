@@ -16,6 +16,7 @@ const compiled=await build({stdin:{contents:`import React from 'react'; import {
   const useState=value=>[value,next=>events.push(next)]; const useMemo=fn=>fn();
   const useNavigate=()=>path=>events.push(path); const useLocation=()=>({state:{assignment}}); const useParams=()=>({assignmentId:'1'});
   const MobileProjectPhotoCapture=({onOpenPhotos})=><button onClick={onOpenPhotos}>Hinterlegte Fotos</button>;
+  const MobileProjectInformationCount=()=>null;
   ${component}
   export function tree(value){assignment=value;events.length=0;return MobileAssignmentDetailPage();}
   export const render=value=>renderToStaticMarkup(tree(value));
