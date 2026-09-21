@@ -59,7 +59,7 @@ test("measurement overview uses one joined action list and a compact title/statu
   }
   assert.match(html, /<small>Prüfung durch Projektleiter erforderlich\.<\/small>/);
   assert.match(styles, /mobile-measurement-overview-actions \{\s*grid-template-columns: minmax\(0, 1fr\);\s*gap: 0;/);
-  assert.match(styles, /mobile-measurement-summary-card \{[^}]*border: 0;[^}]*box-shadow: none;/s);
+  assert.match(styles, /mobile-measurement-summary-card \{[^}]*border: 1px solid #d7e3f0;[^}]*border-radius: 7px;[^}]*background: #ffffff;[^}]*padding: 12px 14px;[^}]*box-shadow: none;/s);
 });
 
 test("overview preserves submission restrictions, loading states and completed signatures", () => {

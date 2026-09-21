@@ -36,6 +36,7 @@
   padding: 10px;
   font-size: 0.875rem;
   line-height: 1.25;
+  white-space: normal;
   box-shadow: none;
 }
 
@@ -74,10 +75,10 @@
 .app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-summary-card {
   gap: 6px;
   min-width: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0 10px;
+  border: 1px solid #d7e3f0;
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 12px 14px;
   box-shadow: none;
   color: #425b7a;
 }
