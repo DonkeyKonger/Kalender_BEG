@@ -28,6 +28,13 @@ test("position list retains data, state messages, negative quantities and existi
   assert.match(list, /\{error \? <div className="form-error">\{error\}/);
 });
 
+test("measurement toolbar uses a quiet shared visual treatment without reducing touch targets", () => {
+  assert.match(styles, /mobile-measurement-list-header \{[^}]*gap: 12px;[^}]*border-bottom: 1px solid #d7e3f0;[^}]*background: #ffffff;[^}]*padding: 12px 16px 16px;/s);
+  assert.match(styles, /mobile-measurement-create-position-button \{[^}]*min-height: 44px;[^}]*border: 1px solid transparent;[^}]*border-radius: 8px;[^}]*background: #eaf1f8;/s);
+  assert.match(styles, /mobile-measurement-search \{[^}]*border-radius: 8px;/s);
+  assert.match(styles, /mobile-measurement-create-position-button:disabled \{[^}]*background: #f3f5f8;/s);
+});
+
 test("mobile descriptions stop at three lines and rows form one responsive list", () => {
   assert.match(styles, /mobile-measurement-position-description \{[^}]*overflow: hidden;[^}]*-webkit-line-clamp: 3;/s);
   assert.match(styles, /mobile-measurement-position-row \+ \.mobile-measurement-position-row \{[^}]*border-top:/s);

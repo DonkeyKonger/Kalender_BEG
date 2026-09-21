@@ -66,10 +66,10 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
 .is-list-view .mobile-measurement-list-header {
   display: grid;
   flex-shrink: 0;
-  gap: 16px;
+  gap: 12px;
   border-bottom: 1px solid #d7e3f0;
   background: #ffffff;
-  padding: 12px 16px 20px;
+  padding: 12px 16px 16px;
 }
 
 .is-list-view .mobile-measurement-list-title {
@@ -96,7 +96,7 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
 
 .is-list-view .mobile-back-icon-button {
   flex: 0 0 44px;
-  border-radius: 0;
+  border-radius: 8px;
   color: var(--mobile-action-time-icon);
 }
 
@@ -146,7 +146,7 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  padding: 20px 16px;
+  padding: 16px;
 }
 
 .is-list-view .mobile-measurement-position-scroll {
@@ -164,9 +164,9 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
   min-height: 44px;
   max-width: 100%;
   margin-left: auto;
-  border: 1px solid var(--mobile-action-time-icon);
-  border-radius: 6px;
-  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #eaf1f8;
   padding: 8px 10px;
   color: var(--mobile-action-time-icon);
   font: inherit;
@@ -186,11 +186,11 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
 }
 
 .is-list-view .mobile-measurement-create-position-button:hover:not(:disabled) {
-  background: #f3f7fc;
+  background: #dde9f5;
 }
 
 .is-list-view .mobile-measurement-create-position-button:disabled {
-  border-color: #cbd7e6;
+  background: #f3f5f8;
   color: #65738a;
   cursor: not-allowed;
 }
