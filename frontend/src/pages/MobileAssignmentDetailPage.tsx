@@ -5148,7 +5148,6 @@ function MobileMeasurementTab({
         </div>
         <div className="mobile-measurement-page-title">
           <p>{assignment.site.name}</p>
-          <h1>Aufmaße</h1>
         </div>
       </header>
 

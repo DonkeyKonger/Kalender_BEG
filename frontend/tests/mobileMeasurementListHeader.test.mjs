@@ -24,7 +24,8 @@ test('measurement list keeps back and create in one top row, with site name unde
   assert.match(html,/mobile-measurement-page-topbar/);
   assert.match(html,/>Projektakte</);
   assert.match(html,/>Neues Aufmaß</);
-  assert.match(html,/<p>Testbaustelle Finienweg<\/p><h1>Aufmaße<\/h1>/);
+  assert.match(html,/<p>Testbaustelle Finienweg<\/p>/);
+  assert.doesNotMatch(html,/<h1\b|>Aufmaße</);
   assert.doesNotMatch(html,/9999/);
   assert.match(styles,/mobile-measurement-page-topbar \{[^}]*display: flex;[^}]*justify-content: space-between;/s);
   assert.match(styles,/mobile-measurement-page-topbar \.mobile-back-button \{[^}]*border: 0;[^}]*background: transparent;/s);
