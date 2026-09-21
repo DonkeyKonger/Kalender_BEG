@@ -32,5 +32,15 @@ test("mobile descriptions stop at three lines and rows form one responsive list"
   assert.match(styles, /mobile-measurement-position-row \+ \.mobile-measurement-position-row \{[^}]*border-top:/s);
   assert.match(styles, /mobile-measurement-position-copy \{[^}]*min-width: 0;[^}]*overflow-wrap: anywhere;/s);
   assert.match(styles, /mobile-measurement-list-actions \{[^}]*flex-wrap: wrap;/s);
-  assert.doesNotMatch(styles, /position:\s*(fixed|sticky)|100[vds]*vh|safe-area|linear-gradient/);
+  assert.doesNotMatch(styles, /position:\s*(fixed|sticky)|linear-gradient/);
+});
+
+test("only positions scroll while title, search and create action remain in the viewport", () => {
+  assert.match(styles, /\.app-main:has\(\.mobile-measurement-positions-page\.is-list-view\) \{[^}]*height: 100dvh;[^}]*min-height: 0;[^}]*overflow: hidden;/s);
+  assert.match(styles, /mobile-measurement-list-content \{[^}]*grid-template-rows: auto minmax\(0, 1fr\);[^}]*min-height: 0;[^}]*overflow: hidden;/s);
+  assert.match(styles, /mobile-measurement-position-scroll \{[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*overscroll-behavior-y: contain;/s);
+  const scrollStart = list.indexOf('className="mobile-measurement-position-scroll"');
+  assert.ok(scrollStart > list.indexOf('<span>Position erstellen</span>'));
+  assert.match(list.slice(scrollStart), /role="region" aria-label="Aufmaßpositionen" tabIndex=\{0\}/);
+  assert.ok(list.indexOf('className="mobile-measurement-position-list"') > scrollStart);
 });

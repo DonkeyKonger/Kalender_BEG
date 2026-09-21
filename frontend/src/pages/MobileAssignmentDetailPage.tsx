@@ -5873,38 +5873,40 @@ function MeasurementBatchDetail({
               <span>Position erstellen</span>
             </button>
           </div>
-          {batch.is_locked_for_worker ? (
-            <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
-          ) : null}
-          {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
-          {error ? <div className="form-error">{error}</div> : null}
-          {!isItemsLoading && !error && allItems.length === 0 ? (
-            <div className="empty-panel">Noch keine Aufmaßpositionen importiert.</div>
-          ) : null}
-          {!isItemsLoading && !error && allItems.length > 0 && items.length === 0 ? (
-            <div className="empty-panel">Keine Aufmaßposition gefunden.</div>
-          ) : null}
-          {!isItemsLoading && !error && items.length > 0 ? (
-            <div className="mobile-measurement-position-list">
-              {items.filter((item) => !isInlineFreePositionDraftItem(item)).map((item) => {
-                const positionLabel = getMeasurementPositionDisplayLabel(item);
-                return (
-                  <button className="mobile-measurement-position-row" key={item.id} type="button" onClick={() => onSelectItem(item)}>
-                    <span className="mobile-measurement-position-copy">
-                      {positionLabel ? <strong>{positionLabel}</strong> : null}
-                      {item.is_free_position ? <span className="mobile-measurement-free-badge">Zusatzposition</span> : null}
-                      <span className="mobile-measurement-position-description">{item.description}</span>
-                    </span>
-                    <span className="mobile-measurement-position-amount">
-                      <strong className={Number(item.reported_quantity) < 0 ? "measurement-negative-quantity" : undefined}>{formatMeasurementNumber(item.reported_quantity)}</strong>
-                      <span>{item.unit ?? ""}</span>
-                    </span>
-                    <ChevronRight aria-hidden="true" size={18} />
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
+          <div className="mobile-measurement-position-scroll" role="region" aria-label="Aufmaßpositionen" tabIndex={0}>
+            {batch.is_locked_for_worker ? (
+              <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
+            ) : null}
+            {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
+            {error ? <div className="form-error">{error}</div> : null}
+            {!isItemsLoading && !error && allItems.length === 0 ? (
+              <div className="empty-panel">Noch keine Aufmaßpositionen importiert.</div>
+            ) : null}
+            {!isItemsLoading && !error && allItems.length > 0 && items.length === 0 ? (
+              <div className="empty-panel">Keine Aufmaßposition gefunden.</div>
+            ) : null}
+            {!isItemsLoading && !error && items.length > 0 ? (
+              <div className="mobile-measurement-position-list">
+                {items.filter((item) => !isInlineFreePositionDraftItem(item)).map((item) => {
+                  const positionLabel = getMeasurementPositionDisplayLabel(item);
+                  return (
+                    <button className="mobile-measurement-position-row" key={item.id} type="button" onClick={() => onSelectItem(item)}>
+                      <span className="mobile-measurement-position-copy">
+                        {positionLabel ? <strong>{positionLabel}</strong> : null}
+                        {item.is_free_position ? <span className="mobile-measurement-free-badge">Zusatzposition</span> : null}
+                        <span className="mobile-measurement-position-description">{item.description}</span>
+                      </span>
+                      <span className="mobile-measurement-position-amount">
+                        <strong className={Number(item.reported_quantity) < 0 ? "measurement-negative-quantity" : undefined}>{formatMeasurementNumber(item.reported_quantity)}</strong>
+                        <span>{item.unit ?? ""}</span>
+                      </span>
+                      <ChevronRight aria-hidden="true" size={18} />
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
         </section>
       </div>
     );

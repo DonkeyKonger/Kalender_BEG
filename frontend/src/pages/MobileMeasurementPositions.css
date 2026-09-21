@@ -10,10 +10,52 @@
   }
 }
 
+/* Bound the entire list screen to the available viewport, including app chrome. */
+body:has(.mobile-measurement-positions-page.is-list-view) {
+  min-height: 100dvh;
+}
+
+.app-shell.is-mobile-workspace:has(.mobile-measurement-positions-page.is-list-view) {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell.is-mobile-workspace .app-main:has(.mobile-measurement-positions-page.is-list-view) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell.is-mobile-workspace .app-main:has(.mobile-measurement-positions-page.is-list-view) > :not(.content-area) {
+  flex-shrink: 0;
+}
+
+.app-shell.is-mobile-workspace .content-area:has(.mobile-measurement-positions-page.is-list-view),
+.app-shell.is-mobile-workspace .mobile-detail-page:has(.mobile-measurement-positions-page.is-list-view) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.app-shell.is-mobile-workspace .mobile-detail-page:has(.mobile-measurement-positions-page.is-list-view) {
+  width: 100%;
+}
+
 .mobile-measurement-positions-page.is-list-view,
 .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-list-view {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   gap: 0;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
   border: 0;
   border-radius: 0;
   background: #f2f7fc;
@@ -23,6 +65,7 @@
 
 .is-list-view .mobile-measurement-list-header {
   display: grid;
+  flex-shrink: 0;
   gap: 16px;
   border-bottom: 1px solid #d7e3f0;
   background: #ffffff;
@@ -91,9 +134,20 @@
 
 .is-list-view .mobile-measurement-list-content {
   display: grid;
+  flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 16px;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
   padding: 20px 16px;
+}
+
+.is-list-view .mobile-measurement-position-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .is-list-view .mobile-measurement-list-actions {
