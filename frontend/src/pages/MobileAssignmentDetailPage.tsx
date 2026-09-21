@@ -3259,12 +3259,26 @@ function MobileProjectPhotoCapture({ assignment, onOpenPhotos }: { assignment: M
   const [isUploadingProjectPhoto, setIsUploadingProjectPhoto] = useState(false);
   const [projectPhotoMessage, setProjectPhotoMessage] = useState<string | null>(null);
   const [projectPhotoMessageTone, setProjectPhotoMessageTone] = useState<"info" | "error">("info");
+  const [isPhotoSourceDialogOpen, setIsPhotoSourceDialogOpen] = useState(false);
   const projectPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const projectPhotoLibraryInputRef = useRef<HTMLInputElement | null>(null);
 
   function openProjectPhotoCapture(): void {
+    if (isUploadingProjectPhoto) {
+      return;
+    }
     setProjectPhotoMessage(null);
     setProjectPhotoMessageTone("info");
-    projectPhotoInputRef.current?.click();
+    setIsPhotoSourceDialogOpen(true);
+  }
+
+  function selectProjectPhotoSource(source: "camera" | "library"): void {
+    if (isUploadingProjectPhoto) {
+      return;
+    }
+    setIsPhotoSourceDialogOpen(false);
+    const inputRef = source === "camera" ? projectPhotoInputRef : projectPhotoLibraryInputRef;
+    inputRef.current?.click();
   }
 
   async function handleProjectPhotoChange(event: ReactChangeEvent<HTMLInputElement>): Promise<void> {
@@ -3318,12 +3332,27 @@ function MobileProjectPhotoCapture({ assignment, onOpenPhotos }: { assignment: M
         onOpenPhotos={onOpenPhotos}
         onTakePhoto={openProjectPhotoCapture}
       />
+      {isPhotoSourceDialogOpen ? (
+        <ExtraWorkPhotoSourceDialog
+          isUploading={isUploadingProjectPhoto}
+          onClose={() => setIsPhotoSourceDialogOpen(false)}
+          onTakePhoto={() => selectProjectPhotoSource("camera")}
+          onChoosePhoto={() => selectProjectPhotoSource("library")}
+        />
+      ) : null}
       <input
         ref={projectPhotoInputRef}
         className="visually-hidden"
         type="file"
         accept="image/*"
         capture="environment"
+        onChange={(event) => void handleProjectPhotoChange(event)}
+      />
+      <input
+        ref={projectPhotoLibraryInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="image/*"
         onChange={(event) => void handleProjectPhotoChange(event)}
       />
     </div>
