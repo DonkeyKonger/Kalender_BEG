@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from time import monotonic
 from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
@@ -373,6 +374,55 @@ class ProjectStorageService:
         if not isinstance(items, list):
             return []
         return [_document_item(item) for item in items if isinstance(item, dict)]
+
+    def count_folder_files(self, *, drive_id: str | None, folder_item_id: str | None) -> int:
+        """Count files in this tree, never folders or remote shortcuts; fail rather than return a partial count."""
+        if not self.config.ms_graph_enabled:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
+        if not drive_id or not folder_item_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "SharePoint-Ordner ist noch nicht angebunden.")
+        pending = [folder_item_id]
+        seen_items = {folder_item_id}
+        count = 0
+        deadline = monotonic() + 20
+        base_url = self.config.ms_graph_base_url.rstrip("/")
+        while pending:
+            item_id = pending.pop()
+            children_path = f"/drives/{quote(drive_id, safe='')}/items/{quote(item_id, safe='')}/children"
+            path = children_path + "?$select=id,file,folder,remoteItem"
+            seen_pages: set[str] = set()
+            while path:
+                if monotonic() > deadline or path in seen_pages:
+                    raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Dateianzahl konnte nicht vollständig ermittelt werden.")
+                seen_pages.add(path)
+                try:
+                    response = self.graph_client.get(path)
+                except MicrosoftGraphRequestError as error:
+                    raise _safe_graph_files_exception(error) from error
+                items = response.get("value")
+                if not isinstance(items, list):
+                    raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Ungültige Dateiliste von SharePoint.")
+                for item in items:
+                    if not isinstance(item, dict) or item.get("remoteItem") is not None:
+                        continue
+                    child_id = item.get("id")
+                    if not isinstance(child_id, str) or not child_id or child_id in seen_items:
+                        continue
+                    seen_items.add(child_id)
+                    if isinstance(item.get("folder"), dict):
+                        pending.append(child_id)
+                    elif isinstance(item.get("file"), dict):
+                        count += 1
+                next_link = response.get("@odata.nextLink")
+                if next_link:
+                    # Accept only pages of this exact collection, never arbitrary URLs.
+                    prefix = base_url + children_path + "?"
+                    if not isinstance(next_link, str) or not next_link.startswith(prefix):
+                        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Ungültige Folgeseite von SharePoint.")
+                    path = next_link[len(base_url):]
+                else:
+                    path = ""
+        return count
 
     def list_folder_item_children(
         self,

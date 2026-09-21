@@ -49,6 +49,7 @@ from app.schemas.person import PersonRead
 from app.schemas.project_folder import (
     ProjectFolderDocumentItem,
     ProjectFolderDocumentList,
+    ProjectFolderFileCount,
     ProjectFolderRead,
     ProjectSubfolderCreate,
 )
@@ -223,6 +224,20 @@ def get_project_photo_appendix(
         media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(filename, safe='')}"},
     )
+
+
+@router.get("/{site_id}/documents/folders/{folder_key}/file-count", response_model=ProjectFolderFileCount)
+def get_project_folder_file_count(
+    site_id: int,
+    folder_key: str,
+    current_user: User = Depends(CAN_FOLDER_READ),
+    db: Session = Depends(get_db),
+) -> ProjectFolderFileCount:
+    folder = ProjectFolderService(db).get_project_folder_for_site_by_key(site_id, folder_key, current_user)
+    count = ProjectStorageService().count_folder_files(
+        drive_id=folder.external_drive_id, folder_item_id=folder.external_item_id,
+    )
+    return ProjectFolderFileCount(file_count=count)
 
 
 @router.get(

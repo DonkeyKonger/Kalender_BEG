@@ -52,3 +52,7 @@ class ProjectFolderDocumentList(BaseModel):
     folder_key: str
     folder_name: str
     items: list[ProjectFolderDocumentItem]
+
+
+class ProjectFolderFileCount(BaseModel):
+    file_count: int = Field(ge=0)

@@ -1,0 +1,73 @@
+.app-shell.is-mobile-workspace .mobile-detail-page.is-folders-view {
+  max-width: 560px;
+  min-width: 0;
+  gap: 22px;
+}
+
+@media (max-width: 699px) {
+  body:has(.is-folders-view) { min-width: 0; }
+}
+
+.app-shell.is-mobile-workspace .mobile-folder-project-back {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 6px 0;
+  color: #14243f;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: left;
+  box-shadow: none;
+}
+
+.mobile-folder-project-back > svg { flex-shrink: 0; color: #425f7c; }
+.mobile-folder-project-back > span { min-width: 0; overflow-wrap: anywhere; }
+
+.app-shell.is-mobile-workspace .mobile-folder-overview {
+  gap: 10px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.mobile-folder-overview h2 { margin: 0; font-size: 1.125rem; color: #14243f; }
+
+.mobile-folder-overview .mobile-folder-list {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #d7e3f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0 12px;
+}
+
+.app-shell.is-mobile-workspace .mobile-folder-overview .mobile-folder-card {
+  grid-template-columns: 36px 24px minmax(0, 1fr) auto 19px;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  border: 0;
+  border-radius: 0;
+  padding: 10px 0;
+  box-shadow: none;
+}
+
+.app-shell.is-mobile-workspace .mobile-folder-overview .mobile-folder-card + .mobile-folder-card { border-top: 1px solid #e1e9f2; }
+.mobile-folder-overview .mobile-folder-card strong { white-space: normal; overflow-wrap: anywhere; font-weight: 650; }
+.mobile-folder-overview .mobile-folder-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 7px; background: #f0f6fa; }
+.mobile-folder-overview .mobile-folder-icon svg { color: #58758e; }
+.mobile-folder-overview .mobile-folder-number { color: #7b8da5; text-align: right; font-size: 0.8125rem; font-weight: 600; }
+.mobile-folder-overview .mobile-folder-chevron { color: #788da6; }
+.mobile-folder-count-slot { min-width: 22px; text-align: center; }
+.mobile-folder-file-count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: #c53045; color: #ffffff; font-size: 0.6875rem; font-weight: 700; }
+.mobile-folder-count-unavailable { color: #7b8da5; }
+.app-shell.is-mobile-workspace .mobile-folder-project-back:focus-visible,
+.app-shell.is-mobile-workspace .mobile-folder-overview .mobile-folder-card:focus-visible { outline: 2px solid #315f91; outline-offset: -2px; }

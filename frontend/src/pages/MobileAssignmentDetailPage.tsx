@@ -72,6 +72,8 @@ import "./MobileMeasurementEmailSend.css";
 import "./MobileMeasurementList.css";
 import "./MobileProjectFile.css";
 import "./MobileSiteOverview.css";
+import "./MobileProjectFolders.css";
+import { useProjectFolderFileCounts } from "./useProjectFolderFileCounts";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -297,7 +299,7 @@ export function MobileAssignmentDetailPage() {
   }
 
   return (
-    <section className={`mobile-page mobile-detail-page${isFocusedEntry ? " is-entry-mode" : ""}${activeTab === null || activeTab === "tools" ? " is-project-file" : ""}`}>
+    <section className={`mobile-page mobile-detail-page${isFocusedEntry ? " is-entry-mode" : ""}${isFoldersFlow ? " is-folders-view" : ""}${activeTab === null || activeTab === "tools" ? " is-project-file" : ""}`}>
       {isOverviewFlow ? (
         <>
           <button className="icon-button secondary mobile-back-button mobile-site-overview-back mobile-project-back-button" type="button" onClick={() => setActiveTab(null)}>
@@ -406,26 +408,12 @@ function MobileProjectFoldersHeader({
   onBack: () => void;
 }) {
   return (
-    <>
-      <button className="icon-button secondary mobile-back-button mobile-project-back-button" type="button" onClick={onBack}>
+    <header className="mobile-folder-page-header">
+      <button className="mobile-folder-project-back" type="button" onClick={onBack} aria-label={`Zurück zur Projektakte: ${assignment.site.name}`}>
         <ArrowLeft aria-hidden="true" size={25} />
-        <span>Projektakte</span>
+        <span>{assignment.site.name}</span>
       </button>
-
-      <header className="mobile-detail-hero mobile-detail-summary mobile-folder-master-header">
-        <div className="assignment-card-main">
-          <div>
-            <p className="eyebrow">Ordner</p>
-            <h1>{assignment.site.name}</h1>
-            <p className="muted-text">{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</p>
-          </div>
-          <FolderOpen aria-hidden="true" className="mobile-folder-master-icon" size={24} />
-        </div>
-        <p className="assignment-date">
-          <span><FolderOpen aria-hidden="true" size={15} />Projektordner und Dateien</span>
-        </p>
-      </header>
-    </>
+    </header>
   );
 }
 
@@ -3792,6 +3780,7 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
   const { user } = useAuth();
   const canOpenSharePointDirectly = user?.role === "admin" || user?.role === "project_manager" || user?.role === "office";
   const [folders, setFolders] = useState<ProjectFolder[]>([]);
+  const fileCounts = useProjectFolderFileCounts(assignment.site.id, folders);
   const [selectedFolder, setSelectedFolder] = useState<ProjectFolder | null>(null);
   const [documents, setDocuments] = useState<ProjectFolderDocumentList | null>(null);
   const [folderStack, setFolderStack] = useState<MobileFolderNavigationLevel[]>([]);
@@ -4113,7 +4102,7 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
   }
 
   return (
-    <div className="mobile-detail-panel mobile-folder-panel">
+    <div className="mobile-detail-panel mobile-folder-panel mobile-folder-overview">
       <h2>Ordner</h2>
       {isLoadingFolders ? <div className="empty-panel">Ordnerstruktur wird geladen...</div> : null}
       {error ? <div className="form-error">{error}</div> : null}
@@ -4124,9 +4113,19 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
         <div className="mobile-folder-list" aria-label="Projektordner">
           {folders.map((folder) => (
             <button className="mobile-folder-card" key={folder.id} type="button" onClick={() => setSelectedFolder(folder)}>
-              <FolderOpen aria-hidden="true" size={19} />
-              <span>{folder.sort_order}.</span>
+              <span className="mobile-folder-icon"><FolderOpen aria-hidden="true" size={23} /></span>
+              <span className="mobile-folder-number">{folder.sort_order}.</span>
               <strong>{folder.name}</strong>
+              <span className="mobile-folder-count-slot">
+                {typeof fileCounts[folder.folder_key] === "number" ? (
+                  <span className="mobile-folder-file-count" aria-label={`${fileCounts[folder.folder_key]} Dateien einschließlich Unterordner`}>
+                    {fileCounts[folder.folder_key]}
+                  </span>
+                ) : fileCounts[folder.folder_key] === null ? (
+                  <span className="mobile-folder-count-unavailable" aria-label="Dateianzahl nicht verfügbar" title="Dateianzahl nicht verfügbar">–</span>
+                ) : null}
+              </span>
+              <ChevronRight aria-hidden="true" className="mobile-folder-chevron" size={19} />
             </button>
           ))}
         </div>

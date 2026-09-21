@@ -7,10 +7,10 @@ const styles = await readFile(new URL("../src/pages/MobileProjectFile.css", impo
 const icon = await readFile(new URL("../src/components/MobileBackButton.tsx", import.meta.url), "utf8");
 const listStyles = await readFile(new URL("../src/pages/MobileMeasurementList.css", import.meta.url), "utf8");
 
-test("all four project-file return buttons use the same heading-sized presentation", () => {
+test("all project-file labelled return buttons use the same heading-sized presentation", () => {
   const buttons = [...source.matchAll(/<button\b(?:(?!<\/button>)[\s\S])*<\/button>/g)]
     .map(match => match[0]).filter(button => button.includes("<span>Projektakte</span>"));
-  assert.equal(buttons.length, 4, "overview, folders, extra work and measurements");
+  assert.equal(buttons.length, 3, "overview, extra work and measurements; folders show the site name");
   for (const button of buttons) {
     assert.match(button, /mobile-project-back-button/);
     assert.match(button, /size=\{25\}/);

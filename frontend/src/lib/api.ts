@@ -1230,6 +1230,10 @@ export const api = {
     return request<ProjectFolder[]>(`/sites/${siteId}/project-folders`);
   },
 
+  async projectFolderFileCount(siteId: number, folderKey: string): Promise<{ file_count: number }> {
+    return request<{ file_count: number }>(`/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/file-count`);
+  },
+
   async projectFolderDocuments(siteId: number, folderKey: string): Promise<ProjectFolderDocumentList> {
     return request<ProjectFolderDocumentList>(
       `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/children`,
