@@ -616,7 +616,7 @@ export function MobileTimeEntryPage() {
         <header className="mobile-time-month-header">
           <div className="mobile-time-month-context">
             <button className="mobile-calendar-back" type="button" onClick={() => navigate("/me/assignments")}>
-              <ArrowLeft aria-hidden="true" size={18} />
+              <ArrowLeft aria-hidden="true" size={25} />
               <span>Zurück</span>
             </button>
             <span className="mobile-time-month-label">Lohnzeit erfassen</span>
@@ -636,7 +636,7 @@ export function MobileTimeEntryPage() {
       ) : (
         <header className="mobile-calendar-nav">
           <button className="mobile-calendar-back" type="button" onClick={() => setActiveView("month")}>
-            <ArrowLeft aria-hidden="true" size={18} />
+            <ArrowLeft aria-hidden="true" size={25} />
             <span>Monat</span>
           </button>
           <button className="mobile-calendar-month-button" type="button" onClick={() => setActiveView("month")}>

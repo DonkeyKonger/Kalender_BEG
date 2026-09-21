@@ -20,12 +20,12 @@
 
 .app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-detail-topbar {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 10px;
 }
 
-.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-detail-topbar button {
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-detail-topbar button:not(.mobile-back-button) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -40,7 +40,7 @@
   box-shadow: none;
 }
 
-.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-detail-topbar button svg {
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-detail-topbar button:not(.mobile-back-button) svg {
   flex-shrink: 0;
   width: 19px;
   height: 19px;
@@ -59,7 +59,9 @@
 }
 
 .app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-submit-action {
-  flex: 0 1 auto;
+  flex: 1 1 120px;
+  max-width: 190px;
+  margin-left: auto;
   border: 1px solid #315f91;
   background: #315f91;
   color: #ffffff;

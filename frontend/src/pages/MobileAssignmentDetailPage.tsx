@@ -965,7 +965,7 @@ function ExtraWorkOrderOverview({
     <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel is-measurement-overview is-extra-work-overview">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={17} />
+          <ArrowLeft aria-hidden="true" size={25} />
           <span>Stundenzettel</span>
         </button>
         <button
@@ -1783,7 +1783,7 @@ function ExtraWorkCustomerSignatureOverlay({
     >
       <header className="mobile-customer-signature-header">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onClose}>
-          <ArrowLeft aria-hidden="true" size={17} />
+          <ArrowLeft aria-hidden="true" size={25} />
           <span>Zurück</span>
         </button>
         <div className="mobile-customer-signature-title">
@@ -3564,7 +3564,7 @@ function MobileProjectPhotoGallery({
     <div className="mobile-detail-panel mobile-measurement-photo-gallery mobile-project-photo-gallery">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={17} />
+          <ArrowLeft aria-hidden="true" size={25} />
           <span>Projekt</span>
         </button>
         <button className="primary-action mobile-measurement-photo-capture-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto}>
@@ -4044,7 +4044,7 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
     return (
       <div className="mobile-detail-panel mobile-folder-panel">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={handleBackFromFolderDetail}>
-          <ArrowLeft aria-hidden="true" size={17} />
+          <ArrowLeft aria-hidden="true" size={25} />
           <span>{isInSubfolder ? "Zurück" : "Ordner"}</span>
         </button>
 
@@ -4162,7 +4162,7 @@ function MobileDocumentPreview({
     >
       <div className="mobile-document-preview-head">
         <button className="icon-button secondary mobile-document-preview-back" type="button" onClick={onClose}>
-          <ArrowLeft aria-hidden="true" size={17} />
+          <ArrowLeft aria-hidden="true" size={25} />
           <span>Dokumente</span>
         </button>
         <div>
@@ -5390,7 +5390,7 @@ function MeasurementBatchOverview({
     <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-overview-panel is-measurement-overview">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={17} />
+          <ArrowLeft aria-hidden="true" size={25} />
           <span>Aufmaße</span>
         </button>
         <button
@@ -5670,7 +5670,7 @@ function MeasurementPhotoGallery({
     <div className="mobile-detail-panel mobile-measurement-photo-gallery">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={17} />
+          <ArrowLeft aria-hidden="true" size={25} />
           <span>Aufmaß</span>
         </button>
         <button className="primary-action mobile-measurement-photo-capture-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto || isPhotoLimitReached}>
@@ -5871,7 +5871,7 @@ function ExtraWorkPhotoGallery({
     <div className="mobile-detail-panel mobile-measurement-photo-gallery">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={17} />
+          <ArrowLeft aria-hidden="true" size={25} />
           <span>Stundenzettel</span>
         </button>
         <button className="primary-action mobile-measurement-photo-capture-action" type="button" onClick={onTakePhoto} disabled={isUploadingPhoto || isPhotoLimitReached}>
@@ -6094,7 +6094,7 @@ function MeasurementBatchDetail({
     <div className="mobile-detail-panel mobile-measurement-panel mobile-measurement-positions-page is-table-view">
       <div className="mobile-measurement-detail-topbar">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={17} />
+          <ArrowLeft aria-hidden="true" size={25} />
           <span>Aufmaß</span>
         </button>
         {searchControl}
@@ -7517,7 +7517,7 @@ function CustomerSignatureOverlay({
     >
       <header className="mobile-customer-signature-header">
         <button className="icon-button secondary mobile-back-button" type="button" onClick={onClose}>
-          <ArrowLeft aria-hidden="true" size={17} />
+          <ArrowLeft aria-hidden="true" size={25} />
           <span>Zurück</span>
         </button>
         <div className="mobile-customer-signature-title">
