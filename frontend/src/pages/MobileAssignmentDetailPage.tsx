@@ -8462,8 +8462,18 @@ type MobileCustomerEmailStatusItem = {
 };
 
 function MobileCustomerEmailStatus({ item }: { item: MobileCustomerEmailStatusItem }) {
-  const status = getMobileCustomerEmailStatus(item);
-  return <span className={`mobile-customer-email-status ${status.className}`}>{status.label}</span>;
+  const isSent = Boolean(item.customer_email_sent_at);
+  const label = isSent ? "Mail an Kunden gesendet" : "Mail nicht an Kunden gesendet";
+  return (
+    <span
+      className={`mobile-document-email-indicator ${isSent ? "is-sent" : "is-not-sent"}`}
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      {isSent ? <MailCheck aria-hidden="true" size={22} /> : <MailX aria-hidden="true" size={22} />}
+    </span>
+  );
 }
 
 function getMobileCustomerEmailStatus(item: MobileCustomerEmailStatusItem): { label: string; className: string } {

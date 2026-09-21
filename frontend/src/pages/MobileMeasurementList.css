@@ -1,4 +1,4 @@
-/* Header of the measurement collection, without changing the measurement cards. */
+/* Measurement collection header and shared document-list delivery indicators. */
 @media (max-width: 699px) {
   body:has(.mobile-measurement-page-header) {
     min-width: 0;
@@ -79,4 +79,28 @@
 .mobile-measurement-page-topbar button:focus-visible {
   outline: 2px solid #315f91;
   outline-offset: 2px;
+}
+
+/* Keep date, delivery icon and hours vertically ordered on the right. */
+.mobile-measurement-card.is-document-card {
+  grid-template-rows: auto minmax(24px, 1fr) auto;
+  row-gap: 4px;
+}
+
+.mobile-measurement-card.is-document-card .mobile-document-email-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  justify-self: end;
+  width: 24px;
+  height: 24px;
+}
+
+.mobile-document-email-indicator.is-not-sent svg {
+  color: #c53045;
+}
+
+.mobile-document-email-indicator.is-sent svg {
+  color: #2f8050;
 }
