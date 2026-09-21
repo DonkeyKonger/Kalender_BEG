@@ -31,6 +31,7 @@ test("free-position creation shares the capture header, inputs and icon-only key
   assert.match(html,/mobile-measurement-entry-page mobile-measurement-capture-page mobile-measurement-free-position-page/);
   assert.match(html,/aria-label="Zurück zu den Positionen"/);
   assert.match(html,/<h1>Position erstellen<\/h1>/);
+  assert.doesNotMatch(html,/Freie Zusatzposition nur für dieses Aufmaß|mobile-entry-head/);
   assert.match(html,/mobile-measurement-entry-form mobile-measurement-free-position-form/);
   assert.match(html,/is-entry-keypad/);
   assert.match(html,/aria-label="Letzte Ziffer entfernen"/);

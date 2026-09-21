@@ -6053,10 +6053,6 @@ function MeasurementFreePositionForm({
         <h1 id={variant === "dialog" ? "mobile-measurement-position-dialog-title" : undefined}>Position erstellen</h1>
       </header>
 
-      <header className="mobile-entry-head">
-        <p>Freie Zusatzposition nur für dieses Aufmaß anlegen.</p>
-      </header>
-
       <div className="mobile-measurement-form mobile-measurement-entry-form mobile-measurement-free-position-form">
         <label>
           <span>Positionsnummer / Kennung</span>

@@ -254,10 +254,6 @@
   padding: 14px;
 }
 
-.mobile-measurement-capture-page.mobile-measurement-free-position-page .mobile-entry-head {
-  margin: 0;
-}
-
 .mobile-measurement-capture-page.mobile-measurement-free-position-page textarea {
   min-height: 80px;
   line-height: 1.4;
