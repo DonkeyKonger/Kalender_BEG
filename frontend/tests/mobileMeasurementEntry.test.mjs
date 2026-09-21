@@ -68,6 +68,9 @@ test("capture redesign retains existing data controls and limits descriptions to
   assert.match(detail, /Bereichsvorschläge/);
   assert.match(detail, /<label htmlFor="mobile-measurement-entry-area">Bereich \/ Ort<\/label>/);
   assert.match(detail, /id="mobile-measurement-entry-area"/);
-  assert.match(detail, /Details anzeigen/);
+  assert.doesNotMatch(detail, /Details anzeigen|<details|measuredQuantity|siteNumber/);
+  assert.match(detail, /<X aria-hidden="true" size=\{15\} strokeWidth=\{1\.5\} \/>/);
+  assert.match(styles, /mobile-measurement-entry > span \{\s*font-weight: 400;/);
+  assert.match(styles, /mobile-measurement-entry-delete \{[^}]*min-height: 30px;[^}]*border: 0;[^}]*background: transparent;/s);
   assert.match(styles, /-webkit-line-clamp: 3/);
 });

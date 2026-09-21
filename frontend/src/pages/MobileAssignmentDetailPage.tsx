@@ -4758,7 +4758,6 @@ function MobileMeasurementTab({
     return (
       <MeasurementDetail
         batch={selectedBatch}
-        siteNumber={assignment.site.site_number}
         item={selectedItem}
         allItems={items}
         isSaving={isSaving}
@@ -6696,7 +6695,6 @@ function MeasurementTableFixedKeypad({
 
 function MeasurementDetail({
   batch,
-  siteNumber,
   item,
   allItems,
   isSaving,
@@ -6711,7 +6709,6 @@ function MeasurementDetail({
   onSave,
 }: {
   batch: MobileMeasurementBatch;
-  siteNumber: string | null;
   item: MobileMeasurementItem;
   allItems: MobileMeasurementItem[];
   isSaving: boolean;
@@ -6730,7 +6727,6 @@ function MeasurementDetail({
   const areaInputRef = useRef<HTMLInputElement>(null);
   const areaSuggestions = useMemo(() => collectMeasurementAreaTags(allItems), [allItems]);
   const measuredAreas = useMemo(() => groupMeasurementEntriesByArea(item.entries), [item.entries]);
-  const measuredQuantity = useMemo(() => sumMeasurementEntryQuantities(item.entries), [item.entries]);
   const positionLabel = getMeasurementPositionDisplayLabel(item);
 
   useEffect(() => {
@@ -6847,33 +6843,13 @@ function MeasurementDetail({
                 type="button"
                 onClick={() => void onDeleteEntries(area.entries)}
               >
-                ×
+                <X aria-hidden="true" size={15} strokeWidth={1.5} />
               </button>
             ) : null}
           </article>
         ))}
       </div>
 
-      <details className="mobile-measurement-secondary-details">
-        <summary>Details anzeigen</summary>
-        <div className="mobile-measurement-detail-grid">
-          <span>Aufmaßnummer <strong>{formatMobileMeasurementBatchTitle(batch, siteNumber)}</strong></span>
-          <span>Min/Einh. <strong>{formatMeasurementNumber(item.minutes_per_unit)}</strong></span>
-          <span>Menge laut Angebot <strong>{formatMeasurementNumber(item.list_quantity)}</strong></span>
-          <span>
-            Menge nach Aufmaß <strong className={measuredQuantity < 0 ? "measurement-negative-quantity" : undefined}>{formatMeasurementNumber(measuredQuantity)}</strong>
-          </span>
-        </div>
-        <div className="mobile-measurement-detail-areas">
-          <strong>Verbaute Orte:</strong>
-          {measuredAreas.length > 0 ? measuredAreas.map((area) => (
-            <span key={area.key}>
-              <span>{area.label}:</span>
-              <strong className={area.quantity < 0 ? "measurement-negative-quantity" : undefined}>{formatMeasurementNumber(area.quantity)} {item.unit ?? ""}</strong>
-            </span>
-          )) : <span>Noch keine Orte erfasst.</span>}
-        </div>
-      </details>
     </div>
   );
 }

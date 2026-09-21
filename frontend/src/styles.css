@@ -27722,48 +27722,6 @@ body.mobile-modal-scroll-locked {
   font-size: 0.9rem;
 }
 
-.mobile-measurement-secondary-details {
-  border: 1px solid #dce3ee;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #42526b;
-  font-size: 0.78rem;
-}
-
-.mobile-measurement-secondary-details summary {
-  min-height: 34px;
-  cursor: pointer;
-  padding: 8px 10px;
-  font-weight: 850;
-}
-
-.mobile-measurement-secondary-details div {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-  border-top: 1px solid #dce3ee;
-  padding: 9px 10px 10px;
-}
-
-.mobile-measurement-secondary-details .mobile-measurement-detail-areas {
-  grid-template-columns: 1fr;
-  gap: 6px;
-}
-
-.mobile-measurement-secondary-details .mobile-measurement-detail-areas > span {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.mobile-measurement-secondary-details span {
-  display: grid;
-  gap: 2px;
-}
-
-.mobile-measurement-secondary-details strong {
-  color: #111827;
-}
 
 .mobile-measurement-entries,
 .mobile-measurement-form {
