@@ -6745,7 +6745,6 @@ function MeasurementDetail({
 
       <header className="mobile-entry-head">
         <div>
-          <span className={`measurement-status mobile-status-${item.mobile_status}`}>{mobileStatusLabel(item.mobile_status)}</span>
           <h2>{positionLabel ? `Pos. ${positionLabel}` : "Freie Position"}</h2>
           <p>{item.description}</p>
         </div>
@@ -9031,13 +9030,6 @@ function canEditMobileExtraWorkContent(order: MobileExtraWorkTicket): boolean {
 
 function canEditExtraWorkPhotoCaption(order: MobileExtraWorkTicket): boolean {
   return canEditMobileExtraWorkContent(order);
-}
-
-function mobileStatusLabel(status: string): string {
-  if (["approved", "billed", "edited"].includes(status)) {
-    return "Erfasst";
-  }
-  return "Offen";
 }
 
 function isMobileMeasurementItemCaptured(item: MobileMeasurementItem): boolean {

@@ -51,7 +51,7 @@
 }
 
 .mobile-measurement-entry-page.mobile-measurement-capture-page .mobile-entry-head h2 {
-  margin: 6px 0 3px;
+  margin: 0 0 3px;
   font-size: 1.125rem;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -64,14 +64,6 @@
   overflow: hidden;
   color: #425b7a;
   font-size: 0.875rem;
-  line-height: 1.4;
-}
-
-.mobile-measurement-entry-page.mobile-measurement-capture-page .measurement-status {
-  min-height: 0;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 0.75rem;
   line-height: 1.4;
 }
 
