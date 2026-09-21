@@ -232,6 +232,8 @@ test("assignment cards use blue next/later wedges without the construction icon"
   assert.match(pageSource, /isNext=\{item\.key === mobileHomeTimelineItems\[0\]\?\.key\}/);
   assert.match(pageSource, /<em>\{isNext \? "Als nächstes" : "Danach"\}<\/em>/);
   assert.doesNotMatch(pageSource, /HardHat|mobile-home-assignment-icon/);
+  assert.match(styles, /\.mobile-home-timeline-date \{[^}]*position: relative;[^}]*padding: 32px 24px 8px 9px;/s);
+  assert.match(styles, /\.mobile-home-timeline-date em \{[^}]*position: absolute;[^}]*top: 8px;[^}]*left: 9px;/s);
   assert.match(
     styles,
     /\.mobile-home-timeline-date\.is-next \{[^}]*linear-gradient\(135deg, #28639f 0%, #174a7d 100%\);[^}]*color:\s*#ffffff;/s,
