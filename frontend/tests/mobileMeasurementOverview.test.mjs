@@ -128,3 +128,10 @@ test("locked overview has an orange notice and an unframed back action", () => {
   assert.match(styles, /mobile-measurement-lock-notice \{\s*border-color: #d88925;\s*background: #fff4e5;\s*color: #8a4b12;/);
   assert.match(styles, /mobile-back-button \{\s*border: 0;\s*background: transparent;/);
 });
+
+test("all mobile measurement lock notices share the same orange presentation", () => {
+  const notices = source.match(/<p className="[^"]*">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt\.<\/p>/g);
+  assert.equal(notices.length, 4);
+  assert.ok(notices.every(notice => notice.includes('className="form-info mobile-measurement-lock-notice"')));
+  assert.match(styles, /\.app-shell\.is-mobile-workspace \.mobile-measurement-lock-notice \{/);
+});

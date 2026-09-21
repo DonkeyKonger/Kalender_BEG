@@ -5913,7 +5913,7 @@ function MeasurementBatchDetail({
         <section className="mobile-measurement-list-content" aria-label="Positionen">
           <div className="mobile-measurement-position-scroll" role="region" aria-label="Aufmaßpositionen" tabIndex={0}>
             {batch.is_locked_for_worker ? (
-              <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
+              <p className="form-info mobile-measurement-lock-notice">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
             ) : null}
             {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
             {error ? <div className="form-error">{error}</div> : null}
@@ -5963,7 +5963,7 @@ function MeasurementBatchDetail({
         {searchControl}
       </div>
       {batch.is_locked_for_worker ? (
-        <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
+        <p className="form-info mobile-measurement-lock-notice">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
       ) : null}
 
       {isItemsLoading ? <div className="empty-panel">Aufmaßpositionen werden geladen...</div> : null}
@@ -6793,7 +6793,7 @@ function MeasurementDetail({
       </header>
 
       {isLockedForWorker ? (
-        <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
+        <p className="form-info mobile-measurement-lock-notice">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
       ) : null}
 
       {isEditable ? (
