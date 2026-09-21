@@ -69,6 +69,7 @@ import "./MobileMeasurementEntry.css";
 import "./MobileMeasurementOverview.css";
 import "./MobileProjectEmailRecipients.css";
 import "./MobileMeasurementEmailSend.css";
+import "./MobileMeasurementList.css";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -5069,40 +5070,41 @@ function MobileMeasurementTab({
 
   return (
     <div className="mobile-measurement-page mobile-measurement-panel">
-      <button className="icon-button secondary mobile-back-button" type="button" onClick={onBackToProject}>
-        <ArrowLeft aria-hidden="true" size={17} />
-        <span>Projektakte</span>
-      </button>
-
-      <div className="mobile-panel-title-row">
-        <div className="mobile-measurement-page-title">
-          <h1>Aufmaße</h1>
-          <p>{[assignment.site.site_number, assignment.site.name].filter(Boolean).join(" · ")}</p>
+      <header className="mobile-measurement-page-header">
+        <div className="mobile-measurement-page-topbar">
+          <button className="icon-button secondary mobile-back-button" type="button" onClick={onBackToProject}>
+            <ArrowLeft aria-hidden="true" size={17} />
+            <span>Projektakte</span>
+          </button>
+          <button
+            className="primary-action mobile-measurement-new-action"
+            type="button"
+            onClick={async () => {
+              setIsSaving(true);
+              setError(null);
+              try {
+                const batch = await api.createMobileMeasurementBatch(assignment.id);
+                await loadBatches(batch.id);
+                setSelectedBatch(batch);
+                setIsBatchPositionOverviewOpen(false);
+                await loadBatchItems(batch);
+              } catch (requestError) {
+                setError(readApiError(requestError, "Aufmaß konnte nicht erstellt werden."));
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            disabled={isSaving}
+          >
+            <Plus aria-hidden="true" size={15} />
+            <span>{isSaving ? "Erstelle..." : "Neues Aufmaß"}</span>
+          </button>
         </div>
-        <button
-          className="primary-action mobile-measurement-new-action"
-          type="button"
-          onClick={async () => {
-            setIsSaving(true);
-            setError(null);
-            try {
-              const batch = await api.createMobileMeasurementBatch(assignment.id);
-              await loadBatches(batch.id);
-              setSelectedBatch(batch);
-              setIsBatchPositionOverviewOpen(false);
-              await loadBatchItems(batch);
-            } catch (requestError) {
-              setError(readApiError(requestError, "Aufmaß konnte nicht erstellt werden."));
-            } finally {
-              setIsSaving(false);
-            }
-          }}
-          disabled={isSaving}
-        >
-          <Plus aria-hidden="true" size={15} />
-          <span>{isSaving ? "Erstelle..." : "Neues Aufmaß"}</span>
-        </button>
-      </div>
+        <div className="mobile-measurement-page-title">
+          <p>{assignment.site.name}</p>
+          <h1>Aufmaße</h1>
+        </div>
+      </header>
 
       {isLoading ? <div className="empty-panel">Aufmaße werden geladen...</div> : null}
       {error ? <div className="form-error">{error}</div> : null}
