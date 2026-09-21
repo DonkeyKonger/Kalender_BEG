@@ -47,6 +47,13 @@ class MobileSite(BaseModel):
     requires_extra_work_approval: bool = False
 
 
+class MobileAssignmentColleague(BaseModel):
+    person_id: int
+    last_name: str
+    start_date: Date
+    end_date: Date
+
+
 class MobileAssignment(BaseModel):
     id: int
     start_date: Date
@@ -55,6 +62,7 @@ class MobileAssignment(BaseModel):
     note: str | None = None
     person: MobilePerson
     site: MobileSite
+    colleagues: list[MobileAssignmentColleague] | None = None
 
 
 class MobileAssignmentsResponse(BaseModel):

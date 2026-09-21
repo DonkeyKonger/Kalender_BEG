@@ -618,6 +618,9 @@ class FakeScalarDb:
     def scalar(self, statement):
         return self.values.pop(0)
 
+    def execute(self, statement):
+        return SimpleNamespace(all=lambda: [])
+
 
 class FakeAssignmentService:
     calls = []
@@ -635,6 +638,7 @@ class FakeAssignmentService:
         person = mobile_person(4)
         assignment = SimpleNamespace(
             id=99,
+            site_id=17,
             start_date=payload.start_date,
             end_date=payload.end_date,
             assignment_type=payload.assignment_type,
@@ -762,6 +766,7 @@ def test_mobile_self_plan_returns_existing_duplicate(monkeypatch):
     monkeypatch.setattr(mobile_assignment_module, "AssignmentService", FakeAssignmentService)
     existing = SimpleNamespace(
         id=42,
+        site_id=17,
         start_date=date(2026, 6, 11),
         end_date=date(2026, 6, 11),
         assignment_type=AssignmentType.REGULAR,

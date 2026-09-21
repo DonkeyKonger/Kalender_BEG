@@ -10,6 +10,7 @@ import {
   Settings,
   UserCircle,
   UserRound,
+  UsersRound,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UIEvent as ReactUIEvent } from "react";
@@ -20,6 +21,7 @@ import { MobileBackButton } from "../components/MobileBackButton";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { buildMobileAssignmentHistoryWeeks } from "../lib/mobileAssignmentHistory";
+import { formatAssignmentColleagues } from "../lib/mobileAssignmentColleagues";
 import { useMobileScrollReset } from "../lib/mobileScroll";
 import { canUsePushNotifications, initializePushNotifications } from "../lib/pushNotifications";
 import { useMobileModalStack } from "../lib/useMobileModalStack";
@@ -688,9 +690,9 @@ function MobileHomeTimelineCard({
   const isToday = item.start === today;
   const dateLabel = formatHomeTimelineDateRange(item.start, item.end);
   const weekdayLabel = formatHomeTimelineWeekdayRange(item.start, item.end);
-  const secondaryText = assignment
-    ? [assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")
-    : "Antippen, falls du trotzdem auf Baustelle bist.";
+  const colleagues = assignment?.colleagues
+    ? formatAssignmentColleagues(assignment.colleagues, item.start, item.end, assignment.person.id)
+    : null;
   const cardContent = (
     <>
       <span className={`mobile-home-timeline-date${isNext ? " is-next" : ""}`}>
@@ -703,7 +705,16 @@ function MobileHomeTimelineCard({
           <b title={assignment?.site.name ?? "Kein Einsatz geplant."}>
             {assignment?.site.name ?? "Kein Einsatz geplant."}
           </b>
-          <small title={secondaryText}>{secondaryText}</small>
+          {assignment ? (
+            <span className="mobile-home-timeline-team">
+              <UsersRound aria-hidden="true" size={15} />
+              <span className="mobile-home-timeline-team-list">
+                {colleagues?.length ? colleagues.map(colleague => (
+                  <span key={colleague.personId}>{colleague.name} <span className="mobile-home-timeline-team-period">({colleague.period})</span></span>
+                )) : <span>{colleagues ? "Keine Kollegen mitgeplant" : "Teamdaten nicht verfügbar"}</span>}
+              </span>
+            </span>
+          ) : <small>Antippen, falls du trotzdem auf Baustelle bist.</small>}
           {item.dayCount > 1 ? (
             <span className="mobile-home-timeline-duration">{item.dayCount} Einsatztage</span>
           ) : null}
@@ -718,7 +729,7 @@ function MobileHomeTimelineCard({
   if (assignment) {
     return (
       <Link
-        aria-label={`${formatRangeLabel(item.start, item.end)}: ${assignment.site.name}`}
+        aria-label={`${formatRangeLabel(item.start, item.end)}: ${assignment.site.name}${colleagues?.length ? `. Mitgeplant: ${colleagues.map(colleague => `${colleague.name} (${colleague.period})`).join(", ")}` : ""}`}
         className={`mobile-home-timeline-card${isNext ? " is-next" : ""}`}
         data-mobile-home-timeline-item
         state={{ assignment }}

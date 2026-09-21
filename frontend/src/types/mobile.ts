@@ -31,6 +31,13 @@ export type MobileSite = {
   requires_extra_work_approval: boolean;
 };
 
+export type MobileAssignmentColleague = {
+  person_id: number;
+  last_name: string;
+  start_date: string;
+  end_date: string;
+};
+
 export type MobileAssignment = {
   id: number;
   start_date: string;
@@ -39,6 +46,7 @@ export type MobileAssignment = {
   note: string | null;
   person: MobilePerson;
   site: MobileSite;
+  colleagues?: MobileAssignmentColleague[] | null;
 };
 
 export type MobileAssignmentsResponse = {

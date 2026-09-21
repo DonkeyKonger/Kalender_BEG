@@ -15,6 +15,7 @@ from app.schemas.assignment import AssignmentCreate
 from app.schemas.site_note import MobileSiteNote, MobileProjectNotes
 from app.schemas.mobile import (
     MobileAssignment,
+    MobileAssignmentColleague,
     MobileAssignmentSiteHistoryResponse,
     MobileAssignmentSiteSummary,
     MobileAssignmentSitesResponse,
@@ -212,11 +213,47 @@ class MobileAssignmentService:
             end,
             len(assignments),
         )
+        colleagues = self._load_assignment_colleagues(assignments, person_id=person_id, start=start, end=end) if view == "upcoming" else {}
         return MobileAssignmentsResponse(
             start_date=start,
             end_date=end,
-            assignments=[self._build_assignment(item) for item in assignments],
+            assignments=[self._build_assignment(item, colleagues=colleagues.get(item.id)) for item in assignments],
         )
+
+    def _load_assignment_colleagues(
+        self, assignments: list[Assignment], *, person_id: int, start: date, end: date,
+    ) -> dict[int, list[MobileAssignmentColleague]]:
+        if not assignments:
+            return {}
+        # One query for the visible sites, including both internal and external people.
+        rows = self.db.execute(
+            select(Assignment.site_id, Assignment.person_id, Assignment.start_date, Assignment.end_date,
+                   Person.last_name, Person.display_name)
+            .join(Person, Person.id == Assignment.person_id)
+            .where(Assignment.site_id.in_({item.site_id for item in assignments}),
+                   Assignment.person_id != person_id, Assignment.start_date <= end, Assignment.end_date >= start)
+            .order_by(Person.last_name, Person.id, Assignment.start_date, Assignment.end_date)
+        ).all()
+        by_site: dict[int, list] = {}
+        for row in rows:
+            by_site.setdefault(row.site_id, []).append(row)
+        result: dict[int, list[MobileAssignmentColleague]] = {}
+        for assignment in assignments:
+            peers = []
+            seen = set()
+            for row in by_site.get(assignment.site_id, []):
+                first = max(start, assignment.start_date, row.start_date)
+                last = min(end, assignment.end_date, row.end_date)
+                key = (row.person_id, first, last)
+                if first > last or key in seen:
+                    continue
+                seen.add(key)
+                peers.append(MobileAssignmentColleague(
+                    person_id=row.person_id, last_name=row.last_name.strip() or row.display_name,
+                    start_date=first, end_date=last,
+                ))
+            result[assignment.id] = peers
+        return result
 
     def list_active_sites_for_mobile(self, *, current_user: User) -> list[MobileSite]:
         if current_user.role == UserRole.MONTEUR and current_user.person_id is None:
@@ -320,7 +357,11 @@ class MobileAssignmentService:
             .limit(1)
         )
         if existing_assignment is not None:
-            return self._build_assignment(existing_assignment)
+            peers = self._load_assignment_colleagues(
+                [existing_assignment], person_id=current_user.person_id,
+                start=existing_assignment.start_date, end=existing_assignment.end_date,
+            )
+            return self._build_assignment(existing_assignment, colleagues=peers[existing_assignment.id])
 
         result = AssignmentService(self.db).create_assignment(
             AssignmentCreate(
@@ -334,7 +375,11 @@ class MobileAssignmentService:
             user_id=current_user.id,
             audit_action="assignment.mobile_self_planned",
         )
-        return self._build_assignment(result.assignment)
+        peers = self._load_assignment_colleagues(
+            [result.assignment], person_id=current_user.person_id,
+            start=result.assignment.start_date, end=result.assignment.end_date,
+        )
+        return self._build_assignment(result.assignment, colleagues=peers[result.assignment.id])
 
     def _is_known_site_for_mobile(self, *, person_id: int, site_id: int) -> bool:
         return self.db.scalar(
@@ -365,6 +410,7 @@ class MobileAssignmentService:
         assignment: Assignment,
         *,
         end_date: date | None = None,
+        colleagues: list[MobileAssignmentColleague] | None = None,
     ) -> MobileAssignment:
         return MobileAssignment(
             id=assignment.id,
@@ -374,6 +420,7 @@ class MobileAssignmentService:
             note=assignment.note,
             person=self._build_person(assignment.person),
             site=self._build_site(assignment.site),
+            colleagues=colleagues,
         )
 
     def _build_site(self, site: Site) -> MobileSite:
