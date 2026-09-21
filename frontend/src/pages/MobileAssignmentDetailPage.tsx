@@ -67,6 +67,7 @@ import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear, toDateInputValue } 
 import "./MobileMeasurementPositions.css";
 import "./MobileMeasurementEntry.css";
 import "./MobileMeasurementOverview.css";
+import "./MobileProjectEmailRecipients.css";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -1533,7 +1534,7 @@ function ProjectEmailRecipientsModal({
       onClick={onClose}
     >
       <div
-        className="mobile-project-email-dialog mobile-modal-scroll-region"
+        className="mobile-project-email-dialog is-recipient-picker mobile-modal-scroll-region"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-project-email-dialog-title"
@@ -1541,7 +1542,6 @@ function ProjectEmailRecipientsModal({
       >
         <div className="mobile-project-email-dialog-head">
           <h2 id="mobile-project-email-dialog-title">E-Mail-Empfänger</h2>
-          <p>Hier siehst du nur die Empfänger dieser Baustelle. Hinzugefügte Adressen werden auch beim Kunden gespeichert.</p>
         </div>
 
         {isLoading ? <div className="empty-panel">Empfänger werden geladen...</div> : null}
@@ -1549,18 +1549,18 @@ function ProjectEmailRecipientsModal({
           <>
             <div className="mobile-project-email-list">
               {suggestions.length === 0 ? (
-                <p className="mobile-project-email-empty">Für diese Baustelle ist noch keine E-Mail-Adresse gespeichert. Du kannst unten eine Adresse hinzufügen – auch wenn sie beim Kunden bereits bekannt ist.</p>
+                <p className="mobile-project-email-empty">Noch keine E-Mail-Adresse für diese Baustelle gespeichert.</p>
               ) : null}
               {suggestions.map((recipient) => (
-                <label className="mobile-project-email-option" key={recipient.email}>
+                <label className={`mobile-project-email-option${selectedEmails.includes(recipient.email) ? " is-selected" : ""}`} key={recipient.email}>
                   <input
                     type="checkbox"
                     checked={selectedEmails.includes(recipient.email)}
+                    disabled={isSaving}
                     onChange={() => toggleEmail(recipient.email)}
                   />
                   <span>
-                    <strong>{recipient.label || recipient.email}</strong>
-                    {recipient.label ? <small>{recipient.email}</small> : null}
+                    <strong>{recipient.email}</strong>
                   </span>
                 </label>
               ))}
@@ -1571,6 +1571,10 @@ function ProjectEmailRecipientsModal({
                 <span>Neue E-Mail-Adresse</span>
                 <input
                   type="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  disabled={isSaving}
                   value={newEmail}
                   onChange={(event) => setNewEmail(event.target.value)}
                   placeholder="kunde@example.de"
