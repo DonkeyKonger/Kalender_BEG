@@ -10,11 +10,14 @@ const card=source.slice(source.indexOf('function MobileHomeTimelineCard('),sourc
 const compiled=await build({stdin:{contents:`import React from 'react';import {renderToStaticMarkup} from 'react-dom/server';
   import {ChevronRight,UsersRound} from 'lucide-react';
   import {formatAssignmentColleagues} from './src/lib/mobileAssignmentColleagues';
+  import {MobileAssignmentTeamSheet} from './src/components/MobileAssignmentTeamSheet';
   export {formatAssignmentColleagues};
   const Link=({children,to,state,...props})=><a href={to} {...props}>{children}</a>;
   const formatHomeTimelineDateRange=(a,b)=>a+' '+b,formatHomeTimelineWeekdayRange=()=> 'Mo–Fr',formatRangeLabel=(a,b)=>a+' '+b,formatDate=a=>a;
   ${card}
   export const render=assignment=>renderToStaticMarkup(<MobileHomeTimelineCard isNext today="2026-09-21" item={{start:'2026-09-21',end:'2026-09-25',dayCount:5,assignment}}/>);
+  export const tree=(assignment,onOpenTeam)=>MobileHomeTimelineCard({isNext:true,today:'2026-09-21',item:{start:'2026-09-21',end:'2026-09-25',dayCount:5,assignment},onOpenTeam});
+  export const renderSheet=colleagues=>renderToStaticMarkup(<MobileAssignmentTeamSheet siteName="Testbaustelle" rangeLabel="21.09.2026 bis 25.09.2026" colleagues={colleagues} onClose={()=>{}}/>);
 `,resolveDir:fileURLToPath(new URL('..',import.meta.url)),loader:'tsx'},bundle:true,write:false,format:'cjs',platform:'node',packages:'external',jsx:'automatic'});
 const module={exports:{}};
 new Function('require','module','exports',compiled.outputFiles[0].text)(createRequire(import.meta.url),module,module.exports);
@@ -45,7 +48,8 @@ test('same surnames remain separate people and multiweek ranges are unambiguous'
 test('home cards replace commission and customer with colleagues without changing navigation',()=>{
   const assignment={id:42,person:{id:1},site:{name:'Testbaustelle',site_number:'9999',customer:'Nicht anzeigen'},colleagues:[peer(2,'Koehle','2026-09-21','2026-09-23'),peer(3,'Tietz','2026-09-24')]};
   const html=module.exports.render(assignment);
-  assert.match(html,/Koehle/);assert.match(html,/\(Mo–Mi\)/);assert.match(html,/\(Do\)/);
+  assert.match(html,/2 Kollegen · Anzeigen/);
+  assert.doesNotMatch(html,/Koehle|Tietz|Mo–Mi/);
   assert.match(html,/href="\/me\/assignments\/42"/);
   assert.doesNotMatch(html,/9999|Nicht anzeigen/);
   assert.match(module.exports.render({...assignment,colleagues:[]}),/Keine Kollegen mitgeplant/);
@@ -53,12 +57,46 @@ test('home cards replace commission and customer with colleagues without changin
   assert.match(module.exports.render(null),/Antippen, falls du trotzdem auf Baustelle bist/);
 });
 
-test('colleagues use two equal columns with full-width empty messages and shared slider rows',()=>{
-  assert.match(styles,/\.mobile-home-timeline-team-list \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*overflow-wrap: anywhere;/);
-  assert.match(styles,/\.mobile-home-timeline-team-empty \{ grid-column: 1 \/ -1; \}/);
+test('compact team count preserves empty messages and shared slider row heights',()=>{
   const empty=module.exports.render({id:42,person:{id:1},site:{name:'Test'},colleagues:[]});
-  assert.match(empty,/class="mobile-home-timeline-team-empty">Keine Kollegen mitgeplant/);
+  assert.match(empty,/Keine Kollegen mitgeplant/);
+  assert.doesNotMatch(empty,/aria-haspopup="dialog"/);
   assert.match(styles,/@supports \(grid-template-rows: subgrid\) \{\s*\.mobile-home-timeline-track \{\s*grid-template-rows: repeat\(2, minmax\(clamp\(84px, 24vw, 98px\), auto\)\);/);
   assert.match(styles,/\.mobile-home-timeline-page \{\s*grid-row: span 2;\s*grid-template-rows: subgrid;/);
   assert.match(styles,/\.mobile-home-timeline-page \{[^}]*grid-auto-rows: minmax\(clamp\(84px, 24vw, 98px\), 1fr\);/);
+});
+
+test('team button and stretched project link are separate interactive targets',()=>{
+  const assignment={id:42,person:{id:1},site:{name:'Test'},colleagues:[peer(2,'Koehle','2026-09-21')]};
+  let opened=0;
+  const tree=module.exports.tree(assignment,()=>opened++);
+  const collect=node=>!node||typeof node!=='object'?[]:Array.isArray(node)?node.flatMap(collect):[node,...collect(node.props?.children)];
+  const nodes=collect(tree);
+  assert.equal(tree.type,'div');
+  assert.equal(tree.props.onClick,undefined);
+  const link=nodes.find(node=>node.props?.to);
+  assert.equal(link.props.to,'/me/assignments/42');
+  assert.equal(link.props.state.assignment,assignment);
+  assert.equal(collect(link).some(node=>node.type==='button'),false);
+  const button=nodes.find(node=>node.type==='button');
+  assert.equal(button.props['aria-haspopup'],'dialog');
+  button.props.onClick();
+  assert.equal(opened,1);
+  assert.match(module.exports.render(assignment),/1 Kollege · Anzeigen/);
+  assert.match(styles,/mobile-home-timeline-project-link::after \{[^}]*inset: 0;[^}]*z-index: 1;/);
+  assert.match(styles,/mobile-home-timeline-team-button \{[^}]*z-index: 2;[^}]*min-height: 44px;/);
+});
+
+test('large teams stay compact and the sheet lists every colleague and period',()=>{
+  const peers=Array.from({length:20},(_,index)=>peer(index+2,`Kollege-${index}`,'2026-09-21','2026-09-23'));
+  const html=module.exports.render({id:42,person:{id:1},site:{name:'Test'},colleagues:peers});
+  assert.match(html,/20 Kollegen · Anzeigen/);
+  assert.doesNotMatch(html,/Kollege-\d/);
+  const sheet=module.exports.renderSheet(format(peers));
+  assert.equal((sheet.match(/<li>/g)||[]).length,20);
+  assert.equal((sheet.match(/Mo–Mi/g)||[]).length,20);
+  assert.match(sheet,/role="dialog"/);
+  assert.match(sheet,/Teamliste schließen/);
+  assert.match(styles,/mobile-assignment-team-sheet \{[^}]*grid-template-rows: auto auto minmax\(0, 1fr\);[^}]*max-height: min\(78dvh, 620px\);/);
+  assert.match(styles,/mobile-team-sheet-list \{[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/);
 });

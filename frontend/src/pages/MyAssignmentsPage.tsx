@@ -18,6 +18,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { MobileBackButton } from "../components/MobileBackButton";
+import { MobileAssignmentTeamSheet } from "../components/MobileAssignmentTeamSheet";
 import { SiteStatusBadge } from "../components/StatusBadge";
 import { ApiError, api } from "../lib/api";
 import { buildMobileAssignmentHistoryWeeks } from "../lib/mobileAssignmentHistory";
@@ -76,6 +77,7 @@ export function MyAssignmentsPage() {
   const [isFromCache, setIsFromCache] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [placeholder, setPlaceholder] = useState<PlaceholderContent | null>(null);
+  const [teamItem, setTeamItem] = useState<MobileHomeTimelineItem | null>(null);
   const [selfPlanSheet, setSelfPlanSheet] = useState<SelfPlanSheetState | null>(null);
   const [recentSelfPlanSites, setRecentSelfPlanSites] = useState<MobileSite[] | null>(null);
   const [isLoadingSelfPlanSites, setIsLoadingSelfPlanSites] = useState(false);
@@ -554,6 +556,7 @@ export function MyAssignmentsPage() {
                       item={item}
                       key={item.key}
                       today={today}
+                      onOpenTeam={() => setTeamItem(item)}
                       onEmptyDaySelect={(workDate, label) => void openSelfPlanSheet(workDate, label)}
                     />
                   ))}
@@ -644,6 +647,14 @@ export function MyAssignmentsPage() {
       )}
 
       {placeholder ? <MobilePlaceholderDialog content={placeholder} onClose={() => setPlaceholder(null)} /> : null}
+      {teamItem?.assignment ? (
+        <MobileAssignmentTeamSheet
+          siteName={teamItem.assignment.site.name}
+          rangeLabel={formatRangeLabel(teamItem.start, teamItem.end)}
+          colleagues={formatAssignmentColleagues(teamItem.assignment.colleagues ?? [], teamItem.start, teamItem.end, teamItem.assignment.person.id)}
+          onClose={() => setTeamItem(null)}
+        />
+      ) : null}
       {selfPlanSheet ? (
         <MobileSelfPlanSheet
           error={selfPlanError}
@@ -680,11 +691,13 @@ function MobileHomeTimelineCard({
   item,
   today,
   onEmptyDaySelect,
+  onOpenTeam,
 }: {
   isNext: boolean;
   item: MobileHomeTimelineItem;
   today: string;
   onEmptyDaySelect?: (date: string, label: string) => void;
+  onOpenTeam?: () => void;
 }) {
   const assignment = item.assignment;
   const isToday = item.start === today;
@@ -703,17 +716,33 @@ function MobileHomeTimelineCard({
       <span className="mobile-home-timeline-main">
         <span className="mobile-home-timeline-copy">
           <b title={assignment?.site.name ?? "Kein Einsatz geplant."}>
-            {assignment?.site.name ?? "Kein Einsatz geplant."}
+            {assignment ? (
+              <Link
+                className="mobile-home-timeline-project-link"
+                aria-label={`${formatRangeLabel(item.start, item.end)}: ${assignment.site.name}. Projektakte öffnen`}
+                state={{ assignment }}
+                to={`/me/assignments/${assignment.id}`}
+              >{assignment.site.name}</Link>
+            ) : "Kein Einsatz geplant."}
           </b>
           {assignment ? (
-            <span className="mobile-home-timeline-team">
-              <UsersRound aria-hidden="true" size={15} />
-              <span className="mobile-home-timeline-team-list">
-                {colleagues?.length ? colleagues.map(colleague => (
-                  <span key={colleague.personId}>{colleague.name} <span className="mobile-home-timeline-team-period">({colleague.period})</span></span>
-                )) : <span className="mobile-home-timeline-team-empty">{colleagues ? "Keine Kollegen mitgeplant" : "Teamdaten nicht verfügbar"}</span>}
+            colleagues?.length ? (
+              <button
+                className="mobile-home-timeline-team mobile-home-timeline-team-button"
+                type="button"
+                aria-haspopup="dialog"
+                aria-label={`Team für ${assignment.site.name} anzeigen: ${colleagues.length} ${colleagues.length === 1 ? "Kollege" : "Kollegen"}`}
+                onClick={onOpenTeam}
+              >
+                <UsersRound aria-hidden="true" size={15} />
+                <span>{colleagues.length} {colleagues.length === 1 ? "Kollege" : "Kollegen"} · Anzeigen</span>
+              </button>
+            ) : (
+              <span className="mobile-home-timeline-team">
+                <UsersRound aria-hidden="true" size={15} />
+                <span>{colleagues ? "Keine Kollegen mitgeplant" : "Teamdaten nicht verfügbar"}</span>
               </span>
-            </span>
+            )
           ) : <small>Antippen, falls du trotzdem auf Baustelle bist.</small>}
           {item.dayCount > 1 ? (
             <span className="mobile-home-timeline-duration">{item.dayCount} Einsatztage</span>
@@ -728,15 +757,12 @@ function MobileHomeTimelineCard({
 
   if (assignment) {
     return (
-      <Link
-        aria-label={`${formatRangeLabel(item.start, item.end)}: ${assignment.site.name}${colleagues?.length ? `. Mitgeplant: ${colleagues.map(colleague => `${colleague.name} (${colleague.period})`).join(", ")}` : ""}`}
+      <div
         className={`mobile-home-timeline-card${isNext ? " is-next" : ""}`}
         data-mobile-home-timeline-item
-        state={{ assignment }}
-        to={`/me/assignments/${assignment.id}`}
       >
         {cardContent}
-      </Link>
+      </div>
     );
   }
 

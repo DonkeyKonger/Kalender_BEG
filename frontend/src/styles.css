@@ -5906,6 +5906,7 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-timeline-card {
+  position: relative;
   display: grid;
   grid-template-columns: clamp(92px, 27vw, 106px) minmax(0, 1fr);
   align-items: stretch;
@@ -6054,16 +6055,40 @@ button.person-chip:focus-visible {
 }
 
 .mobile-home-timeline-team > svg { margin-top: 1px; }
-.mobile-home-timeline-team-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 10px;
-  min-width: 0;
-  overflow-wrap: anywhere;
+
+/* The link covers the card; its sibling team button sits above that hit area.
+   No nested interactive elements and no navigation handler on the wrapper. */
+.mobile-home-timeline-project-link { color: inherit; text-decoration: none; }
+.mobile-home-timeline-project-link::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: 12px; }
+.mobile-home-timeline-project-link:focus-visible { outline: none; }
+.mobile-home-timeline-project-link:focus-visible::after { outline: 3px solid #315f91; outline-offset: -3px; }
+.mobile-home-timeline-team-button {
+  position: relative;
+  z-index: 2;
+  align-items: center;
+  min-height: 44px;
+  width: fit-content;
+  max-width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 4px 0;
+  text-align: left;
+  color: #315f91;
 }
-.mobile-home-timeline-team-list > span { min-width: 0; }
-.mobile-home-timeline-team-empty { grid-column: 1 / -1; }
-.mobile-home-timeline-team-period { font-weight: 400; }
+.mobile-home-timeline-team-button:hover { background: #eaf1f8; }
+.mobile-home-timeline-team-button:focus-visible { outline: 2px solid #315f91; outline-offset: 2px; }
+.mobile-home-timeline-team-button > span { min-width: 0; overflow-wrap: anywhere; }
+
+.mobile-dialog-backdrop.mobile-team-sheet-backdrop { align-items: end; padding: 14px 14px max(14px, env(safe-area-inset-bottom, 0px)); }
+.mobile-bottom-sheet.mobile-assignment-team-sheet { grid-template-rows: auto auto minmax(0, 1fr); max-height: min(78dvh, 620px); }
+.mobile-assignment-team-sheet .mobile-bottom-sheet-head > div { min-width: 0; overflow-wrap: anywhere; }
+.mobile-team-sheet-close { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; border: 1px solid #d7e3f0; border-radius: 8px; background: #fff; color: #243f5f; }
+.mobile-team-sheet-hint { margin: 0; color: #65738a; font-size: 0.8125rem; }
+.mobile-team-sheet-list { margin: 0; padding: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; list-style: none; }
+.mobile-team-sheet-list li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 45%); gap: 16px; padding: 12px 2px; border-bottom: 1px solid #e1e9f2; color: #243f5f; font-size: 0.875rem; overflow-wrap: anywhere; }
+.mobile-team-sheet-list li > :last-child { text-align: right; color: #65738a; }
+.mobile-team-sheet-list:focus-visible, .mobile-team-sheet-close:focus-visible { outline: 2px solid #315f91; outline-offset: -2px; }
 
 .mobile-home-timeline-duration {
   justify-self: start;
