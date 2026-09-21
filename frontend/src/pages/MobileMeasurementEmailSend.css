@@ -1,0 +1,106 @@
+/* Measurement sending only; other shared document dialogs remain unchanged. */
+.app-shell.is-mobile-workspace .mobile-project-email-dialog.is-measurement-send {
+  width: min(560px, calc(100vw - 32px));
+  min-width: 0;
+  gap: 18px;
+  border: 1px solid #d7e3f0;
+  border-radius: 10px;
+  padding: clamp(16px, 4vw, 24px);
+  color: #102b50;
+}
+
+.is-measurement-send .mobile-project-email-dialog-head h2 {
+  color: #102b50;
+  font-size: 1.375rem;
+  line-height: 1.3;
+}
+
+.is-measurement-send .mobile-project-email-warning {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  border: 1px solid #dfc7a9;
+  border-radius: 6px;
+  background: #fcf8f1;
+  padding: 14px 16px;
+  color: #665338;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.is-measurement-send .mobile-project-email-warning svg {
+  margin-top: 2px;
+}
+
+.is-measurement-send .mobile-project-email-list {
+  display: block;
+  min-width: 0;
+  max-height: min(35dvh, 280px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  border: 1px solid #cbd8e8;
+  border-radius: 2px;
+  background: #ffffff;
+}
+
+.is-measurement-send .mobile-project-email-option {
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 20px;
+  min-height: 62px;
+  border: 0;
+  border-radius: 0;
+  padding: 14px 18px;
+}
+
+.is-measurement-send .mobile-project-email-option + .mobile-project-email-option {
+  border-top: 1px solid #cbd8e8;
+}
+
+.is-measurement-send .mobile-project-email-option svg {
+  width: 24px;
+  height: 24px;
+  color: #315f91;
+}
+
+.is-measurement-send .mobile-project-email-option strong {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  color: #102b50;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-send .mobile-project-email-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-send .mobile-project-email-actions button {
+  justify-content: center;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid #c4d5e8;
+  border-radius: 4px;
+  padding: 10px;
+  background: #ffffff;
+  color: #143c6d;
+  font-size: 1rem;
+  line-height: 1.3;
+  white-space: normal;
+  box-shadow: none;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-send .mobile-project-email-actions .primary-action {
+  border-color: #203c5d;
+  background: #203c5d;
+  color: #ffffff;
+}
+
+.is-measurement-send button:focus-visible {
+  outline: 2px solid #315f91;
+  outline-offset: 2px;
+}

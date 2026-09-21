@@ -68,6 +68,7 @@ import "./MobileMeasurementPositions.css";
 import "./MobileMeasurementEntry.css";
 import "./MobileMeasurementOverview.css";
 import "./MobileProjectEmailRecipients.css";
+import "./MobileMeasurementEmailSend.css";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -1354,6 +1355,7 @@ function ExtraWorkDetailsDialog({
 }
 
 function DocumentEmailSendDialog({
+  variant = "default",
   title,
   description,
   recipients,
@@ -1364,6 +1366,7 @@ function DocumentEmailSendDialog({
   onClose,
   onConfirm,
 }: {
+  variant?: "default" | "measurement";
   title: string;
   description: string;
   recipients: SiteEmailRecipient[];
@@ -1386,7 +1389,7 @@ function DocumentEmailSendDialog({
       onClick={isSending ? undefined : onClose}
     >
       <div
-        className="mobile-project-email-dialog mobile-modal-scroll-region"
+        className={`mobile-project-email-dialog mobile-modal-scroll-region${variant === "measurement" ? " is-measurement-send" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-extra-work-email-send-title"
@@ -1394,25 +1397,30 @@ function DocumentEmailSendDialog({
       >
         <div className="mobile-project-email-dialog-head">
           <h2 id="mobile-extra-work-email-send-title">{title}</h2>
-          <p>{description}</p>
+          {variant !== "measurement" ? <p>{description}</p> : null}
         </div>
 
-        {warning ? <p className="mobile-project-email-warning">{warning}</p> : null}
+        {warning ? (
+          <p className="mobile-project-email-warning">
+            {variant === "measurement" ? <AlertTriangle aria-hidden="true" size={28} /> : null}
+            <span>{warning}</span>
+          </p>
+        ) : null}
 
         <div className="mobile-project-email-list">
           <div className="mobile-project-email-option is-static">
             <FileText aria-hidden="true" size={18} />
             <span>
               <strong>{filename}</strong>
-              <small>PDF-Dokument</small>
+              {variant !== "measurement" ? <small>PDF-Dokument</small> : null}
             </span>
           </div>
           {recipients.map((recipient) => (
             <div className="mobile-project-email-option is-static" key={recipient.email}>
               <Mail aria-hidden="true" size={18} />
               <span>
-                <strong>{recipient.label || recipient.email}</strong>
-                {recipient.label ? <small>{recipient.email}</small> : null}
+                <strong>{variant === "measurement" ? recipient.email : recipient.label || recipient.email}</strong>
+                {variant !== "measurement" && recipient.label ? <small>{recipient.email}</small> : null}
               </span>
             </div>
           ))}
@@ -5392,6 +5400,7 @@ function MeasurementBatchOverview({
       ) : null}
       {isConfirmingEmailSend ? (
         <DocumentEmailSendDialog
+          variant="measurement"
           description="Das aktuelle Aufmaß wird als vollständige PDF an die ausgewählten Kundenempfänger gesendet."
           filename={emailPdfFilename}
           isSending={isSendingEmail}
