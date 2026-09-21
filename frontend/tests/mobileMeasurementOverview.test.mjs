@@ -49,7 +49,7 @@ const render = (batch = {}, props = {}) => module.exports.render({
   ...props,
 });
 
-test("measurement overview uses one joined action list and a compact title/status heading", () => {
+test("measurement overview uses four separate action cards and a compact title/status heading", () => {
   const html = render();
   assert.match(html, /is-measurement-overview/);
   assert.match(html, /mobile-measurement-summary-heading"><h2>Aufmaß 9999.28<\/h2><span/);
@@ -58,7 +58,18 @@ test("measurement overview uses one joined action list and a compact title/statu
     assert.ok(html.includes(title));
   }
   assert.match(html, /<small>Prüfung durch Projektleiter erforderlich\.<\/small>/);
-  assert.match(styles, /mobile-measurement-overview-actions \{\s*grid-template-columns: minmax\(0, 1fr\);\s*gap: 0;/);
+  const groups = html.split('class="mobile-measurement-overview-action-group"').slice(1);
+  assert.equal(groups.length, 4);
+  for (const [index, label] of ["Erfassung und PDF", "Unterschriften", "E-Mail", "Fotos"].entries()) {
+    assert.ok(groups[index].startsWith(` role="group" aria-label="${label}"`));
+  }
+  assert.match(groups[0], /Aufmaßpositionen erfassen[^]*Aufmaß anzeigen \(PDF\)/);
+  assert.match(groups[1], /Monteursunterschrift einfügen[^]*Kundenunterschrift einfügen/);
+  assert.match(groups[2], /Kunden-E-Mail[^]*Per E-Mail senden/);
+  assert.match(groups[3], /Hinterlegte Fotos[^]*aria-label="Foto aufnehmen"/);
+  assert.match(styles, /mobile-measurement-overview-actions \{[^}]*gap: 16px;[^}]*border: 0;[^}]*background: transparent;/);
+  assert.match(styles, /mobile-measurement-overview-action-group \{[^}]*overflow: hidden;[^}]*border: 1px solid #d7e3f0;[^}]*border-radius: 7px;[^}]*background: #ffffff;/);
+  assert.match(styles, /mobile-measurement-overview-action-group > \* \+ \* \{/);
   assert.match(styles, /mobile-measurement-summary-card \{[^}]*border: 1px solid #d7e3f0;[^}]*border-radius: 7px;[^}]*background: #ffffff;[^}]*padding: 12px 14px;[^}]*box-shadow: none;/s);
 });
 

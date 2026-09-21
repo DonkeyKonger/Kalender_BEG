@@ -1031,80 +1031,88 @@ function ExtraWorkOrderOverview({
       {error || pdfError ? <div className="form-error">{error ?? pdfError}</div> : null}
 
       <div className="mobile-measurement-overview-actions">
-        <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenEntry}>
-          <ClipboardList aria-hidden="true" size={18} />
-          <span>{isApproval ? "Freigabe erfassen" : "Leistungen erfassen"}</span>
-        </button>
-        <button className="mobile-measurement-overview-action" type="button" onClick={() => void openExtraWorkPdf()} disabled={isOpeningPdf}>
-          <FileText aria-hidden="true" size={18} />
-          <span>{isOpeningPdf ? "PDF wird geöffnet..." : `${kindLabel} anzeigen (PDF)`}</span>
-        </button>
-        <button
-          className={`mobile-measurement-overview-action${hasCustomerSignature ? " is-complete" : ""}`}
-          type="button"
-          onClick={() => {
-            setPdfError(null);
-            setIsSigningCustomer(true);
-          }}
-          disabled={hasCustomerSignature}
-        >
-          <UserRound aria-hidden="true" size={18} />
-          <span>{hasCustomerSignature ? "Kundenunterschrift vorhanden" : "Kundenunterschrift einfügen"}</span>
-          {hasCustomerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
-        </button>
-        <button
-          className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
-          type="button"
-          onClick={() => {
-            setPdfError(null);
-            setIsSigningWorker(true);
-          }}
-          disabled={hasWorkerSignature}
-        >
-          <UserRound aria-hidden="true" size={18} />
-          <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
-          {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
-        </button>
-        <button
-          className="mobile-measurement-overview-action"
-          type="button"
-          onClick={() => {
-            setPdfError(null);
-            setIsEditingEmailRecipients(true);
-          }}
-        >
-          <Mail aria-hidden="true" size={18} />
-          <span>Kunden-E-Mail</span>
-        </button>
-        <button
-          className={`mobile-measurement-overview-action has-inline-status${shouldWarnMissingCustomerSignatureForEmail ? " is-email-warning" : ""}`}
-          type="button"
-          title={emailSendStatusTitle}
-          onClick={() => {
-            setEmailSendError(null);
-            setIsConfirmingEmailSend(true);
-          }}
-          disabled={!emailSendPrerequisitesMet || isSendingEmail || isLoadingEmailRecipients}
-        >
-          <Mail aria-hidden="true" size={18} />
-          <span>{isSendingEmail ? "Wird gesendet..." : "Per E-Mail senden"}</span>
-          <span
-            className={`mobile-measurement-email-indicator ${emailSendError ? "is-not-sent" : emailDeliveryStatus.className}`}
-            role="img"
-            aria-label={emailSendError ?? emailDeliveryStatus.label}
-            title={emailSendStatusTitle ?? emailDeliveryStatus.label}
+        <div className="mobile-measurement-overview-action-group" role="group" aria-label="Erfassung und PDF">
+          <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenEntry}>
+            <ClipboardList aria-hidden="true" size={18} />
+            <span>{isApproval ? "Freigabe erfassen" : "Leistungen erfassen"}</span>
+          </button>
+          <button className="mobile-measurement-overview-action" type="button" onClick={() => void openExtraWorkPdf()} disabled={isOpeningPdf}>
+            <FileText aria-hidden="true" size={18} />
+            <span>{isOpeningPdf ? "PDF wird geöffnet..." : `${kindLabel} anzeigen (PDF)`}</span>
+          </button>
+        </div>
+        <div className="mobile-measurement-overview-action-group" role="group" aria-label="Unterschriften">
+          <button
+            className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
+            type="button"
+            onClick={() => {
+              setPdfError(null);
+              setIsSigningWorker(true);
+            }}
+            disabled={hasWorkerSignature}
           >
-            {emailSendError ? <AlertTriangle aria-hidden="true" size={22} />
-              : emailDeliveryStatus.className === "is-not-sent" ? <MailX aria-hidden="true" size={22} />
-                : <MailCheck aria-hidden="true" size={22} />}
-          </span>
-        </button>
-        <MobileOverviewPhotoAction
-          count={order.photo_count}
-          disabled={isUploadingPhoto || isPhotoLimitReached}
-          onOpenPhotos={onOpenPhotos}
-          onTakePhoto={onTakePhoto}
-        />
+            <UserRound aria-hidden="true" size={18} />
+            <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
+            {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
+          </button>
+          <button
+            className={`mobile-measurement-overview-action${hasCustomerSignature ? " is-complete" : ""}`}
+            type="button"
+            onClick={() => {
+              setPdfError(null);
+              setIsSigningCustomer(true);
+            }}
+            disabled={hasCustomerSignature}
+          >
+            <UserRound aria-hidden="true" size={18} />
+            <span>{hasCustomerSignature ? "Kundenunterschrift vorhanden" : "Kundenunterschrift einfügen"}</span>
+            {hasCustomerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
+          </button>
+        </div>
+        <div className="mobile-measurement-overview-action-group" role="group" aria-label="E-Mail">
+          <button
+            className="mobile-measurement-overview-action"
+            type="button"
+            onClick={() => {
+              setPdfError(null);
+              setIsEditingEmailRecipients(true);
+            }}
+          >
+            <Mail aria-hidden="true" size={18} />
+            <span>Kunden-E-Mail</span>
+          </button>
+          <button
+            className={`mobile-measurement-overview-action has-inline-status${shouldWarnMissingCustomerSignatureForEmail ? " is-email-warning" : ""}`}
+            type="button"
+            title={emailSendStatusTitle}
+            onClick={() => {
+              setEmailSendError(null);
+              setIsConfirmingEmailSend(true);
+            }}
+            disabled={!emailSendPrerequisitesMet || isSendingEmail || isLoadingEmailRecipients}
+          >
+            <Mail aria-hidden="true" size={18} />
+            <span>{isSendingEmail ? "Wird gesendet..." : "Per E-Mail senden"}</span>
+            <span
+              className={`mobile-measurement-email-indicator ${emailSendError ? "is-not-sent" : emailDeliveryStatus.className}`}
+              role="img"
+              aria-label={emailSendError ?? emailDeliveryStatus.label}
+              title={emailSendStatusTitle ?? emailDeliveryStatus.label}
+            >
+              {emailSendError ? <AlertTriangle aria-hidden="true" size={22} />
+                : emailDeliveryStatus.className === "is-not-sent" ? <MailX aria-hidden="true" size={22} />
+                  : <MailCheck aria-hidden="true" size={22} />}
+            </span>
+          </button>
+        </div>
+        <div className="mobile-measurement-overview-action-group" role="group" aria-label="Fotos">
+          <MobileOverviewPhotoAction
+            count={order.photo_count}
+            disabled={isUploadingPhoto || isPhotoLimitReached}
+            onOpenPhotos={onOpenPhotos}
+            onTakePhoto={onTakePhoto}
+          />
+        </div>
       </div>
       {isPhotoLimitReached ? (
         <p className="mobile-measurement-action-hint">Maximal 5 Fotos pro Stundenzettel erlaubt.</p>
@@ -5416,6 +5424,7 @@ function MeasurementBatchOverview({
       {error ? <div className="form-error">{error}</div> : null}
 
       <div className="mobile-measurement-overview-actions">
+        <div className="mobile-measurement-overview-action-group" role="group" aria-label="Erfassung und PDF">
           <button className="mobile-measurement-overview-action is-primary" type="button" onClick={onOpenPositions} disabled={isItemsLoading}>
             <ClipboardList aria-hidden="true" size={18} />
             <span>{isItemsLoading ? "Positionen laden..." : "Aufmaßpositionen erfassen"}</span>
@@ -5424,7 +5433,18 @@ function MeasurementBatchOverview({
             <FileText aria-hidden="true" size={18} />
             <span>{isOpeningPdf ? "PDF wird geöffnet..." : "Aufmaß anzeigen (PDF)"}</span>
           </button>
-
+        </div>
+        <div className="mobile-measurement-overview-action-group" role="group" aria-label="Unterschriften">
+          <button
+            className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
+            type="button"
+            onClick={onWorkerSignature}
+            disabled={hasWorkerSignature}
+          >
+            <UserRound aria-hidden="true" size={18} />
+            <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
+            {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
+          </button>
           <button
             className={`mobile-measurement-overview-action${hasCustomerSignature ? " is-complete" : ""}`}
             type="button"
@@ -5438,17 +5458,8 @@ function MeasurementBatchOverview({
             </span>
             {hasCustomerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
           </button>
-          <button
-            className={`mobile-measurement-overview-action${hasWorkerSignature ? " is-complete" : ""}`}
-            type="button"
-            onClick={onWorkerSignature}
-            disabled={hasWorkerSignature}
-          >
-            <UserRound aria-hidden="true" size={18} />
-            <span>{hasWorkerSignature ? "Monteursunterschrift vorhanden" : "Monteursunterschrift einfügen"}</span>
-            {hasWorkerSignature ? <CheckCircle2 className="mobile-action-status-icon" aria-hidden="true" size={19} /> : null}
-          </button>
-
+        </div>
+        <div className="mobile-measurement-overview-action-group" role="group" aria-label="E-Mail">
           <button
             className="mobile-measurement-overview-action"
             type="button"
@@ -5486,12 +5497,15 @@ function MeasurementBatchOverview({
             </span>
           </button>
 
+        </div>
+        <div className="mobile-measurement-overview-action-group" role="group" aria-label="Fotos">
           <MobileOverviewPhotoAction
             count={batch.photo_count}
             disabled={isUploadingPhoto || isPhotoLimitReached}
             onOpenPhotos={onOpenPhotos}
             onTakePhoto={onTakePhoto}
           />
+        </div>
       </div>
       {isPhotoLimitReached ? (
         <p className="mobile-measurement-action-hint">Maximal 5 Fotos pro Aufmaß erlaubt.</p>

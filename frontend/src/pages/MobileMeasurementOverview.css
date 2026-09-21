@@ -124,7 +124,17 @@
 }
 
 .app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-overview-actions {
+  display: grid;
   grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  border: 0;
+  background: transparent;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-overview-action-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 0;
   overflow: hidden;
   border: 1px solid #d7e3f0;
@@ -132,7 +142,7 @@
   background: #ffffff;
 }
 
-.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-overview-actions > * + * {
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-overview-action-group > * + * {
   border-top: 1px solid #e2eaf3;
 }
 

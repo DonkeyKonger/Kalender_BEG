@@ -57,6 +57,22 @@ test('submission, signing, rename and photo restrictions remain intact',()=>{
   assert.match(signed,/Maximal 5 Fotos pro Stundenzettel/);
 });
 
+test('time sheets and approvals group actions into four cards with worker signature first',()=>{
+  for(const kind of ['timesheet','approval']){
+    const {tree,updates}=module.exports.tree({...base,order:{...base.order,kind}});
+    const groups=collect(tree).filter(n=>n.props?.className==='mobile-measurement-overview-action-group');
+    assert.deepEqual(groups.map(n=>n.props['aria-label']),['Erfassung und PDF','Unterschriften','E-Mail','Fotos']);
+    assert.deepEqual(groups.map(n=>collect(n).filter(child=>child.type==='button').length),[2,2,2,0]);
+    const signatures=collect(groups[1]).filter(n=>n.type==='button');
+    assert.match(module.exports.render({...base,order:{...base.order,kind}}),/Monteursunterschrift einfügen[^]*Kundenunterschrift einfügen/);
+    signatures[0].props.onClick();
+    signatures[1].props.onClick();
+    assert.match(overview,/setIsSigningWorker\(true\)[^]*setIsSigningCustomer\(true\)/);
+    assert.equal(updates.filter(([,value])=>value===true).length,2);
+    assert.equal(groups[3].props.children.props.onTakePhoto,base.onTakePhoto);
+  }
+});
+
 test('delivery indicator exposes unsent, unsigned-sent, signed-sent and error states',()=>{
   assert.match(render(),/is-not-sent" role="img" aria-label="Mail nicht an Kunden gesendet"/);
   assert.match(render({customer_email_sent_at:'2026-09-21'}),/mobile-measurement-email-indicator is-signature-open/);
