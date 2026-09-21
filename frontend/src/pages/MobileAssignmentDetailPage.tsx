@@ -4304,6 +4304,7 @@ function MobileMeasurementTab({
   const [workerSignatureBatch, setWorkerSignatureBatch] = useState<MobileMeasurementBatch | null>(null);
   const [photoGalleryBatch, setPhotoGalleryBatch] = useState<MobileMeasurementBatch | null>(null);
   const [photoUploadBatch, setPhotoUploadBatch] = useState<MobileMeasurementBatch | null>(null);
+  const [isPhotoSourceDialogOpen, setIsPhotoSourceDialogOpen] = useState(false);
   const [photoMessage, setPhotoMessage] = useState<string | null>(null);
   const [photoMessageTone, setPhotoMessageTone] = useState<"info" | "error">("info");
   const [photoGalleryVersion, setPhotoGalleryVersion] = useState(0);
@@ -4314,6 +4315,7 @@ function MobileMeasurementTab({
   const [inlineError, setInlineError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const inlineFreePositionDraftIdRef = useRef(-1);
+  const photoLibraryInputRef = useRef<HTMLInputElement | null>(null);
   const canUseInlineMeasurementTable = useMediaQuery(TABLET_INLINE_MEASUREMENT_QUERY);
   const viewMode: MeasurementViewMode = canUseInlineMeasurementTable ? "table" : "list";
   const isFreePositionDialogTopModal = useMobileModalStack(Boolean(
@@ -4470,6 +4472,9 @@ function MobileMeasurementTab({
   }
 
   function openPhotoCapture(batch: MobileMeasurementBatch): void {
+    if (isUploadingPhoto) {
+      return;
+    }
     if ((batch.photo_count ?? 0) >= MOBILE_DOCUMENT_PHOTO_LIMIT) {
       setPhotoMessage("Maximal 5 Fotos pro Aufmaß erlaubt.");
       setPhotoMessageTone("error");
@@ -4478,7 +4483,7 @@ function MobileMeasurementTab({
     setPhotoUploadBatch(batch);
     setPhotoMessage(null);
     setPhotoMessageTone("info");
-    photoInputRef.current?.click();
+    setIsPhotoSourceDialogOpen(true);
   }
 
   async function handlePhotoInputChange(event: ReactChangeEvent<HTMLInputElement>): Promise<void> {
@@ -4513,6 +4518,43 @@ function MobileMeasurementTab({
       setPhotoUploadBatch(null);
     }
   }
+
+  const photoSourceControls = (
+    <>
+      {isPhotoSourceDialogOpen ? (
+        <ExtraWorkPhotoSourceDialog
+          isUploading={isUploadingPhoto}
+          onTakePhoto={() => {
+            setIsPhotoSourceDialogOpen(false);
+            photoInputRef.current?.click();
+          }}
+          onChoosePhoto={() => {
+            setIsPhotoSourceDialogOpen(false);
+            photoLibraryInputRef.current?.click();
+          }}
+          onClose={() => {
+            setIsPhotoSourceDialogOpen(false);
+            setPhotoUploadBatch(null);
+          }}
+        />
+      ) : null}
+      <input
+        ref={photoInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(event) => void handlePhotoInputChange(event)}
+      />
+      <input
+        ref={photoLibraryInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="image/*"
+        onChange={(event) => void handlePhotoInputChange(event)}
+      />
+    </>
+  );
 
   async function handleCreateFreePosition(batch: MobileMeasurementBatch): Promise<void> {
     const description = freePositionDraft.description.trim();
@@ -4839,14 +4881,7 @@ function MobileMeasurementTab({
             onTakePhoto={() => openPhotoCapture(photoGalleryBatch)}
             photoLimit={MOBILE_DOCUMENT_PHOTO_LIMIT}
           />
-          <input
-            ref={photoInputRef}
-            className="visually-hidden"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={(event) => void handlePhotoInputChange(event)}
-          />
+          {photoSourceControls}
         </>
       );
     }
@@ -4916,14 +4951,7 @@ function MobileMeasurementTab({
             }}
           />
         ) : null}
-        <input
-          ref={photoInputRef}
-          className="visually-hidden"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(event) => void handlePhotoInputChange(event)}
-        />
+        {photoSourceControls}
       </>
     );
   }
@@ -5260,7 +5288,7 @@ function MeasurementBatchOverview({
         </span>
       </div>
       {batch.is_locked_for_worker ? (
-        <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
+        <p className="form-info mobile-measurement-lock-notice">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
       ) : null}
       {error ? <div className="form-error">{error}</div> : null}
 

@@ -46,9 +46,15 @@
 }
 
 .app-shell.is-mobile-workspace .is-measurement-overview .mobile-back-button {
-  border: 1px solid #d7e3f0;
-  background: #ffffff;
+  border: 0;
+  background: transparent;
   color: #143c6d;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-lock-notice {
+  border-color: #d88925;
+  background: #fff4e5;
+  color: #8a4b12;
 }
 
 .app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-submit-action {

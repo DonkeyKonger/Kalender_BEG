@@ -28719,6 +28719,7 @@ body.mobile-modal-scroll-locked {
 
 .mobile-extra-work-photo-source-dialog {
   width: min(calc(100% - 32px), 360px);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .mobile-extra-work-photo-source-actions {
@@ -28727,8 +28728,10 @@ body.mobile-modal-scroll-locked {
 }
 
 .mobile-extra-work-photo-source-actions button {
+  min-width: 0;
   min-height: 48px;
   gap: 8px;
+  white-space: normal;
 }
 
 .mobile-extra-work-photo-source-actions .mobile-extra-work-photo-source-cancel {

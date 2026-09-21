@@ -7,7 +7,11 @@ import { build } from "esbuild";
 
 const source = await readFile(new URL("../src/pages/MobileAssignmentDetailPage.tsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/pages/MobileMeasurementOverview.css", import.meta.url), "utf8");
+const sharedStyles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 const overview = source.slice(source.indexOf("function MeasurementBatchOverview("), source.indexOf("type MeasurementPhotoPreview"));
+const measurementTab = source.slice(source.indexOf("function MobileMeasurementTab("), source.indexOf("function MeasurementBatchOverview("));
+const openPhoto = measurementTab.slice(measurementTab.indexOf("  function openPhotoCapture("), measurementTab.indexOf("  async function handlePhotoInputChange("));
+const photoControls = measurementTab.slice(measurementTab.indexOf("  const photoSourceControls ="), measurementTab.indexOf("  async function handleCreateFreePosition("));
 const helpers = ["MobileOverviewPhotoAction", "MobileCameraButton", "formatMeasurementNumber", "formatMobileMeasurementBatchTitle", "getMobileMeasurementPdfFilename", "getDocumentEmailSendHint", "getMobileCustomerEmailStatus"]
   .map(name => source.match(new RegExp(`^function ${name}\\([^]*?^}\\n`, "m"))[0]).join("\n");
 const compiled = await build({
@@ -17,7 +21,21 @@ const compiled = await build({
       const getMobileMeasurementBatchStatusBadge = batch => ({label:batch.status,className:'test-status'});
       const formatMobileMeasurementBatchDate = () => '21.09.2026';
       ${helpers}\n${overview}
-      export const render = props => renderToStaticMarkup(React.createElement(MeasurementBatchOverview,props));`,
+      export const render = props => renderToStaticMarkup(React.createElement(MeasurementBatchOverview,props));
+      export function photoFlow({uploading=false,count=0,open=true}={}) {
+        const events=[]; const isUploadingPhoto=uploading; const isPhotoSourceDialogOpen=open;
+        const MOBILE_DOCUMENT_PHOTO_LIMIT=5;
+        const setPhotoUploadBatch=value=>events.push(['target',value]);
+        const setPhotoMessage=value=>events.push(['message',value]);
+        const setPhotoMessageTone=value=>events.push(['tone',value]);
+        const setIsPhotoSourceDialogOpen=value=>events.push(['dialog',value]);
+        const photoInputRef={current:{click:()=>events.push(['camera'])}};
+        const photoLibraryInputRef={current:{click:()=>events.push(['library'])}};
+        const handlePhotoInputChange=()=>{};
+        const ExtraWorkPhotoSourceDialog=()=>null;
+        ${openPhoto}\n${photoControls}
+        return {request:()=>openPhotoCapture({id:1,photo_count:count}),controls:photoSourceControls,events};
+      }`,
     resolveDir: fileURLToPath(new URL("..", import.meta.url)), loader: "tsx",
   },
   bundle: true, write: false, format: "cjs", platform: "node", packages: "external", jsx: "automatic",
@@ -71,4 +89,42 @@ test("email status remains accessible at the send action in all delivery states"
   }
   assert.match(overview, /onOpenPhotos=\{onOpenPhotos\}/);
   assert.match(overview, /onTakePhoto=\{onTakePhoto\}/);
+});
+
+test("measurement photo action offers camera and library before opening the respective input", () => {
+  const flow = module.exports.photoFlow();
+  flow.request();
+  assert.deepEqual(flow.events.at(-1), ["dialog", true]);
+  assert.ok(!flow.events.some(([type]) => type === "camera" || type === "library"));
+  const [dialog, camera, library] = flow.controls.props.children;
+  assert.equal(camera.props.capture, "environment");
+  assert.equal(library.props.capture, undefined);
+  assert.equal(camera.props.accept, "image/*");
+  assert.equal(library.props.accept, "image/*");
+  dialog.props.onTakePhoto();
+  assert.deepEqual(flow.events.slice(-2), [["dialog", false], ["camera"]]);
+  dialog.props.onChoosePhoto();
+  assert.deepEqual(flow.events.slice(-2), [["dialog", false], ["library"]]);
+  dialog.props.onClose();
+  assert.deepEqual(flow.events.slice(-2), [["dialog", false], ["target", null]]);
+  assert.equal((measurementTab.match(/\{photoSourceControls\}/g) ?? []).length, 2);
+  assert.match(sharedStyles, /mobile-extra-work-photo-source-dialog \{[^}]*grid-template-columns: minmax\(0, 1fr\);/s);
+  assert.match(sharedStyles, /mobile-extra-work-photo-source-actions button \{[^}]*min-width: 0;[^}]*white-space: normal;/s);
+});
+
+test("photo source selection retains upload and five-photo guards", () => {
+  const uploading = module.exports.photoFlow({uploading:true});
+  uploading.request();
+  assert.deepEqual(uploading.events, []);
+  const limit = module.exports.photoFlow({count:5});
+  limit.request();
+  assert.deepEqual(limit.events, [["message", "Maximal 5 Fotos pro Aufmaß erlaubt."], ["tone", "error"]]);
+  assert.match(measurementTab, /prepareMeasurementPhotoFile\(file\)/);
+  assert.match(measurementTab, /api.uploadMobileMeasurementBatchPhoto\(assignment.id, batch.id, uploadFile\)/);
+});
+
+test("locked overview has an orange notice and an unframed back action", () => {
+  assert.match(render({is_locked_for_worker:true}), /form-info mobile-measurement-lock-notice/);
+  assert.match(styles, /mobile-measurement-lock-notice \{\s*border-color: #d88925;\s*background: #fff4e5;\s*color: #8a4b12;/);
+  assert.match(styles, /mobile-back-button \{\s*border: 0;\s*background: transparent;/);
 });
