@@ -711,7 +711,7 @@ function MobileHomeTimelineCard({
               <span className="mobile-home-timeline-team-list">
                 {colleagues?.length ? colleagues.map(colleague => (
                   <span key={colleague.personId}>{colleague.name} <span className="mobile-home-timeline-team-period">({colleague.period})</span></span>
-                )) : <span>{colleagues ? "Keine Kollegen mitgeplant" : "Teamdaten nicht verfügbar"}</span>}
+                )) : <span className="mobile-home-timeline-team-empty">{colleagues ? "Keine Kollegen mitgeplant" : "Teamdaten nicht verfügbar"}</span>}
               </span>
             </span>
           ) : <small>Antippen, falls du trotzdem auf Baustelle bist.</small>}

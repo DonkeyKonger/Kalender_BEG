@@ -211,7 +211,7 @@ test("the assignment timeline scales its cards and copy for narrow mobile viewpo
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(clamp\(84px, 24vw, 98px\), auto\);[^}]*align-content:\s*start;/s,
+    /\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(clamp\(84px, 24vw, 98px\), 1fr\);[^}]*align-content:\s*stretch;/s,
   );
   assert.match(
     styles,
@@ -223,7 +223,7 @@ test("the assignment timeline scales its cards and copy for narrow mobile viewpo
   );
   assert.match(
     styles,
-    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(82px, auto\);[\s\S]*\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*88px minmax\(0, 1fr\);[^}]*min-height:\s*82px;[^}]*padding:\s*0;/s,
+    /@media \(max-width: 340px\) \{[\s\S]*\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(82px, 1fr\);[\s\S]*\.mobile-home-timeline-card \{[^}]*grid-template-columns:\s*88px minmax\(0, 1fr\);[^}]*min-height:\s*82px;[^}]*padding:\s*0;/s,
   );
 });
 
@@ -255,7 +255,7 @@ test("the home assignment block is a snap timeline with grouped consecutive assi
   );
   assert.match(
     styles,
-    /\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(clamp\(84px, 24vw, 98px\), auto\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s,
+    /\.mobile-home-timeline-page \{[^}]*grid-auto-rows:\s*minmax\(clamp\(84px, 24vw, 98px\), 1fr\);[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s,
   );
 });
 

@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 import {build} from 'esbuild';
 const source=await readFile(new URL('../src/pages/MyAssignmentsPage.tsx',import.meta.url),'utf8');
+const styles=await readFile(new URL('../src/styles.css',import.meta.url),'utf8');
 const card=source.slice(source.indexOf('function MobileHomeTimelineCard('),source.indexOf('function MobileAssignmentSiteCard('));
 const compiled=await build({stdin:{contents:`import React from 'react';import {renderToStaticMarkup} from 'react-dom/server';
   import {ChevronRight,UsersRound} from 'lucide-react';
@@ -50,4 +51,14 @@ test('home cards replace commission and customer with colleagues without changin
   assert.match(module.exports.render({...assignment,colleagues:[]}),/Keine Kollegen mitgeplant/);
   assert.match(module.exports.render({...assignment,colleagues:undefined}),/Teamdaten nicht verfügbar/);
   assert.match(module.exports.render(null),/Antippen, falls du trotzdem auf Baustelle bist/);
+});
+
+test('colleagues use two equal columns with full-width empty messages and shared slider rows',()=>{
+  assert.match(styles,/\.mobile-home-timeline-team-list \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*overflow-wrap: anywhere;/);
+  assert.match(styles,/\.mobile-home-timeline-team-empty \{ grid-column: 1 \/ -1; \}/);
+  const empty=module.exports.render({id:42,person:{id:1},site:{name:'Test'},colleagues:[]});
+  assert.match(empty,/class="mobile-home-timeline-team-empty">Keine Kollegen mitgeplant/);
+  assert.match(styles,/@supports \(grid-template-rows: subgrid\) \{\s*\.mobile-home-timeline-track \{\s*grid-template-rows: repeat\(2, minmax\(clamp\(84px, 24vw, 98px\), auto\)\);/);
+  assert.match(styles,/\.mobile-home-timeline-page \{\s*grid-row: span 2;\s*grid-template-rows: subgrid;/);
+  assert.match(styles,/\.mobile-home-timeline-page \{[^}]*grid-auto-rows: minmax\(clamp\(84px, 24vw, 98px\), 1fr\);/);
 });
