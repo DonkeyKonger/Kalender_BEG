@@ -186,7 +186,14 @@
 }
 
 .app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-photo-action-row {
-  grid-template-columns: minmax(0, 1fr) 60px;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 0;
+  min-height: 72px;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-photo-main-action {
+  min-height: 72px;
 }
 
 .app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-photo-main-action strong {
@@ -194,12 +201,26 @@
 }
 
 .app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-inline-camera-button {
-  width: 60px;
-  min-height: 60px;
+  position: relative;
+  justify-self: center;
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
   border: 0;
-  border-radius: 0;
+  border-radius: 7px;
   background: #315f91;
+  padding: 0;
   box-shadow: none;
+}
+
+.app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-inline-camera-button::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -12px;
+  width: 1px;
+  background: #d7e3f0;
 }
 
 .app-shell.is-mobile-workspace .is-measurement-overview .mobile-measurement-email-indicator {

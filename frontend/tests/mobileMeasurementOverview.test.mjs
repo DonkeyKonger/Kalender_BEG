@@ -123,6 +123,15 @@ test("measurement photo action offers camera and library before opening the resp
   assert.match(sharedStyles, /mobile-extra-work-photo-source-actions button \{[^}]*min-width: 0;[^}]*white-space: normal;/s);
 });
 
+test("both document overviews use the inset project-file camera design and divider", () => {
+  assert.match(styles, /is-measurement-overview \.mobile-measurement-photo-action-row \{[^}]*grid-template-columns: minmax\(0, 1fr\) 72px;[^}]*align-items: center;/);
+  assert.match(styles, /is-measurement-overview \.mobile-measurement-inline-camera-button \{[^}]*position: relative;[^}]*justify-self: center;[^}]*width: 48px;[^}]*height: 48px;[^}]*min-height: 48px;[^}]*border-radius: 7px;[^}]*background: #315f91;/);
+  assert.match(styles, /mobile-measurement-inline-camera-button::before \{[^}]*left: -12px;[^}]*width: 1px;[^}]*background: #d7e3f0;/);
+  const extra = source.slice(source.indexOf("function ExtraWorkOrderOverview("), source.indexOf("function ExtraWorkTitleDialog("));
+  assert.match(extra, /is-measurement-overview is-extra-work-overview/);
+  assert.match(extra, /<MobileOverviewPhotoAction/);
+});
+
 test("photo source selection retains upload and five-photo guards", () => {
   const uploading = module.exports.photoFlow({uploading:true});
   uploading.request();
