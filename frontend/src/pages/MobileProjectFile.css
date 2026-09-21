@@ -1,0 +1,199 @@
+/* Project-file landing page only; document and folder views keep their own layouts. */
+.app-shell.is-mobile-workspace .mobile-detail-page.is-project-file {
+  width: 100%;
+  max-width: 560px;
+  min-width: 0;
+  gap: 14px;
+}
+
+.mobile-project-file-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mobile-project-file-heading h1 {
+  margin: 0;
+  color: #14243f;
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+
+.mobile-project-file-summary {
+  border: 1px solid #d7e3f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  cursor: pointer;
+}
+
+.mobile-project-file-summary .assignment-card-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-project-file-summary .assignment-card-main > div {
+  min-width: 0;
+}
+
+.mobile-project-file-summary h2 {
+  margin: 0;
+  color: #14243f;
+  font-size: 1.125rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.mobile-project-file-summary .muted-text {
+  margin: 6px 0 0;
+  color: #7486a1;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.mobile-project-file-summary .status-badge {
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 0.75rem;
+}
+
+.mobile-project-file-menu {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid #d7e3f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.app-shell.is-mobile-workspace .mobile-project-file-action {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 68px;
+  border: 0;
+  border-radius: 0;
+  padding: 12px;
+  background: #ffffff;
+  text-align: left;
+  white-space: normal;
+  box-shadow: none;
+}
+
+.app-shell.is-mobile-workspace .mobile-project-file-action + .mobile-project-file-action,
+.mobile-project-file-menu .mobile-project-photo-action {
+  border-top: 1px solid #d7e3f0;
+}
+
+.mobile-project-file-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  background: #eef0f3;
+  color: #575b61;
+}
+
+.is-folders .mobile-project-file-icon { background: #fff4dc; color: #95630c; }
+.is-measurement .mobile-project-file-icon { background: #e5f8f3; color: #16867b; }
+.is-extra-work .mobile-project-file-icon { background: #eaf4ff; color: #286398; }
+.is-timesheet .mobile-project-file-icon { background: #f1edff; color: #6552a5; }
+
+.mobile-project-file-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mobile-project-file-copy strong,
+.is-project-file .mobile-project-photo-action strong {
+  color: #14243f;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.mobile-project-file-copy small,
+.is-project-file .mobile-project-photo-action small {
+  color: #7486a1;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.mobile-project-file-chevron { color: #7286a0; }
+
+.app-shell.is-mobile-workspace .mobile-project-file-action:is(:hover, .is-active) {
+  background: #f3f7fc;
+}
+
+.mobile-project-file-action:disabled { opacity: 0.65; cursor: wait; }
+
+.is-project-file .mobile-project-photo-action { margin: 0; gap: 0; }
+
+.is-project-file .mobile-project-photo-action .mobile-measurement-photo-action-row {
+  grid-template-columns: minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 0;
+}
+
+.app-shell.is-mobile-workspace .is-project-file .mobile-project-photo-action .mobile-measurement-photo-main-action {
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 72px;
+  border: 0;
+  border-radius: 0;
+  padding: 12px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.is-project-file .mobile-project-photo-action .mobile-measurement-photo-main-action > svg {
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border-radius: 9px;
+  background: #faece9;
+  color: #ac4c31;
+}
+
+.app-shell.is-mobile-workspace .is-project-file .mobile-project-photo-action .mobile-camera-button {
+  position: relative;
+  justify-self: center;
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 7px;
+  background: #315f91;
+  color: #ffffff;
+  padding: 0;
+  box-shadow: none;
+}
+
+.is-project-file .mobile-project-photo-action .mobile-camera-button::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -12px;
+  width: 1px;
+  background: #d7e3f0;
+}
+
+.is-project-file .mobile-project-photo-message { padding: 10px 12px; }
+
+.mobile-project-file-summary:focus-visible,
+.mobile-project-file-menu button:focus-visible {
+  outline: 2px solid #315f91;
+  outline-offset: -3px;
+}

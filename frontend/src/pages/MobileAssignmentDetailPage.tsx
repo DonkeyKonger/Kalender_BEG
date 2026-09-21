@@ -70,6 +70,7 @@ import "./MobileMeasurementOverview.css";
 import "./MobileProjectEmailRecipients.css";
 import "./MobileMeasurementEmailSend.css";
 import "./MobileMeasurementList.css";
+import "./MobileProjectFile.css";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -295,7 +296,7 @@ export function MobileAssignmentDetailPage() {
   }
 
   return (
-    <section className={`mobile-page mobile-detail-page${isFocusedEntry ? " is-entry-mode" : ""}`}>
+    <section className={`mobile-page mobile-detail-page${isFocusedEntry ? " is-entry-mode" : ""}${activeTab === null || activeTab === "tools" ? " is-project-file" : ""}`}>
       {isOverviewFlow ? (
         <>
           <button className="icon-button secondary mobile-back-button" type="button" onClick={() => setActiveTab(null)}>
@@ -307,10 +308,13 @@ export function MobileAssignmentDetailPage() {
         <MobileProjectFoldersHeader assignment={assignment} onBack={() => setActiveTab(null)} />
       ) : !isMeasurementFlow && !isExtraWorkFlow && !isProjectPhotosFlow ? (
         <>
-          <MobileBackButton label="Zurück zu Meine Einsätze" onClick={() => navigate("/me/assignments")} />
+          <div className="mobile-project-file-heading">
+            <MobileBackButton label="Zurück zu Meine Einsätze" onClick={() => navigate("/me/assignments")} />
+            <h1>Projektakte</h1>
+          </div>
 
           <header
-            className="mobile-detail-hero mobile-detail-summary mobile-detail-summary-button"
+            className="mobile-project-file-summary"
             role="button"
             tabIndex={0}
             onClick={openOverview}
@@ -323,46 +327,43 @@ export function MobileAssignmentDetailPage() {
           >
             <div className="assignment-card-main">
               <div>
-                <h1>{assignment.site.name}</h1>
+                <h2>{assignment.site.name}</h2>
                 <p className="muted-text">{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</p>
               </div>
               <SiteStatusBadge status={assignment.site.status} />
             </div>
-            <p className="assignment-date">
-              <span><CalendarClock aria-hidden="true" size={15} />{formatAssignmentRange(assignment)}</span>
-              <ChevronRight aria-hidden="true" className="mobile-detail-summary-chevron" size={17} />
-            </p>
           </header>
 
-          <div className="mobile-detail-actions" aria-label="Baustellendetails">
+          <div className="mobile-project-file-menu" aria-label="Baustellendetails">
             {detailTabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
-                  className={tab.key !== "timesheet" && activeTab === tab.key ? "is-active" : ""}
+                  className={`mobile-project-file-action is-${tab.key}${tab.key !== "timesheet" && activeTab === tab.key ? " is-active" : ""}`}
                   disabled={tab.key === "timesheet" && isOpeningTimesheet}
                   key={tab.key}
                   type="button"
                   onClick={() => handleDetailAction(tab)}
                 >
-                  <Icon aria-hidden="true" size={16} />
-                  <span>
+                  <span className="mobile-project-file-icon"><Icon aria-hidden="true" size={24} /></span>
+                  <span className="mobile-project-file-copy">
                     <strong>{tab.label}</strong>
                     <small>{tab.key === "timesheet" && isOpeningTimesheet ? "Zeitenliste wird geladen..." : tab.description}</small>
                   </span>
+                  <ChevronRight className="mobile-project-file-chevron" aria-hidden="true" size={20} />
                 </button>
               );
             })}
-            {timesheetMessage ? (
-              <p className="mobile-detail-action-message">
-                {timesheetMessage}
-                {timesheetMessage === "Keine aktive Zeitenliste ausgewählt." ? (
-                  <span>Bitte im Büro/Projektleiterbereich unter Baustellen / Aufmaß / Angebot auswählen.</span>
-                ) : null}
-              </p>
-            ) : null}
+            {activeTab === null ? <MobileProjectPhotoCapture assignment={assignment} onOpenPhotos={() => setActiveTab("photos")} /> : null}
           </div>
-          {activeTab === null ? <MobileProjectPhotoCapture assignment={assignment} onOpenPhotos={() => setActiveTab("photos")} /> : null}
+          {timesheetMessage ? (
+            <p className="mobile-detail-action-message">
+              {timesheetMessage}
+              {timesheetMessage === "Keine aktive Zeitenliste ausgewählt." ? (
+                <span>Bitte im Büro/Projektleiterbereich unter Baustellen / Aufmaß / Angebot auswählen.</span>
+              ) : null}
+            </p>
+          ) : null}
         </>
       ) : null}
 
