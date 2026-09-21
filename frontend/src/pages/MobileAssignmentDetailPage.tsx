@@ -1155,6 +1155,7 @@ function ExtraWorkOrderOverview({
       ) : null}
       {isConfirmingEmailSend ? (
         <DocumentEmailSendDialog
+          variant="measurement"
           description={`Der aktuelle ${formatMobileExtraWorkKindLabel(order.kind)} wird als vollständige PDF an die ausgewählten Kundenempfänger gesendet.`}
           filename={emailPdfFilename}
           isSending={isSendingEmail}

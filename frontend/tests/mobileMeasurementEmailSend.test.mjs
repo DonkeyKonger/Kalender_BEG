@@ -60,13 +60,29 @@ test("send, cancel and busy guards retain their original behavior",()=>{
   assert.match(module.exports.render({...props,error:'Versand fehlgeschlagen.'}),/form-error">Versand fehlgeschlagen/);
 });
 
-test("other document send dialogs retain their content and layout variant",()=>{
+test("default document dialog variant remains available without the compact layout",()=>{
   const html=module.exports.render({...props,variant:undefined,title:'Stundenzettel senden?'});
   assert.doesNotMatch(html,/is-measurement-send|lucide-triangle-alert/);
   assert.match(html,/Erklärung/);
   assert.match(html,/PDF-Dokument/);
   assert.match(html,/<strong>Kontaktname<\/strong>/);
   assert.match(html,/<small>test@example.de<\/small>/);
+});
+
+test("extra-work emails reuse the measurement design while keeping their content and send handler",()=>{
+  const extraWork=source.slice(source.indexOf('function ExtraWorkOrderOverview('),source.indexOf('function ExtraWorkTitleDialog('));
+  assert.match(extraWork,/<DocumentEmailSendDialog\s+variant="measurement"/);
+  assert.match(extraWork,/onConfirm=\{\(\) => void sendExtraWorkEmail\(\)\}/);
+  assert.match(extraWork,/warning=\{shouldWarnMissingCustomerSignatureForEmail \?/);
+  const html=module.exports.render({...props,title:'Stundenzettel senden?',filename:'Stundenzettel 23 - Hauptauftrag.pdf',warning:'Für diesen Zusatzauftrag liegt noch keine Kundenunterschrift vor.',recipients:[{email:'one@example.de',label:null},{email:'two@example.de',label:'Mobile E-Mail'}]});
+  assert.match(html,/is-measurement-send/);
+  assert.match(html,/Stundenzettel senden\?/);
+  assert.match(html,/Stundenzettel 23 - Hauptauftrag.pdf/);
+  assert.match(html,/Für diesen Zusatzauftrag/);
+  assert.match(html,/lucide-triangle-alert/);
+  assert.match(html,/<strong>one@example.de<\/strong>/);
+  assert.match(html,/<strong>two@example.de<\/strong>/);
+  assert.doesNotMatch(html,/Mobile E-Mail|PDF-Dokument|Erklärung/);
 });
 
 test("responsive send layout wraps long addresses and keeps equal actions",()=>{

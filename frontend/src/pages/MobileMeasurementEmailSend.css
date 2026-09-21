@@ -1,4 +1,4 @@
-/* Measurement sending only; other shared document dialogs remain unchanged. */
+/* Shared measurement-style confirmation for measurement and extra-work emails. */
 .app-shell.is-mobile-workspace .mobile-project-email-dialog.is-measurement-send {
   width: min(560px, calc(100vw - 32px));
   min-width: 0;
