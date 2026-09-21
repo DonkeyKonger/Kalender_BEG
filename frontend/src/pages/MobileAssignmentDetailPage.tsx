@@ -1336,11 +1336,11 @@ function ExtraWorkDetailsDialog({
       >
         <div className="mobile-extra-work-details-dialog-head">
           <div>
-            <p>{formatMobileExtraWorkOrderTitle(order)}</p>
             <h2 id="mobile-extra-work-details-dialog-title">Stundenzettel-Details</h2>
+            <p>{formatMobileExtraWorkOrderTitle(order)}</p>
           </div>
           <button className="icon-button secondary" type="button" onClick={onClose} disabled={isSaving} aria-label="Schließen">
-            <X aria-hidden="true" size={18} />
+            <X aria-hidden="true" size={22} />
           </button>
         </div>
 
@@ -1371,7 +1371,8 @@ function ExtraWorkDetailsDialog({
             {selectedWeekRange
               ? `${formatGermanDateKey(selectedWeekRange.start)} – ${formatGermanDateKey(selectedWeekRange.end)}`
               : "Ungültige Kalenderwoche"}
-            {` · Automatisch: KW ${String(automaticWeek.week).padStart(2, "0")} / ${automaticWeek.isoYear}`}
+            <br />
+            {`Automatisch: KW ${String(automaticWeek.week).padStart(2, "0")} / ${automaticWeek.isoYear}`}
           </small>
         </label>
 

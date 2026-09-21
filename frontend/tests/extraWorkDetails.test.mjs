@@ -49,9 +49,9 @@ test("customer signature makes details read-only while worker-signed and submitt
 });
 
 test("details dialog stays touch-friendly and bounded on phones", () => {
-  assert.match(styles, /\.mobile-extra-work-details-dialog \{[^}]*width:\s*min\(92vw, 460px\);[^}]*max-height:\s*min\(86vh, 680px\);[^}]*overflow-y:\s*auto/s);
-  assert.match(styles, /\.mobile-extra-work-details-field input,[\s\S]*min-height:\s*48px/s);
-  assert.match(styles, /@media \(max-width: 430px\)[\s\S]*\.mobile-extra-work-details-dialog/s);
+  assert.match(styles, /\.mobile-extra-work-details-dialog \{[^}]*width:\s*min\(560px, calc\(100vw - 32px\)\);[^}]*max-height:\s*min\(86dvh, 680px\);[^}]*overflow-y:\s*auto/s);
+  assert.match(styles, /\.mobile-extra-work-details-field input,[^}]*min-height:\s*52px;[^}]*font-size:\s*1rem;/s);
+  assert.match(styles, /\.mobile-extra-work-details-dialog-head button \{[^}]*width:\s*48px;[^}]*height:\s*48px;/s);
 });
 
 test("mobile extra-work rows invisibly roundtrip identity and every desktop surcharge field", () => {
