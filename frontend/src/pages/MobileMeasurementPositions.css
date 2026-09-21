@@ -85,6 +85,13 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
   font-size: 1.625rem;
   font-weight: 700;
   line-height: 1.23;
+  white-space: nowrap;
+}
+
+@media (max-width: 359px) {
+  .is-list-view .mobile-measurement-list-title h1 {
+    font-size: 1.375rem;
+  }
 }
 
 .is-list-view .mobile-back-icon-button {
@@ -135,8 +142,7 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
 .is-list-view .mobile-measurement-list-content {
   display: grid;
   flex: 1 1 auto;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 16px;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -148,22 +154,6 @@ body:has(.mobile-measurement-positions-page.is-list-view) {
   overflow-y: auto;
   overscroll-behavior-y: contain;
   padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-.is-list-view .mobile-measurement-list-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.is-list-view .mobile-measurement-list-actions h2 {
-  margin: 0;
-  color: #102b50;
-  font-size: 1.0625rem;
-  font-weight: 600;
-  line-height: 1.42;
 }
 
 .is-list-view .mobile-measurement-create-position-button {

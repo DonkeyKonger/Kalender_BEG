@@ -5857,12 +5857,6 @@ function MeasurementBatchDetail({
           <div className="mobile-measurement-list-title">
             <MobileBackButton label="Zurück zum Aufmaß" onClick={onBack} />
             <h1>Aufmaß</h1>
-          </div>
-          {searchControl}
-        </header>
-        <section className="mobile-measurement-list-content" aria-labelledby="mobile-measurement-positions-title">
-          <div className="mobile-measurement-list-actions">
-            <h2 id="mobile-measurement-positions-title">Positionen</h2>
             <button
               className="mobile-measurement-create-position-button"
               type="button"
@@ -5873,6 +5867,9 @@ function MeasurementBatchDetail({
               <span>Position erstellen</span>
             </button>
           </div>
+          {searchControl}
+        </header>
+        <section className="mobile-measurement-list-content" aria-label="Positionen">
           <div className="mobile-measurement-position-scroll" role="region" aria-label="Aufmaßpositionen" tabIndex={0}>
             {batch.is_locked_for_worker ? (
               <p className="form-info">Dieses Aufmaß wurde vom Kunden unterschrieben und ist für Monteure gesperrt.</p>
