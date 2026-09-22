@@ -331,10 +331,6 @@ export function MyAssignmentsPage() {
     () => chunkMobileHomeTimelineItems(mobileHomeTimelineItems),
     [mobileHomeTimelineItems],
   );
-  const mobileHomePlannedCount = useMemo(
-    () => mobileHomeTimelineItems.filter((item) => item.assignment !== null).length,
-    [mobileHomeTimelineItems],
-  );
   const canUseAppPushNotifications = canUsePushNotifications();
   const pushToggleLabel = isPushNotificationsEnabled ? "Benachrichtigungen ein" : "Benachrichtigungen aus";
   useMobileScrollReset(
@@ -535,7 +531,6 @@ export function MyAssignmentsPage() {
           <section className="mobile-home-overview-panel" aria-labelledby="mobile-home-assignments-title">
             <div className="mobile-home-timeline-heading">
               <h2 id="mobile-home-assignments-title">Nächste Einsätze</h2>
-              <span>{mobileHomePlannedCount} geplant</span>
             </div>
             <div
               aria-label="Nächste Einsätze als wischbare Timeline"

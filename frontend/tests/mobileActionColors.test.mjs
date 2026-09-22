@@ -164,11 +164,10 @@ test("horizontal assignment timeline keeps every planned block beyond the legacy
 });
 
 
-test("planned counter uses the grouped blocks rendered by the horizontal timeline", () => {
-  assert.match(
-    pageSource,
-    /mobileHomeTimelineItems\.filter\(\(item\) => item\.assignment !== null\)\.length/,
-  );
+test("timeline heading has no redundant planned-count badge and retains grouped blocks", () => {
+  assert.doesNotMatch(pageSource, /mobileHomePlannedCount/);
+  assert.match(pageSource, /className="mobile-home-timeline-heading">\s*<h2 id="mobile-home-assignments-title">Nächste Einsätze<\/h2>\s*<\/div>/);
+  assert.doesNotMatch(styles, /\.mobile-home-timeline-heading > span/);
   assert.match(pageSource, /function buildMobileHomeTimelineItems\(/);
   assert.match(pageSource, /continuesPrevious[\s\S]*previous\.dayCount \+= 1/);
 });

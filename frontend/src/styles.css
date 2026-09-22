@@ -5849,17 +5849,6 @@ button.person-chip:focus-visible {
   line-height: 1.2;
 }
 
-.mobile-home-timeline-heading > span {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #40526b;
-  padding: 3px 7px;
-  font-size: 0.64rem;
-  font-weight: 850;
-  line-height: 1;
-}
-
 .mobile-home-timeline-track {
   position: relative;
   display: grid;
