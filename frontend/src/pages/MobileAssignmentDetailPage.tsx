@@ -332,9 +332,18 @@ export function MobileAssignmentDetailPage() {
             <div className="assignment-card-main">
               <div>
                 <h2>{assignment.site.name}</h2>
-                <p className="muted-text">{[assignment.site.site_number, assignment.site.customer].filter(Boolean).join(" · ")}</p>
               </div>
               <SiteStatusBadge status={assignment.site.status} />
+            </div>
+            <div className="mobile-project-file-contacts">
+              <div>
+                <UserRound aria-hidden="true" size={22} />
+                <dl><dt>Projektleiter</dt><dd>{assignment.site.project_manager?.display_name?.trim() || "Nicht hinterlegt"}</dd></dl>
+              </div>
+              <div>
+                <Building2 aria-hidden="true" size={22} />
+                <dl><dt>Kunde</dt><dd>{assignment.site.customer?.trim() || "Nicht hinterlegt"}</dd></dl>
+              </div>
             </div>
           </header>
 
@@ -3205,10 +3214,6 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
         {![assignment.site.street, assignment.site.house_number, assignment.site.postal_code, assignment.site.city].every((value) => value?.trim()) && addressLabel ? (
           <p className="mobile-site-address-fallback"><span>Vorhandene Adressangabe</span>{addressLabel}</p>
         ) : null}
-      </section>
-      <section className="mobile-site-contacts" aria-label="Projektkontakte">
-        <div><UserRound aria-hidden="true" size={22} /><dl><dt>Projektleiter</dt><dd>{assignment.site.project_manager?.display_name || "Nicht hinterlegt"}</dd></dl></div>
-        <div><Building2 aria-hidden="true" size={22} /><dl><dt>Kunde</dt><dd>{assignment.site.customer || "Nicht hinterlegt"}</dd></dl></div>
       </section>
       <section className="mobile-site-information" aria-labelledby="mobile-site-information-heading">
         <h2 id="mobile-site-information-heading"><MessageSquare aria-hidden="true" size={20} />Informationen</h2>

@@ -35,8 +35,7 @@
 .mobile-site-overview dl,
 .mobile-site-overview dd { margin: 0; }
 
-.mobile-site-address-card,
-.mobile-site-contacts {
+.mobile-site-address-card {
   border: 1px solid #d7e3f0;
   border-radius: 12px;
   background: #ffffff;
@@ -104,17 +103,6 @@
 }
 
 .mobile-site-address-fallback span { display: block; font-size: 0.75rem; margin-bottom: 4px; }
-
-.mobile-site-contacts > div {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-}
-
-.mobile-site-contacts > div + div { border-top: 1px solid #e4ebf3; }
-.mobile-site-contacts svg { color: #6a7e98; }
 
 .mobile-site-information { display: grid; gap: 14px; padding: 6px 0 16px; min-width: 0; }
 .mobile-site-information h2 { margin-bottom: 2px; }

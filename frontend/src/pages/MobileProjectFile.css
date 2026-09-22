@@ -1,4 +1,8 @@
 /* Project-file landing page only; document and folder views keep their own layouts. */
+@media (max-width: 699px) {
+  body:has(.mobile-detail-page.is-project-file) { min-width: 0; }
+}
+
 .app-shell.is-mobile-workspace .mobile-detail-page.is-project-file {
   width: 100%;
   max-width: 560px;
@@ -65,9 +69,34 @@
   overflow-wrap: anywhere;
 }
 
-.mobile-project-file-summary .muted-text {
-  margin: 6px 0 0;
-  color: #7486a1;
+.mobile-project-file-contacts {
+  margin: 12px 0 0;
+  border-top: 1px solid #e4ebf3;
+}
+
+.mobile-project-file-contacts > div {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+}
+
+.mobile-project-file-contacts > div + div { border-top: 1px solid #e4ebf3; }
+.mobile-project-file-contacts > div:last-child { padding-bottom: 0; }
+.mobile-project-file-contacts svg { color: #6a7e98; }
+.mobile-project-file-contacts dl { margin: 0; min-width: 0; }
+
+.mobile-project-file-contacts dt {
+  color: #6a7e98;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+.mobile-project-file-contacts dd {
+  margin: 0;
+  color: #203c5d;
   font-size: 0.875rem;
   line-height: 1.35;
   overflow-wrap: anywhere;

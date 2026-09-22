@@ -9,7 +9,7 @@ const source=await readFile(new URL('../src/pages/MobileAssignmentDetailPage.tsx
 const styles=await readFile(new URL('../src/pages/MobileProjectFile.css',import.meta.url),'utf8');
 const component=source.slice(source.indexOf('const detailTabs:'),source.indexOf('function MobileProjectFoldersHeader('));
 const compiled=await build({stdin:{contents:`import React from 'react'; import {renderToStaticMarkup} from 'react-dom/server';
-  import {FolderOpen,ReceiptText,FileText,ClipboardList,Package,ChevronRight,Hammer} from 'lucide-react';
+  import {FolderOpen,ReceiptText,FileText,ClipboardList,Package,ChevronRight,Hammer,UserRound,Building2} from 'lucide-react';
   import {MobileBackButton} from './src/components/MobileBackButton';
   import {SiteStatusBadge} from './src/components/StatusBadge';
   let assignment; export const events=[];
@@ -23,7 +23,7 @@ const compiled=await build({stdin:{contents:`import React from 'react'; import {
 `,resolveDir:fileURLToPath(new URL('..',import.meta.url)),loader:'tsx'},bundle:true,write:false,format:'cjs',platform:'node',packages:'external',jsx:'automatic'});
 const module={exports:{}};
 new Function('require','module','exports',compiled.outputFiles[0].text)(createRequire(import.meta.url),module,module.exports);
-const assignment={id:1,site:{id:1,name:'Testbaustelle Finienweg',site_number:'9999',customer:'Kunde GmbH',status:'paused'}};
+const assignment={id:1,site:{id:1,name:'Testbaustelle Finienweg',site_number:'9999',customer:'Kunde GmbH',project_manager:{display_name:'CE'},status:'paused'}};
 const collect=node=>!node||typeof node!=='object'?[]:Array.isArray(node)?node.flatMap(collect):[node,...collect(node.props?.children)];
 
 test('menu accents are muted while keeping icon contrast and the blue camera action',()=>{
@@ -52,12 +52,26 @@ test('project file renders compact summary and all six destinations in one menu'
   const html=module.exports.render(assignment);
   assert.match(html,/<h1>Projektakte<\/h1>/);
   assert.match(html,/<h2>Testbaustelle Finienweg<\/h2>/);
-  assert.match(html,/9999 · Kunde GmbH/);
+  assert.doesNotMatch(html,/9999/);
+  assert.match(html,/<dt>Projektleiter<\/dt><dd>CE<\/dd>/);
+  assert.match(html,/<dt>Kunde<\/dt><dd>Kunde GmbH<\/dd>/);
+  assert.match(html,/lucide-user-round/);
+  assert.match(html,/lucide-building-2/);
   assert.match(html,/>Pause</);
   for(const name of ['Ordner','Aufmaß','Stundenzettel','Zeitenliste','Werkzeuge &amp; Material','Hinterlegte Fotos']) assert.ok(html.includes(name));
   assert.equal((html.match(/mobile-project-file-chevron/g)||[]).length,5);
   assert.doesNotMatch(html,/assignment-date|mobile-detail-summary-chevron/);
   assert.match(styles,/mobile-project-file-menu \{[^}]*grid-template-columns: minmax\(0, 1fr\)/s);
+});
+
+test('project summary keeps missing contacts explicit and long contact values readable',()=>{
+  const missing=module.exports.render({...assignment,site:{...assignment.site,project_manager:null,customer:'  '}});
+  assert.equal((missing.match(/Nicht hinterlegt/g)||[]).length,2);
+  const longName='Sehr langer Projektleitername '.repeat(5);
+  const html=module.exports.render({...assignment,site:{...assignment.site,project_manager:{display_name:longName},customer:longName}});
+  assert.ok(html.includes(longName.trim()));
+  assert.match(styles,/\.mobile-project-file-contacts dd \{[^}]*overflow-wrap: anywhere/s);
+  assert.match(styles,/body:has\(\.mobile-detail-page.is-project-file\) \{ min-width: 0; \}/);
 });
 
 test('project file preserves summary keyboard entry, navigation and menu actions',()=>{

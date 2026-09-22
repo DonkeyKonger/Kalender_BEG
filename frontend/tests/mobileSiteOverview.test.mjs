@@ -28,10 +28,10 @@ test('overview starts with the address without redundant subtitle or site-name h
   assert.doesNotMatch(styles,/mobile-site-overview-heading/);
 });
 
-test('overview separates address fields and keeps project contacts and route',()=>{
+test('overview separates address fields and keeps the route without duplicated project contacts',()=>{
   const html=module.exports.render(assignment);
   for(const [label,value] of [['Straße','Finienweg'],['Hausnummer','12a'],['PLZ','28832'],['Stadt','Achim']]) assert.match(html,new RegExp('<dt>'+label+'</dt><dd[^>]*>'+value+'</dd>'));
-  assert.match(html,/Projektleiter<\/dt><dd>CE/);assert.match(html,/Kunde<\/dt><dd>Kunde GmbH/);
+  assert.doesNotMatch(html,/mobile-site-contacts|Projektleiter|Kunde GmbH/);
   assert.match(html,/Hinterhof/);assert.match(html,/href="https:\/\/www.google.com\/maps\/dir/);
   assert.match(decodeURIComponent(module.exports.route(assignment.site)),/Finienweg 12a, 28832 Achim/);
   assert.match(source,/mobile-back-button mobile-site-overview-back/);
