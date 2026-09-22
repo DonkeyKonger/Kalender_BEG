@@ -3176,10 +3176,6 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
 
   return (
     <div className="mobile-site-overview">
-      <header className="mobile-site-overview-heading">
-        <p>Baustellenübersicht</p>
-        <h1>{assignment.site.name}</h1>
-      </header>
       <section className="mobile-site-address-card" aria-labelledby="mobile-site-address-heading">
         <div className="mobile-site-address-heading">
           <h2 id="mobile-site-address-heading"><MapPin aria-hidden="true" size={20} />Adresse</h2>

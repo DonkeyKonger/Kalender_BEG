@@ -21,6 +21,13 @@ const module={exports:{}};
 new Function('require','module','exports',compiled.outputFiles[0].text)(createRequire(import.meta.url),module,module.exports);
 const assignment={site:{name:'Testbaustelle',street:'Finienweg',house_number:'12a',postal_code:'28832',city:'Achim',address_extra:'Hinterhof',project_manager:{display_name:'CE'},customer:'Kunde GmbH'},note:null};
 
+test('overview starts with the address without redundant subtitle or site-name heading',()=>{
+  const html=module.exports.render(assignment);
+  assert.match(html,/^<div class="mobile-site-overview"><section class="mobile-site-address-card"/);
+  assert.doesNotMatch(html,/Baustellenübersicht|<h1|mobile-site-overview-heading/);
+  assert.doesNotMatch(styles,/mobile-site-overview-heading/);
+});
+
 test('overview separates address fields and keeps project contacts and route',()=>{
   const html=module.exports.render(assignment);
   for(const [label,value] of [['Straße','Finienweg'],['Hausnummer','12a'],['PLZ','28832'],['Stadt','Achim']]) assert.match(html,new RegExp('<dt>'+label+'</dt><dd[^>]*>'+value+'</dd>'));
