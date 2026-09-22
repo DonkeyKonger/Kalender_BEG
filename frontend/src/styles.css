@@ -6094,18 +6094,6 @@ button.person-chip:focus-visible {
 .mobile-team-sheet-list li > :last-child { text-align: right; color: #65738a; }
 .mobile-team-sheet-list:focus-visible, .mobile-team-sheet-close:focus-visible { outline: 2px solid #315f91; outline-offset: -2px; }
 
-.mobile-home-timeline-duration {
-  justify-self: start;
-  border-radius: 999px;
-  background: #e7eff9;
-  color: #315f91;
-  padding: 2px 5px;
-  font-size: clamp(0.54rem, 2.5vw, 0.59rem);
-  font-weight: 850;
-  line-height: 1;
-  white-space: nowrap;
-}
-
 .mobile-home-timeline-card .assignment-card-affordance {
   color: #657b96;
 }

@@ -49,6 +49,8 @@ test('home cards replace commission and customer with colleagues without changin
   const assignment={id:42,person:{id:1},site:{name:'Testbaustelle',site_number:'9999',customer:'Nicht anzeigen'},colleagues:[peer(2,'Koehle','2026-09-21','2026-09-23'),peer(3,'Tietz','2026-09-24')]};
   const html=module.exports.render(assignment);
   assert.match(html,/2 Kollegen · Anzeigen/);
+  assert.doesNotMatch(html,/Einsatztage|mobile-home-timeline-duration/);
+  assert.match(html,/2026-09-21 2026-09-25/);
   assert.doesNotMatch(html,/Koehle|Tietz|Mo–Mi/);
   assert.match(html,/href="\/me\/assignments\/42"/);
   assert.doesNotMatch(html,/9999|Nicht anzeigen/);

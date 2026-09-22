@@ -744,9 +744,6 @@ function MobileHomeTimelineCard({
               </span>
             )
           ) : <small>Antippen, falls du trotzdem auf Baustelle bist.</small>}
-          {item.dayCount > 1 ? (
-            <span className="mobile-home-timeline-duration">{item.dayCount} Einsatztage</span>
-          ) : null}
         </span>
         <span className="assignment-card-affordance">
           <ChevronRight aria-hidden="true" size={18} />

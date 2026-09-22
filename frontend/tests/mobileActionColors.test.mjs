@@ -250,7 +250,8 @@ test("the home assignment block is a snap timeline with grouped consecutive assi
   assert.match(pageSource, /MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE\s*=\s*2/);
   assert.match(pageSource, /function chunkMobileHomeTimelineItems\([\s\S]*items\.slice\(index, index \+ MOBILE_HOME_TIMELINE_ITEMS_PER_PAGE\)/);
   assert.match(pageSource, /className="mobile-home-timeline-pagination"[\s\S]*scrollMobileHomeTimelineTo\(index\)/);
-  assert.match(pageSource, /className="mobile-home-timeline-copy"[\s\S]*mobile-home-timeline-duration[\s\S]*\{item\.dayCount\} Einsatztage/);
+  assert.doesNotMatch(pageSource, /mobile-home-timeline-duration|\{item\.dayCount\} Einsatztage/);
+  assert.doesNotMatch(styles, /\.mobile-home-timeline-duration/);
   assert.match(
     styles,
     /\.mobile-home-timeline-track \{[^}]*grid-auto-columns:\s*calc\(100% - clamp\(8px, 3vw, 14px\)\);[^}]*overflow-x:\s*auto;[^}]*overscroll-behavior-inline:\s*contain;[^}]*scroll-snap-type:\s*x mandatory;[^}]*scrollbar-width:\s*none;[^}]*touch-action:\s*pan-x pan-y;/s,
