@@ -3213,7 +3213,7 @@ function OverviewPanel({ assignment }: { assignment: MobileAssignment }) {
       <section className="mobile-site-information" aria-labelledby="mobile-site-information-heading">
         <h2 id="mobile-site-information-heading"><MessageSquare aria-hidden="true" size={20} />Informationen</h2>
         <MobileProjectNotes assignment={assignment} />
-        {assignment.note && <section className="mobile-site-note-bubble is-assignment" aria-label="Einsatzhinweis"><strong>Einsatzhinweis</strong><p>{assignment.note}</p></section>}
+        {assignment.note && <section className="mobile-site-note-bubble is-assignment" aria-label="Einsatzhinweis"><p>{assignment.note}</p></section>}
       </section>
     </div>
   );
@@ -3266,10 +3266,9 @@ function MobileProjectNotes({ assignment }: { assignment: MobileAssignment }) {
     assignment.site.general_info !== undefined ? assignment.site.general_info : assignment.site.info
   );
   return <>
-    {general && <section className="mobile-site-note-bubble is-general" aria-label="Allgemeine Information"><strong>Allgemeine Information</strong><p>{general}</p></section>}
+    {general && <section className="mobile-site-note-bubble is-general" aria-label="Allgemeine Information"><p>{general}</p></section>}
     {notes?.note_blocks.map((note) => (
       <section className="mobile-site-note-bubble" key={note.id} aria-label={note.title}>
-        <strong>{note.title}</strong>
         <p>{note.content}</p>
         <small>Stand {note.number} · {new Date(note.updated_at).toLocaleDateString("de-DE")}</small>
       </section>

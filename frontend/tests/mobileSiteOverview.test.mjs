@@ -46,9 +46,14 @@ test('legacy and missing addresses are never guessed or hidden',()=>{
   assert.doesNotMatch(module.exports.render({site:{name:'Leer'}}),/mobile-site-route-link/);
 });
 
-test('information renders as readable bubbles with title, version, paragraphs and assignment hint',()=>{
+test('information bubbles start with their content without visible block titles and retain version and paragraphs',()=>{
   const html=module.exports.render({...assignment,note:'Einsatz beachten'}, {notes:{info:'Allgemeiner Hinweis',note_blocks:[{id:1,title:'Monteurinfo',number:3,updated_at:'2026-09-14T12:00:00Z',content:'Erster Absatz\n\nZweiter Absatz <script>'}]}});
   assert.match(html,/mobile-site-note-bubble is-general/);assert.match(html,/mobile-site-note-bubble is-assignment/);
+  assert.match(html,/aria-label="Allgemeine Information"><p>Allgemeiner Hinweis<\/p>/);
+  assert.match(html,/aria-label="Monteurinfo"><p>Erster Absatz/);
+  assert.match(html,/aria-label="Einsatzhinweis"><p>Einsatz beachten<\/p>/);
+  assert.doesNotMatch(html,/<strong>|<h3/);
+  assert.doesNotMatch(styles,/\.mobile-site-note-bubble strong/);
   assert.match(html,/Stand 3 ·/);assert.match(html,/Erster Absatz\n\nZweiter Absatz &lt;script&gt;/);
   assert.match(styles,/white-space: pre-wrap/);assert.match(styles,/overflow-wrap: anywhere/);
   assert.match(styles,/body:has\(\.mobile-site-overview\) \{ min-width: 0; \}/);

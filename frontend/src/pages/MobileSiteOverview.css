@@ -144,7 +144,6 @@
 
 .mobile-site-note-bubble.is-general { background: #e4effd; }
 .mobile-site-note-bubble.is-assignment { background: #e3f1ef; }
-.mobile-site-note-bubble strong { display: block; font-size: 0.8125rem; line-height: 1.4; margin-bottom: 6px; color: #31506f; }
 .mobile-site-note-bubble p { font-size: 0.9375rem; line-height: 1.55; white-space: pre-wrap; }
 .mobile-site-note-bubble small { display: block; margin-top: 10px; font-size: 0.6875rem; line-height: 1.4; color: #6a7e98; }
 .mobile-site-notes-status { color: #6a7e98; font-size: 0.875rem; }
