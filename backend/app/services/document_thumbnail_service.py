@@ -3,12 +3,14 @@ from __future__ import annotations
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 import pdfplumber
 from PIL import Image, ImageOps
 
 from app.core.config import settings
+from app.services.document_photo_optimizer import create_document_photo_thumbnail
 
 THUMBNAIL_SIZE_PX = 220
 THUMBNAIL_RENDER_RESOLUTION = 96
@@ -44,6 +46,24 @@ class DocumentThumbnailService:
         temporary_path = path.with_suffix(".tmp")
         thumbnail.save(temporary_path, format="JPEG", quality=THUMBNAIL_QUALITY, optimize=True)
         temporary_path.replace(path)
+        return path
+
+    def get_or_create_photo_thumbnail(self, content: bytes, cache_key: str) -> Path:
+        cached = self.get_cached_thumbnail(cache_key)
+        if cached:
+            return cached
+        thumbnail = create_document_photo_thumbnail(content)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        path = self.cache_path(cache_key)
+        # Unique temporary files prevent simultaneous viewers from colliding.
+        with NamedTemporaryFile(dir=self.cache_dir, suffix=".tmp", delete=False) as output:
+            temporary_path = Path(output.name)
+            try:
+                output.write(thumbnail)
+                output.flush()
+                temporary_path.replace(path)
+            finally:
+                temporary_path.unlink(missing_ok=True)
         return path
 
     def build_cache_key(

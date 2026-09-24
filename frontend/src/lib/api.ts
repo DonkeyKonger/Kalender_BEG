@@ -1316,12 +1316,13 @@ export const api = {
     siteId: number,
     folderKey: string,
     itemId: string,
+    version?: string | null,
   ): Promise<Blob> {
     const encodedSiteId = encodeURIComponent(String(siteId));
     const encodedFolderKey = encodeURIComponent(folderKey);
     const encodedItemId = encodeURIComponent(itemId);
     return requestBlob(
-      `/sites/${encodedSiteId}/documents/folders/${encodedFolderKey}/items/${encodedItemId}/thumbnail`,
+      `/sites/${encodedSiteId}/documents/folders/${encodedFolderKey}/items/${encodedItemId}/thumbnail${version ? `?v=${encodeURIComponent(version)}` : ""}`,
     );
   },
 

@@ -71,3 +71,37 @@
 .mobile-folder-count-unavailable { color: #7b8da5; }
 .app-shell.is-mobile-workspace .mobile-folder-project-back:focus-visible,
 .app-shell.is-mobile-workspace .mobile-folder-overview .mobile-folder-card:focus-visible { outline: 2px solid #315f91; outline-offset: -2px; }
+.mobile-folder-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 0;
+}
+
+.mobile-folder-photo-grid > .mobile-folder-file-card { grid-column: 1 / -1; }
+
+.app-shell.is-mobile-workspace .mobile-folder-photo-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: #e8edf4;
+  color: #60738e;
+  box-shadow: none;
+}
+
+.mobile-folder-photo-tile img { width: 100%; height: 100%; object-fit: cover; }
+.mobile-folder-photo-placeholder { display: grid; justify-items: center; gap: 5px; padding: 6px; }
+.mobile-folder-photo-placeholder small { font-size: 0.625rem; line-height: 1.3; white-space: normal; }
+.mobile-folder-photo-loading { position: absolute; inset: auto 0 0; padding: 4px; background: #14243fcc; color: white; font-size: 0.75rem; }
+.mobile-folder-photo-tile:focus-visible { outline: 2px solid #315f91; outline-offset: -2px; }
+
+@media (min-width: 600px) {
+  .mobile-folder-photo-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

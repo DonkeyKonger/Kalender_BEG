@@ -460,7 +460,8 @@ def get_project_folder_document_thumbnail(
         folder_item_id=folder.external_item_id,
         item_id=item_id,
     )
-    if not is_pdf_document(document):
+    is_photo = is_supported_photo_upload(filename=document.get("name"), content_type=document.get("mime_type"))
+    if not is_pdf_document(document) and not is_photo:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Keine PDF-Vorschau verfügbar.")
 
     thumbnail_service = DocumentThumbnailService()
@@ -481,7 +482,8 @@ def get_project_folder_document_thumbnail(
         item_id=item_id,
     )
     try:
-        thumbnail_path = thumbnail_service.get_or_create_pdf_thumbnail(
+        renderer = thumbnail_service.get_or_create_photo_thumbnail if is_photo else thumbnail_service.get_or_create_pdf_thumbnail
+        thumbnail_path = renderer(
             bytes(download["content"]),
             cache_key,
         )

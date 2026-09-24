@@ -74,6 +74,7 @@ import "./MobileProjectFile.css";
 import "./MobileSiteOverview.css";
 import "./MobileProjectFolders.css";
 import { useProjectFolderFileCounts } from "./useProjectFolderFileCounts";
+import { MobileFolderPhotoTile } from "../components/MobileFolderPhotoTile";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
@@ -4078,8 +4079,17 @@ function MobileProjectFoldersPanel({ assignment }: { assignment: MobileAssignmen
           <div className="empty-panel">Noch keine Dateien in diesem Ordner.</div>
         ) : null}
         {!currentLoading && !documentsError && currentDocuments && currentDocuments.items.length > 0 ? (
-          <div className="mobile-folder-file-list">
-            {currentDocuments.items.map((item) => (
+          <div className={selectedFolder.folder_key === "fotos" ? "mobile-folder-photo-grid" : "mobile-folder-file-list"}>
+            {currentDocuments.items.map((item) => selectedFolder.folder_key === "fotos" && !item.is_folder && getProjectDocumentKind(item) === "image" ? (
+              <MobileFolderPhotoTile
+                key={item.id}
+                folderKey={selectedFolder.folder_key}
+                item={item}
+                siteId={assignment.site.id}
+                isOpening={openingItemId === item.id}
+                onOpen={() => void handleOpenDocument(item)}
+              />
+            ) : (
               <MobileFolderFileItem
                 folderKey={selectedFolder.folder_key}
                 item={item}
