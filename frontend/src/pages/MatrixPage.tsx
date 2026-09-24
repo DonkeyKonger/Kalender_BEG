@@ -3981,7 +3981,7 @@ function MatrixTableGroup({ group, ...props }: MatrixTableCalendarProps & { grou
   return (
     <>
       {group.showHeading && (
-        <tr className="matrix-group-row">
+        <tr className={`matrix-group-row${!group.label && props.showAbsences ? " is-absence-spacer" : ""}`}>
           <th colSpan={5 + props.matrix.days.length}><span className="matrix-group-label">{group.label}</span></th>
         </tr>
       )}

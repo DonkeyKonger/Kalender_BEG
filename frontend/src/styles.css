@@ -4601,6 +4601,16 @@ button.person-chip:focus-visible {
   display: none;
 }
 
+/* The empty filtered heading only reserves the existing sticky absence gap.
+   A normal group-row height leaves an extra moving strip below that gap. */
+.matrix-page .matrix-table .matrix-group-row.is-absence-spacer,
+.matrix-page .matrix-table .matrix-group-row.is-absence-spacer > th {
+  height: var(--matrix-absence-separator-height);
+  min-height: 0;
+  border: 0;
+  padding: 0;
+}
+
 /* Separate managers directly on the next site row, without an empty spacer. */
 .matrix-page.is-current-planning .matrix-group-row:not(:first-child) + tr > th,
 .matrix-page.is-current-planning .matrix-group-row:not(:first-child) + tr > td {
