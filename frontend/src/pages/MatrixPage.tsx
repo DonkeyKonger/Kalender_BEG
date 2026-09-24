@@ -338,7 +338,7 @@ export function MatrixPage() {
     }
     const assignedKeys = new Set(draftEntries.map((entry) => entry.key));
     const matches = people
-      .filter((person) => person.is_active)
+      .filter(isAssignmentSuggestionPerson)
       .filter((person) => !assignedKeys.has(`p-${person.id}`))
       .filter((person) => personMatchesQuery(person, query));
     const internalMatches = matches
@@ -3157,7 +3157,7 @@ function AssignmentAutocompleteDropdown({
               <>
                 <span className="assignment-autocomplete-name">{item.person.display_name}</span>
                 <span className="assignment-autocomplete-short">
-                  {item.person.person_type === "internal" ? calendarPersonCode(item.person) : `Extern · ${calendarPersonCode(item.person)}`}
+                  {item.person.person_type === "internal" ? calendarPersonCode(item.person) : "Extern"}
                 </span>
               </>
             )}
@@ -5558,6 +5558,14 @@ function upsertPerson(people: Person[], person: Person): Person[] {
     ? people.map((item) => item.id === person.id ? person : item)
     : [...people, person];
   return next.sort(compareAssignmentPeople);
+}
+
+function isAssignmentSuggestionPerson(person: Person): boolean {
+  if (!person.is_active || person.deleted_at) return false;
+  if (person.person_type !== "internal") return true;
+  // Match the employee directory: internal people without a login are workers too.
+  const roles = person.user_roles ?? [];
+  return !roles.some((role) => role === "project_manager" || role === "office" || role === "admin");
 }
 
 function personMatchesQuery(person: Person, query: string): boolean {
