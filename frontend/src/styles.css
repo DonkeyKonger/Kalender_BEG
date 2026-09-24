@@ -5068,7 +5068,8 @@ button.person-chip:focus-visible {
   border: 1px solid transparent;
   border-radius: 2px;
   background: transparent;
-  color: #a8322b;
+  color: #000000;
+  font-family: Verdana, Arial, sans-serif;
   padding: 4px 5px;
   font-size: 0.68rem;
   line-height: 1.14;
@@ -5104,7 +5105,7 @@ button.person-chip:focus-visible {
 }
 
 .matrix-info-editor textarea:disabled {
-  color: #a94740;
+  color: #000000;
   cursor: default;
   opacity: 1;
 }
