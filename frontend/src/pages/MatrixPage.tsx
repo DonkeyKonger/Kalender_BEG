@@ -4437,7 +4437,8 @@ function MatrixInfoEditor({
 
       const availableTextHeight = Math.max(0, containerHeight - verticalSpacing);
       const visibleRows = Math.max(1, Math.floor(availableTextHeight / lineHeight));
-      const nextHeight = Math.min(containerHeight, Math.floor(visibleRows * lineHeight + verticalSpacing));
+      // Preserve fractional line heights so the last complete line is not clipped.
+      const nextHeight = Math.min(containerHeight, visibleRows * lineHeight + verticalSpacing);
       setTextareaHeight((current) => (current === nextHeight ? current : nextHeight));
     };
 
@@ -4458,7 +4459,11 @@ function MatrixInfoEditor({
         title={displayValue || undefined}
         value={displayValue}
         onChange={(event) => onChange(event.target.value)}
-        onBlur={onSave}
+        onBlur={(event) => {
+          // Return the unfocused preview to a full first line after editing/scrolling.
+          event.currentTarget.scrollTop = 0;
+          onSave();
+        }}
         onClick={(event) => event.stopPropagation()}
       />
     </label>

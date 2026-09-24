@@ -5258,6 +5258,13 @@ button.person-chip:focus-visible {
   font-size: 0.6rem;
 }
 
+.matrix-info-editor textarea:not(:focus),
+.matrix-page.is-compact .matrix-info-editor textarea:not(:focus) {
+  /* Textareas paint overflow into their padding: hide the next line there. */
+  clip-path: inset(0) content-box;
+  overflow-y: hidden;
+}
+
 .matrix-page.is-compact .matrix-info-editor textarea.info-text-very-long,
 .matrix-page.is-compact .matrix-info-editor textarea.info-text-extreme {
   font-size: 0.58rem;
