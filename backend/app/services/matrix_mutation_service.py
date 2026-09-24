@@ -118,7 +118,9 @@ class MatrixMutationService:
 
         people = self._resolve_entries(entries)
         existing = self.assignments.list(start=start_date, end=end_date, site_id=site_id)
-        affected_person_ids = {assignment.person_id for assignment in existing}
+        requested_person_ids = {person.id for person in people}
+        removed = [item for item in existing if item.person_id not in requested_person_ids]
+        affected_person_ids = {assignment.person_id for assignment in removed}
         excluded_ids = {assignment.id for assignment in existing}
         blockers: list[ConflictMessage] = []
         warnings: list[ConflictMessage] = []
@@ -169,22 +171,26 @@ class MatrixMutationService:
                 },
             )
 
-        for assignment in existing:
+        for assignment in removed:
             self._split_or_delete_assignment(assignment, start_date, end_date, user_id)
 
         created = []
         for person in people:
-            affected_person_ids.add(person.id)
-            assignment = Assignment(
-                site_id=site_id,
-                person_id=person.id,
-                start_date=start_date,
-                end_date=end_date,
-                created_by_user_id=user_id,
-                updated_by_user_id=user_id,
-            )
-            self.assignments.add(assignment)
-            created.append(assignment)
+            # Keep every retained assignment intact, including its ID and metadata.
+            # Only dates not already planned for this person need new assignments.
+            retained = [item for item in existing if item.person_id == person.id]
+            for gap_start, gap_end in uncovered_assignment_ranges(retained, start_date, end_date):
+                affected_person_ids.add(person.id)
+                assignment = Assignment(
+                    site_id=site_id,
+                    person_id=person.id,
+                    start_date=gap_start,
+                    end_date=gap_end,
+                    created_by_user_id=user_id,
+                    updated_by_user_id=user_id,
+                )
+                self.assignments.add(assignment)
+                created.append(assignment)
 
         self.audit.record(
             user_id=user_id,
@@ -203,8 +209,10 @@ class MatrixMutationService:
             "infos": [item.to_dict() for item in infos],
             "updated_cells": MatrixService(self.db).get_site_cells(
                 site_id=site_id,
-                start=start_date,
-                end=end_date,
+                # Removed assignments may have been split outside the edited range.
+                # Return those cells too, so drag/resize never use stale assignment IDs.
+                start=min([start_date, *(item.start_date for item in removed)]),
+                end=max([end_date, *(item.end_date for item in removed)]),
             ),
         }
 
@@ -275,3 +283,20 @@ class MatrixMutationService:
             "assignment_type": assignment.assignment_type.value,
             "note": assignment.note,
         }
+
+
+def uncovered_assignment_ranges(
+    assignments: list[Assignment], start_date: Date, end_date: Date,
+) -> list[tuple[Date, Date]]:
+    """Return only missing dates; existing assignment boundaries are independent."""
+    cursor = start_date
+    gaps = []
+    for assignment in sorted(assignments, key=lambda item: (item.start_date, item.end_date)):
+        if assignment.start_date > cursor:
+            gaps.append((cursor, min(end_date, assignment.start_date - timedelta(days=1))))
+        if assignment.end_date >= end_date:
+            return gaps
+        cursor = max(cursor, assignment.end_date + timedelta(days=1))
+    if cursor <= end_date:
+        gaps.append((cursor, end_date))
+    return gaps
