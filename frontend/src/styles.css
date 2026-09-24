@@ -22844,6 +22844,20 @@ body.mobile-modal-scroll-locked {
   gap: 7px;
 }
 
+.site-address-search-control {
+  position: relative;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.site-address-search-control .site-address-edit-toggle {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  width: 24px;
+  height: 24px;
+}
+
 .site-address-display-item {
   display: grid;
   gap: 3px;

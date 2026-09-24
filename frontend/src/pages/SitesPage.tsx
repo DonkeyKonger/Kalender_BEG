@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, ChevronDown, PlusCircle, Search, UserPlus } from "lucide-react";
+import { BriefcaseBusiness, Check, ChevronDown, Pencil, PlusCircle, Search, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -627,6 +627,7 @@ export function SiteFields({
   onGeocodeSelected?: (values: Partial<SiteCreate>) => void;
 }) {
   const [isCustomerSuggestionsOpen, setIsCustomerSuggestionsOpen] = useState(false);
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [activeCustomerSuggestionIndex, setActiveCustomerSuggestionIndex] = useState(0);
   const projectManagerOptions = useMemo(
     () => withCurrentProjectManagerOption(people, draft.project_manager_person_id, currentProjectManager),
@@ -807,36 +808,53 @@ export function SiteFields({
         onChange={(color) => onChange({ color })}
       />
       <section className="site-location-section">
-        <AddressSearch
-          disabled={disabled}
-          inputId="site-query-token"
-          inputName="site-query-token"
-          onSelect={(result) => {
-            const selectedValues: Partial<SiteCreate> = {
-              address: result.label,
-              postal_code: result.postal_code,
-              city: result.city,
-              location: result.city ?? draft.location,
-              street: result.street,
-              house_number: result.house_number,
-              latitude: result.latitude,
-              longitude: result.longitude,
-              location_status: "geocoded",
-            };
-            onChange(selectedValues);
-            onGeocodeSelected?.(selectedValues);
-          }}
-        />
+        <div className="site-address-search-control">
+          <AddressSearch
+            disabled={disabled}
+            inputId="site-query-token"
+            inputName="site-query-token"
+            onSelect={(result) => {
+              const selectedValues: Partial<SiteCreate> = {
+                address: result.label,
+                postal_code: result.postal_code,
+                city: result.city,
+                location: result.city ?? draft.location,
+                street: result.street,
+                house_number: result.house_number,
+                latitude: result.latitude,
+                longitude: result.longitude,
+                location_status: "geocoded",
+              };
+              onChange(selectedValues);
+              setIsEditingAddress(false);
+              onGeocodeSelected?.(selectedValues);
+            }}
+          />
+          {editableAddress && (
+            <button
+              className="site-inline-edit-button site-address-edit-toggle"
+              type="button"
+              disabled={disabled}
+              aria-label={isEditingAddress ? "Adressbearbeitung abschließen" : "Adresse manuell bearbeiten"}
+              title={isEditingAddress ? "Adressbearbeitung abschließen" : "Adresse manuell bearbeiten"}
+              aria-expanded={isEditingAddress}
+              onClick={() => setIsEditingAddress((current) => !current)}
+            >
+              {isEditingAddress ? <Check aria-hidden="true" size={14} /> : <Pencil aria-hidden="true" size={14} />}
+            </button>
+          )}
+        </div>
         <div className="site-address-display-grid">
           {([
             ["postal_code", "PLZ"],
             ["city", "Stadt"],
             ["street", "Straße"],
             ["house_number", "Hausnummer"],
-          ] as const).map(([field, label]) => editableAddress ? (
+          ] as const).map(([field, label]) => editableAddress && isEditingAddress ? (
             <label className="site-address-display-item" key={field}>
               <span>{label}</span>
               <input
+                autoFocus={field === "postal_code"}
                 disabled={disabled}
                 value={draft[field] ?? ""}
                 onChange={(event) => onChange(updateSiteAddressDraft(draft, field, event.target.value))}

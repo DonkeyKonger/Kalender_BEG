@@ -31,6 +31,11 @@ test('new site enables editable fields while retaining address search and existi
   const source = await readFile(new URL('../src/pages/SitesPage.tsx', import.meta.url), 'utf8');
   assert.match(source, /hideTopLocationField\s+editableAddress/);
   assert.match(source, /editableAddress = false/);
+  assert.match(source, /\[isEditingAddress, setIsEditingAddress\] = useState\(false\)/);
+  assert.match(source, /editableAddress && isEditingAddress \?/);
+  assert.match(source, /aria-expanded=\{isEditingAddress\}/);
+  assert.match(source, /"Adresse manuell bearbeiten"/);
+  assert.match(source, /setIsEditingAddress\(false\);\s+onGeocodeSelected/);
   assert.match(source, /disabled=\{disabled\}\s+value=\{draft\[field\] \?\? ""\}/);
   assert.match(source, /onChange\(updateSiteAddressDraft\(draft, field, event.target.value\)\)/);
   assert.match(source, /address: result.label,[\s\S]*?house_number: result.house_number,[\s\S]*?location_status: "geocoded"/);
