@@ -17,6 +17,7 @@ import {
   withNewForeignSiteGroupsCollapsed,
 } from "../lib/siteGroupCollapse";
 import { compareSiteNumbers } from "../lib/siteSorting";
+import { updateSiteAddressDraft } from "../lib/siteAddressDraft";
 import { CustomerFields } from "./CustomersPage";
 import type { Customer, CustomerCreate } from "../types/customer";
 import type { SiteStatus } from "../types/matrix";
@@ -535,6 +536,7 @@ export function SiteCreateDrawer({
           customersLoading={customersLoading}
           disabled={!canEdit}
           hideTopLocationField
+          editableAddress
           onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
           onCustomerFocus={() => {
             if (customersLoaded === false && customersLoading === false) {
@@ -601,6 +603,7 @@ export function SiteFields({
   customersLoading = false,
   disabled = false,
   hideTopLocationField = false,
+  editableAddress = false,
   onChange,
   onCustomerFocus,
   onCustomerSelected,
@@ -614,6 +617,7 @@ export function SiteFields({
   customersLoading?: boolean;
   disabled?: boolean;
   hideTopLocationField?: boolean;
+  editableAddress?: boolean;
   isCheckingLocation?: boolean;
   onChange: (values: Partial<SiteCreate>) => void;
   onCustomerFocus?: () => void;
@@ -824,10 +828,21 @@ export function SiteFields({
           }}
         />
         <div className="site-address-display-grid">
-          <AddressDisplayItem label="PLZ" value={draft.postal_code} />
-          <AddressDisplayItem label="Stadt" value={draft.city} />
-          <AddressDisplayItem label="Strasse" value={draft.street} />
-          <AddressDisplayItem label="Hausnummer" value={draft.house_number} />
+          {([
+            ["postal_code", "PLZ"],
+            ["city", "Stadt"],
+            ["street", "Straße"],
+            ["house_number", "Hausnummer"],
+          ] as const).map(([field, label]) => editableAddress ? (
+            <label className="site-address-display-item" key={field}>
+              <span>{label}</span>
+              <input
+                disabled={disabled}
+                value={draft[field] ?? ""}
+                onChange={(event) => onChange(updateSiteAddressDraft(draft, field, event.target.value))}
+              />
+            </label>
+          ) : <AddressDisplayItem key={field} label={label} value={draft[field]} />)}
           <AddressDisplayItem label="Adresszusatz / Bereich" value={draft.address_extra} wide />
         </div>
       </section>
