@@ -882,7 +882,7 @@ button:disabled {
 }
 
 .matrix-table thead .matrix-day-row th {
-  top: var(--matrix-week-header-height);
+  top: var(--matrix-week-header-offset, var(--matrix-week-header-height));
   z-index: 11;
 }
 
@@ -5151,7 +5151,7 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page.is-compact .matrix-table thead .matrix-day-row th {
-  top: var(--matrix-week-header-height);
+  top: var(--matrix-week-header-offset, var(--matrix-week-header-height));
 }
 
 .matrix-page.is-compact .site-number-col,

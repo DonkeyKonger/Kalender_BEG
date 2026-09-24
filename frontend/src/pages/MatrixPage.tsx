@@ -3576,6 +3576,29 @@ type MatrixTableProps = {
 };
 
 function MatrixTable(props: MatrixTableProps) {
+  const headerRef = useRef<HTMLTableSectionElement>(null);
+  const [headerHeights, setHeaderHeights] = useState<{ week: number; total: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const weekRow = header?.rows[0];
+    if (!header || !weekRow) return;
+
+    // Wrapped day labels can exceed the CSS minimum, including fractional pixels.
+    // Use the rendered heights so the absence row is pinned from the first scroll pixel.
+    const updateHeaderHeights = () => {
+      const week = weekRow.getBoundingClientRect().height;
+      const total = header.getBoundingClientRect().height;
+      setHeaderHeights((current) => current?.week === week && current.total === total ? current : { week, total });
+    };
+    updateHeaderHeights();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(updateHeaderHeights);
+    observer.observe(header);
+    observer.observe(weekRow);
+    return () => observer.disconnect();
+  }, [props.isCompactView]);
+
   const tableWidth = matrixTableWidth(props.matrix.days, props.isCompactView);
   const holidayMap = useMemo(() => matrixHolidayMap(props.matrix.days), [props.matrix.days]);
   const weekGroups = useMemo(
@@ -3589,6 +3612,10 @@ function MatrixTable(props: MatrixTableProps) {
   } as CSSProperties;
   const tableStyle = {
     ...matrixCssVars,
+    ...(headerHeights ? {
+      "--matrix-week-header-offset": `${headerHeights.week}px`,
+      "--matrix-sticky-header-height": `${headerHeights.total}px`,
+    } : {}),
     width: tableWidth,
     minWidth: tableWidth,
   } as CSSProperties;
@@ -3616,7 +3643,7 @@ function MatrixTable(props: MatrixTableProps) {
             <col className={dayColumnWidthClassName(day.date)} key={day.date} />
           ))}
         </colgroup>
-        <thead>
+        <thead ref={headerRef}>
           <tr className="matrix-week-row">
             <th className="sticky-col site-number-col matrix-week-fixed" aria-hidden="true" />
             <th className="sticky-col site-col matrix-week-fixed" aria-hidden="true" />
