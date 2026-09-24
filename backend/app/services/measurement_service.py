@@ -75,6 +75,7 @@ from app.services.photo_filename import (
 )
 from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
+from app.services.project_folder_count_cache import invalidate_site_counts
 from app.services.project_storage_service import ProjectStorageService
 from app.services.push_notification_service import PushNotificationService
 from app.services.time_entry_service import TimeEntryService
@@ -1259,6 +1260,7 @@ class MeasurementService:
             file_size_bytes=uploaded.get("size") if isinstance(uploaded.get("size"), int) else len(optimized_photo.content),
         )
         self.db.add(photo)
+        invalidate_site_counts(self.db, batch.site_id)
         self.db.commit()
         self.db.refresh(photo)
         return self._build_mobile_photo(photo)
@@ -1302,6 +1304,7 @@ class MeasurementService:
             item_id=photo.external_item_id,
         )
         self.db.delete(photo)
+        invalidate_site_counts(self.db, batch.site_id)
         self.db.commit()
 
     def update_mobile_batch_photo_caption(
@@ -3617,6 +3620,8 @@ class MeasurementService:
             content=pdf_content,
             content_type="application/pdf",
         )
+        invalidate_site_counts(self.db, batch.site_id)
+        self.db.commit()
 
     def _get_site(self, site_id: int) -> Site:
         site = self.db.get(Site, site_id)

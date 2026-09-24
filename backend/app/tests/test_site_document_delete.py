@@ -22,6 +22,8 @@ from app.tests.test_project_storage_service import FakeGraphClient, enabled_conf
 ])
 def test_delete_route_requires_site_edit_permission(monkeypatch, role, permissions, expected):
     calls = []
+    invalidated = []
+    monkeypatch.setattr(sites, "invalidate_site_counts", lambda db, site_id: invalidated.append(site_id))
 
     class Folders:
         def __init__(self, db):
@@ -39,7 +41,7 @@ def test_delete_route_requires_site_edit_permission(monkeypatch, role, permissio
     monkeypatch.setattr(sites, "ProjectStorageService", Storage)
     app = FastAPI()
     app.include_router(sites.router)
-    app.dependency_overrides[get_db] = lambda: object()
+    app.dependency_overrides[get_db] = lambda: SimpleNamespace(commit=lambda: None)
     app.dependency_overrides[get_current_app_user] = lambda: SimpleNamespace(
         role=role, office_page_permissions=permissions,
     )
@@ -47,11 +49,13 @@ def test_delete_route_requires_site_edit_permission(monkeypatch, role, permissio
     assert response.status_code == expected
     if expected == 204:
         assert response.content == b""
+        assert invalidated == [7]
         assert calls == [(7, "dokumentation", role), {
             "drive_id": "drive-1", "folder_item_id": "folder-1", "item_id": "file-1",
         }]
     else:
         assert calls == []
+        assert invalidated == []
 
 
 @pytest.mark.parametrize("item_id,expected", [("folder-2", 400), ("foreign-file-1", 404)])

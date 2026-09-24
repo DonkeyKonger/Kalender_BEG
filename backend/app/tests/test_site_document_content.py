@@ -263,6 +263,8 @@ def test_project_photo_appendix_returns_inline_pdf(monkeypatch):
 
 def test_project_folder_photo_upload_uses_clean_site_photo_filename(monkeypatch):
     calls = {"upload": []}
+    invalidated = []
+    monkeypatch.setattr(sites, "invalidate_site_counts", lambda db, site_id: invalidated.append(site_id))
     date_prefix = datetime.now(PHOTO_FILENAME_TIMEZONE).strftime("%y%m%d")
 
     class FakeProjectFolderService:
@@ -325,11 +327,12 @@ def test_project_folder_photo_upload_uses_clean_site_photo_filename(monkeypatch)
             folder_key="fotos",
             file=FakeUploadFile(),
             current_user=user,
-            db=object(),
+            db=SimpleNamespace(commit=lambda: None),
         )
     )
 
     assert response.name == f"{date_prefix}_Schüchtermann_Klinik_Christopher_Erichsen_02.jpg"
+    assert invalidated == [7]
     assert calls["upload"] == [
         (
             "drive-1",

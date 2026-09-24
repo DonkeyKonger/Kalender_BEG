@@ -21,16 +21,18 @@ const compiled=await build({stdin:{contents:`import React from 'react';import {r
   ${header}
   export const render=(folders,counts)=>renderToStaticMarkup(tree(folders,counts).node);
   export const renderHeader=()=>renderToStaticMarkup(<MobileProjectFoldersHeader assignment={{site:{name:'Baustelle',site_number:'9999',customer:'Kunde'}}} onBack={()=>{}}/>);
-  export function lifecycle(){
+  export function lifecycle(seedCount){
     let state={},effect;const listeners=new Map(),requests=[];
+    let now=20000;const Date={now:()=>now};const timers=new Map();let timerId=0;
+    const setTimeout=(fn,delay)=>{timers.set(++timerId,{fn,delay});return timerId;};const clearTimeout=id=>timers.delete(id);
     const useState=()=>[state,next=>{state=typeof next==='function'?next(state):next;}];
     const useEffect=fn=>{effect=fn;};
     const window={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
     const document={...window,visibilityState:'visible'};
     const api={projectFolderFileCount:(id,key)=>new Promise((resolve,reject)=>requests.push({id,key,resolve,reject}))};
     ${hook}
-    useProjectFolderFileCounts(42,[{folder_key:'a'},{folder_key:'b'},{folder_key:'c'}]);const cleanup=effect();
-    return {get state(){return state;},listeners,requests,cleanup};
+    useProjectFolderFileCounts(42,[{folder_key:'a',file_count:seedCount},{folder_key:'b'},{folder_key:'c'}]);const cleanup=effect();
+    return {get state(){return state.counts;},listeners,requests,cleanup,timers,advance:()=>{now+=20000;}};
   }
 `,resolveDir:fileURLToPath(new URL('..',import.meta.url)),loader:'tsx'},bundle:true,write:false,format:'cjs',platform:'node',packages:'external',jsx:'automatic'});
 const module={exports:{}};
@@ -69,7 +71,31 @@ test('count requests are bounded, refreshable and ignore unmounted responses',as
   f.requests[2].resolve({file_count:17});
   for(let i=0;i<5;i++)await Promise.resolve();
   assert.equal(f.state.c,17);
-  f.listeners.get('focus')();assert.deepEqual(f.state,{});assert.equal(f.requests.length,5);
+  f.advance();f.listeners.get('focus')();assert.deepEqual(f.state,{a:0,b:null,c:17});assert.equal(f.requests.length,5);
   f.cleanup();f.requests[3].resolve({file_count:999});await Promise.resolve();
-  assert.deepEqual(f.state,{});assert.equal(f.listeners.size,0);assert.equal(f.requests.length,5);
+  assert.deepEqual(f.state,{a:0,b:null,c:17});assert.equal(f.listeners.size,0);assert.equal(f.requests.length,5);assert.equal(f.timers.size,0);
+});
+
+test('cached counts render immediately and survive background refresh failures',async()=>{
+  const f=module.exports.lifecycle(25);
+  assert.equal(f.state.a,25);
+  f.requests[0].reject(Error('offline'));await Promise.resolve();
+  assert.equal(f.state.a,25);
+  f.requests[1].resolve({file_count:null,refreshing:true});await Promise.resolve();
+  f.requests[2].resolve({file_count:7});for(let i=0;i<5;i++)await Promise.resolve();
+  assert.equal([...f.timers.values()][0].delay,3000);
+  f.advance();f.listeners.get('focus')();
+  f.requests[3].reject({status:403});await Promise.resolve();
+  assert.equal(f.state.a,null);
+  f.cleanup();
+});
+
+test('file changes during a pending request schedule another refresh instead of waiting five minutes',async()=>{
+  const f=module.exports.lifecycle(25);
+  f.listeners.get('project-files-changed')();
+  f.requests[0].resolve({file_count:25});await Promise.resolve();
+  f.requests[1].resolve({file_count:1});await Promise.resolve();
+  f.requests[2].resolve({file_count:7});for(let i=0;i<5;i++)await Promise.resolve();
+  assert.equal([...f.timers.values()][0].delay,0);
+  f.cleanup();
 });

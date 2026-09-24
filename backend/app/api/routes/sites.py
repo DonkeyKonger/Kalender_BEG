@@ -69,6 +69,7 @@ from app.services.document_thumbnail_service import (
     THUMBNAIL_MEDIA_TYPE,
     is_pdf_document,
 )
+from app.services.project_folder_count_cache import cache_key, cached_counts, read_and_refresh, invalidate_site_counts
 from app.services.extra_work_service import ExtraWorkService
 from app.services.measurement_group_service import MeasurementGroupService
 from app.services.document_photo_optimizer import create_document_photo_thumbnail, OPTIMIZED_PHOTO_CONTENT_TYPE
@@ -206,7 +207,8 @@ def list_project_folders(
     db: Session = Depends(get_db),
 ) -> list[ProjectFolderRead]:
     folders = ProjectFolderService(db).get_visible_project_folders_for_site(site_id, current_user)
-    return [ProjectFolderRead.model_validate(folder) for folder in folders]
+    counts = cached_counts(db, site_id, folders)
+    return [ProjectFolderRead.model_validate(folder).model_copy(update={"file_count": counts.get(cache_key(site_id, folder))}) for folder in folders]
 
 
 @router.get("/{site_id}/project-photos/photo-appendix")
@@ -230,14 +232,12 @@ def get_project_photo_appendix(
 def get_project_folder_file_count(
     site_id: int,
     folder_key: str,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(CAN_FOLDER_READ),
     db: Session = Depends(get_db),
 ) -> ProjectFolderFileCount:
     folder = ProjectFolderService(db).get_project_folder_for_site_by_key(site_id, folder_key, current_user)
-    count = ProjectStorageService().count_folder_files(
-        drive_id=folder.external_drive_id, folder_item_id=folder.external_item_id,
-    )
-    return ProjectFolderFileCount(file_count=count)
+    return ProjectFolderFileCount(**read_and_refresh(db, site_id, folder, background_tasks))
 
 
 @router.get(
@@ -342,6 +342,8 @@ def delete_project_folder_document(
         folder_item_id=folder.external_item_id,
         item_id=item_id,
     )
+    invalidate_site_counts(db, site_id)
+    db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -547,6 +549,8 @@ async def upload_project_folder_document(
         content=content,
         content_type=file.content_type,
     )
+    invalidate_site_counts(db, site_id)
+    db.commit()
     return ProjectFolderDocumentItem.model_validate(uploaded)
 
 

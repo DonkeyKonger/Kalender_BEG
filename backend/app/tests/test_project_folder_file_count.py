@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from app.api.routes import sites
 from app.services.project_storage_service import ProjectStorageService
@@ -98,20 +98,19 @@ def test_count_route_checks_folder_access_before_storage(monkeypatch):
             calls.append((site_id, key, current_user))
             return SimpleNamespace(external_drive_id="drive", external_item_id="root")
 
-    class Storage:
-        def count_folder_files(self, **kwargs):
-            calls.append(kwargs)
-            return 7
+    def cached(db, site_id, folder, tasks):
+        calls.append({"drive_id": folder.external_drive_id, "folder_item_id": folder.external_item_id})
+        return {"file_count": 7, "refreshing": True}
 
     monkeypatch.setattr(sites, "ProjectFolderService", Folders)
-    monkeypatch.setattr(sites, "ProjectStorageService", Storage)
-    assert sites.get_project_folder_file_count(42, "fotos", user, None).file_count == 7
+    monkeypatch.setattr(sites, "read_and_refresh", cached)
+    assert sites.get_project_folder_file_count(42, "fotos", BackgroundTasks(), user, None).file_count == 7
     assert calls == [(42, "fotos", user), {"drive_id": "drive", "folder_item_id": "root"}]
 
     def denied(*args): raise HTTPException(403, "Forbidden")
     monkeypatch.setattr(Folders, "get_project_folder_for_site_by_key", denied)
     calls.clear()
     with pytest.raises(HTTPException) as error:
-        sites.get_project_folder_file_count(42, "fotos", user, None)
+        sites.get_project_folder_file_count(42, "fotos", BackgroundTasks(), user, None)
     assert error.value.status_code == 403
     assert calls == []

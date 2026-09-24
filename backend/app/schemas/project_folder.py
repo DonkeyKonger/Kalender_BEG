@@ -31,6 +31,7 @@ class ProjectFolderRead(BaseModel):
     external_web_url: str | None = None
     created_at: datetime
     updated_at: datetime
+    file_count: int | None = Field(default=None, ge=0)
 
     model_config = {"from_attributes": True}
 
@@ -55,4 +56,5 @@ class ProjectFolderDocumentList(BaseModel):
 
 
 class ProjectFolderFileCount(BaseModel):
-    file_count: int = Field(ge=0)
+    file_count: int | None = Field(default=None, ge=0)
+    refreshing: bool = False

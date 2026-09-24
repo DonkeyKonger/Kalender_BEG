@@ -366,6 +366,10 @@ async function requestBlob(path: string, signal?: AbortSignal): Promise<Blob> {
 async function request<T>(path: string, options: RequestInit = {}, retryOnUnauthorized = true): Promise<T> {
   const { response, payload } = await sendRequest(path, options, retryOnUnauthorized);
 
+  if (response.ok && /^(POST|DELETE)$/i.test(options.method ?? "GET") && /\/(photos|documents)(\/|$)/.test(path) && typeof window !== "undefined") {
+    window.dispatchEvent(new Event("project-files-changed"));
+  }
+
   if (response.status === 204) {
     return undefined as T;
   }
@@ -1230,8 +1234,8 @@ export const api = {
     return request<ProjectFolder[]>(`/sites/${siteId}/project-folders`);
   },
 
-  async projectFolderFileCount(siteId: number, folderKey: string): Promise<{ file_count: number }> {
-    return request<{ file_count: number }>(`/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/file-count`);
+  async projectFolderFileCount(siteId: number, folderKey: string): Promise<{ file_count: number | null; refreshing?: boolean }> {
+    return request<{ file_count: number | null; refreshing?: boolean }>(`/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/file-count`);
   },
 
   async projectFolderDocuments(siteId: number, folderKey: string): Promise<ProjectFolderDocumentList> {

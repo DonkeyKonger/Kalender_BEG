@@ -62,6 +62,7 @@ from app.services.photo_filename import (
 )
 from app.services.photo_limits import MAX_DOCUMENT_PHOTOS
 from app.services.project_folder_service import ProjectFolderService
+from app.services.project_folder_count_cache import invalidate_site_counts
 from app.services.project_storage_service import ProjectStorageService
 from app.services.measurement_service import format_site_signature_location
 from app.services.audit_service import AuditService
@@ -938,6 +939,7 @@ class ExtraWorkService:
             customer_document_selected=True,
         )
         self.db.add(photo)
+        invalidate_site_counts(self.db, ticket.site_id)
         self.db.commit()
         self.db.refresh(photo)
         return self._build_mobile_photo(photo, ticket)
@@ -1168,6 +1170,7 @@ class ExtraWorkService:
             item_id=photo.external_item_id,
         )
         self.db.delete(photo)
+        invalidate_site_counts(self.db, photo.site_id)
         self.db.commit()
 
     def _get_site(self, site_id: int, *, for_update: bool = False) -> Site:

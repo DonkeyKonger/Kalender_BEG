@@ -10,6 +10,7 @@ from app.core.database import SessionLocal
 from app.models.extra_work_ticket import ExtraWorkTicket
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.project_storage_service import ProjectStorageService
+from app.services.project_folder_count_cache import invalidate_site_counts
 
 
 LOGGER = logging.getLogger(__name__)
@@ -80,6 +81,8 @@ class ExtraWorkArchiveService:
             filename=filename,
             content=content,
         )
+        invalidate_site_counts(self.db, site_id)
+        self.db.commit()
         LOGGER.info(
             "Extra-work PDF archived: site_id=%s ticket_id=%s filename=%s item_id=%s.",
             site_id,

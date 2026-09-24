@@ -140,6 +140,7 @@ export type SiteRemoveResponse = {
 };
 
 export type ProjectFolder = {
+  file_count?: number | null;
   id: number;
   site_id: number;
   sort_order: number;
