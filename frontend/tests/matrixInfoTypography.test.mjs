@@ -8,9 +8,11 @@ const rule = selector => css.slice(css.indexOf(`${selector} {`)).split('}')[0];
 const source = await readFile(new URL('../src/pages/MatrixPage.tsx', import.meta.url), 'utf8');
 const editor = source.slice(source.indexOf('function MatrixInfoEditor('), source.indexOf('const DAY_IN_MS'));
 
-test('matrix info cells use black readable text, including disabled editors', () => {
+test('matrix info cells inherit the same font as site locations and retain black text', () => {
   assert.match(rule('.matrix-info-editor textarea'), /color: #000000;/);
-  assert.match(rule('.matrix-info-editor textarea'), /font-family: Verdana, Arial, sans-serif;/);
+  assert.match(rule('.matrix-info-editor textarea'), /font-family: inherit;/);
+  assert.match(rule('.matrix-table'), /font-family: Arial, "Segoe UI", sans-serif;/);
+  assert.doesNotMatch(rule('.matrix-site-compact-meta'), /font-family:/);
   assert.match(rule('.matrix-info-editor textarea:disabled'), /color: #000000;/);
   assert.doesNotMatch(rule('.matrix-page.is-compact .matrix-info-editor textarea'), /\bcolor:|font-family:/);
 });

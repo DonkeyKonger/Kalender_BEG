@@ -5079,7 +5079,7 @@ button.person-chip:focus-visible {
   border-radius: 2px;
   background: transparent;
   color: #000000;
-  font-family: Verdana, Arial, sans-serif;
+  font-family: inherit;
   padding: 4px 5px;
   font-size: 0.68rem;
   line-height: 1.14;
