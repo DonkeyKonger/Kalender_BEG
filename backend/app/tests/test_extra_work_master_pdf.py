@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
 from io import BytesIO
 from hashlib import sha256
+from types import SimpleNamespace
 import re
 
 from fastapi import HTTPException
@@ -110,6 +111,88 @@ def test_signed_snapshot_binds_manifest_and_pdf_to_the_same_original_bytes(monke
     assert captured["photo_contents"] == {photo.id: original_bytes}
     assert ticket.signed_photo_manifest["photos"] == manifest
     assert ticket.signed_pdf_sha256 == sha256(content).hexdigest()
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_signed_photo_selection_changes_only_appendix_for_desktop_and_mobile(monkeypatch, tmp_path, legacy):
+    from PIL import Image
+    from app.schemas.extra_work import ExtraWorkTicketPhotoSelectionUpdate
+    from app.services.extra_work_service import ExtraWorkService
+
+    db = db_session()
+    person = Person(first_name="Max", last_name="Monteur", display_name="Max Monteur", short_code="MM")
+    site = Site(site_number="9999", name="Unveränderte Baustelle")
+    db.add_all([person, site])
+    db.flush()
+    assignment = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 9, 25), end_date=date(2026, 9, 25))
+    ticket = ExtraWorkTicket(site=site, sequence_number=1, display_number="9999.Z01", kind="billing", status="signed",
+                             customer_signed_at=datetime(2026, 9, 25, tzinfo=timezone.utc), customer_signature_name="Unterschrift Kunde",
+                             customer_signature_type="billing_customer",
+                             customer_signature_strokes=[[{"x": 0.1, "y": 0.2}, {"x": 0.8, "y": 0.7}]],
+                             work_description="Unterschriebener Inhalt unverändert")
+    ticket.entries = [ExtraWorkTicketEntry(site_id=site.id, component="Halle", floor="EG", worker_rows=[
+        {"worker_name": f"Monteur {index}", "monday_hours": 1} for index in range(4)
+    ])]
+    def photo(name):
+        return ExtraWorkTicketPhoto(site_id=site.id, ticket=ticket, project_folder_key="fotos", external_drive_id="drive",
+                                    external_item_id=name, filename=f"{name}.jpg", content_type="image/jpeg")
+    first, second = photo("Dokufoto-A"), photo("Dokufoto-B")
+    db.add_all([assignment, ticket, first, second])
+    db.commit()
+    image = BytesIO()
+    Image.new("RGB", (300, 180), "#88aacc").save(image, format="JPEG")
+    monkeypatch.setattr(ExtraWorkPdfService, "_get_photo_folder_item_id", lambda *_: "folder")
+    monkeypatch.setattr(pdf_module, "download_photo_files", lambda _storage, requests: [SimpleNamespace(content=image.getvalue(), error=None) for _ in requests])
+    service = ExtraWorkPdfService(db)
+    frozen, _ = service.create_signed_snapshot(ticket=ticket, assignment=assignment)
+    db.commit()
+    original_hash = ticket.signed_pdf_sha256
+    if legacy:
+        ticket.signed_photo_manifest = {key: value for key, value in ticket.signed_photo_manifest.items() if key != "document_page_count"}
+        db.commit()
+    manifest = dict(ticket.signed_photo_manifest)
+    original_pages = PdfReader(BytesIO(frozen)).pages
+    assert len(original_pages) > 2
+    assert all(photo.customer_document_selected for photo in [first, second])
+    assert service.build_site_ticket_pdf(site_id=site.id, ticket_id=ticket.id)[0] == frozen
+    # Prove we copy the frozen pages, not a freshly generated body from live data.
+    ticket.work_description = "Darf nicht im unterschriebenen Dokument erscheinen"
+    ticket.entries[0].worker_rows = []
+    db.commit()
+    selection = ExtraWorkService(db)
+    user = SimpleNamespace(id=7, person_id=person.id)
+    changed = selection.update_site_ticket_photo_selection(site_id=site.id, ticket_id=ticket.id, photo_id=first.id,
+        payload=ExtraWorkTicketPhotoSelectionUpdate(selected=False))
+    assert changed.signed_document_member and not changed.customer_document_selected
+    reduced, _ = service.build_site_ticket_pdf(site_id=site.id, ticket_id=ticket.id)
+    assert service.build_mobile_ticket_pdf(assignment_id=assignment.id, ticket_id=ticket.id, current_user=user)[0] == reduced
+    assert "Dokufoto-A.jpg" not in "\n".join(page.extract_text() for page in PdfReader(BytesIO(reduced)).pages)
+    assert "Dokufoto-B.jpg" in "\n".join(page.extract_text() for page in PdfReader(BytesIO(reduced)).pages)
+    selection.update_mobile_ticket_photo_selection(assignment_id=assignment.id, ticket_id=ticket.id, photo_id=second.id,
+        current_user=user, payload=ExtraWorkTicketPhotoSelectionUpdate(selected=False))
+    body_only, _ = service.build_site_ticket_pdf(site_id=site.id, ticket_id=ticket.id)
+    assert len(PdfReader(BytesIO(body_only)).pages) == 2
+    third = photo("Nachtraegliches-Foto")
+    db.add(third)
+    db.commit()
+    assert third.customer_document_selected
+    with_new, _ = service.build_site_ticket_pdf(site_id=site.id, ticket_id=ticket.id)
+    assert "Nachtraegliches-Foto.jpg" in "\n".join(page.extract_text() for page in PdfReader(BytesIO(with_new)).pages)
+    for output in [reduced, body_only, with_new]:
+        pages = PdfReader(BytesIO(output)).pages
+        for index in range(2):
+            assert pages[index].get_contents().get_data() == original_pages[index].get_contents().get_data()
+        assert "Darf nicht" not in "\n".join(page.extract_text() for page in pages)
+    for item in [first, second, third]:
+        selection.update_site_ticket_photo_selection(site_id=site.id, ticket_id=ticket.id, photo_id=item.id,
+            payload=ExtraWorkTicketPhotoSelectionUpdate(selected=item.id != third.id))
+    assert service.build_site_ticket_pdf(site_id=site.id, ticket_id=ticket.id)[0] == frozen
+    assert bytes(ticket.signed_pdf_content) == frozen
+    assert ticket.signed_pdf_sha256 == original_hash
+    assert ticket.signed_photo_manifest == manifest
+    (tmp_path / "signed-original.pdf").write_bytes(frozen)
+    (tmp_path / "signed-selected.pdf").write_bytes(reduced)
+    (tmp_path / "signed-no-photos.pdf").write_bytes(body_only)
 
 
 def test_remarks_capacity_uses_all_18_real_pdf_lines_with_exact_helvetica_metrics():

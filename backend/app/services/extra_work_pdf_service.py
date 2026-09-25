@@ -183,7 +183,7 @@ class ExtraWorkPdfService:
         assignment = get_mobile_extra_work_assignment(self.db, assignment_id, current_user)
         ticket = self._get_ticket(ticket_id, assignment.site_id)
         if ticket.customer_signed_at is not None:
-            return self._get_or_freeze_signed_pdf(ticket, assignment)
+            return self._build_signed_output(ticket, assignment)
         started_at = perf_counter()
         filename = self._build_filename(ticket)
         version_hash = self._build_ticket_pdf_version_hash(ticket, assignment)
@@ -211,7 +211,7 @@ class ExtraWorkPdfService:
         ticket = self._get_ticket(ticket_id, site_id)
         assignment = self._get_site_assignment_context(ticket)
         if ticket.customer_signed_at is not None:
-            return self._get_or_freeze_signed_pdf(ticket, assignment)
+            return self._build_signed_output(ticket, assignment)
         started_at = perf_counter()
         filename = self._build_filename(ticket)
         version_hash = self._build_ticket_pdf_version_hash(ticket, assignment)
@@ -263,6 +263,7 @@ class ExtraWorkPdfService:
             "snapshot_kind": snapshot_kind,
             "customer_signed_at": ticket.customer_signed_at.isoformat() if ticket.customer_signed_at else None,
             "photos": manifest,
+            "document_page_count": max(1, (len(ticket.entries[0].worker_rows or []) + 2) // 3) if ticket.entries else 1,
         }
         ticket.signed_snapshot_kind = snapshot_kind
         ticket.signed_snapshot_created_at = datetime.now(UTC)
@@ -296,6 +297,55 @@ class ExtraWorkPdfService:
             cache_key=f"extra-work-supplemental-{ticket.id}",
             version_hash=version_hash,
             build=lambda: self._build_standalone_photo_document(ticket, photos),
+        )
+        return content, filename
+
+    def _build_signed_output(
+        self,
+        ticket: ExtraWorkTicket,
+        assignment: Assignment | None,
+    ) -> tuple[bytes, str]:
+        # The stored signature snapshot is never rewritten. Only the optional
+        # photo appendix is rebuilt from the current selection for each output.
+        frozen, filename = self._get_or_freeze_signed_pdf(ticket, assignment)
+        manifest = ticket.signed_photo_manifest or {}
+        original_ids = {item["photo_id"] for item in manifest.get("photos", []) if isinstance(item, dict) and "photo_id" in item}
+        photos = sorted(
+            [photo for photo in ticket.photos or [] if photo.customer_document_selected],
+            key=lambda photo: (photo.created_at, photo.id),
+        )
+        if {photo.id for photo in photos} == original_ids:
+            return frozen, filename
+        version_hash = build_pdf_version_hash({
+            "type": "extra_work_signed_output_v1",
+            "snapshot": ticket.signed_pdf_sha256,
+            "photos": [self._photo_cache_identity(photo) for photo in photos],
+        })
+
+        def build() -> bytes:
+            reader = PdfReader(BytesIO(frozen))
+            body_count = manifest.get("document_page_count")
+            if body_count is None:
+                # Older snapshots have no page-count metadata. Their photo
+                # appendix starts with the generator's fixed Fotoanlage header.
+                body_count = next((index for index, page in enumerate(reader.pages)
+                                   if (page.extract_text() or "").lstrip().startswith("Fotoanlage")), None)
+                if body_count is None and not original_ids:
+                    body_count = len(reader.pages)
+            if not isinstance(body_count, int) or not 0 < body_count <= len(reader.pages):
+                raise HTTPException(status.HTTP_409_CONFLICT, "Der unterschriebene Dokumentteil konnte nicht sicher von den Fotos getrennt werden.")
+            writer = PdfWriter()
+            for page in reader.pages[:body_count]:
+                writer.add_page(page)
+            # Strict downloads prevent silently omitting a selected photograph.
+            _, contents = self._build_photo_manifest(ticket, photos)
+            self._append_photo_pages(writer, ticket, photos, photo_contents=contents)
+            output = BytesIO()
+            writer.write(output)
+            return output.getvalue()
+
+        content, _ = DocumentPdfCache().get_or_build(
+            cache_key=f"extra-work-signed-output-{ticket.id}", version_hash=version_hash, build=build,
         )
         return content, filename
 

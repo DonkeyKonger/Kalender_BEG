@@ -1850,14 +1850,14 @@ def test_mobile_extra_work_email_send_delivers_signed_pdf_and_records_audit(monk
             return b"%PDF-test", "Stundenzettel_3_Hauptauftrag.pdf"
 
         def build_mobile_ticket_supplemental_photo_pdf(self, *, assignment_id, ticket_id, current_user):
-            return b"%PDF-photo", "Ergaenzende_Fotodokumentation_3.pdf"
+            raise AssertionError("Selected photos are already in the downloaded PDF; do not attach them twice")
 
     class FakeEmailDeliveryService:
-        def send_document_email(self, *, recipients, subject, body, attachments):
+        def send_document_email(self, *, recipients, subject, body, attachment):
             deliveries.append({
                 "recipients": recipients,
                 "subject": subject,
-                "attachments": attachments,
+                "attachments": [attachment],
             })
 
     monkeypatch.setattr(extra_work_email_module, "ExtraWorkPdfService", FakePdfService)
@@ -1875,15 +1875,12 @@ def test_mobile_extra_work_email_send_delivers_signed_pdf_and_records_audit(monk
     assert deliveries[0]["recipients"] == ["kunde@example.de"]
     assert [attachment.content for attachment in deliveries[0]["attachments"]] == [
         b"%PDF-test",
-        b"%PDF-photo",
     ]
     assert [attachment.content_type for attachment in deliveries[0]["attachments"]] == [
-        "application/pdf",
         "application/pdf",
     ]
     assert audit_log.new_value_json["attachment_filenames"] == [
         "Stundenzettel_3_Hauptauftrag.pdf",
-        "Ergaenzende_Fotodokumentation_3.pdf",
     ]
     assert audit_log.entity_type == "extra_work_ticket"
     assert audit_log.entity_id == ticket.id

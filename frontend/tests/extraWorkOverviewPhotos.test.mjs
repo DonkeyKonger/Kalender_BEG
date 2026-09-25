@@ -242,29 +242,26 @@ test("the large view stays a centered, bounded popup and grows responsively on p
   assert.match(styles, /@media \(max-width: 600px\) \{[\s\S]*\.project-extra-work-photo-modal \{[^}]*width:\s*calc\(100vw - 28px\);[^}]*height:\s*min\(92dvh, calc\(100dvh - 28px\)\);/s);
 });
 
-test("photo document selection is a separate accessible control with signed locks and rollback", () => {
+test("photo document selection remains accessible after signing and rolls back failures", () => {
   assert.match(apiSource, /updateSiteExtraWorkTicketPhotoSelection[\s\S]*customer-document-selection[\s\S]*method: "PATCH"/);
   assert.match(pageSource, /project-extra-work-photo-selection-badge/);
   assert.match(pageSource, /event\.stopPropagation\(\);[\s\S]*onToggleSelection\(photo\)/);
-  assert.match(pageSource, /disabled=\{photo\.signed_document_member \|\| selectionPending\}/);
-  assert.match(pageSource, /Im unterschriebenen Dokument/);
-  assert.match(pageSource, /Nicht im Dokument/);
-  assert.match(pageSource, /Nicht mitsenden/);
+  assert.match(pageSource, /disabled=\{selectionPending\}/);
+  assert.doesNotMatch(pageSource, /photo\.signed_document_member/);
+  assert.match(pageSource, /Nicht in PDF \/ E-Mail/);
   assert.match(pageSource, /setSelectionError\(readApiError/);
-  assert.match(pageSource, /Fotos im unterschriebenen Dokument ·/);
   assert.match(styles, /\.project-extra-work-photo-wrap\.is-excluded[\s\S]*opacity:\s*0\.55/);
   assert.match(styles, /\.project-extra-work-photo-selection-badge:focus-visible/);
 });
 
 test("photo selection badges stay quiet and the count is available only to assistive technology", () => {
-  assert.match(pageSource, /className=\{`project-extra-work-photo-selection-badge\$\{photo\.signed_document_member \? " is-locked" : ""\}`\}/);
-  assert.match(pageSource, /aria-pressed=\{photo\.signed_document_member \? undefined : photo\.customer_document_selected\}/);
+  assert.match(pageSource, /className="project-extra-work-photo-selection-badge"/);
+  assert.match(pageSource, /aria-pressed=\{photo\.customer_document_selected\}/);
   assert.match(pageSource, /<span aria-live="polite" className="sr-only" role="status">[\s\S]*Fotos werden im Dokument verwendet[\s\S]*<\/span>/);
   assert.doesNotMatch(pageSource, /project-extra-work-photo-selection-summary/);
   assert.match(styles, /\.project-extra-work-photo-selection-badge \{[^}]*background:\s*rgb\(255 255 255 \/ 96%\);[^}]*color:\s*#17324f;/s);
   assert.match(styles, /\.project-extra-work-photo-selection-badge\[aria-pressed="true"\] \{[^}]*background:\s*rgb\(255 255 255 \/ 96%\);[^}]*color:\s*#17324f;/s);
   assert.match(styles, /\.project-extra-work-photo-selection-badge\[aria-pressed="false"\] \{[^}]*background:\s*rgb\(255 255 255 \/ 96%\);[^}]*color:\s*#52677e;/s);
-  assert.match(styles, /\.project-extra-work-photo-selection-badge\.is-locked \{[^}]*background:\s*#356b9f;[^}]*color:\s*#ffffff;/s);
   assert.match(styles, /\.project-extra-work-photo-selection-badge::before \{[^}]*inset:\s*-9px;/s);
   assert.match(styles, /\.project-extra-work-photo-selection-badge:hover:not\(:disabled\)/);
 });

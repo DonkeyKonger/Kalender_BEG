@@ -30692,12 +30692,6 @@ body.mobile-modal-scroll-locked {
   cursor: default;
 }
 
-.project-extra-work-photo-selection-badge.is-locked {
-  border-color: rgb(255 255 255 / 88%);
-  background: #356b9f;
-  color: #ffffff;
-}
-
 .project-extra-work-photo-selection-label {
   position: absolute;
   right: 4px;

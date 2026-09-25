@@ -14,7 +14,7 @@ import "../components/MeasurementReviewMarks.css";
 import type { OverviewPhoto, OverviewPhotoKind } from "../lib/extraWorkPhotoPreview";
 import { ProjectNoteTextarea } from "../components/ProjectNoteTextarea";
 import { SiteProjectNotes } from "../components/SiteProjectNotes";
-import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Lock, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, Wrench, X } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
@@ -4072,7 +4072,7 @@ function ExtraWorkOverviewPhotos({
   }
 
   async function togglePhotoSelection(photo: OverviewPhoto): Promise<void> {
-    if (photoKind === "measurement" || selectionPendingPhotoId !== null || photo.signed_document_member) {
+    if (photoKind === "measurement" || selectionPendingPhotoId !== null) {
       return;
     }
     const uploadTicketId = ticket.id;
@@ -4243,7 +4243,6 @@ function ExtraWorkOverviewPhotos({
               onOpen={openPhotoPreview}
               onToggleSelection={togglePhotoSelection}
               selectionPending={selectionPendingPhotoId === photo.id}
-              signed={Boolean(ticket.customer_signed_at)}
             />
           ) : (
             canUpload && !isLoading && !hasError ? (
@@ -4307,11 +4306,7 @@ function ExtraWorkOverviewPhotos({
       {photoKind === "measurement" && !canUpload && !isLoading && !hasError && photos.length === 0 ? <span className="sr-only">Keine Fotos vorhanden.</span> : null}
       {photoKind === "extra-work" && photos.length > 0 ? (
         <span aria-live="polite" className="sr-only" role="status">
-          {ticket.customer_signed_at ? (
-            <>{photos.filter((photo) => photo.signed_document_member).length} Fotos im unterschriebenen Dokument · {photos.filter((photo) => !photo.signed_document_member && photo.customer_document_selected).length} zusätzliche Fotos werden mitgesendet</>
-          ) : (
-            <>{photos.filter((photo) => photo.customer_document_selected).length} von {photos.length} Fotos werden im Dokument verwendet</>
-          )}
+          {photos.filter((photo) => photo.customer_document_selected).length} von {photos.length} Fotos werden im Dokument verwendet
         </span>
       ) : null}
       {selectionError ? <span className="project-extra-work-photo-feedback is-error" role="alert">{selectionError}</span> : null}
@@ -4340,7 +4335,6 @@ function ExtraWorkOverviewThumbnail({
   onOpen,
   onToggleSelection,
   selectionPending,
-  signed,
   photoKind = "extra-work",
 }: {
   siteId: number;
@@ -4350,7 +4344,6 @@ function ExtraWorkOverviewThumbnail({
   onOpen: (photo: OverviewPhoto, opener: HTMLButtonElement) => void;
   onToggleSelection: (photo: OverviewPhoto) => void;
   selectionPending: boolean;
-  signed: boolean;
   photoKind?: OverviewPhotoKind;
 }) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
@@ -4395,13 +4388,11 @@ function ExtraWorkOverviewThumbnail({
   const accessibleName = photo.caption?.trim()
     ? `Foto: ${photo.caption.trim()}`
     : `Foto: ${photo.filename}`;
-  const selectionLabel = photo.signed_document_member
-    ? "Im unterschriebenen Dokument"
-    : photo.customer_document_selected
-      ? (signed ? "Nicht als zusätzliche Fotodokumentation mitsenden" : "Aus Dokument ausschließen")
-      : (signed ? "Als zusätzliche Fotodokumentation mitsenden" : "Im Dokument verwenden");
+  const selectionLabel = photo.customer_document_selected
+    ? "Aus PDF und E-Mail ausschließen"
+    : "In PDF und E-Mail verwenden";
   return (
-    <div className={`project-extra-work-photo-wrap${photoKind === "measurement" || photo.customer_document_selected || photo.signed_document_member ? "" : " is-excluded"}`}>
+    <div className={`project-extra-work-photo-wrap${photoKind === "measurement" || photo.customer_document_selected ? "" : " is-excluded"}`}>
     <button
       aria-haspopup="dialog"
       className={`project-extra-work-photo project-extra-work-photo-trigger${hasError ? " has-error" : ""}`}
@@ -4420,9 +4411,9 @@ function ExtraWorkOverviewThumbnail({
       {photoKind === "extra-work" ? <button
         aria-label={`${selectionLabel}: ${photo.filename}`}
         aria-busy={selectionPending}
-        aria-pressed={photo.signed_document_member ? undefined : photo.customer_document_selected}
-        className={`project-extra-work-photo-selection-badge${photo.signed_document_member ? " is-locked" : ""}`}
-        disabled={photo.signed_document_member || selectionPending}
+        aria-pressed={photo.customer_document_selected}
+        className="project-extra-work-photo-selection-badge"
+        disabled={selectionPending}
         title={selectionLabel}
         type="button"
         onClick={(event) => {
@@ -4430,9 +4421,9 @@ function ExtraWorkOverviewThumbnail({
           onToggleSelection(photo);
         }}
       >
-        {selectionPending ? "…" : photo.signed_document_member ? <Lock aria-hidden="true" size={13} /> : photo.customer_document_selected ? <Check aria-hidden="true" size={15} /> : "○"}
+        {selectionPending ? "…" : photo.customer_document_selected ? <Check aria-hidden="true" size={15} /> : "○"}
       </button> : null}
-      {photoKind === "extra-work" && !photo.signed_document_member && !photo.customer_document_selected ? <span className="project-extra-work-photo-selection-label">{signed ? "Nicht mitsenden" : "Nicht im Dokument"}</span> : null}
+      {photoKind === "extra-work" && !photo.customer_document_selected ? <span className="project-extra-work-photo-selection-label">Nicht in PDF / E-Mail</span> : null}
     </div>
   );
 }

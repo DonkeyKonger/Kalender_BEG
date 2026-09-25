@@ -47,16 +47,9 @@ class ExtraWorkEmailService:
         site_name = _clean_text(ticket.site.name if ticket.site else None) or "Baustelle"
         document_title = _email_document_title(ticket, site_name, filename)
         worker_name = _worker_name(assignment, current_user)
-        supplemental_builder = getattr(pdf_service, "build_mobile_ticket_supplemental_photo_pdf", None)
-        supplemental = supplemental_builder(
-            assignment_id=assignment_id,
-            ticket_id=ticket_id,
-            current_user=current_user,
-        ) if callable(supplemental_builder) else None
+        # The same output as the download already contains all selected photos,
+        # including those added after signing. Do not attach them a second time.
         attachments = [EmailAttachment(filename, content, "application/pdf")]
-        if supplemental is not None:
-            supplemental_content, supplemental_filename = supplemental
-            attachments.append(EmailAttachment(supplemental_filename, supplemental_content, "application/pdf"))
         sent_at = _deliver_pdf_email(
             recipients=recipients,
             document_title=document_title,

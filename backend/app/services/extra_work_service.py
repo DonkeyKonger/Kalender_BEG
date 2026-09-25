@@ -1147,11 +1147,6 @@ class ExtraWorkService:
             raise HTTPException(status.HTTP_409_CONFLICT, "Archivierte Zusatzaufträge können nicht bearbeitet werden.")
         self._freeze_legacy_snapshot_before_photo_change(ticket, assignment)
         photo = self._get_photo_for_ticket(photo_id, ticket.id)
-        if self._photo_is_signed_member(ticket, photo.id):
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Dieses Foto ist Bestandteil des unveränderlichen unterschriebenen Dokuments.",
-            )
         photo.customer_document_selected = selected
         self.db.add(photo)
         self.db.commit()
