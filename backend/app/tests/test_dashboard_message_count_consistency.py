@@ -14,6 +14,7 @@ from app.models.site import Site
 from app.models.site_measurement_item import SiteMeasurementBatch
 from app.models.user import User
 from app.services.dashboard_message_service import DashboardMessageService
+from app.services.measurement_service import MeasurementService
 from app.tests.test_dashboard_note_service import db_session
 
 
@@ -52,7 +53,9 @@ def test_counter_reaches_zero_after_visible_messages_read_despite_archived_measu
     visible = batch(db, site, 2, signed=signed)
     service = DashboardMessageService(db)
     messages = service.list_messages(limit=6, current_user=user)
-    assert [message.batch_id for message in messages] == [visible.id]
+    assert [message.batch_id for message in messages] == (
+        [visible.id] if role == UserRole.PROJECT_MANAGER else []
+    )
     for message in messages:
         service.dismiss_message(message_key=message.message_key, current_user=user)
     summary = service.get_summary(limit=6, current_user=user)
@@ -173,3 +176,72 @@ def test_default_summary_returns_all_unread_messages_not_just_six_or_twenty(data
     remaining = client.get("/api/dashboard/messages/summary").json()
     assert remaining["open_count"] == len(remaining["latest_messages"]) == total - 1
     assert key not in {row["message_key"] for row in remaining["latest_messages"]}
+
+
+@pytest.mark.parametrize("recipient", ["assigned", "other", "unlinked", "office", "admin"])
+def test_only_assigned_manager_receives_document_messages_on_all_endpoints(data, recipient):
+    db, user, site = data
+    unassigned_site = Site(name="Ohne Projektleitung", site_number="8008")
+    foreign_site = Site(name="Andere Projektleitung", site_number="8009", project_manager=Person(
+        first_name="Andere", last_name="Leitung", display_name="Andere Leitung", short_code="AL"))
+    db.add_all([unassigned_site, foreign_site])
+    db.commit()
+    own_keys = set()
+    for target in (site, unassigned_site, foreign_site):
+        submitted = batch(db, target, 1)
+        signed = batch(db, target, 2, signed=True)
+        ticket = ExtraWorkTicket(site=target, sequence_number=1, display_number=f"{target.site_number}.Z01",
+                                 status="submitted", submitted_at=NOW)
+        db.add(ticket)
+        db.commit()
+        if target == site:
+            own_keys = {f"measurement_submitted:{submitted.id}", f"measurement_customer_signed:{signed.id}",
+                        f"extra_work_submitted:{ticket.id}"}
+    if recipient == "unlinked":
+        user.person = None
+    elif recipient == "other":
+        user.person = Person(first_name="Ohne", last_name="Baustellen", display_name="Ohne Baustellen", short_code="OB")
+    elif recipient in {"office", "admin"}:
+        # Even sharing the assigned person's ID must not turn an office/admin
+        # account into a recipient. Role and assignment must both match.
+        user.role = UserRole.OFFICE if recipient == "office" else UserRole.ADMIN
+        user.office_page_permissions = ["overview", "calendar", "sites"]
+    note = DashboardNote(text="Andere Meldungen bleiben sichtbar", created_by_user_id=user.id,
+                         shared_with_user_id=user.id, shared_at=NOW, share_revision=1)
+    db.add(note)
+    db.commit()
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_app_user] = lambda: user
+    client = TestClient(app)
+    expected = own_keys if recipient == "assigned" else set()
+    response = client.get("/api/dashboard/measurement-submissions")
+    assert response.status_code == 200
+    assert {row["message_key"] for row in response.json()} == expected
+    response = client.get("/api/dashboard/messages/summary")
+    assert response.status_code == 200
+    summary = response.json()
+    assert {row["message_key"] for row in summary["latest_messages"]} == expected | {f"dashboard_note_shared:{note.id}:1"}
+    assert summary["open_count"] == len(expected) + 1
+    assert client.get("/api/dashboard/messages/unread-count").json() == {"count": len(expected) + 1}
+
+
+def test_manager_reassignment_moves_existing_document_messages_without_office_fallback(data):
+    db, user, site = data
+    batch(db, site, 1)
+    batch(db, site, 2, signed=True)
+    db.add(ExtraWorkTicket(site=site, sequence_number=1, display_number="8007.Z01", status="submitted", submitted_at=NOW))
+    other = User(username="new-manager", display_name="Neue Leitung", password_hash="x", role=UserRole.PROJECT_MANAGER,
+                 person=Person(first_name="Neue", last_name="Leitung", display_name="Neue Leitung", short_code="NL"))
+    db.add(other)
+    db.commit()
+    service = DashboardMessageService(db)
+    assert service.get_summary(limit=None, current_user=user).open_count == 3
+    site.project_manager = other.person
+    db.commit()
+    assert service.get_summary(limit=None, current_user=user).model_dump() == {"open_count": 0, "latest_messages": []}
+    summary = service.get_summary(limit=None, current_user=other)
+    assert summary.open_count == len(summary.latest_messages) == 3
+    # No user context must not expose a global submission inbox either.
+    assert MeasurementService(db).list_dashboard_submissions() == []
+    assert MeasurementService(db).count_dashboard_submissions() == 0

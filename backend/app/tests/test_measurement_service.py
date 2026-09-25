@@ -2228,6 +2228,16 @@ def test_status_reset_preserves_reviewed_content_signatures_and_invoicing(initia
         assert len(stored.entries) == 1
 
 
+def dashboard_project_manager(db, site, username="dashboard-manager"):
+    if site.project_manager is None:
+        site.project_manager = Person(first_name="Projekt", last_name="Leitung", display_name="Projekt Leitung", short_code="PL")
+    manager = User(username=username, display_name="Projekt Leitung", password_hash="x",
+                   role=UserRole.PROJECT_MANAGER, person=site.project_manager)
+    db.add(manager)
+    db.commit()
+    return manager
+
+
 def test_site_measurement_billing_status_and_entry_update():
     from datetime import date
 
@@ -2292,7 +2302,8 @@ def test_site_measurement_billing_status_and_entry_update():
         batch_id=batch.id,
         current_user=user,
     )
-    dashboard_messages = service.list_dashboard_submissions(limit=5)
+    manager = dashboard_project_manager(db, site)
+    dashboard_messages = service.list_dashboard_submissions(limit=5, current_user=manager)
     updated_entry = service.update_site_entry(
         site_id=site.id,
         batch_id=submitted.id,
@@ -3532,7 +3543,7 @@ def test_dashboard_submissions_for_project_manager_are_scoped_to_assigned_sites(
 
     assert [message.batch_id for message in project_manager_messages] == [own_batch.id]
     assert unrelated_project_manager_messages == []
-    assert {message.batch_id for message in admin_messages} == {own_batch.id, other_batch.id}
+    assert admin_messages == []
 
 
 def test_dashboard_submissions_include_submitted_extra_work_tickets():
@@ -3580,8 +3591,10 @@ def test_dashboard_submissions_include_submitted_extra_work_tickets():
     db.commit()
 
     service = MeasurementService(db)
-    dashboard_messages = service.list_dashboard_submissions(limit=5)
-    dashboard_summary = service.get_dashboard_messages_summary(limit=5)
+    manager = dashboard_project_manager(db, site)
+    other_manager_login = dashboard_project_manager(db, site, "other-manager-login")
+    dashboard_messages = service.list_dashboard_submissions(limit=5, current_user=manager)
+    dashboard_summary = service.get_dashboard_messages_summary(limit=5, current_user=manager)
 
     assert len(dashboard_messages) == 1
     assert dashboard_summary.open_count == 1
@@ -3596,12 +3609,12 @@ def test_dashboard_submissions_include_submitted_extra_work_tickets():
     assert dashboard_messages[0].submitted_by_name == "Max Monteur"
     assert dashboard_messages[0].event_at == ticket.submitted_at
 
-    service.dismiss_dashboard_message(message_key=dashboard_messages[0].message_key, current_user=user)
-    dismissed_summary = service.get_dashboard_messages_summary(limit=5, current_user=user)
+    service.dismiss_dashboard_message(message_key=dashboard_messages[0].message_key, current_user=manager)
+    dismissed_summary = service.get_dashboard_messages_summary(limit=5, current_user=manager)
     assert dismissed_summary.open_count == 0
     assert dismissed_summary.latest_messages == []
-    assert service.list_dashboard_submissions(limit=5, current_user=user) == []
-    assert service.list_dashboard_submissions(limit=5)[0].extra_work_ticket_id == ticket.id
+    assert service.list_dashboard_submissions(limit=5, current_user=manager) == []
+    assert service.list_dashboard_submissions(limit=5, current_user=other_manager_login)[0].extra_work_ticket_id == ticket.id
 
 
 def test_dashboard_submissions_include_customer_signed_batches_until_billed():
@@ -3692,8 +3705,10 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
         payload=signature_payload,
     )
 
-    dashboard_messages = service.list_dashboard_submissions(limit=5)
-    dashboard_summary = service.get_dashboard_messages_summary(limit=5)
+    manager = dashboard_project_manager(db, site)
+    other_manager_login = dashboard_project_manager(db, site, "other-manager-login")
+    dashboard_messages = service.list_dashboard_submissions(limit=5, current_user=manager)
+    dashboard_summary = service.get_dashboard_messages_summary(limit=5, current_user=manager)
 
     assert dashboard_summary.open_count == 1
     assert dashboard_summary.latest_messages[0].message_key == dashboard_messages[0].message_key
@@ -3705,12 +3720,12 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
     assert dashboard_messages[0].message_key == f"measurement_customer_signed:{batch.id}"
     assert signed.customer_signature_place == "Klinikweg 8, 77815 Buehl"
 
-    service.dismiss_dashboard_message(message_key=dashboard_messages[0].message_key, current_user=user)
-    dismissed_summary = service.get_dashboard_messages_summary(limit=5, current_user=user)
+    service.dismiss_dashboard_message(message_key=dashboard_messages[0].message_key, current_user=manager)
+    dismissed_summary = service.get_dashboard_messages_summary(limit=5, current_user=manager)
     assert dismissed_summary.open_count == 0
     assert dismissed_summary.latest_messages == []
-    assert service.list_dashboard_submissions(limit=5, current_user=user) == []
-    assert service.list_dashboard_submissions(limit=5)[0].batch_id == batch.id
+    assert service.list_dashboard_submissions(limit=5, current_user=manager) == []
+    assert service.list_dashboard_submissions(limit=5, current_user=other_manager_login)[0].batch_id == batch.id
 
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     assert stored_batch is not None

@@ -7,7 +7,7 @@ import re
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import String, and_, cast, func, or_, select
+from sqlalchemy import String, and_, cast, false, func, or_, select
 from sqlalchemy.orm import Session, defer, selectinload, with_loader_criteria
 
 from app.models.assignment import Assignment
@@ -2097,15 +2097,27 @@ class MeasurementService:
         return self.list_site_batch_items(site_id=site_id, batch_id=batch_id)
 
     @staticmethod
+    def _dashboard_recipient_filter(current_user: User | None):
+        # Submission/signature messages belong only to the assigned project
+        # manager, not to every account allowed to view the dashboard. An
+        # unlinked manager must not match sites whose manager is also NULL.
+        if (
+            current_user is None
+            or current_user.role != UserRole.PROJECT_MANAGER
+            or current_user.person_id is None
+        ):
+            return false()
+        return Site.project_manager_person_id == current_user.person_id
+
+    @staticmethod
     def _dashboard_batch_filters(current_user: User | None) -> list:
         # Share eligibility between the list and its independently polled counter.
         # Archived batches must not remain as invisible unread notifications.
         filters = [
             SiteMeasurementBatch.status.notin_(("billed", "approved", "closed")),
             SiteMeasurementBatch.deleted_at.is_(None),
+            MeasurementService._dashboard_recipient_filter(current_user),
         ]
-        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
-            filters.append(Site.project_manager_person_id == current_user.person_id)
         return filters
 
     @staticmethod
@@ -2114,9 +2126,8 @@ class MeasurementService:
             ExtraWorkTicket.status == "submitted",
             ExtraWorkTicket.submitted_at.is_not(None),
             ExtraWorkTicket.deleted_at.is_(None),
+            MeasurementService._dashboard_recipient_filter(current_user),
         ]
-        if current_user is not None and current_user.role == UserRole.PROJECT_MANAGER:
-            filters.append(Site.project_manager_person_id == current_user.person_id)
         return filters
 
     def list_dashboard_submissions(
