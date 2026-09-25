@@ -2421,6 +2421,7 @@ export const api = {
     startDate: string;
     endDate: string;
     entries: MatrixEntryInput[];
+    initialPersonIds: number[];
   }): Promise<MatrixMutationResponse> {
     return request<MatrixMutationResponse>("/matrix/range", {
       method: "PATCH",
@@ -2429,6 +2430,7 @@ export const api = {
         start_date: params.startDate,
         end_date: params.endDate,
         entries: params.entries,
+        initial_person_ids: params.initialPersonIds,
       }),
     });
   },

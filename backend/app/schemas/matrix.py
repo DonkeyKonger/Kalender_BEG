@@ -101,6 +101,9 @@ class MatrixRangePatch(BaseModel):
     start_date: Date
     end_date: Date
     entries: list[MatrixEntryInput]
+    # Baseline from the opened editor; only additions/removals apply to the range.
+    # Older clients omit it, so the service derives it from the starting day.
+    initial_person_ids: list[int] | None = None
 
 
 class MatrixCellMarkPatch(BaseModel):

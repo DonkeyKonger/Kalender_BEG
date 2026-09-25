@@ -41,6 +41,13 @@ class MatrixMutationService:
     def patch_range(self, payload: MatrixRangePatch, user_id: int) -> dict:
         if payload.end_date < payload.start_date:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
+        initial_person_ids = payload.initial_person_ids
+        if initial_person_ids is None:
+            # Compatibility with already-open/older clients: their entry list
+            # is seeded from the first selected cell, not the whole range.
+            initial_person_ids = [item.person_id for item in self.assignments.list(
+                start=payload.start_date, end=payload.start_date, site_id=payload.site_id,
+            )]
         return self._replace_range(
             site_id=payload.site_id,
             start_date=payload.start_date,
@@ -48,6 +55,7 @@ class MatrixMutationService:
             entries=payload.entries,
             user_id=user_id,
             action="matrix.range.updated",
+            initial_person_ids=set(initial_person_ids),
         )
 
 
@@ -112,6 +120,7 @@ class MatrixMutationService:
         entries: list[MatrixEntryInput],
         user_id: int,
         action: str,
+        initial_person_ids: set[int] | None = None,
     ) -> dict:
         if self.sites.get(site_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Baustelle nicht gefunden.")
@@ -119,14 +128,17 @@ class MatrixMutationService:
         people = self._resolve_entries(entries)
         existing = self.assignments.list(start=start_date, end=end_date, site_id=site_id)
         requested_person_ids = {person.id for person in people}
-        removed = [item for item in existing if item.person_id not in requested_person_ids]
+        removed = [item for item in existing if item.person_id not in requested_person_ids
+                   and (initial_person_ids is None or item.person_id in initial_person_ids)]
+        people_to_plan = [person for person in people
+                          if initial_person_ids is None or person.id not in initial_person_ids]
         affected_person_ids = {assignment.person_id for assignment in removed}
         excluded_ids = {assignment.id for assignment in existing}
         blockers: list[ConflictMessage] = []
         warnings: list[ConflictMessage] = []
         infos: list[ConflictMessage] = []
 
-        for person in people:
+        for person in people_to_plan:
             check = self.conflicts.check_assignment(
                 person_id=person.id,
                 site_id=site_id,
@@ -145,6 +157,8 @@ class MatrixMutationService:
             "end_date": end_date.isoformat(),
             "people": [person.id for person in people],
         }
+        if initial_person_ids is not None:
+            requested["initial_person_ids"] = sorted(initial_person_ids)
 
         if blockers:
             self.audit.record(
@@ -175,7 +189,7 @@ class MatrixMutationService:
             self._split_or_delete_assignment(assignment, start_date, end_date, user_id)
 
         created = []
-        for person in people:
+        for person in people_to_plan:
             # Keep every retained assignment intact, including its ID and metadata.
             # Only dates not already planned for this person need new assignments.
             retained = [item for item in existing if item.person_id == person.id]

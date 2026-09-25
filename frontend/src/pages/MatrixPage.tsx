@@ -1275,7 +1275,7 @@ export function MatrixPage() {
       autosaveRef.current = null;
     }
     const unchanged = sameEntries(initialEntries, entriesForSave);
-    if (unchanged && activeCell.endDate === activeCell.date) {
+    if (unchanged) {
       setSaveStatus((current) => ({ ...current, [activeCell.key]: "idle" }));
       if (options.closeOnSuccess) {
         closeActiveEditor();
@@ -1301,6 +1301,7 @@ export function MatrixPage() {
             startDate: activeCell.date,
             endDate: activeCell.endDate,
             entries,
+            initialPersonIds: initialEntries.flatMap((entry) => entry.person_id === undefined ? [] : [entry.person_id]),
           });
       setInitialEntries(entriesForSave);
       setError(null);
