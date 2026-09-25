@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { measurementReviewMarksKey, measurementReviewCellKey, readMeasurementReviewMarks, writeMeasurementReviewMarks, toggleMeasurementReviewMark, paintMeasurementReviewMarks } from "../src/lib/measurementReviewMarks.ts";
+import { clearMeasurementReviewSelection, measurementReviewMarksKey, measurementReviewCellKey, readMeasurementReviewMarks, writeMeasurementReviewMarks, toggleMeasurementReviewMark, paintMeasurementReviewMarks } from "../src/lib/measurementReviewMarks.ts";
 
 function storage() {
   const values = new Map();
@@ -65,4 +65,44 @@ test("reordered rows and columns retain semantic cells, never their old screen c
   assert.equal(grid.rows[0].cells[1].dataset.reviewMarked, "true");
   assert.equal(grid.rows[1].cells[2].dataset.reviewMarked, undefined);
   assert.notEqual(measurementReviewCellKey("a:b", "c"), measurementReviewCellKey("a", "b:c"));
+});
+
+test("right-click clears native word selection only inside the clicked cell", () => {
+  const inside = {}, outside = {};
+  let cleared = 0;
+  const selection = {isCollapsed:false, anchorNode:inside, focusNode:inside, removeAllRanges(){cleared++;}};
+  const cell = {contains: node => node === inside, ownerDocument:{getSelection:()=>selection, activeElement:null}};
+  clearMeasurementReviewSelection(cell);
+  assert.equal(cleared, 1);
+  selection.anchorNode = outside;
+  selection.focusNode = outside;
+  clearMeasurementReviewSelection(cell);
+  assert.equal(cleared, 1);
+  selection.focusNode = inside;
+  clearMeasurementReviewSelection(cell);
+  assert.equal(cleared, 2);
+});
+
+test("selected input text collapses without changing its value or firing blur/save", () => {
+  for (const tagName of ["INPUT", "TEXTAREA"]) {
+    const editor = {tagName, value:"6,00", selectionStart:0, selectionEnd:4,
+      setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;}};
+    const cell = {contains: node => node === editor, ownerDocument:{getSelection:()=>null, activeElement:editor}};
+    clearMeasurementReviewSelection(cell);
+    assert.equal(editor.selectionStart,4);
+    assert.equal(editor.selectionEnd,4);
+    assert.equal(editor.value,"6,00");
+    cell.contains = () => false;
+    editor.selectionStart = 0;
+    clearMeasurementReviewSelection(cell);
+    assert.equal(editor.selectionStart,0);
+  }
+});
+
+test("non-text inputs and collapsed selections are left unchanged", () => {
+  const editor = {tagName:"INPUT", selectionStart:null, selectionEnd:null,
+    setSelectionRange(){assert.fail("A numeric input has no text selection API");}};
+  const cell = {contains:()=>true,ownerDocument:{activeElement:editor,
+    getSelection:()=>({isCollapsed:true,removeAllRanges(){assert.fail("No selected text");}})}};
+  assert.doesNotThrow(()=>clearMeasurementReviewSelection(cell));
 });

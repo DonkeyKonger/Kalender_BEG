@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { MouseEvent, RefObject } from "react";
-import { getMeasurementReviewCell, paintMeasurementReviewMarks, readMeasurementReviewMarks, toggleMeasurementReviewMark, writeMeasurementReviewMarks } from "../lib/measurementReviewMarks";
+import { clearMeasurementReviewSelection, getMeasurementReviewCell, paintMeasurementReviewMarks, readMeasurementReviewMarks, toggleMeasurementReviewMark, writeMeasurementReviewMarks } from "../lib/measurementReviewMarks";
 
 export function useMeasurementReviewMarks(tableRef: RefObject<HTMLTableElement | null>, cacheKey: string | null) {
   const state = useRef<{ key: string | null; marks: Set<string> } | null>(null);
+  const selectionFrame = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (selectionFrame.current !== null) window.cancelAnimationFrame(selectionFrame.current);
+  }, []);
   const load = useCallback(() => {
     try { return cacheKey ? readMeasurementReviewMarks(window.localStorage, cacheKey) : new Set<string>(); }
     catch { return new Set<string>(); }
@@ -23,16 +27,34 @@ export function useMeasurementReviewMarks(tableRef: RefObject<HTMLTableElement |
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, [cacheKey, load, tableRef]);
+  function preventRightClickSelection(event: MouseEvent<HTMLTableElement>) {
+    if (event.button !== 2 && !(event.button === 0 && event.ctrlKey)) {
+      // A subsequent normal click owns its selection again.
+      if (selectionFrame.current !== null) window.cancelAnimationFrame(selectionFrame.current);
+      selectionFrame.current = null;
+      return;
+    }
+    const cell = getMeasurementReviewCell(event.target, event.currentTarget);
+    if (!cell) return;
+    // Intercept before native word selection/focus, without saving another draft.
+    event.preventDefault();
+    clearMeasurementReviewSelection(cell);
+  }
   return {
-    onMouseDownCapture(event: MouseEvent<HTMLTableElement>) {
-      // Right-clicking must not blur another draft and accidentally save it.
-      if (event.button === 2 && getMeasurementReviewCell(event.target, event.currentTarget)) event.preventDefault();
-    },
+    onPointerDownCapture: preventRightClickSelection,
+    onMouseDownCapture: preventRightClickSelection,
     onContextMenuCapture(event: MouseEvent<HTMLTableElement>) {
       const cell = getMeasurementReviewCell(event.target, event.currentTarget);
       if (!cell || !state.current) return;
       event.preventDefault();
       event.stopPropagation();
+      clearMeasurementReviewSelection(cell);
+      if (selectionFrame.current !== null) window.cancelAnimationFrame(selectionFrame.current);
+      selectionFrame.current = window.requestAnimationFrame(() => {
+        // Safari may perform native context-menu selection after the event handler.
+        if (cell.isConnected) clearMeasurementReviewSelection(cell);
+        selectionFrame.current = null;
+      });
       toggleMeasurementReviewMark(state.current.marks, cell.dataset.reviewMarkKey!);
       paintMeasurementReviewMarks(event.currentTarget, state.current.marks);
       try {

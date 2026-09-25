@@ -41,6 +41,24 @@ export function getMeasurementReviewCell(target: EventTarget | null, table: HTML
   return cell?.closest("table") === table && cell.dataset.reviewMarkKey ? cell : null;
 }
 
+// Some browsers select a word for their native context menu, even on read-only
+// cells. Only clear the clicked cell's selection; keep other drafts/focus intact.
+export function clearMeasurementReviewSelection(cell: HTMLTableCellElement): void {
+  const document = cell.ownerDocument;
+  const selection = document.getSelection();
+  if (selection && !selection.isCollapsed
+    && (cell.contains(selection.anchorNode) || cell.contains(selection.focusNode))) {
+    selection.removeAllRanges();
+  }
+  const editor = document.activeElement;
+  if (editor && cell.contains(editor) && (editor.tagName === "INPUT" || editor.tagName === "TEXTAREA")) {
+    const input = editor as HTMLInputElement | HTMLTextAreaElement;
+    if (input.selectionEnd !== null && input.selectionStart !== input.selectionEnd) {
+      input.setSelectionRange(input.selectionEnd, input.selectionEnd);
+    }
+  }
+}
+
 export function paintMeasurementReviewMarks(table: HTMLTableElement, marks: Set<string>): void {
   const columns = Array.from(table.querySelectorAll<HTMLTableColElement>("col[data-review-column]"), col => col.dataset.reviewColumn!);
   for (const row of Array.from(table.rows)) {
