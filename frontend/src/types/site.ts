@@ -397,6 +397,7 @@ export type MobileExtraWorkTicket = {
   sequence_number: number;
   display_number: string;
   title: string | null;
+  internal_label?: string | null;
   kind: "billing" | "approval" | string;
   approval_ticket_id: number | null;
   status: "draft" | "submitted" | "reviewed" | "signed" | string;

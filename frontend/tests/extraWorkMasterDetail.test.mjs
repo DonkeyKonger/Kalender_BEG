@@ -171,13 +171,14 @@ test("detail overflow menu preserves archive and restore paths with full keyboar
   assert.match(detailSource, /<MoreHorizontal aria-hidden="true"/);
   assert.match(detailSource, /role="menu"/);
   assert.match(detailSource, /role="menuitem"/);
-  assert.match(detailSource, /archiveMode \? "Wiederherstellen" : "Archivieren"/);
+  assert.match(detailSource, /"Wiederherstellen"/);
+  assert.match(detailSource, /Zusatzauftrag beschriften/);
   assert.match(detailSource, /if \(archiveMode\) \{[\s\S]*onRestoreTicket\(selectedTicket\);[\s\S]*\} else \{[\s\S]*onArchiveTicket\(selectedTicket\);/);
   assert.match(detailSource, /document\.addEventListener\("pointerdown", handlePointerDown, true\)/);
   assert.match(detailSource, /document\.addEventListener\("keydown", handleKeyDown\)/);
   assert.match(detailSource, /event\.key === "Escape"[\s\S]*closeActionMenu\(true\)/);
-  assert.match(detailSource, /event\.key === "Tab"[\s\S]*event\.preventDefault\(\)[\s\S]*menuItemRef\.current\?\.focus\(\)/);
-  assert.match(detailSource, /requestAnimationFrame\(\(\) => menuItemRef\.current\?\.focus\(\)\)/);
+  assert.match(detailSource, /\["Tab", "ArrowDown", "ArrowUp", "Home", "End"\][\s\S]*event\.preventDefault\(\)[\s\S]*items\[index\]\?\.focus\(\)/);
+  assert.match(detailSource, /requestAnimationFrame\(\(\) => \(labelItemRef\.current \?\? menuItemRef\.current\)\?\.focus\(\)\)/);
   assert.match(detailSource, /triggerRef\.current\?\.focus\(\)/);
   assert.match(detailSource, /disabled=\{actionMenuBusy\}/);
   assert.doesNotMatch(detailSource, /onClick=\{\(\) => onArchiveTicket\(ticket\)\}/);

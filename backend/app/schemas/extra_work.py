@@ -272,6 +272,15 @@ class ExtraWorkTicketEntrySummaryRead(BaseModel):
     estimated_hours: float | None
 
 
+class ExtraWorkTicketLabelUpdate(BaseModel):
+    internal_label: str = Field(max_length=120)
+
+
+class ExtraWorkTicketLabelRead(BaseModel):
+    id: int
+    internal_label: str | None
+
+
 class ExtraWorkTicketRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -280,6 +289,7 @@ class ExtraWorkTicketRead(BaseModel):
     sequence_number: int
     display_number: str
     title: str | None
+    internal_label: str | None = None
     kind: str
     approval_ticket_id: int | None
     status: str

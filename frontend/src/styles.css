@@ -30143,6 +30143,14 @@ body.mobile-modal-scroll-locked {
   place-items: center;
 }
 
+.project-extra-work-master-title.has-internal-label strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .project-extra-work-invoiced-control {
   position: relative;
   display: grid;

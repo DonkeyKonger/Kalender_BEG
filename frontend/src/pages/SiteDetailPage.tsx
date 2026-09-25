@@ -1857,6 +1857,11 @@ export function SiteDetailPage() {
             onDownloadPdf={(ticket) => void handleExtraWorkTicketPdf(ticket, "download")}
             onArchiveTicket={archiveExtraWorkTicket}
             onRestoreTicket={restoreExtraWorkTicket}
+            onLabelTicket={async (ticket, label) => {
+              const updated = await api.updateSiteExtraWorkTicketLabel(site.id, ticket.id, label);
+              setExtraWorkTickets(current => current.map(row => row.id === updated.id ? { ...row, ...updated } : row));
+              setSelectedExtraWorkTicket(current => current?.id === updated.id ? { ...current, ...updated } : current);
+            }}
             onPromoteStatus={(ticket, status) => void promoteExtraWorkTicketStatus(ticket, status)}
             onToggleInvoiced={(ticket) => void toggleExtraWorkTicketInvoiced(ticket)}
             onPhotoCountUpdated={(ticketId, photoCount) => {
@@ -3152,6 +3157,7 @@ function mergeExtraWorkOverviewEntrySummaries(
 }
 
 function ExtraWorkTab({
+  onLabelTicket,
   site,
   tickets,
   isLoading,
@@ -3183,6 +3189,7 @@ function ExtraWorkTab({
 }: {
   site: Site;
   tickets: MobileExtraWorkTicket[];
+  onLabelTicket: (ticket: MobileExtraWorkTicket, label: string) => Promise<void>;
   isLoading: boolean;
   error: string | null;
   message: string | null;
@@ -3534,7 +3541,7 @@ function ExtraWorkTab({
                           />
                         </span>
                       </div>
-                      <div className="project-extra-work-master-title" role="gridcell">
+                      <div className={`project-extra-work-master-title${ticket.internal_label ? " has-internal-label" : ""}`} role="gridcell" title={formatExtraWorkOverviewTitle(ticket)}>
                         <strong>{formatExtraWorkOverviewTitle(ticket)}</strong>
                       </div>
                       <div
@@ -3610,6 +3617,7 @@ function ExtraWorkTab({
           </div>
 
           <ExtraWorkOverviewDetail
+            onLabelTicket={onLabelTicket}
             site={site}
             ticket={selectedTicket}
             archiveMode={archiveMode}
@@ -3630,6 +3638,7 @@ function ExtraWorkTab({
 }
 
 function ExtraWorkOverviewDetail({
+  onLabelTicket,
   site,
   ticket,
   archiveMode,
@@ -3645,6 +3654,7 @@ function ExtraWorkOverviewDetail({
 }: {
   site: Site;
   ticket: MobileExtraWorkTicket | null;
+  onLabelTicket: (ticket: MobileExtraWorkTicket, label: string) => Promise<void>;
   archiveMode: boolean;
   pdfAction: string | null;
   archivingTicketId: number | null;
@@ -3660,6 +3670,8 @@ function ExtraWorkOverviewDetail({
   const actionMenuRootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuItemRef = useRef<HTMLButtonElement>(null);
+  const labelItemRef = useRef<HTMLButtonElement>(null);
+  const [labelTicket, setLabelTicket] = useState<MobileExtraWorkTicket | null>(null);
   const actionMenuId = useId();
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
 
@@ -3684,7 +3696,7 @@ function ExtraWorkOverviewDetail({
     if (!isActionMenuOpen) {
       return undefined;
     }
-    const focusFrame = window.requestAnimationFrame(() => menuItemRef.current?.focus());
+    const focusFrame = window.requestAnimationFrame(() => (labelItemRef.current ?? menuItemRef.current)?.focus());
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (target instanceof Node && !actionMenuRootRef.current?.contains(target)) {
@@ -3697,14 +3709,13 @@ function ExtraWorkOverviewDetail({
         closeActionMenu(true);
         return;
       }
-      if (event.key === "Tab") {
+      if (["Tab", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
         event.preventDefault();
-        menuItemRef.current?.focus();
-        return;
-      }
-      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-        event.preventDefault();
-        menuItemRef.current?.focus();
+        const items = [labelItemRef.current, menuItemRef.current].filter((item): item is HTMLButtonElement => Boolean(item && !item.disabled));
+        const current = items.findIndex(item => item === document.activeElement);
+        const backwards = event.key === "ArrowUp" || (event.key === "Tab" && event.shiftKey);
+        const index = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (current + (backwards ? -1 : 1) + items.length) % items.length;
+        items[index]?.focus();
       }
     };
     document.addEventListener("pointerdown", handlePointerDown, true);
@@ -3767,7 +3778,7 @@ function ExtraWorkOverviewDetail({
               ref={triggerRef}
               type="button"
               className="secondary-action project-extra-work-action-menu-trigger"
-              aria-label={`${archiveMode ? "Wiederherstellen" : "Archivieren"}: weitere Aktionen für ${formatExtraWorkOverviewTitle(ticket)}`}
+              aria-label={`Weitere Aktionen für ${formatExtraWorkOverviewTitle(ticket)}`}
               aria-haspopup="menu"
               aria-expanded={isActionMenuOpen}
               aria-controls={isActionMenuOpen ? actionMenuId : undefined}
@@ -3784,6 +3795,10 @@ function ExtraWorkOverviewDetail({
             </button>
             {isActionMenuOpen ? (
               <div className="project-extra-work-action-menu" id={actionMenuId} role="menu" aria-label="Zusatzauftragsaktionen">
+                {canEdit ? <button
+                  ref={labelItemRef} type="button" role="menuitem" disabled={actionMenuBusy}
+                  onClick={() => { closeActionMenu(false); setLabelTicket(ticket); }}
+                >Zusatzauftrag beschriften</button> : null}
                 <button
                   ref={menuItemRef}
                   type="button"
@@ -3869,6 +3884,9 @@ function ExtraWorkOverviewDetail({
         canUpload={canEdit && !archiveMode}
         onPhotoCountUpdated={onPhotoCountUpdated}
       />
+      {labelTicket ? <MeasurementLabelDialog key={labelTicket.id} batch={labelTicket}
+        documentKind="Zusatzauftrag" title={`Zusatzauftrag ${labelTicket.display_number}`}
+        onSave={onLabelTicket} onClose={() => { setLabelTicket(null); window.requestAnimationFrame(() => triggerRef.current?.focus()); }} /> : null}
     </aside>
   );
 }

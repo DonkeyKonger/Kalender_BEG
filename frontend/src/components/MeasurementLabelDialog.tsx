@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { MobileMeasurementBatch } from "../types/site";
 import { ApiError } from "../lib/api";
 import "./MeasurementLabelDialog.css";
 
-export function MeasurementLabelDialog({ batch, title, onSave, onClose }: {
-  batch: MobileMeasurementBatch;
+export function MeasurementLabelDialog<T extends { internal_label?: string | null }>({ batch, title, onSave, onClose, documentKind = "Aufmaß" }: {
+  batch: T;
   title: string;
-  onSave: (batch: MobileMeasurementBatch, label: string) => Promise<void>;
+  documentKind?: "Aufmaß" | "Zusatzauftrag";
+  onSave: (batch: T, label: string) => Promise<void>;
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -31,11 +31,11 @@ export function MeasurementLabelDialog({ batch, title, onSave, onClose }: {
   return <dialog ref={dialog} className="measurement-label-dialog" aria-labelledby="measurement-label-title"
     onCancel={event => { event.preventDefault(); if (!pending.current) onClose(); }}>
     <form onSubmit={event => { event.preventDefault(); void save(); }}>
-      <h3 id="measurement-label-title">Aufmaß beschriften</h3>
+      <h3 id="measurement-label-title">{documentKind} beschriften</h3>
       <p>{title}</p>
       <label htmlFor="measurement-internal-label">Interne Beschriftung</label>
       <input id="measurement-internal-label" autoFocus maxLength={120} value={label} disabled={busy}
-        placeholder="z. B. Aufmaß Nachunternehmer" aria-describedby="measurement-label-hint"
+        placeholder={`z. B. ${documentKind} Nachunternehmer`} aria-describedby="measurement-label-hint"
         onChange={event => setLabel(event.target.value)} />
       <p id="measurement-label-hint">Nur intern sichtbar, nicht auf PDFs oder in Kunden-E-Mails. Zum Entfernen das Feld leeren.</p>
       {error ? <p role="alert">{error}</p> : null}

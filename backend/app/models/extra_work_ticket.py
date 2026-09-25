@@ -43,6 +43,7 @@ class ExtraWorkTicket(TimestampMixin, Base):
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
     display_number: Mapped[str] = mapped_column(String(120), nullable=False)
     title: Mapped[str | None] = mapped_column(String(160))
+    internal_label: Mapped[str | None] = mapped_column(String(120))
     kind: Mapped[str] = mapped_column(String(40), nullable=False, default="billing", index=True)
     approval_ticket_id: Mapped[int | None] = mapped_column(
         ForeignKey("extra_work_tickets.id", ondelete="SET NULL"), index=True

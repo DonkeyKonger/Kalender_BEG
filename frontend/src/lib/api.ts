@@ -1641,6 +1641,12 @@ export const api = {
     });
   },
 
+  async updateSiteExtraWorkTicketLabel(siteId: number, ticketId: number, internalLabel: string): Promise<{ id: number; internal_label: string | null }> {
+    return request(`/sites/${siteId}/extra-work-tickets/${ticketId}/internal-label`, {
+      method: "PATCH", body: JSON.stringify({ internal_label: internalLabel }),
+    });
+  },
+
   async updateSiteExtraWorkTicketPhotoSelection(
     siteId: number,
     ticketId: number,

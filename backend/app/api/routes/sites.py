@@ -20,6 +20,8 @@ from app.schemas.extra_work import (
     ExtraWorkTicketPhotoRead,
     ExtraWorkTicketPhotoSelectionUpdate,
     ExtraWorkTicketRead,
+    ExtraWorkTicketLabelRead,
+    ExtraWorkTicketLabelUpdate,
 )
 from app.schemas.measurement import (
     MeasurementGroupCreate,
@@ -619,6 +621,16 @@ def list_extra_work_tickets(
         site_id,
         archived_only=archived_only,
         include_entry_summaries=True,
+    )
+
+
+@router.patch("/{site_id}/extra-work-tickets/{ticket_id}/internal-label", response_model=ExtraWorkTicketLabelRead)
+def update_extra_work_ticket_internal_label(
+    site_id: int, ticket_id: int, payload: ExtraWorkTicketLabelUpdate,
+    current_user: User = Depends(CAN_SITES_WRITE), db: Session = Depends(get_db),
+) -> dict:
+    return ExtraWorkService(db).set_site_ticket_internal_label(
+        site_id=site_id, ticket_id=ticket_id, internal_label=payload.internal_label, current_user=current_user,
     )
 
 

@@ -5,7 +5,7 @@ import logging
 from collections.abc import Callable
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.audit_log import AuditLog
@@ -1114,6 +1114,29 @@ class ExtraWorkService:
             selected=payload.selected,
             assignment=assignment,
         )
+
+    def set_site_ticket_internal_label(
+        self, *, site_id: int, ticket_id: int, internal_label: str, current_user: User,
+    ) -> dict:
+        self._get_site(site_id)
+        ticket = self._get_ticket_for_site(ticket_id, site_id, include_deleted=True, for_update=True)
+        label = " ".join(internal_label.split()) or None
+        if label != ticket.internal_label:
+            AuditService(self.db).record(
+                user_id=current_user.id, action="extra_work.internal_label_updated",
+                entity_type="extra_work_ticket", entity_id=ticket.id,
+                old_value={"internal_label": ticket.internal_label}, new_value={"internal_label": label},
+            )
+            # Internal metadata must not change document timestamps or PDF caches.
+            self.db.execute(update(ExtraWorkTicket).where(ExtraWorkTicket.id == ticket.id).values(
+                internal_label=label, updated_at=ticket.updated_at,
+            ))
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                raise
+        return {"id": ticket.id, "internal_label": label}
 
     def update_site_ticket_photo_selection(
         self,

@@ -71,6 +71,13 @@ test("overview title deliberately omits the internal Hauptauftrag suffix", () =>
   assert.equal(EXTRA_WORK_OVERVIEW_DEFAULT_PAGE_SIZE, 8);
 });
 
+test("extra-work labels appear only as an internal suffix and are searchable", () => {
+  const labeled = ticket({internal_label: "Nachunternehmer"});
+  assert.equal(formatExtraWorkOverviewTitle(labeled), "Zusatzauftrag 9999.SZ13 - Nachunternehmer");
+  assert.equal(formatExtraWorkOverviewTitle(ticket({internal_label: "  "})), "Zusatzauftrag 9999.SZ13");
+  assert.deepEqual(filterExtraWorkOverviewTickets([labeled, ticket({id: 14})], site, "Nachunternehmer"), [labeled]);
+});
+
 test("overview page size follows available height between four and ten real rows", () => {
   assert.equal(calculateExtraWorkOverviewPageSize(280), 4);
   assert.equal(calculateExtraWorkOverviewPageSize(356), 4);

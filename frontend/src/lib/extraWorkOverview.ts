@@ -151,7 +151,8 @@ export function getExtraWorkOverviewPageItems(
 }
 
 export function formatExtraWorkOverviewTitle(ticket: MobileExtraWorkTicket): string {
-  return `Zusatzauftrag ${ticket.display_number}`;
+  const label = ticket.internal_label?.trim();
+  return `Zusatzauftrag ${ticket.display_number}${label ? ` - ${label}` : ""}`;
 }
 
 export function formatExtraWorkOverviewCreatorName(
@@ -265,6 +266,7 @@ export function buildExtraWorkOverviewSearchText(
     ticket.display_number,
     ticket.sequence_number,
     ticket.title,
+    ticket.internal_label,
     ticket.created_by_name,
     ticket.customer_name,
     ticket.ordered_by_name,
