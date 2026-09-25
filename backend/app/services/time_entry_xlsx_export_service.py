@@ -12,15 +12,18 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from xml.sax.saxutils import escape, quoteattr
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.enums import OvernightStatus
+from app.models.absence import Absence
+from app.models.enums import AbsenceStatus, AbsenceType, OvernightStatus
 from app.models.person import Person
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.gps_service import NOTICE_GPS_NOT_CHECKABLE, GpsPresenceEvaluation, GpsPresenceService
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 from app.services.time_entry_service import GPS_TIME_REVIEW_TOLERANCE_MINUTES, TimeEntryService
+from app.services.person_hours_account_service import DailyAbsenceCredit, calculate_weekly_hours_breakdown
 
 
 PACKAGE_RELATIONSHIP_CONTENT_TYPE = (
@@ -57,6 +60,11 @@ WEEKLY_WORKER_COLUMN_WIDTHS = [10, 14, 18, 34, 16, 16, 12, 16, 14, 18, 30, 42]
 EXPORTABLE_CORRECTION_METHODS = {"accept_gps", "manual_correction", "assign_site"}
 EXPORTABLE_MANUAL_STATUSES = {"manually_approved", "not_verifiable", "auto_closed_by_deadline"}
 GERMAN_WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+WEEKLY_ABSENCE_LABELS = {
+    AbsenceType.VACATION: "Urlaub",
+    AbsenceType.SICK: "Krankheit",
+    AbsenceType.FREE: "Überstundenabbau",
+}
 WEEKLY_WORKER_TABLE_NAME = "LohnpruefungMonteurwoche"
 WEEKLY_WORKER_HEADER_ROW_INDEX = 8
 WEEKLY_WORKER_DATA_START_ROW_INDEX = WEEKLY_WORKER_HEADER_ROW_INDEX + 1
@@ -120,6 +128,7 @@ class WeeklyWorkerExportRow:
     overnight_status: OvernightStatus | None = None
     gps_evaluation: GpsPresenceEvaluation | None = None
     has_multiple_entries_on_day: bool = False
+    absence_credit: DailyAbsenceCredit | None = None
 
 
 @dataclass(frozen=True)
@@ -180,7 +189,8 @@ class TimeEntryXlsxExportService:
         gps_evaluations = gps_service.evaluate_time_entries(entries)
 
         iso_week = start.isocalendar()
-        rows = weekly_worker_rows(start, end, entries, gps_evaluations)
+        absences = self._weekly_absences(start, end, current_user, person_id)
+        rows = weekly_worker_rows(start, end, entries, gps_evaluations, absences)
         return build_weekly_worker_xlsx(
             person_name=person.display_name,
             week_number=iso_week.week,
@@ -214,36 +224,61 @@ class TimeEntryXlsxExportService:
                 continue
             entries_by_person.setdefault(entry.person_id, []).append(entry)
 
-        if not entries_by_person:
+        absences_by_person: dict[int, list[Absence]] = {}
+        for absence in self._weekly_absences(start, end, current_user):
+            absences_by_person.setdefault(absence.person_id, []).append(absence)
+        person_ids = entries_by_person.keys() | absences_by_person.keys()
+        people = list(self.db.scalars(select(Person).where(Person.id.in_(person_ids)))) if person_ids else []
+        people.sort(key=lambda person: (person.display_name.casefold(), person.id))
+        gps_service = GpsPresenceService(self.db)
+        gps_evaluations = gps_service.evaluate_time_entries(entries)
+        rows_by_person = {
+            person.id: weekly_worker_rows(start, end, entries_by_person.get(person.id, []),
+                gps_evaluations, absences_by_person.get(person.id, []))
+            for person in people
+        }
+        people = [person for person in people if person.id in entries_by_person or any(
+            weekly_worker_total_minutes(row) > 0 for row in rows_by_person[person.id]
+        )]
+        if not people:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND,
                 "Für diese Kalenderwoche sind keine Arbeitsstunden vorhanden.",
             )
 
-        gps_service = GpsPresenceService(self.db)
-        gps_evaluations = gps_service.evaluate_time_entries(entries)
         iso_week = start.isocalendar()
-        grouped_entries = sorted(
-            entries_by_person.values(),
-            key=lambda person_entries: weekly_worker_person_name(person_entries[0]).casefold(),
-        )
         sheet_names = unique_weekly_worker_sheet_names(
-            weekly_worker_person_name(person_entries[0])
-            for person_entries in grouped_entries
+            person.display_name for person in people
         )
         sheets = [
             WeeklyWorkerSheet(
-                person_name=weekly_worker_person_name(person_entries[0]),
+                person_name=person.display_name,
                 sheet_name=sheet_names[index],
                 week_number=iso_week.week,
                 year=iso_week.year,
                 start=start,
                 end=end,
-                rows=weekly_worker_rows(start, end, person_entries, gps_evaluations),
+                rows=rows_by_person[person.id],
             )
-            for index, person_entries in enumerate(grouped_entries)
+            for index, person in enumerate(people)
         ]
         return build_weekly_workers_xlsx(sheets)
+
+    def _weekly_absences(
+        self, start: date, end: date, current_user: User, person_id: int | None = None,
+    ) -> list[Absence]:
+        # Keep the same person scope as the time-entry query, including direct service calls.
+        effective_person_id = TimeEntryService(self.db)._effective_person_id(current_user, person_id)
+        statement = select(Absence).join(Person).where(
+            Person.deleted_at.is_(None),
+            Absence.status == AbsenceStatus.ACTIVE,
+            Absence.absence_type.in_(WEEKLY_ABSENCE_LABELS),
+            Absence.start_date <= end,
+            Absence.end_date >= start,
+        )
+        if effective_person_id is not None:
+            statement = statement.where(Absence.person_id == effective_person_id)
+        return list(self.db.scalars(statement))
 
     def _export_row(
         self,
@@ -890,6 +925,10 @@ def fill_weekly_worker_data_row(
 
     entry = row.entry
     if entry is None:
+        if row.absence_credit is not None:
+            set_cell_string(root, f"C{row_number}", WEEKLY_ABSENCE_LABELS[row.absence_credit.absence_type])
+            set_cell_string(root, f"O{row_number}", format_export_hours(row.absence_credit.credit_minutes))
+            return
         set_cell_string(root, f"C{row_number}", "Keine Zeitmeldung")
         return
 
@@ -962,6 +1001,8 @@ def weekly_worker_work_minutes(entry: WorkTimeEntry) -> int:
 
 
 def weekly_worker_total_minutes(row: WeeklyWorkerExportRow) -> int:
+    if row.absence_credit is not None:
+        return row.absence_credit.credit_minutes
     if row.entry is None:
         return 0
     return round_minutes_to_quarter_hour(
@@ -1182,7 +1223,16 @@ def weekly_worker_rows(
     end: date,
     entries: list[WorkTimeEntry],
     gps_evaluations: dict[int, GpsPresenceEvaluation],
+    absences: list[Absence] | None = None,
 ) -> list[WeeklyWorkerExportRow]:
+    # Reuse the calendar's weekday, overlap and eight-hour credit rules, but deduct
+    # exactly the checked/rounded work and travel minutes printed in this export.
+    breakdown = calculate_weekly_hours_breakdown(
+        entries=entries, absences=absences or [], start=start, end=end,
+        work_minutes_for_entry=lambda entry: weekly_worker_total_minutes(
+            WeeklyWorkerExportRow(work_date=entry.work_date, entry=entry)),
+    )
+    credits_by_date = {credit.work_date: credit for credit in breakdown.daily_absence_credits}
     entries_by_date: dict[date, list[WorkTimeEntry]] = {}
     for entry in entries:
         entries_by_date.setdefault(entry.work_date, []).append(entry)
@@ -1192,7 +1242,7 @@ def weekly_worker_rows(
     while cursor <= end:
         day_entries = entries_by_date.get(cursor, [])
         if not day_entries:
-            if cursor.weekday() < 5:
+            if cursor.weekday() < 5 and cursor not in credits_by_date:
                 rows.append(WeeklyWorkerExportRow(work_date=cursor, entry=None))
         else:
             has_multiple = len(day_entries) > 1
@@ -1207,6 +1257,8 @@ def weekly_worker_rows(
                 )
                 for entry in day_entries
             )
+        if credit := credits_by_date.get(cursor):
+            rows.append(WeeklyWorkerExportRow(work_date=cursor, entry=None, absence_credit=credit))
         cursor += timedelta(days=1)
     return rows
 

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -512,11 +513,12 @@ def calculate_weekly_hours_breakdown(
     absences: list[Absence],
     start: date,
     end: date,
+    work_minutes_for_entry: Callable[[WorkTimeEntry], int] = effective_weekly_work_minutes,
 ) -> WeeklyHoursBreakdown:
     work_minutes_by_date: dict[date, int] = defaultdict(int)
     for entry in entries:
         if start <= entry.work_date <= end:
-            work_minutes_by_date[entry.work_date] += effective_weekly_work_minutes(entry)
+            work_minutes_by_date[entry.work_date] += work_minutes_for_entry(entry)
 
     absence_types_by_date: dict[date, set[AbsenceType]] = {}
     for absence in absences:
