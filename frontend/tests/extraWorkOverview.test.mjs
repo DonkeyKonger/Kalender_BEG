@@ -12,6 +12,7 @@ import {
   formatExtraWorkOverviewTitle,
   getExtraWorkOverviewMasterHeight,
   getExtraWorkOverviewDescription,
+  getExtraWorkOverviewMaterials,
   getExtraWorkOverviewPageForIndex,
   getExtraWorkOverviewPageItems,
   getExtraWorkOverviewPageWindow,
@@ -422,7 +423,23 @@ test("a saved document entry refreshes the compact overview data without another
     remarks: "Neue Beschreibung",
     material_text: "Altmaterial ausgebaut",
     material_descriptions: ["Kabelrinne"],
+    material_items: [
+      { quantity: 3, unit: "m", description: " Kabelrinne " },
+      { quantity: 1, unit: "Stk", description: "" },
+    ],
     worker_names: ["Christopher Monteur"],
     estimated_hours: 6,
   });
+});
+
+test("material overview preserves amounts, units and all entries without duplicate legacy descriptions", () => {
+  assert.deepEqual(getExtraWorkOverviewMaterials(ticket({ entry_summaries: [
+    { material_items: [{ quantity: 2.5, unit: " m ", description: " Kabel " }, { quantity: null, unit: null, description: "Befestiger" }], material_text: "old", material_descriptions: ["Kabel"] },
+    { material_items: [{ quantity: 0, unit: "Stk", description: "Reserve" }] },
+  ] })), ["2,5 m Kabel", "Befestiger", "old", "0 Stk Reserve"]);
+  assert.deepEqual(getExtraWorkOverviewMaterials(ticket({ entry_summaries: [
+    { material_text: " Altes Material\n Weitere Zeile " },
+    { material_descriptions: ["Bogen", ""], material_text: "Bogen" },
+  ], material_separate_attachment: true })), ["Altes Material", "Weitere Zeile", "Bogen", "Material gemäß separater Anlage"]);
+  assert.deepEqual(getExtraWorkOverviewMaterials(ticket({ entry_summaries: [] })), []);
 });

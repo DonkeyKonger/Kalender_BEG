@@ -47,6 +47,7 @@ import {
   formatExtraWorkOverviewIsoWeek,
   formatExtraWorkOverviewTitle,
   getExtraWorkOverviewDescription,
+  getExtraWorkOverviewMaterials,
   getExtraWorkOverviewMasterHeight,
   getExtraWorkOverviewPageForIndex,
   getExtraWorkOverviewPageItems,
@@ -3728,6 +3729,7 @@ function ExtraWorkOverviewDetail({
   const emailStatusTooltipId = `extra-work-delivery-status-${ticket.id}`;
   const primaryEntry = getExtraWorkOverviewPrimaryEntry(ticket);
   const description = getExtraWorkOverviewDescription(ticket);
+  const materials = getExtraWorkOverviewMaterials(ticket);
   const isDownloadingPdf = pdfAction === `${ticket.id}:download`;
   const isArchiving = archivingTicketId === ticket.id;
   const isRestoring = restoringTicketId === ticket.id;
@@ -3814,7 +3816,6 @@ function ExtraWorkOverviewDetail({
       </dl>
 
       <section className="project-extra-work-detail-section">
-        <h4>Kunde &amp; Projekt</h4>
         <dl className="project-extra-work-project-data">
           <div><dt>Kunde</dt><dd>{ticket.customer_name?.trim() || site.customer || "–"}</dd></div>
           <div><dt>Projekt</dt><dd>{site.name}</dd></div>
@@ -3840,12 +3841,18 @@ function ExtraWorkOverviewDetail({
       </section>
 
       <section className="project-extra-work-detail-section">
-        <h4>Kurzbeschreibung</h4>
-        <p className="project-extra-work-description">{description || "–"}</p>
+        <p className="project-extra-work-description" aria-label="Kurzbeschreibung">{description || "–"}</p>
+        <div className="project-extra-work-materials">
+          <span className="project-extra-work-materials-label">Material</span>
+          {materials.length > 0 ? (
+            <ul aria-label="Material im Zusatzauftrag">
+              {materials.map((material, index) => <li key={index}>{material}</li>)}
+            </ul>
+          ) : <span>-</span>}
+        </div>
       </section>
 
       <section className="project-extra-work-detail-section">
-        <h4>Weitere Informationen</h4>
         <dl className="project-extra-work-additional-data">
           <div><dt>Bauteil</dt><dd>{primaryEntry?.component?.trim() || "–"}</dd></div>
           <div><dt>Etage</dt><dd>{primaryEntry?.floor?.trim() || "–"}</dd></div>

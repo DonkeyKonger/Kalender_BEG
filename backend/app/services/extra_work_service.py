@@ -1386,6 +1386,7 @@ class ExtraWorkService:
             remarks=entry.remarks,
             material_text=entry.material_text,
             material_descriptions=material_descriptions,
+            material_items=entry.material_items or [],
             worker_names=worker_names,
             estimated_hours=float(entry.estimated_hours) if entry.estimated_hours is not None else None,
         )

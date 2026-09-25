@@ -2193,6 +2193,9 @@ def test_list_site_tickets_eager_loads_entries_and_photos_without_n_plus_one():
     assert result[0].entry_summaries[0].room_number == "Serverraum"
     assert result[0].entry_summaries[0].remarks == "Zusätzliche Kabeltrasse montiert"
     assert result[0].entry_summaries[0].material_descriptions == ["Kabelrinne"]
+    assert [item.model_dump() for item in result[0].entry_summaries[0].material_items] == [
+        {"quantity": 2, "unit": "Stk.", "description": "Kabelrinne"}
+    ]
     assert result[0].entry_summaries[0].worker_names == ["Max"]
     assert len(select_statements) <= 7
     assert sum("FROM extra_work_ticket_entries" in sql for sql in select_statements) == 1

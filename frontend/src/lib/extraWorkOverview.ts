@@ -194,6 +194,7 @@ export function buildExtraWorkOverviewEntrySummary(
     axis: entry.axis ?? null,
     remarks: entry.remarks ?? null,
     material_text: entry.material_text ?? null,
+    material_items: entry.material_items ?? [],
     material_descriptions: (entry.material_items ?? [])
       .map((item) => item.description.trim())
       .filter(Boolean),
@@ -211,6 +212,25 @@ export function getExtraWorkOverviewDescription(ticket: MobileExtraWorkTicket): 
     primaryEntry?.remarks,
     ticket.notes,
   );
+}
+
+export function getExtraWorkOverviewMaterials(ticket: MobileExtraWorkTicket): string[] {
+  const number = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 6 });
+  const materials = (ticket.entry_summaries ?? []).flatMap((entry) => {
+    const items = (entry.material_items ?? []).filter((item) => item.description.trim());
+    const descriptions = (entry.material_descriptions ?? []).map((value) => value.trim()).filter(Boolean);
+    const rows = items.length ? items.map((item) => [
+      item.quantity != null ? number.format(item.quantity) : "",
+      item.unit?.trim(),
+      item.description.trim(),
+    ].filter(Boolean).join(" ")) : descriptions;
+    // Retain additional free text, without repeating exact material descriptions.
+    const known = new Set([...rows, ...descriptions, ...items.map((item) => item.description.trim())]);
+    const text = (entry.material_text ?? "").split(/\r?\n/).map((value) => value.trim()).filter((value) => value && !known.has(value));
+    return [...rows, ...text];
+  });
+  if (ticket.material_separate_attachment) materials.push("Material gemäß separater Anlage");
+  return materials;
 }
 
 export function filterExtraWorkOverviewTickets(

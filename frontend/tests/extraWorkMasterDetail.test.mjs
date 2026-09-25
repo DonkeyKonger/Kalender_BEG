@@ -16,6 +16,16 @@ const tabStart = pageSource.indexOf("function ExtraWorkTab");
 const tabEnd = pageSource.indexOf("function MeasurementTab", tabStart);
 const tabSource = pageSource.slice(tabStart, tabEnd);
 
+test("detail removes only the three headings and keeps an always-visible material row below the description", () => {
+  const detail = tabSource.slice(tabSource.indexOf("function ExtraWorkOverviewDetail"), tabSource.indexOf("function ExtraWorkOverviewPhotos"));
+  assert.doesNotMatch(detail, /<h4>(Kunde &amp; Projekt|Kurzbeschreibung|Weitere Informationen)<\/h4>/);
+  assert.match(detail, /getExtraWorkOverviewMaterials\(ticket\)/);
+  assert.ok(detail.indexOf('className="project-extra-work-materials"') > detail.indexOf('className="project-extra-work-description"'));
+  assert.match(detail, /<span className="project-extra-work-materials-label">Material<\/span>/);
+  assert.match(detail, /materials\.length > 0[\s\S]*<li key=\{index\}>\{material\}<\/li>[\s\S]*: <span>-<\/span>/);
+  assert.match(styles, /\.project-extra-work-materials ul \{[\s\S]*flex-wrap: wrap/);
+});
+
 test("desktop extra-work overview uses one lightweight master-detail workspace", () => {
   assert.match(tabSource, /project-extra-work-workspace/);
   assert.match(tabSource, /project-extra-work-master/);
@@ -61,7 +71,7 @@ test("master rows keep their status control while the detail removes its duplica
 
 test("detail moves delivery state into the fourth customer-project field as an accessible icon", () => {
   const detailStart = tabSource.indexOf("function ExtraWorkOverviewDetail");
-  const customerProjectStart = tabSource.indexOf("<h4>Kunde &amp; Projekt</h4>", detailStart);
+  const customerProjectStart = tabSource.indexOf('<dl className="project-extra-work-project-data">', detailStart);
   const customerProjectEnd = tabSource.indexOf("</dl>", customerProjectStart);
   const customerProjectSource = tabSource.slice(customerProjectStart, customerProjectEnd);
   const labels = [...customerProjectSource.matchAll(/<dt>([^<]+)<\/dt>/g)].map((match) => match[1]);
@@ -305,7 +315,7 @@ test("the two key overview actions reuse the selected payroll week blue with cle
 });
 
 test("additional information shows only the four location fields without removing form data", () => {
-  const headingStart = tabSource.indexOf("<h4>Weitere Informationen</h4>");
+  const headingStart = tabSource.indexOf('<dl className="project-extra-work-additional-data">');
   const listEnd = tabSource.indexOf("</dl>", headingStart);
   const additionalInformationSource = tabSource.slice(headingStart, listEnd);
   const labels = [...additionalInformationSource.matchAll(/<dt>([^<]+)<\/dt>/g)].map((match) => match[1]);

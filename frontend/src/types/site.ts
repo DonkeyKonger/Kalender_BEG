@@ -454,6 +454,7 @@ export type ExtraWorkTicketEntrySummary = {
   remarks: string | null;
   material_text: string | null;
   material_descriptions: string[];
+  material_items?: MobileExtraWorkMaterialItem[];
   worker_names: string[];
   estimated_hours: MeasurementNumericValue | null;
 };

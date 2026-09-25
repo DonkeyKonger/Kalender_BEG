@@ -30424,6 +30424,48 @@ body.mobile-modal-scroll-locked {
   padding: 8px 22px;
 }
 
+.project-extra-work-materials {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 6px;
+  color: #213a5a;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.project-extra-work-materials-label {
+  color: #58708e;
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.project-extra-work-materials ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-extra-work-materials li {
+  position: relative;
+  max-width: 100%;
+  padding-left: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.project-extra-work-materials li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #71839a;
+}
+
 .project-extra-work-key-data,
 .project-extra-work-project-data,
 .project-extra-work-additional-data {

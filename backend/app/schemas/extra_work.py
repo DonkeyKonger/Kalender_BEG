@@ -267,6 +267,7 @@ class ExtraWorkTicketEntrySummaryRead(BaseModel):
     remarks: str | None
     material_text: str | None
     material_descriptions: list[str] = Field(default_factory=list)
+    material_items: list[ExtraWorkMaterialItem] = Field(default_factory=list)
     worker_names: list[str] = Field(default_factory=list)
     estimated_hours: float | None
 
