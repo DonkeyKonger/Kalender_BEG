@@ -3857,8 +3857,7 @@ function ExtraWorkOverviewDetail({
 
       <section className="project-extra-work-detail-section">
         <p className="project-extra-work-description" aria-label="Kurzbeschreibung">{description || "–"}</p>
-        <div className="project-extra-work-materials">
-          <span className="project-extra-work-materials-label">Material</span>
+        <div className="project-extra-work-materials" role="group" aria-label="Material im Zusatzauftrag">
           {materials.length > 0 ? (
             <ul aria-label="Material im Zusatzauftrag">
               {materials.map((material, index) => <li key={index}>{material}</li>)}

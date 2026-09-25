@@ -21,7 +21,12 @@ test("detail removes only the three headings and keeps an always-visible materia
   assert.doesNotMatch(detail, /<h4>(Kunde &amp; Projekt|Kurzbeschreibung|Weitere Informationen)<\/h4>/);
   assert.match(detail, /getExtraWorkOverviewMaterials\(ticket\)/);
   assert.ok(detail.indexOf('className="project-extra-work-materials"') > detail.indexOf('className="project-extra-work-description"'));
-  assert.match(detail, /<span className="project-extra-work-materials-label">Material<\/span>/);
+  assert.doesNotMatch(detail, /project-extra-work-materials-label/);
+  assert.match(detail, /className="project-extra-work-materials" role="group" aria-label="Material im Zusatzauftrag"/);
+  const materialStyles = styles.match(/\.project-extra-work-materials \{([^}]+)\}/)?.[1] ?? "";
+  assert.match(materialStyles, /border-top: 1px solid #cbd5e1/);
+  assert.match(materialStyles, /background: #f3f4f6/);
+  assert.doesNotMatch(materialStyles, /grid-template-columns/);
   assert.match(detail, /materials\.length > 0[\s\S]*<li key=\{index\}>\{material\}<\/li>[\s\S]*: <span>-<\/span>/);
   assert.match(styles, /\.project-extra-work-materials ul \{[\s\S]*flex-wrap: wrap/);
 });
