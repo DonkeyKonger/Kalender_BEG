@@ -15367,7 +15367,8 @@ body.mobile-modal-scroll-locked {
   letter-spacing: 0.02em;
 }
 
-.project-record-status-popover > button {
+.project-record-status-popover > button,
+.site-detail-page.is-project-file-workspace .project-extra-work-action-menu > button {
   min-height: 32px;
   border: 0;
   border-bottom: 1px solid #e4eaf2;
@@ -15382,12 +15383,15 @@ body.mobile-modal-scroll-locked {
   text-align: left;
 }
 
-.project-record-status-popover > button:last-child {
+.project-record-status-popover > button:last-child,
+.site-detail-page.is-project-file-workspace .project-extra-work-action-menu > button:last-child {
   border-bottom: 0;
 }
 
 .project-record-status-popover > button:hover,
-.project-record-status-popover > button:focus-visible {
+.project-record-status-popover > button:focus-visible,
+.site-detail-page.is-project-file-workspace .project-extra-work-action-menu > button:hover:not(:disabled),
+.site-detail-page.is-project-file-workspace .project-extra-work-action-menu > button:focus-visible {
   background: #eaf1fa;
   color: #173b6d;
   outline: 2px solid #6f94c2;
@@ -30386,35 +30390,21 @@ body.mobile-modal-scroll-locked {
   top: calc(100% + 4px);
   right: 0;
   width: max-content;
-  min-width: 154px;
-  border: 1px solid #cbd5e1;
-  border-radius: 2px;
+  min-width: var(--project-extra-work-action-rail-width, 190px);
+  max-width: calc(100vw - 16px);
+  border: 1px solid #b9c7d9;
+  border-radius: 0;
   background: #ffffff;
-  padding: 4px;
-  box-shadow: 0 8px 22px rgb(15 23 42 / 16%);
+  padding: 0;
+  box-shadow: 0 8px 20px rgba(15, 35, 58, 0.18);
 }
 
 .site-detail-page.is-project-file-workspace .project-extra-work-action-menu button {
   display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 32px;
   align-items: center;
-  border: 0;
-  border-radius: 1px;
-  background: #ffffff;
-  color: #334155;
-  padding: 7px 10px;
-  text-align: left;
   white-space: nowrap;
-}
-
-.site-detail-page.is-project-file-workspace .project-extra-work-action-menu button:hover:not(:disabled),
-.site-detail-page.is-project-file-workspace .project-extra-work-action-menu button:focus-visible {
-  background: #eff4fa;
-  color: #174678;
-  outline: 2px solid #3b82f6;
-  outline-offset: -2px;
 }
 
 .project-extra-work-detail dt {

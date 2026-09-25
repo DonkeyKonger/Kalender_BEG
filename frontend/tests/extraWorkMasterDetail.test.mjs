@@ -164,6 +164,20 @@ test("active and archived overview modes use one accessible two-state switch", (
   );
 });
 
+test("extra-work menu shares compact measurement menu typography and action rail width", () => {
+  const sharedButtons = styles.match(/\.project-record-status-popover > button,\s*\.site-detail-page\.is-project-file-workspace \.project-extra-work-action-menu > button \{([^}]+)\}/)?.[1] ?? "";
+  assert.match(sharedButtons, /font: inherit/);
+  assert.match(sharedButtons, /font-size: 0\.78rem/);
+  assert.match(sharedButtons, /font-weight: 700/);
+  assert.match(sharedButtons, /min-height: 32px/);
+  assert.match(sharedButtons, /padding: 6px 10px/);
+  const menu = styles.match(/\.project-extra-work-action-menu \{([^}]+)\}/)?.[1] ?? "";
+  assert.match(menu, /min-width: var\(--project-extra-work-action-rail-width, 190px\)/);
+  assert.match(menu, /width: max-content/);
+  assert.match(menu, /padding: 0;/);
+  assert.match(menu, /border-radius: 0;/);
+});
+
 test("detail overflow menu preserves archive and restore paths with full keyboard lifecycle", () => {
   const detailStart = tabSource.indexOf("function ExtraWorkOverviewDetail");
   const detailSource = tabSource.slice(detailStart);
