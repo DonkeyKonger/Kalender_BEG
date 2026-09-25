@@ -22,6 +22,7 @@ from app.models.assignment import Assignment
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.project_folder import ProjectFolder
 from app.models.user import User
+from app.services.customer_pdf_form import CustomerFormField, add_customer_form
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
 from app.services.extra_work_assignment import get_mobile_extra_work_assignment
 from app.services.extra_work_document_context import (
@@ -53,7 +54,7 @@ from app.services.user_display import (
 PAGE_WIDTH = 595.28
 PAGE_HEIGHT = 841.89
 EXTRA_WORK_PHOTO_FOLDER_KEY = "fotos"
-EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v14-photo-uploader-role"
+EXTRA_WORK_PDF_CACHE_VERSION = "extra-work-pdf-layout-v15-customer-form"
 EXTRA_WORK_SIGNED_SNAPSHOT_VERSION = "extra-work-signed-snapshot-v2-photo-uploader-role"
 EXTRA_WORK_SUPPLEMENTAL_PHOTO_VERSION = "extra-work-supplemental-photos-v2-uploader-role"
 LOGGER = logging.getLogger(__name__)
@@ -471,6 +472,18 @@ class ExtraWorkPdfService:
         self._append_photo_pages(writer, ticket, document_photos, photo_contents=photo_contents)
         output = BytesIO()
         _remove_interactive_pdf_state(writer)
+        if ticket.customer_signed_at is None:
+            # Reintroduce only our own passive fields after sanitizing the master.
+            # Photo pages must never become the customer signing page.
+            customer_place = (
+                ticket.customer_signature_place or ticket.worker_signature_place
+                or _format_site_signature_location(ticket.site)
+            )
+            add_customer_form(writer, len(chunks) - 1, [
+                CustomerFormField("customer_place", "Ort Besteller", (399, 96, 72, 14), _signature_place_short(customer_place), font_size=6.5),
+                CustomerFormField("customer_date", "Datum Besteller", (485, 96, 58, 14), font_size=6.5),
+                CustomerFormField("customer_signature", "Unterschrift Besteller", CUSTOMER_SIG_IMAGE_BOX, signature=True),
+            ])
         writer.write(output)
         content = output.getvalue()
         LOGGER.info(
@@ -951,15 +964,16 @@ class ExtraWorkPdfService:
             signature_date=worker_date,
             place=worker_place,
         )
-        _signature_stamp(
-            commands,
-            strokes=ticket.customer_signature_strokes,
-            image_box=CUSTOMER_SIG_IMAGE_BOX,
-            place_center_x=CUSTOMER_PLACE_CENTER_X,
-            date_center_x=CUSTOMER_DATE_CENTER_X,
-            signature_date=ticket.customer_signed_at.date() if ticket.customer_signed_at else None,
-            place=customer_place,
-        )
+        if ticket.customer_signed_at is not None:
+            _signature_stamp(
+                commands,
+                strokes=ticket.customer_signature_strokes,
+                image_box=CUSTOMER_SIG_IMAGE_BOX,
+                place_center_x=CUSTOMER_PLACE_CENTER_X,
+                date_center_x=CUSTOMER_DATE_CENTER_X,
+                signature_date=ticket.customer_signed_at.date(),
+                place=customer_place,
+            )
 
     def _get_ticket(
         self,

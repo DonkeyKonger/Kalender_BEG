@@ -55,6 +55,15 @@ def _assert_non_interactive(reader: PdfReader, content: bytes) -> None:
     assert b"/JS" not in content
 
 
+def _assert_customer_form(reader: PdfReader, content: bytes) -> None:
+    assert {name: field["/FT"] for name, field in reader.get_fields().items()} == {
+        "customer_place": "/Tx", "customer_date": "/Tx", "customer_signature": "/Sig",
+    }
+    assert all(key not in reader.trailer["/Root"] for key in ("/Names", "/OpenAction", "/AA"))
+    assert b"/JavaScript" not in content
+    assert b"/JS" not in content
+
+
 def _repeated_word_at_remarks_capacity(word: str = "Test") -> str:
     words: list[str] = []
     while extra_work_remarks_fit(" ".join([*words, word])):
@@ -365,7 +374,7 @@ def test_desktop_fields_surcharges_and_exact_checkbox_mapping_are_rendered(monke
     assert filename == "Zusatzauftrag_8015_8015.SZ01.pdf"
     assert len(reader.pages) == 1
     assert text.split().count("Test") == entry.remarks.split().count("Test")
-    _assert_non_interactive(reader, rendered)
+    _assert_customer_form(reader, rendered)
     for value in (
         "8015",
         "8015.SZ01",
@@ -514,7 +523,7 @@ def test_worker_signature_place_date_and_vector_strokes_render_on_clean_pdf():
     reader = PdfReader(BytesIO(rendered))
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
 
-    _assert_non_interactive(reader, rendered)
+    _assert_customer_form(reader, rendered)
     assert "Bad Rothenfelde" in text
     assert "19.08.2026" in text
     assert "Fallbackstadt" not in text

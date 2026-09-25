@@ -283,6 +283,11 @@ def test_rendered_measurement_pdf_uses_block_totals_instead_of_global_total():
     assert "Fortsetzung auf folgendem Blatt" in page_texts[0]
     assert "Fortsetzung auf folgendem Blatt" not in page_texts[1]
     assert "Name Auftraggeber (Kunde):" in page_texts[1]
+    reader = PdfReader(BytesIO(content))
+    assert not reader.pages[0].get("/Annots")
+    assert {widget.get_object()["/T"] for widget in reader.pages[1]["/Annots"]} == {
+        "customer_place_date", "customer_name", "customer_signature",
+    }
 
 
 def test_rendered_measurement_pdf_preserves_negative_entries_and_total():

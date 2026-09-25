@@ -29,6 +29,7 @@ from app.models.site_measurement_item import (
 from app.models.enums import MeasurementBatchOrigin
 from app.models.user import User
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
+from app.services.customer_pdf_form import measurement_customer_form
 from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, _current_measurement_entries
 from app.services.measurement_content import measurement_item_content
 from app.services.photo_appendix_pdf_service import (
@@ -102,7 +103,7 @@ MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
 MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
-MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-v9-compact-sheet-labels"
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-v10-customer-form"
 OFFICE_PDF_CONTENT_Y_OFFSET = 32
 LOGGER = logging.getLogger(__name__)
 
@@ -384,6 +385,16 @@ class MeasurementPdfService:
         for commands in _header_correction_pages(positions):
             pdf.add_page(commands)
         content = self._append_photo_pages(pdf.build(), batch)
+        if batch.customer_signed_at is None:
+            # Attach after all page-copying steps so the AcroForm root survives;
+            # correction and photo appendices follow the actual signing sheet.
+            content = measurement_customer_form(
+                content, page_count - 1,
+                place=_site_signature_city(batch.site, batch.customer_signature_place),
+                name=batch.customer_signature_name or "",
+                y_offset=OFFICE_PDF_CONTENT_Y_OFFSET
+                if batch.origin == MeasurementBatchOrigin.OFFICE.value else 0,
+            )
         LOGGER.info(
             "Measurement PDF generated: batch_id=%s mode=%s photos=%s bytes=%s duration_ms=%.1f",
             batch.id,
@@ -1086,11 +1097,12 @@ def _signature_block(
     _line(commands, 661, 41.3, 764, 41.3, 0.8)
 
     _text(commands, 250.2, 20.4, "Name Auftraggeber (Kunde):", 7, "F2")
-    if customer_name:
+    if customer_name and customer_signed_at is not None:
         _text_fitted(commands, 396, 19.8, customer_name, 8, max_width=158)
     _line(commands, 394.9, 14.6, 566.6, 14.6, 0.8)
     _text(commands, 598.6, 19.6, "Unterschrift:", 7, "F2")
-    _draw_signature(commands, customer_signature_strokes, x=661, y=17.0, width=103, height=24)
+    if customer_signed_at is not None:
+        _draw_signature(commands, customer_signature_strokes, x=661, y=17.0, width=103, height=24)
     _line(commands, 661, 14.6, 764, 14.6, 0.8)
 
 

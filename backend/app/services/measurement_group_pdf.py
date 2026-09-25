@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from textwrap import wrap
 
+from app.services.customer_pdf_form import measurement_customer_form
 from app.services.measurement_pdf_service import (
     LOGO_PATH, LOGO_RESOURCE_NAME, MatrixArea, MatrixCellValue, MatrixPosition, SimplePdf,
     _build_logical_measurement_blocks, _build_measurement_pdf_pages, _draw_grand_total,
@@ -81,4 +82,7 @@ def render_group_pdf(group):
             _draw_signature(commands, signature["strokes"], x=x, y=y - 65, width=200, height=40)
             _line(commands, x, y - 70, x + 320, y - 70)
         pdf.add_page(commands)
-    return pdf.build()
+    content = pdf.build()
+    if not snapshot["customer"]:
+        content = measurement_customer_form(content, len(pages) - 1)
+    return content
