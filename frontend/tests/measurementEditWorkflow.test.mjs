@@ -31,6 +31,17 @@ const render = data => result.exports.render({ items: [item], positionSuggestion
   canEditRows: true, reviewActionLoading: false, savingEntryId: null, onDraftSave: noop, onDraftReset: noop,
   onRenameArea: noop, onCellCreate: noop, onFreeItemCreate: noop, onFreeItemUpdate: noop, onFreeItemDelete: noop, ...data });
 
+test("review marks use stable table identities even with locked cells and never change editor heights", () => {
+  for (const canEditRows of [true, false]) {
+    const html = render({ canEditRows, marksCacheKey: "test-user-site-batch" });
+    for (const row of ["position", "description", "unit", "section", "total"]) assert.ok(html.includes(`data-review-row="${row}"`));
+    assert.match(html, /data-review-column="item-1"/);
+    assert.match(html, /data-review-row="area:/);
+    assert.match(html, /rows="6"/);
+  }
+  assert.match(source, /marksCacheKey=\{measurementReviewMarksKey\(markUserId, site.id, selectedBatch.id\)\}/);
+});
+
 test("draft, submitted, reviewed and really signed are editable; completed and read-only roles never are", () => {
   for (const status of ["draft", "submitted", "reviewed", "customer_signed"]) {
     const data = { ...batch, status, customer_signed_at: status === "customer_signed" ? "2026-09-14" : null, has_signed_snapshot: true };

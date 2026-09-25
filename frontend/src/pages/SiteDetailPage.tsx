@@ -8,6 +8,9 @@ import { MeasurementOfferViewer } from "../components/MeasurementOfferViewer";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import { canEditMeasurementContent } from "../lib/measurementReviewContent";
 import { navigateMeasurementTable } from "../lib/measurementTableNavigation";
+import { measurementReviewMarksKey } from "../lib/measurementReviewMarks";
+import { useMeasurementReviewMarks } from "../hooks/useMeasurementReviewMarks";
+import "../components/MeasurementReviewMarks.css";
 import type { OverviewPhoto, OverviewPhotoKind } from "../lib/extraWorkPhotoPreview";
 import { ProjectNoteTextarea } from "../components/ProjectNoteTextarea";
 import { SiteProjectNotes } from "../components/SiteProjectNotes";
@@ -1707,6 +1710,7 @@ export function SiteDetailPage() {
       ) : null}
       {activeTab === "measurement" ? (
         <MeasurementTab
+          markUserId={user?.id}
           site={site}
           siteNumber={site.site_number}
           activeSubtab={measurementSubtab}
@@ -4913,6 +4917,7 @@ function ExtraWorkOverviewPhotoModal({
 
 
 function MeasurementTab({
+  markUserId,
   site,
   siteNumber,
   activeSubtab,
@@ -5009,6 +5014,7 @@ function MeasurementTab({
   batches: MobileMeasurementBatch[];
   onBatchPhotoCountUpdated: (batchId: number, photoCount: number) => void;
   onLabelBatch: (batch: MobileMeasurementBatch, label: string) => Promise<void>;
+  markUserId?: number;
   measurementWorkers: MeasurementWorkerOption[];
   measurementWorkersLoading: boolean;
   measurementWorkersError: string | null;
@@ -5214,6 +5220,7 @@ function MeasurementTab({
 
       {activeSubtab === "review" ? (
         <MeasurementReviewPanel
+          markUserId={markUserId}
           site={site}
           siteNumber={siteNumber}
           projectPositionSuggestions={projectPositionSuggestions}
@@ -6156,6 +6163,7 @@ function addMeasurementEntryToItems(items: MobileMeasurementItem[], createdEntry
 }
 
 function MeasurementReviewPanel({
+  markUserId,
   site,
   siteNumber,
   projectPositionSuggestions,
@@ -6202,6 +6210,7 @@ function MeasurementReviewPanel({
   site: Site;
   siteNumber: string | null;
   projectPositionSuggestions: MeasurementPositionSuggestion[];
+  markUserId?: number;
   canCreateBatch: boolean;
   canPromoteStatus: boolean;
   batches: MobileMeasurementBatch[];
@@ -6520,6 +6529,8 @@ function MeasurementReviewPanel({
         {!batchItemsLoading ? (
           <MeasurementReviewTable
             items={tableItems}
+            key={selectedBatch.id}
+            marksCacheKey={measurementReviewMarksKey(markUserId, site.id, selectedBatch.id)}
             persistedAreas={selectedBatch.area_rows}
             positionSuggestions={reviewPositionSuggestions}
             freePositionOnly={isFreePositionOnlyBatch}
@@ -6720,6 +6731,7 @@ function MeasurementReviewPanel({
 }
 
 function MeasurementReviewTable({
+  marksCacheKey = null,
   items,
   persistedAreas,
   positionSuggestions,
@@ -6736,6 +6748,7 @@ function MeasurementReviewTable({
   onFreeItemDelete,
 }: {
   items: MobileMeasurementItem[];
+  marksCacheKey?: string | null;
   persistedAreas?: MobileMeasurementBatch["area_rows"];
   positionSuggestions: MeasurementPositionSuggestion[];
   freePositionOnly: boolean;
@@ -6751,6 +6764,8 @@ function MeasurementReviewTable({
   onFreeItemDelete: (item: MobileMeasurementItem) => Promise<void>;
 }) {
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const markTableRef = useRef<HTMLTableElement | null>(null);
+  const markEvents = useMeasurementReviewMarks(markTableRef, marksCacheKey);
   const areaLabelDraftsRef = useRef<Record<string, string>>({});
   const savingCellKeysRef = useRef<Set<string>>(new Set());
   const pendingCreatedCellFocusRef = useRef<{ cellKey: string; source: HTMLInputElement } | null>(null);
@@ -7297,15 +7312,16 @@ function MeasurementReviewTable({
   return (
     <div className="measurement-table-surface measurement-review-table-wrap" ref={tableWrapRef} role="region" aria-label="Tabellarische Aufmaßaufstellung">
       <table className="measurement-table-view measurement-matrix-table measurement-review-table" style={tableStyle}
+        ref={markTableRef} {...markEvents}
         onKeyDown={(event) => navigateMeasurementTable(event.nativeEvent, event.currentTarget)}>
         <colgroup>
-          <col className="measurement-matrix-label-col" />
+          <col className="measurement-matrix-label-col" data-review-column="axis" />
           {displayColumns.map((column) => (
-            <col className="measurement-matrix-position-col" key={column.key} />
+            <col className="measurement-matrix-position-col" key={column.key} data-review-column={column.key} />
           ))}
         </colgroup>
         <thead>
-          <tr className="measurement-matrix-meta-row measurement-matrix-position-row">
+          <tr className="measurement-matrix-meta-row measurement-matrix-position-row" data-review-row="position">
             <th className="measurement-matrix-axis" scope="row">Pos.-Nr.</th>
             {displayColumns.map((column) => {
               if (column.kind === "item") {
@@ -7497,7 +7513,7 @@ function MeasurementReviewTable({
               );
             })}
           </tr>
-          <tr className="measurement-matrix-meta-row measurement-matrix-description-row">
+          <tr className="measurement-matrix-meta-row measurement-matrix-description-row" data-review-row="description">
             <th className="measurement-matrix-axis" scope="row">Beschreibung</th>
             {displayColumns.map((column) => {
               if (column.kind === "item") {
@@ -7539,7 +7555,7 @@ function MeasurementReviewTable({
               );
             })}
           </tr>
-          <tr className="measurement-matrix-meta-row measurement-matrix-unit-row">
+          <tr className="measurement-matrix-meta-row measurement-matrix-unit-row" data-review-row="unit">
             <th className="measurement-matrix-axis" scope="row">Einheit</th>
             {displayColumns.map((column) => {
               if (column.kind === "item") {
@@ -7584,7 +7600,7 @@ function MeasurementReviewTable({
           </tr>
         </thead>
         <tbody>
-          <tr className="measurement-matrix-section-row">
+          <tr className="measurement-matrix-section-row" data-review-row="section">
             <th className="measurement-matrix-axis" scope="row">Bauteil / Ort</th>
             {displayColumns.map((column) => (
               <td
@@ -7596,7 +7612,7 @@ function MeasurementReviewTable({
           {displayAreaRows.map((area) => {
             const areaLabel = getAreaLabel(area);
             return (
-            <tr key={area.key}>
+            <tr key={area.key} data-review-row={`area:${area.key}`}>
               <th className={`measurement-matrix-axis measurement-matrix-area-axis${area.isPlaceholder ? " is-placeholder-row" : ""}`} scope="row">
                 <input
                   key={`${area.key}-${areaDraftVersion}`}
@@ -7720,7 +7736,7 @@ function MeasurementReviewTable({
           })}
         </tbody>
         <tfoot>
-          <tr className="measurement-matrix-total-row">
+          <tr className="measurement-matrix-total-row" data-review-row="total">
             <th className="measurement-matrix-axis" scope="row">Gesamt</th>
             {displayColumns.map((column) => column.kind === "item" ? (
               <td className={`measurement-matrix-quantity-cell${(totalsByItemId.get(column.item.id) ?? 0) < 0 ? " measurement-negative-quantity" : ""}`} key={column.key}>

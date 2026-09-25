@@ -1,0 +1,9 @@
+.measurement-review-detail.is-table-view .measurement-review-table :is(th, td)[data-review-mark-key][data-review-marked="true"] {
+  background-color: #e5f1e8 !important;
+}
+.measurement-review-detail.is-table-view .measurement-review-table [data-review-marked="true"] :is(input, textarea, strong) {
+  background-color: transparent !important;
+}
+@media print {
+  .measurement-review-detail.is-table-view .measurement-review-table :is(th, td)[data-review-mark-key][data-review-marked="true"] { background-color: transparent !important; }
+}
