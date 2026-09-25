@@ -24,8 +24,10 @@ test("detail removes only the three headings and keeps an always-visible materia
   assert.doesNotMatch(detail, /project-extra-work-materials-label/);
   assert.match(detail, /className="project-extra-work-materials" role="group" aria-label="Material im Zusatzauftrag"/);
   const materialStyles = styles.match(/\.project-extra-work-materials \{([^}]+)\}/)?.[1] ?? "";
-  assert.match(materialStyles, /border-top: 1px solid #cbd5e1/);
-  assert.match(materialStyles, /background: #f3f4f6/);
+  const sharedSurface = styles.match(/\.project-extra-work-description,\s*\.project-extra-work-materials \{([^}]+)\}/)?.[1] ?? "";
+  assert.match(sharedSurface, /border: 1px solid var\(--project-extra-work-divider\)/);
+  assert.match(sharedSurface, /border-radius: 2px/);
+  assert.match(sharedSurface, /background: #f8fafc/);
   assert.doesNotMatch(materialStyles, /grid-template-columns/);
   assert.match(detail, /materials\.length > 0[\s\S]*<li key=\{index\}>\{material\}<\/li>[\s\S]*: <span>-<\/span>/);
   assert.match(styles, /\.project-extra-work-materials ul \{[\s\S]*flex-wrap: wrap/);
@@ -466,7 +468,7 @@ test("structural dividers become lighter only inside the extra-work overview", (
   assert.match(styles, /\.project-extra-work-master-row \{[\s\S]*border-bottom: 1px solid var\(--project-extra-work-divider-soft\)/);
   assert.match(styles, /\.project-extra-work-detail-head \{[\s\S]*border-bottom: 1px solid var\(--project-extra-work-divider\)/);
   assert.match(styles, /\.project-extra-work-key-data > div \+ div,[\s\S]*border-left: 1px solid var\(--project-extra-work-divider-soft\)/);
-  assert.match(styles, /\.project-extra-work-description \{[\s\S]*border: 1px solid var\(--project-extra-work-divider\)/);
+  assert.match(styles, /\.project-extra-work-description,\s*\.project-extra-work-materials \{[^}]*border: 1px solid var\(--project-extra-work-divider\)/);
   assert.match(styles, /\.project-extra-work-search \{[\s\S]*border: 1px solid var\(--pf-border\)/);
 });
 
