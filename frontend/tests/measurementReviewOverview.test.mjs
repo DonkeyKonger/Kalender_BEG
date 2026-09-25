@@ -45,6 +45,22 @@ const props = {
   renderStatus: batch => batch.status, renderActions: () => null,
 };
 
+test("internal labels augment the fixed number and are searchable without changing batch title", () => {
+  const labeled = { ...batches[0], internal_label: "Aufmaß Nachunternehmer" };
+  const html = render({ ...props, batches: [labeled] });
+  assert.match(html, /Aufmaß 9999\.25 - Aufmaß Nachunternehmer/);
+  assert.equal(labeled.title, "Paket 1");
+  const view = windowFor([labeled, batches[1]], { ...state, query: "nachunternehmer" }, 8, title);
+  assert.deepEqual(view.visible.map(batch => batch.id), [labeled.id]);
+  assert.doesNotMatch(render({ ...props, batches: [{ ...labeled, internal_label: "" }] }), /Nachunternehmer/);
+});
+
+test("internal label markup stays escaped and long labels remain available as a tooltip", () => {
+  const html = render({ ...props, batches: [{ ...batches[0], internal_label: '<script>alert("test")</script>' }] });
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /title="Aufmaß 9999\.25 - &lt;script&gt;/);
+});
+
 const combined = {
   id: 42, number_label: "9999.25G", created_at: "2026-09-16T10:00:00Z",
   sources: [{id: 1, number_label: "9999.25"}, {id: 5, number_label: "9999.21"}],

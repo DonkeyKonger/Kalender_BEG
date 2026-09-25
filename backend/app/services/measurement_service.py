@@ -7,7 +7,7 @@ import re
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import String, and_, cast, false, func, or_, select
+from sqlalchemy import String, and_, cast, false, func, or_, select, update
 from sqlalchemy.orm import Session, defer, selectinload, with_loader_criteria
 
 from app.models.assignment import Assignment
@@ -1784,6 +1784,30 @@ class MeasurementService:
             rows=rows,
         )
 
+    def set_site_batch_internal_label(
+        self, *, site_id: int, batch_id: int, internal_label: str, current_user: User,
+    ) -> dict:
+        self._get_site(site_id)
+        batch = self._get_batch_for_site(batch_id, site_id, include_deleted=True, for_update=True)
+        label = " ".join(internal_label.split()) or None
+        if label != batch.internal_label:
+            AuditService(self.db).record(
+                user_id=current_user.id, action="measurement.internal_label_updated",
+                entity_type="site_measurement_batch", entity_id=batch.id,
+                old_value={"internal_label": batch.internal_label}, new_value={"internal_label": label},
+            )
+            # Metadata only: do not invalidate signed PDFs, caches or combined
+            # measurements through the content-change flush hook/timestamp.
+            self.db.execute(update(SiteMeasurementBatch).where(SiteMeasurementBatch.id == batch.id).values(
+                internal_label=label, updated_at=batch.updated_at,
+            ))
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                raise
+        return {"id": batch.id, "internal_label": label}
+
     def set_site_batch_invoiced(
         self, *, site_id: int, batch_id: int, is_invoiced: bool, current_user: User,
         schedule_completed_archive: Callable[[int, int, int], None] | None = None,
@@ -3002,6 +3026,7 @@ class MeasurementService:
             is_current_offer=is_current_offer,
             number=batch.number,
             title=batch.title,
+            internal_label=batch.internal_label,
             status=batch.status,
             is_invoiced=batch.is_invoiced,
             previous_status=rollback_target(batch, signature_barrier=signature_barrier),

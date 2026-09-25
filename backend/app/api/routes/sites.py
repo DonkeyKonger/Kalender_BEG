@@ -34,6 +34,8 @@ from app.schemas.measurement import (
     MeasurementWorkerOptionRead,
     MeasurementBatchManualStatusUpdate,
     MeasurementBatchInvoicedUpdate,
+    MeasurementBatchLabelRead,
+    MeasurementBatchLabelUpdate,
     MeasurementStatusRollback,
     MeasurementAreaRename,
     MeasurementTimeAnalysisRead,
@@ -1174,6 +1176,16 @@ def update_measurement_batch_invoiced(
         schedule_completed_archive=lambda sid, bid, uid: background_tasks.add_task(
             archive_completed_measurement_after_response, sid, bid, uid,
         ),
+    )
+
+
+@router.patch("/{site_id}/measurement-batches/{batch_id}/internal-label", response_model=MeasurementBatchLabelRead)
+def update_measurement_batch_internal_label(
+    site_id: int, batch_id: int, payload: MeasurementBatchLabelUpdate,
+    current_user: User = Depends(CAN_SITES_WRITE), db: Session = Depends(get_db),
+) -> dict:
+    return MeasurementService(db).set_site_batch_internal_label(
+        site_id=site_id, batch_id=batch_id, internal_label=payload.internal_label, current_user=current_user,
     )
 
 

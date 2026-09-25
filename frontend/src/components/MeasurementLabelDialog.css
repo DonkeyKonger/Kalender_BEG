@@ -1,0 +1,17 @@
+.measurement-label-dialog {
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 22px;
+  border: 1px solid #cdd9e7;
+  border-radius: 10px;
+  color: #1d304b;
+  background: #fff;
+  box-shadow: 0 18px 60px #10243c33;
+}
+.measurement-label-dialog::backdrop { background: #10243c66; }
+.measurement-label-dialog h3 { margin: 0 0 8px; }
+.measurement-label-dialog p { margin: 8px 0 16px; color: #60738f; font-size: 13px; }
+.measurement-label-dialog label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; }
+.measurement-label-dialog input { width: 100%; box-sizing: border-box; min-height: 38px; }
+.measurement-label-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.measurement-label-dialog [role="alert"] { color: #a12632; }

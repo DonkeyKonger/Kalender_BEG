@@ -1479,6 +1479,12 @@ export const api = {
     });
   },
 
+  async updateSiteMeasurementBatchLabel(siteId: number, batchId: number, internalLabel: string): Promise<{ id: number; internal_label: string | null }> {
+    return request(`/sites/${siteId}/measurement-batches/${batchId}/internal-label`, {
+      method: "PATCH", body: JSON.stringify({ internal_label: internalLabel }),
+    });
+  },
+
   async markSiteMeasurementBatchOpen(siteId: number, batchId: number): Promise<MobileMeasurementBatch> {
     return request<MobileMeasurementBatch>(`/sites/${siteId}/measurement-batches/${batchId}/mark-open`, {
       method: "POST",

@@ -23,6 +23,8 @@ export function getMeasurementGroups(batches: MobileMeasurementBatch[]) {
 }
 
 export function getMeasurementOverviewTitle(batch: MobileMeasurementBatch, numberTitle: string): string {
+  const label = batch.internal_label?.trim();
+  if (label) return `${numberTitle} - ${label}`;
   const hint = batch.origin === "OFFICE" ? batch.area_location?.trim().replace(/\s+/g, " ") : null;
   return hint ? `${numberTitle} - ${hint}` : numberTitle;
 }
@@ -61,7 +63,7 @@ export function getMeasurementOverviewWindow(
   const groups = getMeasurementGroups(batches);
   if (groups.size) return groupedWindow(batches, state, pageSize, title, groups, query);
   const filtered = batches.filter((batch) => !query || [
-    title(batch), batch.title, batch.created_by_name, batch.submitted_by_name, batch.area_location,
+    title(batch), batch.title, batch.internal_label, batch.created_by_name, batch.submitted_by_name, batch.area_location,
   ].some((value) => value?.toLocaleLowerCase("de-DE").includes(query)))
     // Number is the fixed chronology; submitting or reviewing must never move a row.
     .sort((left, right) => right.number - left.number || right.id - left.id);
@@ -83,7 +85,7 @@ function groupedWindow(batches: MobileMeasurementBatch[], state: MeasurementOver
     const group = groups.get(batch.combined_measurement?.id ?? -1);
     const unit = group ? sorted.filter(row => group.sources.some(source => source.id === row.id)) : [batch];
     unit.forEach(row => visited.add(row.id));
-    if (!query || [group?.number_label, ...unit.flatMap(row => [title(row), row.title, row.created_by_name, row.submitted_by_name, row.area_location])]
+    if (!query || [group?.number_label, ...unit.flatMap(row => [title(row), row.title, row.internal_label, row.created_by_name, row.submitted_by_name, row.area_location])]
       .some(value => value?.toLocaleLowerCase("de-DE").includes(query))) units.push(unit);
   }
   // Keep headers and their originals together. Large groups get their own,

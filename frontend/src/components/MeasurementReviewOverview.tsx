@@ -189,7 +189,7 @@ export function MeasurementReviewOverview(props: Props) {
                       disabled={busy || Boolean(group) || !isMeasurementCompleted(batch)} checked={chosenBatches.some(row => row.id === batch.id)}
                       onChange={event => setChosen(current => event.target.checked ? [...current, batch.id] : current.filter(id => id !== batch.id))} /> : null}
                     {props.renderStatus(batch)}</div></td>
-                  <td><button type="button" className="measurement-overview-select" aria-pressed={!selectedGroup && selected?.id === batch.id} onClick={() => changeState({...state, selectedId:batch.id})}>{title(batch)}</button>
+                  <td><button type="button" className={`measurement-overview-select${batch.internal_label ? " has-internal-label" : ""}`} title={title(batch)} aria-pressed={!selectedGroup && selected?.id === batch.id} onClick={() => changeState({...state, selectedId:batch.id})}>{title(batch)}</button>
                     {offer.kind === "older" ? <span className="measurement-status is-old-offer" title={offer.name}>Altes Angebot</span> : null}
                   </td>
                   <td onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>

@@ -96,6 +96,7 @@ class SiteMeasurementBatch(TimestampMixin, Base):
     )
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
+    internal_label: Mapped[str | None] = mapped_column(String(120))
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="draft", index=True)
     status_history: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     item_overrides: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")

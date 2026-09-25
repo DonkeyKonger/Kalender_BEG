@@ -32,7 +32,7 @@ def source_version(batch):
     The flush hook handles regular writes. This additional check catches bulk
     imports/SQL updates as well, including catalog changes without batch updates.
     """
-    omitted = {"original_submitted_snapshot", "customer_signed_snapshot",
+    omitted = {"internal_label", "original_submitted_snapshot", "customer_signed_snapshot",
                "worker_signature_strokes", "customer_signature_strokes"}
     def columns(obj):
         return {attr.key: _normalized(getattr(obj, attr.key)) for attr in inspect(type(obj)).column_attrs

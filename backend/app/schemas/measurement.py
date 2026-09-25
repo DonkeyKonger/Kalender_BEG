@@ -220,6 +220,7 @@ class MobileMeasurementBatchRead(BaseModel):
     is_current_offer: bool
     number: int
     title: str
+    internal_label: str | None = None
     status: str
     previous_status: str | None = None
     status_rollback_floor: Literal["draft", "customer_signed"] = "draft"
@@ -276,6 +277,15 @@ class MeasurementAreaRename(BaseModel):
 
 class MeasurementBatchInvoicedUpdate(BaseModel):
     is_invoiced: bool
+
+
+class MeasurementBatchLabelUpdate(BaseModel):
+    internal_label: str = Field(max_length=120)
+
+
+class MeasurementBatchLabelRead(BaseModel):
+    id: int
+    internal_label: str | None
 
 
 class MeasurementBatchManualStatusUpdate(BaseModel):

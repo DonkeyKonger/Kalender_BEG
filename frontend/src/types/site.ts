@@ -301,6 +301,7 @@ export type MeasurementGroup = {
 };
 
 export type MobileMeasurementBatch = {
+  internal_label?: string | null;
   combined_measurement?: MeasurementGroup | null;
   has_signed_snapshot?: boolean;
   previous_status?: string | null;

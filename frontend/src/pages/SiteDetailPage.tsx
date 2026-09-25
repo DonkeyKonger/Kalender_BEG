@@ -1,6 +1,7 @@
 import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
 import { MeasurementReviewOverview } from "../components/MeasurementReviewOverview";
+import { MeasurementLabelDialog } from "../components/MeasurementLabelDialog";
 import { MeasurementImportDialog } from "../components/MeasurementImportDialog";
 import { MeasurementReviewStatusBar } from "../components/MeasurementReviewStatusBar";
 import { MeasurementOfferViewer } from "../components/MeasurementOfferViewer";
@@ -1752,6 +1753,11 @@ export function SiteDetailPage() {
             setMeasurementTimeAnalysisError(null);
           }}
           batches={measurementBatches}
+          onLabelBatch={async (batch, label) => {
+            const updated = await api.updateSiteMeasurementBatchLabel(site.id, batch.id, label);
+            setMeasurementBatches(current => current.map(row => row.id === updated.id ? { ...row, ...updated } : row));
+            setSelectedMeasurementBatch(current => current?.id === updated.id ? { ...current, ...updated } : current);
+          }}
           onBatchPhotoCountUpdated={(batchId, photoCount) => {
             setMeasurementBatches((current) => current.map((batch) => batch.id === batchId ? { ...batch, photo_count: photoCount, combined_measurement: batch.photo_count === photoCount ? batch.combined_measurement : null } : batch));
             setSelectedMeasurementBatch((current) => current?.id === batchId ? { ...current, photo_count: photoCount } : current);
@@ -4936,6 +4942,7 @@ function MeasurementTab({
   onRetryTimeAnalysis,
   batches,
   onBatchPhotoCountUpdated,
+  onLabelBatch,
   measurementWorkers,
   measurementWorkersLoading,
   measurementWorkersError,
@@ -5001,6 +5008,7 @@ function MeasurementTab({
   onRetryTimeAnalysis: () => void;
   batches: MobileMeasurementBatch[];
   onBatchPhotoCountUpdated: (batchId: number, photoCount: number) => void;
+  onLabelBatch: (batch: MobileMeasurementBatch, label: string) => Promise<void>;
   measurementWorkers: MeasurementWorkerOption[];
   measurementWorkersLoading: boolean;
   measurementWorkersError: string | null;
@@ -5213,6 +5221,7 @@ function MeasurementTab({
           canPromoteStatus={canPromoteStatus}
           batches={batches}
           onBatchPhotoCountUpdated={onBatchPhotoCountUpdated}
+          onLabelBatch={onLabelBatch}
           measurementWorkers={measurementWorkers}
           measurementWorkersLoading={measurementWorkersLoading}
           measurementWorkersError={measurementWorkersError}
@@ -6154,6 +6163,7 @@ function MeasurementReviewPanel({
   canPromoteStatus,
   batches,
   onBatchPhotoCountUpdated,
+  onLabelBatch,
   measurementWorkers,
   measurementWorkersLoading,
   measurementWorkersError,
@@ -6196,6 +6206,7 @@ function MeasurementReviewPanel({
   canPromoteStatus: boolean;
   batches: MobileMeasurementBatch[];
   onBatchPhotoCountUpdated: (batchId: number, photoCount: number) => void;
+  onLabelBatch: (batch: MobileMeasurementBatch, label: string) => Promise<void>;
   measurementWorkers: MeasurementWorkerOption[];
   measurementWorkersLoading: boolean;
   measurementWorkersError: string | null;
@@ -6246,6 +6257,7 @@ function MeasurementReviewPanel({
     setOverviewState({ selectedId: null, query: "", page: 1 });
   }, [archiveMode]);
   const [openOverviewActionId, setOpenOverviewActionId] = useState<number | null>(null);
+  const [labelBatch, setLabelBatch] = useState<MobileMeasurementBatch | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<number | null>(null);
   const [restoringBatchId, setRestoringBatchId] = useState<number | null>(null);
   const [openStatusBatchId, setOpenStatusBatchId] = useState<number | null>(null);
@@ -6577,13 +6589,16 @@ function MeasurementReviewPanel({
             menuWidthAnchor=".measurement-overview-detail-head > div"
             ariaLabel={`Weitere Aktionen für ${formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}`}
             busy={reviewActionLoading || deletingBatchId !== null || restoringBatchId !== null}
-            options={[{value: "action", label: archiveMode ? "Wiederherstellen" : "Aufmaß Archivieren"}]}
+            options={[{value: "label", label: "Aufmaß beschriften"}, {value: "action", label: archiveMode ? "Wiederherstellen" : "Aufmaß Archivieren"}]}
             onClose={() => setOpenOverviewActionId(null)}
             onToggle={() => setOpenOverviewActionId(current => current === batch.id ? null : batch.id)}
-            onSelect={() => { setOpenOverviewActionId(null); if (archiveMode) void restoreBatch(batch); else void deleteBatch(batch); }}
+            onSelect={(action) => { setOpenOverviewActionId(null); if (action === "label") setLabelBatch(batch); else if (archiveMode) void restoreBatch(batch); else void deleteBatch(batch); }}
           />
         </div> : null}
       />
+      {labelBatch ? <MeasurementLabelDialog key={labelBatch.id} batch={labelBatch}
+        title={formatMeasurementPackageNumber(siteNumber, labelBatch.number, labelBatch.title)}
+        onSave={onLabelBatch} onClose={() => setLabelBatch(null)} /> : null}
       {isCreateDialogOpen ? (
         <div
           className="measurement-create-modal-backdrop"
