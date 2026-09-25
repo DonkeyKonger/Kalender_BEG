@@ -12170,7 +12170,7 @@ body.mobile-modal-scroll-locked {
 
 .project-folder-workspace {
   display: grid;
-  grid-template-columns: minmax(180px, 230px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
   gap: 0;
   align-items: start;
 }
@@ -31661,7 +31661,7 @@ body.mobile-modal-scroll-locked {
 
 .site-detail-page.is-project-file-workspace .project-folder-card {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   gap: 4px;
   border: 0;
   border-bottom: 1px solid #e8eef6;
@@ -31704,6 +31704,27 @@ body.mobile-modal-scroll-locked {
 .site-detail-page.is-project-file-workspace .project-folder-card.is-selected strong {
   color: #1d4ed8;
   font-weight: 900;
+}
+
+.site-detail-page.is-project-file-workspace .project-folder-card .project-folder-count-slot {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 28px;
+}
+
+.site-detail-page.is-project-file-workspace .project-folder-card .project-folder-file-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: #e5ebf2;
+  color: #52657c;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .site-detail-page.is-project-file-workspace .project-folder-card.is-drag-over,

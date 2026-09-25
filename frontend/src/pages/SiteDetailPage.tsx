@@ -112,6 +112,7 @@ import type { TimeEntry, TimeEntryStatus } from "../types/timeEntry";
 import { CustomerFields, normalizeCustomerPayload, validateCustomerPayload } from "./CustomersPage";
 import { SiteFields, normalizeSitePayload, siteStatusOptions, toEditableSite, validateSitePayload } from "./SitesPage";
 import type { EditableSite } from "./SitesPage";
+import { useProjectFolderFileCounts } from "./useProjectFolderFileCounts";
 
 type ProjectRecordTab = "overview" | "folders" | "assembly-times" | "measurement" | "extra-work" | "tools-material";
 type MeasurementSubtab = "timesheet" | "review" | "time-analysis" | "bases";
@@ -2367,6 +2368,8 @@ function ProjectFoldersPanel({
   onRetry: () => void;
   onRetryDocuments: () => void;
 }) {
+  const fileCounts = useProjectFolderFileCounts(site.id, folders);
+
   if (isLoading) {
     return <div className="matrix-state">Ordnerstruktur wird geladen...</div>;
   }
@@ -2394,6 +2397,7 @@ function ProjectFoldersPanel({
             <div className="project-folder-grid is-folder-list">
               {folders.map((folder) => {
                 const isSelected = selectedFolder?.id === folder.id;
+                const fileCount = fileCounts[folder.folder_key];
                 return (
                   <button
                     key={folder.id}
@@ -2415,6 +2419,17 @@ function ProjectFoldersPanel({
                   >
                     <span>{folder.sort_order}.</span>
                     <strong>{dragOverFolderKey === folder.folder_key ? "Hier ablegen zum Hochladen" : folder.name}</strong>
+                    <span className="project-folder-count-slot">
+                      {typeof fileCount === "number" && fileCount > 0 ? (
+                        <span
+                          className="project-folder-file-count"
+                          aria-label={`${fileCount} ${fileCount === 1 ? "Datei" : "Dateien"} einschließlich Unterordner`}
+                          title={`${fileCount} ${fileCount === 1 ? "Datei" : "Dateien"} einschließlich Unterordner`}
+                        >
+                          {fileCount}
+                        </span>
+                      ) : null}
+                    </span>
                   </button>
                 );
               })}
