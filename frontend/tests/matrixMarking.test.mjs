@@ -46,10 +46,12 @@ test('orange marking keeps the original colors with forty percent transparency o
   assert.doesNotMatch(rule, /(?:filter|opacity)\s*:/); // Keep nested installer bubbles and text fully opaque.
 });
 
-test('today uses the thinner marking frame without changing the day indicator or selection', async () => {
+test('today markings have no blue top stripe while the header and selection remain identifiable', async () => {
   const css = await readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
-  const today = css.match(/\.matrix-cell\.today\.mark-orange\s*\{([^}]+)\}/)[1];
-  assert.match(today, /inset 0 3px 0 #1d5c99, inset 0 0 0 0\.8px/);
+  assert.doesNotMatch(css, /\.matrix-cell\.today\.mark-orange\s*\{/);
   const selected = css.match(/\.matrix-cell\.today\.is-range-selected\s*\{([^}]+)\}/)[1];
-  assert.match(selected, /inset 0 3px 0 #1d5c99, inset 0 0 0 2px/);
+  assert.match(selected, /box-shadow: inset 0 0 0 2px/);
+  assert.doesNotMatch(selected, /inset 0 3px/);
+  const header = css.match(/\.matrix-table thead th\.today\s*\{([^}]+)\}/)[1];
+  assert.match(header, /inset 0 3px 0 #1d5c99/);
 });
