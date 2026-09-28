@@ -196,6 +196,29 @@ def test_legacy_signature_without_snapshot_is_never_overwritten(case):
     assert c.item.description == "Kabelrinne liefern und montieren"
 
 
+def test_number_added_to_signed_placeholder_keeps_normal_pdf_header_baseline(case):
+    from io import BytesIO
+    from pypdf import PdfReader
+    from app.services.measurement_pdf_service import TABLE_TOP, MATRIX_POSITION_BOTTOM, _baseline_between
+
+    c = case
+    c.item.position = "FREI-1"
+    c.db.commit()
+    sign(c)
+    snapshot = deepcopy(c.batch.customer_signed_snapshot)
+    edit(c, position="N2.1")
+    service = MeasurementPdfService(c.db)
+    positions, _, _, _ = service._build_matrix(c.batch, mode="checked")
+    assert positions[0].original_position == ""
+    content = service._render_batch_pdf_content(batch=c.batch, mode="checked")
+    labels = []
+    PdfReader(BytesIO(content)).pages[0].extract_text(
+        visitor_text=lambda text, cm, tm, font, size: labels.append((text.strip(), tm[5]))
+    )
+    assert ("N2.1", pytest.approx(_baseline_between(TABLE_TOP, MATRIX_POSITION_BOTTOM, 6.4) + 1.5, abs=0.01)) in labels
+    assert c.batch.customer_signed_snapshot == snapshot
+
+
 def test_rename_collision_and_foreign_item_leave_batch_unchanged(case):
     c = case
     c.service.create_site_entry(site_id=c.site.id, batch_id=c.batch.id, measurement_item_id=c.item.id, current_user=c.user, payload=MeasurementEntryCreate(area_or_comment="UG", quantity=2))

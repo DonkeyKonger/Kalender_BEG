@@ -103,7 +103,7 @@ MATRIX_AREA_LABEL_WIDTH = MATRIX_X - MATRIX_AREA_LABEL_X
 MATRIX_SECTION_LABEL_RIGHT = 96.3
 LOGO_RESOURCE_NAME = "ImLogo"
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "beg_logo_icon.png"
-MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-v10-customer-form"
+MEASUREMENT_PDF_CACHE_VERSION = "measurement-pdf-v11-position-alignment"
 OFFICE_PDF_CONTENT_Y_OFFSET = 32
 LOGGER = logging.getLogger(__name__)
 
@@ -988,13 +988,16 @@ def _draw_measurement_matrix(
             continue
         position = positions[index]
         header_color = _correction_color() if position.is_added or position.is_removed else None
-        if position.original_position is not None:
+        # An empty signed position (including hidden FREI placeholders) has no
+        # old number to strike out. Keep additions on the normal header baseline.
+        has_original_position = bool((position.original_position or "").strip())
+        if has_original_position:
             _text_centered_struck(commands, (x + column_right) / 2, TABLE_TOP - 6,
                                   position.original_position, 5.3)
         _cell_text(
             commands,
             x,
-            MATRIX_POSITION_BOTTOM + 5 if position.original_position is not None else _baseline_between(TABLE_TOP, MATRIX_POSITION_BOTTOM, 6.4) + 1.5,
+            MATRIX_POSITION_BOTTOM + 5 if has_original_position else _baseline_between(TABLE_TOP, MATRIX_POSITION_BOTTOM, 6.4) + 1.5,
             position.position,
             width,
             6.4,
