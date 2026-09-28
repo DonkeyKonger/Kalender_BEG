@@ -1971,7 +1971,7 @@ function getAssignedSitesForDay(
         managerLabel: getManagerLabel(row.site.project_manager),
         internalCount: assignments.length - externalCount,
         externalCount,
-        hasWarnings: cell?.mark === "red" || cell?.mark === "orange",
+        hasWarnings: cell?.mark === "orange",
       } satisfies AssignedSiteSummary;
     })
     .filter((summary): summary is AssignedSiteSummary => summary !== null)

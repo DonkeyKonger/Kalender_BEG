@@ -4746,16 +4746,6 @@ button.person-chip:focus-visible {
   box-shadow: inset 0 0 0 2px rgb(245 158 11 / 32%);
 }
 
-.matrix-cell.mark-red {
-  background: #ffe5e5;
-  box-shadow: inset 0 0 0 2px rgb(220 38 38 / 30%);
-}
-
-.matrix-cell.mark-blue {
-  background: #e5f0ff;
-  box-shadow: inset 0 0 0 2px rgb(37 99 235 / 28%);
-}
-
 
 .matrix-absence-row th,
 .matrix-absence-row td {
@@ -5103,9 +5093,7 @@ button.person-chip:focus-visible {
 }
 
 .matrix-cell.today.is-range-selected,
-.matrix-cell.today.mark-orange,
-.matrix-cell.today.mark-red,
-.matrix-cell.today.mark-blue {
+.matrix-cell.today.mark-orange {
   box-shadow: inset 0 3px 0 #1d5c99, inset 0 0 0 2px rgb(29 92 153 / 22%);
 }
 

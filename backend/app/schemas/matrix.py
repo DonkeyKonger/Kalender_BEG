@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date as Date
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -109,7 +110,7 @@ class MatrixRangePatch(BaseModel):
 class MatrixCellMarkPatch(BaseModel):
     site_id: int
     date: Date
-    mark: MatrixCellMark | None = None
+    mark: Literal[MatrixCellMark.ORANGE] | None = None
 
 
 class MatrixConflictMessage(BaseModel):

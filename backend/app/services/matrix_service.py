@@ -10,7 +10,7 @@ from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
 from app.models.dashboard_note import DashboardNote
-from app.models.enums import AbsenceStatus
+from app.models.enums import AbsenceStatus, MatrixCellMark
 from app.models.operational_absence import OperationalAbsence
 from app.models.person import Person
 from app.models.planning_cell_mark import PlanningCellMark
@@ -467,6 +467,8 @@ class MatrixService:
             return {}
         statement = select(PlanningCellMark).where(
             PlanningCellMark.site_id.in_(site_ids),
+            # Retired colors stay in storage, but are no longer active markings.
+            PlanningCellMark.mark == MatrixCellMark.ORANGE,
             PlanningCellMark.mark_date >= start,
             PlanningCellMark.mark_date <= end,
         )

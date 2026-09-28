@@ -4594,7 +4594,6 @@ const STATUS_MENU_HEIGHT = 142;
 const STATUS_MENU_WIDTH = 128;
 const FIXED_MATRIX_COLUMNS_WIDTH = 614;
 const COMPACT_FIXED_MATRIX_COLUMNS_WIDTH = 476;
-const MATRIX_CELL_MARKS: Array<MatrixCellMark | null> = [null, "orange", "red", "blue"];
 const SITE_STATUS_OPTIONS: SiteStatus[] = ["active", "paused", "planned", "completed", "deleted"];
 
 function isMatrixVisibleSiteStatus(status: SiteStatus): boolean {
@@ -5171,7 +5170,7 @@ function matrixCellClassName(
     holiday ? "is-holiday" : "",
     isWeekStartDate(cell.date) ? "is-week-start" : "",
     cell.date === today ? "today" : "",
-    cell.mark ? `mark-${cell.mark}` : "",
+    cell.mark === "orange" ? "mark-orange" : "",
     isRangeSelected ? "is-range-selected" : "",
     isDragTarget ? "is-drag-target" : "",
     isResizePreview ? "is-resize-preview" : "",
@@ -5195,8 +5194,7 @@ function isWeekStartDate(value: string): boolean {
 }
 
 function nextMatrixCellMark(current: MatrixCellMark | null): MatrixCellMark | null {
-  const currentIndex = MATRIX_CELL_MARKS.indexOf(current);
-  return MATRIX_CELL_MARKS[(currentIndex + 1) % MATRIX_CELL_MARKS.length];
+  return current === "orange" ? null : "orange";
 }
 
 function isCellInCellRange(siteId: number, dayIndex: number, range: CellRange | null): boolean {

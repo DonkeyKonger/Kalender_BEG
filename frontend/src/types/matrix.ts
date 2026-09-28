@@ -1,7 +1,7 @@
 export type AssignmentType = "regular" | "support" | "emergency" | "self_planned";
 export type AbsenceType = "vacation" | "sick" | "school" | "free" | "other";
 export type SiteStatus = "active" | "paused" | "planned" | "completed" | "deleted";
-export type MatrixCellMark = "orange" | "red" | "blue";
+export type MatrixCellMark = "orange";
 
 export type MatrixDay = {
   date: string;
