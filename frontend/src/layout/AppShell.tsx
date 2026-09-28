@@ -88,7 +88,7 @@ export function AppShell() {
         <div className="sidebar-brand-header">
           <div className="brand-block">
             <span className="brand-mark brand-logo-mark">
-              <img src="/beg-logo.png" alt="BEG Logo" />
+              <img src="/beg-sidebar-logo.svg" alt="BEG Logo" width={38} height={38} />
             </span>
             <div className="brand-copy">
               <p className="brand-name">Kalender Baustellen</p>

@@ -267,7 +267,10 @@ button:disabled {
 }
 
 .sidebar .brand-logo-mark {
-  background: #ffffff;
+  background: transparent;
+  padding: 0;
+  flex: 0 0 38px;
+  box-shadow: none;
 }
 
 .sidebar .brand-subtitle {
