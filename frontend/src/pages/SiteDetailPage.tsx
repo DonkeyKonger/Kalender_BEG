@@ -1,6 +1,7 @@
 import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
 import { ProjectDocumentFilename } from "../components/ProjectDocumentFilename";
+import { ProjectFolderPhotoGrid } from "../components/ProjectFolderPhotoGrid";
 import { MeasurementReviewOverview } from "../components/MeasurementReviewOverview";
 import { MeasurementLabelDialog } from "../components/MeasurementLabelDialog";
 import { MeasurementImportDialog } from "../components/MeasurementImportDialog";
@@ -2870,6 +2871,13 @@ function ProjectFolderDocumentBrowser({
         <div className="project-record-empty-state">Keine Dateien gefunden.</div>
       ) : null}
       {hasSharePointFolder && !isCurrentLoading && !error && visibleItems.length > 0 ? (
+        folder.folder_key === "fotos" ? (
+          <ProjectFolderPhotoGrid siteId={siteId} folderKey={folder.folder_key} items={visibleItems}
+            sort={documentSort} onSort={handleDocumentSort} canEdit={canDeleteDocuments}
+            openingItemId={openingItemId} downloadingItemId={downloadingItemId} deletingItemId={deletingItemId}
+            folderNavigationLoading={folderNavigationLoading} onOpen={handleOpen} onOpenFolder={handleOpenFolder}
+            onDownload={handleDownload} onDelete={handleDelete} onRename={handleRename} />
+        ) : (
         <div className="project-document-table-wrap">
           <table className="project-document-table">
             <thead>
@@ -2971,6 +2979,7 @@ function ProjectFolderDocumentBrowser({
             </tbody>
           </table>
         </div>
+        )
       ) : null}
     </aside>
   );

@@ -1,0 +1,27 @@
+.project-photo-sort { display: flex; gap: 24px; padding: 7px 12px; background: #edf3f9; border-bottom: 1px solid #d5e0ef; }
+.project-photo-sort .project-document-sort-trigger { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #607695; }
+.project-photo-sort .project-document-sort-trigger.is-active { color: #245185; }
+.project-photo-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; padding: 12px; align-items: start; }
+.project-photo-card { min-width: 0; overflow: hidden; border: 1px solid #d5e0ef; border-radius: 3px; background: #fff; }
+.project-photo-preview { position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; background: #eef2f6; cursor: pointer; overflow: hidden; }
+.project-photo-preview img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.project-photo-preview .mobile-folder-photo-placeholder { display: flex; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px; color: #73869e; }
+.project-photo-preview .mobile-folder-photo-placeholder small { font-size: 0.7rem; }
+.project-photo-preview .mobile-folder-photo-loading { position: absolute; inset: 0; display: grid; place-items: center; background: #ffffffbf; color: #315f91; }
+.project-photo-caption { min-width: 0; padding: 7px; border-top: 1px solid #e3eaf3; }
+.project-photo-caption .project-document-name-cell strong { font-size: 0.75rem; font-weight: 650; }
+.project-photo-actions { display: flex; justify-content: flex-end; gap: 4px; margin-top: 5px; }
+.project-photo-actions button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; color: #526b88; background: #f8fafc; border: 1px solid #d5e0ef; border-radius: 2px; cursor: pointer; }
+.project-photo-actions button:hover { background: #edf3f9; }
+.project-photo-grid button:focus-visible { outline: 2px solid #315f91; outline-offset: -2px; }
+.project-photo-grid button:disabled { cursor: default; opacity: 0.6; }
+.project-photo-subfolder { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid #d5e0ef; background: #f8fafc; color: #315f91; text-align: left; cursor: pointer; }
+.project-photo-card.is-document { grid-column: 1 / -1; display: flex; align-items: center; }
+.project-photo-document-icon { align-self: stretch; border: 0; background: #f8fafc; color: #526b88; padding: 12px; cursor: pointer; }
+.project-photo-card.is-document .project-photo-caption { flex: 1; border-top: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.project-photo-card.is-document .project-photo-actions { margin-top: 0; }
+@media (max-width: 760px) {
+  .project-photo-grid { gap: 6px; padding: 6px; }
+  .project-photo-caption { padding: 4px; }
+  .project-photo-actions { gap: 2px; flex-wrap: wrap; }
+}

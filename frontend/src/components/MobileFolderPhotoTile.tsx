@@ -3,12 +3,13 @@ import { Images } from "lucide-react";
 import { api } from "../lib/api";
 import type { ProjectFolderDocumentItem } from "../types/site";
 
-export function MobileFolderPhotoTile({ siteId, folderKey, item, isOpening, onOpen }: {
+export function MobileFolderPhotoTile({ siteId, folderKey, item, isOpening, onOpen, className = "mobile-folder-photo-tile" }: {
   siteId: number;
   folderKey: string;
   item: ProjectFolderDocumentItem;
   isOpening: boolean;
   onOpen: () => void;
+  className?: string;
 }) {
   const element = useRef<HTMLButtonElement>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -47,7 +48,7 @@ export function MobileFolderPhotoTile({ siteId, folderKey, item, isOpening, onOp
     };
   }, [siteId, folderKey, item.id, item.last_modified_date_time]);
 
-  return <button ref={element} type="button" className="mobile-folder-photo-tile"
+  return <button ref={element} type="button" className={className}
     onClick={onOpen} disabled={isOpening} aria-label={`Foto öffnen: ${item.name}`} title={item.name}>
     {url && !failed ? <img src={url} alt="" decoding="async" onError={() => setFailed(true)} /> :
       <span className="mobile-folder-photo-placeholder"><Images size={26} aria-hidden="true" />
