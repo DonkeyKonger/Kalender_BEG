@@ -140,7 +140,7 @@ export function PersonsPage() {
   const [isEditingPerson, setIsEditingPerson] = useState(false);
   const [activePersonAction, setActivePersonAction] = useState<PersonDetailActionKey | null>(null);
   const [personScope, setPersonScope] = useState<PersonScope>("internal");
-  const [collapsedPersonGroupKeys, setCollapsedPersonGroupKeys] = useState<Set<string>>(() => new Set());
+  const [collapsedPersonGroupKeys, setCollapsedPersonGroupKeys] = useState<Set<string>>(() => new Set(["internal-departed"]));
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingPersonId, setSavingPersonId] = useState<number | null>(null);
@@ -2740,23 +2740,30 @@ function groupPeopleForOverview(people: Person[], scope: PersonScope): PeopleOve
     ].filter((group) => group.people.length > 0);
   }
   const internalPeople = people.filter((person) => person.person_type === "internal");
+  const currentInternalPeople = internalPeople.filter((person) => personEmploymentStatus(person) !== "departed");
   return [
     {
       key: "internal-project-managers",
       label: "Projektleiter",
-      people: sortPeopleForOverview(internalPeople.filter(isProjectManagerPerson)),
+      people: sortPeopleForOverview(currentInternalPeople.filter(isProjectManagerPerson)),
       collapsible: true,
     },
     {
       key: "internal-office",
       label: "Büro",
-      people: sortPeopleForOverview(internalPeople.filter(isOfficePerson)),
+      people: sortPeopleForOverview(currentInternalPeople.filter(isOfficePerson)),
       collapsible: true,
     },
     {
       key: "internal-workers",
       label: "Monteure",
-      people: sortPeopleForOverview(internalPeople.filter(isWorkerPerson)),
+      people: sortPeopleForOverview(currentInternalPeople.filter(isWorkerPerson)),
+      collapsible: true,
+    },
+    {
+      key: "internal-departed",
+      label: "Ausgeschiedene",
+      people: sortPeopleForOverview(internalPeople.filter((person) => personEmploymentStatus(person) === "departed")),
       collapsible: true,
     },
   ].filter((group) => group.people.length > 0);
