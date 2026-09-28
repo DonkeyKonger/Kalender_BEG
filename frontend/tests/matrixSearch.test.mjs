@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { searchMatrixRows, matrixSearchRangeAtViewport } from '../src/lib/matrixSearch.ts';
+import { searchMatrixRows } from '../src/lib/matrixSearch.ts';
 
 const range = { start: '2026-09-28', end: '2026-10-09' };
 const person = (id, name, type = 'internal') => ({ id, display_name: name, short_code: name, person_type: type });
@@ -29,7 +29,7 @@ test('site search supports partial numbers, names, location, whitespace and diac
   assert.deepEqual(ids('nicht vorhanden'), []);
 });
 
-test('installer search crosses PM groups and only includes assignments on visible dates, inclusive', () => {
+test('installer search crosses PM groups and includes assignments within loaded dates, inclusive', () => {
   assert.deepEqual(ids('kramer'), [1, 2]);
   assert.deepEqual(ids('BULLERMANN'), [3]);
   assert.deepEqual(ids('kramer', rows, [], { start: '2026-10-10', end: '2026-10-11' }), [5]);
@@ -61,25 +61,28 @@ test('filtering never changes planning or row order and clearing returns the ori
   assert.equal(searchMatrixRows(rows, '  ', [], range), rows);
 });
 
-test('visible range handles partial days, narrow weekends, resizing, empty viewport and range end', () => {
-  const columns = [{ date: 'fri', width: 88 }, { date: 'sat', width: 53 }, { date: 'sun', width: 53 }, { date: 'mon', width: 88 }];
-  assert.deepEqual(matrixSearchRangeAtViewport(columns, 0, 88), { start: 'fri', end: 'fri' });
-  assert.deepEqual(matrixSearchRangeAtViewport(columns, 88, 106), { start: 'sat', end: 'sun' });
-  assert.deepEqual(matrixSearchRangeAtViewport(columns, 40, 200), { start: 'fri', end: 'mon' });
-  assert.deepEqual(matrixSearchRangeAtViewport(columns, 194, 500), { start: 'mon', end: 'mon' });
-  assert.equal(matrixSearchRangeAtViewport(columns, 0, 0), null);
-  assert.equal(matrixSearchRangeAtViewport([], 0, 100), null);
+test('loaded eight-week range includes previous and future weeks from the first search', () => {
+  const loaded = { start: '2026-09-14', end: '2026-11-08' };
+  const data = [...rows,
+    row(7, '7', 'Erster geladener Tag', loaded.start, worker, 20),
+    row(8, '8', 'Letzter geladener Tag', loaded.end, worker),
+    row(9, '9', 'Vor dem Zeitraum', '2026-09-13', worker),
+    row(10, '10', 'Nach dem Zeitraum', '2026-11-09', worker),
+    row(11, '11', 'Externe Vorwoche', '2026-09-15', external, 30),
+  ];
+  assert.deepEqual(ids('kramer', data, [], loaded), [1, 2, 4, 5, 7, 8]);
+  assert.deepEqual(ids('bullermann', data, [], loaded), [3, 11]);
+  assert.deepEqual(ids('kramer', data, [], { start: '2026-01-01', end: '2026-12-31' }), [1, 2, 4, 5, 7, 8, 9, 10]);
 });
 
 test('page uses the effective PM scope in every fetch and version refresh, and keeps selected PM for clearing', () => {
   const source = readFileSync(new URL('../src/pages/MatrixPage.tsx', import.meta.url), 'utf8');
   assert.equal((source.match(/matrixProjectManagerPersonIdFromFilter\(dataProjectManagerFilter\)/g) ?? []).length, 5);
   assert.match(source, /dataProjectManagerFilter = isMatrixSearchActive \? "all" : projectManagerFilter/);
-  assert.match(source, /searchMatrixRows\(rows, matrixSearch, people, searchVisibleRange\)/);
+  assert.match(source, /searchMatrixRows\(rows, matrixSearch, people, \{\s*start: matrix\.start_date,\s*end: matrix\.end_date,/);
+  assert.doesNotMatch(source, /searchVisibleRange|matrixSearchRangeAtViewport|setSearchVisibleRange/);
   assert.match(source, /key: "search", label: "", rows: matches, showHeading: true/);
   assert.match(source, /nextFilter !== dataProjectManagerFilter[\s\S]*?invalidateMatrixDataContext\(\)/);
   assert.match(source, /element\.scrollLeft = searchScrollRestoreRef\.current\.left/);
-  assert.match(source, /element\.addEventListener\("scroll", scheduleUpdate/);
-  assert.match(source, /new ResizeObserver\(scheduleUpdate\)/);
   assert.ok(source.indexOf('className="matrix-search"') < source.indexOf('className="matrix-pm-filter"'));
 });

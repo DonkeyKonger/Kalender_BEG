@@ -20,7 +20,7 @@ import {
 import { getSiteColorDisplayValue } from "../lib/siteColors";
 import { currentlyPlannedRows } from "../lib/currentPlanning";
 import { matrixNavigationTarget, matrixSiteScrollTop } from "../lib/matrixNavigation";
-import { matrixSearchRangeAtViewport, searchMatrixRows, type MatrixSearchRange } from "../lib/matrixSearch";
+import { searchMatrixRows } from "../lib/matrixSearch";
 import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
 import type { CurrentUser } from "../types/auth";
@@ -276,7 +276,6 @@ export function MatrixPage() {
   const [matrixSearch, setMatrixSearch] = useState("");
   const isMatrixSearchActive = matrixSearch.trim().length > 0;
   const dataProjectManagerFilter = isMatrixSearchActive ? "all" : projectManagerFilter;
-  const [searchVisibleRange, setSearchVisibleRange] = useState<MatrixSearchRange | null>(null);
   const searchScrollRestoreRef = useRef<{ left: number; top: number } | null>(null);
   const [isCompactView, setIsCompactView] = useState(false);
   const [isYearView, setIsYearView] = useState(false);
@@ -2100,7 +2099,6 @@ export function MatrixPage() {
   }, [matrix]);
 
   // Restore the date position when changing the server-side PM scope for a search.
-  // Scrolling and resizing then update installer results without reloading the matrix.
   useLayoutEffect(() => {
     const element = matrixScrollRef.current;
     if (!element || !matrix || isLoading) return;
@@ -2109,27 +2107,7 @@ export function MatrixPage() {
       element.scrollTop = searchScrollRestoreRef.current.top;
       searchScrollRestoreRef.current = null;
     }
-    const columns = matrix.days.map((day) => ({ date: day.date, width: matrixColumnWidthForDate(day.date, isCompactView) }));
-    const fixedWidth = isCompactView ? COMPACT_FIXED_MATRIX_COLUMNS_WIDTH : FIXED_MATRIX_COLUMNS_WIDTH;
-    const updateRange = () => {
-      const next = matrixSearchRangeAtViewport(columns, element.scrollLeft, element.clientWidth - fixedWidth);
-      setSearchVisibleRange((current) => current?.start === next?.start && current?.end === next?.end ? current : next);
-    };
-    let frame: number | null = null;
-    const scheduleUpdate = () => {
-      if (frame !== null) return;
-      frame = window.requestAnimationFrame(() => { frame = null; updateRange(); });
-    };
-    updateRange();
-    element.addEventListener("scroll", scheduleUpdate, { passive: true });
-    const observer = new ResizeObserver(scheduleUpdate);
-    observer.observe(element);
-    return () => {
-      element.removeEventListener("scroll", scheduleUpdate);
-      observer.disconnect();
-      if (frame !== null) window.cancelAnimationFrame(frame);
-    };
-  }, [matrix, isLoading, isCompactView]);
+  }, [matrix, isLoading]);
 
   const searchIsBlocked = hasPendingMatrixSave || Boolean(activeCell && !sameEntries(initialEntries, draftEntries))
     || Boolean(activeAbsenceCell || assignmentDrag || assignmentResize || isSelecting)
@@ -2155,11 +2133,15 @@ export function MatrixPage() {
     }
     const rows = isCurrentPlanningOnly ? currentlyPlannedRows(matrix) : matrix.rows;
     if (isMatrixSearchActive) {
-      const matches = searchMatrixRows(rows, matrixSearch, people, searchVisibleRange).slice().sort(compareMatrixRowsByNumber);
+      // Search the loaded range, not the viewport: scrolling must not change the site list.
+      const matches = searchMatrixRows(rows, matrixSearch, people, {
+        start: matrix.start_date,
+        end: matrix.end_date,
+      }).slice().sort(compareMatrixRowsByNumber);
       return matches.length ? [{ key: "search", label: "", rows: matches, showHeading: true }] : [];
     }
     return groupMatrixRows(rows, projectManagerFilter);
-  }, [matrix, projectManagerFilter, isCurrentPlanningOnly, isMatrixSearchActive, matrixSearch, people, searchVisibleRange]);
+  }, [matrix, projectManagerFilter, isCurrentPlanningOnly, isMatrixSearchActive, matrixSearch, people]);
 
   useEffect(() => {
     if (!navigationTarget || isLoading || navigatedSiteRef.current === location.key) return;
@@ -2190,7 +2172,7 @@ export function MatrixPage() {
             <input
               aria-label="Monteur oder Baustelle suchen"
               placeholder="Monteur / Baustelle suchen …"
-              title="Projektleiterübergreifend suchen. Monteure: nur Einplanungen im sichtbaren Datumsausschnitt."
+              title="Projektleiterübergreifend suchen. Monteure: alle Einplanungen im gesamten geladenen Zeitraum."
               type="search"
               value={matrixSearch}
               disabled={searchIsBlocked}
@@ -2262,7 +2244,7 @@ export function MatrixPage() {
         <>
           {isMatrixSearchActive && visibleRowGroups.length === 0 && (
             <p className="matrix-current-planning-empty" role="status">
-              Keine passenden Baustellen oder Monteur-Einplanungen im sichtbaren Datumsausschnitt{isCurrentPlanningOnly ? " mit aktueller Planung" : ""}.
+              Keine passenden Baustellen oder Monteur-Einplanungen im geladenen Zeitraum{isCurrentPlanningOnly ? " mit aktueller Planung" : ""}.
             </p>
           )}
           {!isMatrixSearchActive && isCurrentPlanningOnly && visibleRowGroups.length === 0 && (

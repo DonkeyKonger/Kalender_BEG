@@ -7,7 +7,7 @@ function normalized(value: string): string {
   return value.toLocaleLowerCase("de").normalize("NFD").replace(/\p{M}/gu, "").replace(/ß/g, "ss");
 }
 
-/** Search only filters rows; assignments and their dates are never changed. */
+/** Search the complete loaded date range, independent of scroll position or viewport size. */
 export function searchMatrixRows(
   rows: MatrixRow[], query: string, people: Person[], range: MatrixSearchRange | null,
 ): MatrixRow[] {
@@ -31,22 +31,4 @@ export function searchMatrixRows(
       })
     ));
   });
-}
-
-/** Partially visible day columns count; columns hidden behind the fixed site fields do not. */
-export function matrixSearchRangeAtViewport(
-  columns: { date: string; width: number }[], scrollLeft: number, viewportWidth: number,
-): MatrixSearchRange | null {
-  if (viewportWidth <= 0) return null;
-  let offset = 0;
-  let start: string | undefined;
-  let end: string | undefined;
-  for (const column of columns) {
-    if (offset + column.width > scrollLeft + 1 && offset < scrollLeft + viewportWidth - 1) {
-      start ??= column.date;
-      end = column.date;
-    }
-    offset += column.width;
-  }
-  return start && end ? { start, end } : null;
 }
