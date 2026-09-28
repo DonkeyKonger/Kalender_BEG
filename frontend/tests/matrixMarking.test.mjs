@@ -31,19 +31,14 @@ test('middle mouse down still toggles directly without default browser action', 
   assert.match(source, /if \(event.button === 1\) \{\s*event.preventDefault\(\);\s*event.stopPropagation\(\);\s*props.onCycleCellMark\(row, cell\);/);
 });
 
-test('orange marking reduces only its own fill and border saturation by thirty percent', async () => {
+test('orange marking keeps the original colors with forty percent transparency only on the marking', async () => {
   const css = await readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
   const rule = css.match(/\.matrix-cell\.mark-orange\s*\{([^}]+)\}/)[1];
-  const colors = [...rule.matchAll(/hsl\(([\d.]+) ([\d.]+)% ([\d.]+)%(?: \/ ([\d.]+)%)?\)/g)];
+  const colors = [...rule.matchAll(/rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)%\)/g)];
   assert.equal(colors.length, 2);
   const originals = [[255, 242, 214], [245, 158, 11]];
   colors.forEach((color, i) => {
-    const max = Math.max(...originals[i]) / 255;
-    const min = Math.min(...originals[i]) / 255;
-    const lightness = (max + min) / 2;
-    const saturation = (max - min) / (1 - Math.abs(2 * lightness - 1));
-    assert.ok(Math.abs(Number(color[2]) - saturation * 70) < 0.01);
-    assert.ok(Math.abs(Number(color[3]) - lightness * 100) < 0.01);
+    assert.deepEqual(color.slice(1, 4).map(Number), originals[i]);
   });
   assert.equal(Number(colors[0][4]), 100 * 0.6);
   assert.equal(Number(colors[1][4]), 32 * 0.6);
