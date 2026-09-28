@@ -140,6 +140,7 @@ export type SiteRemoveResponse = {
 };
 
 export type ProjectFolder = {
+  visible_for_monteurs?: boolean;
   file_count?: number | null;
   id: number;
   site_id: number;

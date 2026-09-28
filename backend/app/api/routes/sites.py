@@ -94,7 +94,7 @@ from app.services.photo_filename import (
     photo_extension_from_upload,
     user_photo_name,
 )
-from app.services.project_folder_service import ProjectFolderService
+from app.services.project_folder_service import ProjectFolderService, role_can_access_project_folder
 from app.services.project_photo_pdf_service import ProjectPhotoPdfService
 from app.services.project_manager_service import ProjectManagerService
 from app.services.project_storage_service import ProjectStorageService
@@ -214,7 +214,13 @@ def list_project_folders(
 ) -> list[ProjectFolderRead]:
     folders = ProjectFolderService(db).get_visible_project_folders_for_site(site_id, current_user)
     counts = cached_counts(db, site_id, folders)
-    return [ProjectFolderRead.model_validate(folder).model_copy(update={"file_count": counts.get(cache_key(site_id, folder))}) for folder in folders]
+    return [
+        ProjectFolderRead.model_validate(folder).model_copy(update={
+            "file_count": counts.get(cache_key(site_id, folder)),
+            "visible_for_monteurs": role_can_access_project_folder(UserRole.MONTEUR, folder),
+        })
+        for folder in folders
+    ]
 
 
 @router.get("/{site_id}/project-photos/photo-appendix")

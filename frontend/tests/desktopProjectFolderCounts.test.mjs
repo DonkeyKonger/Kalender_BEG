@@ -66,3 +66,19 @@ test('wider desktop navigation keeps a responsive fallback and muted count styli
   assert.match(badge,/color: #52657c;/);
   assert.match(badge,/font-variant-numeric: tabular-nums;/);
 });
+
+test('monteur visibility is a quiet server-driven hint independent of selection and counts', () => {
+  const folders = [
+    {id:1,folder_key:'terminplan',sort_order:5,name:'Terminplan',visible_for_monteurs:true},
+    {id:2,folder_key:'angebote',sort_order:1,name:'Angebote',visible_for_monteurs:false},
+    {id:3,folder_key:'unknown',sort_order:16,name:'Unbekannt'},
+  ];
+  const buttons = collect(module.exports.tree({terminplan:2},{folders,selectedFolder:folders[0]})).filter(node=>node.type==='button');
+  assert.match(buttons[0].props.className,/is-monteur-visible is-selected/);
+  assert.match(buttons[0].props.title,/Für Monteure sichtbar/);
+  assert.doesNotMatch(buttons[1].props.className,/is-monteur-visible/);
+  assert.doesNotMatch(buttons[2].props.className,/is-monteur-visible/);
+  assert.match(css,/\.project-folder-card\.is-monteur-visible \{\s*background: #edf4f1;/);
+  assert.match(css,/\.project-folder-card\.is-monteur-visible\.is-selected \{\s*background: #edf4f1;/);
+  assert.doesNotMatch(panel,/role="alert"|animation/);
+});

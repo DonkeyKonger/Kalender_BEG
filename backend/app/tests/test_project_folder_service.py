@@ -106,6 +106,24 @@ def test_direct_folder_access_blocks_disallowed_role():
     assert error.value.status_code == 403
 
 
+def test_folder_response_marks_exactly_the_folders_monteurs_can_access(monkeypatch):
+    from app.api.routes import sites
+    from app.services.project_folder_service import role_can_access_project_folder
+
+    db = db_session()
+    site = create_site(db)
+    monkeypatch.setattr(sites, "cached_counts", lambda *_args: {})
+    response = sites.list_project_folders(site.id, current_user=user(UserRole.ADMIN), db=db)
+    actual_visible = ProjectFolderService(db).get_visible_project_folders_for_site(site.id, user(UserRole.MONTEUR))
+    assert {folder.folder_key for folder in response if folder.visible_for_monteurs} == {
+        folder.folder_key for folder in actual_visible
+    }
+    assert len([folder for folder in response if folder.visible_for_monteurs]) == 5
+    assert all("visible_for_monteurs" in folder.model_dump() for folder in response)
+    assert not role_can_access_project_folder(UserRole.MONTEUR, ProjectFolder(folder_key="unknown", is_active=True))
+    assert not role_can_access_project_folder(UserRole.MONTEUR, ProjectFolder(folder_key="fotos", is_active=False))
+
+
 def test_attach_external_subfolders_updates_matching_logical_folders():
     db = db_session()
     site = create_site(db)

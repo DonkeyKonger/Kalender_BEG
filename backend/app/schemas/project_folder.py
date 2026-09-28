@@ -46,6 +46,7 @@ class ProjectFolderRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     file_count: int | None = Field(default=None, ge=0)
+    visible_for_monteurs: bool = False
 
     model_config = {"from_attributes": True}
 

@@ -175,11 +175,15 @@ class ProjectFolderService:
 
 
 def user_can_access_project_folder(user: User, project_folder: ProjectFolder) -> bool:
+    return role_can_access_project_folder(user.role, project_folder)
+
+
+def role_can_access_project_folder(role: UserRole, project_folder: ProjectFolder) -> bool:
     if not project_folder.is_active:
         return False
-    if user.role in FULL_ACCESS_ROLES:
+    if role in FULL_ACCESS_ROLES:
         return True
     template = PROJECT_FOLDER_TEMPLATE_BY_KEY.get(project_folder.folder_key)
     if template is None:
         return False
-    return user.role.value in template["visible_for_roles"]
+    return role.value in template["visible_for_roles"]

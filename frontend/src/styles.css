@@ -31721,6 +31721,10 @@ body.mobile-modal-scroll-locked {
   box-shadow: none;
 }
 
+.site-detail-page.is-project-file-workspace .project-folder-card.is-monteur-visible {
+  background: #edf4f1;
+}
+
 .site-detail-page.is-project-file-workspace .project-folder-card:hover,
 .site-detail-page.is-project-file-workspace .project-folder-card:focus-visible,
 .site-detail-page.is-project-file-workspace .project-document-item:hover {
@@ -31731,6 +31735,10 @@ body.mobile-modal-scroll-locked {
 .site-detail-page.is-project-file-workspace .measurement-base-card.is-active {
   background: #ffffff;
   box-shadow: inset 3px 0 0 var(--pf-active);
+}
+
+.site-detail-page.is-project-file-workspace .project-folder-card.is-monteur-visible.is-selected {
+  background: #edf4f1;
 }
 
 .site-detail-page.is-project-file-workspace .project-folder-card span {

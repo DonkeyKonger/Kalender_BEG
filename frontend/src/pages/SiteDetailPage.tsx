@@ -2419,7 +2419,7 @@ function ProjectFoldersPanel({
                   <button
                     key={folder.id}
                     type="button"
-                    className={`project-folder-card${isSelected ? " is-selected" : ""}${dragOverFolderKey === folder.folder_key ? " is-drag-over" : ""}`}
+                    className={`project-folder-card${folder.visible_for_monteurs ? " is-monteur-visible" : ""}${isSelected ? " is-selected" : ""}${dragOverFolderKey === folder.folder_key ? " is-drag-over" : ""}`}
                     onClick={() => onSelectFolder(folder)}
                     onDragOver={(event) => {
                       event.preventDefault();
@@ -2432,7 +2432,7 @@ function ProjectFoldersPanel({
                       onDragOverFolder(null);
                       void onUploadFiles(folder, event.dataTransfer.files);
                     }}
-                    title={`${folder.sort_order}. ${folder.name} Dateien anzeigen`}
+                    title={`${folder.sort_order}. ${folder.name} Dateien anzeigen${folder.visible_for_monteurs ? " · Für Monteure sichtbar" : ""}`}
                   >
                     <span>{folder.sort_order}.</span>
                     <strong>{dragOverFolderKey === folder.folder_key ? "Hier ablegen zum Hochladen" : folder.name}</strong>
