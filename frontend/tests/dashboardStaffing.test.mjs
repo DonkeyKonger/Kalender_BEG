@@ -6,9 +6,9 @@ import test from 'node:test';
 import { build } from 'esbuild';
 
 const compiled = await build({
-  stdin: { contents: `import React from 'react'; import {renderToStaticMarkup} from 'react-dom/server';
+  stdin: { contents: `import React from 'react'; import {renderToStaticMarkup} from 'react-dom/server'; import {MemoryRouter} from 'react-router-dom';
     import {DashboardStaffingOverview} from './src/components/DashboardStaffingOverview';
-    export const render = (days,today='2026-09-28') => renderToStaticMarkup(<DashboardStaffingOverview days={days} today={today}/>);`,
+    export const render = (days,today='2026-09-28') => renderToStaticMarkup(<MemoryRouter><DashboardStaffingOverview days={days} today={today}/></MemoryRouter>);`,
     resolveDir: fileURLToPath(new URL('..', import.meta.url)), loader: 'tsx' },
   bundle: true, write: false, format: 'cjs', platform: 'node', packages: 'external', jsx: 'automatic',
 });
@@ -16,6 +16,15 @@ const result = {exports:{}};
 new Function('require','module','exports', compiled.outputFiles[0].text)(createRequire(import.meta.url), result, result.exports);
 const day = (count = 0, extra = {}) => ({date:'2026-09-28',isWorkday:true,nonWorkdayLabel:null,needs:[],
   freeWorkers:Array.from({length:count},(_,i)=>({id:i,display_name:`Monteur ${i}`,short_code:`M.${i}`,isExternal:i===0})),...extra});
+
+test('orange site bubbles are links to their precise site and manager in the matrix', () => {
+  const html = result.exports.render([day(0, { needs: [
+    {siteId: 27, projectManagerPersonId: 12, siteName: 'Test', siteNumber: '8026', managerLabel: 'CE'},
+    {siteId: 28, projectManagerPersonId: null, siteName: 'Ohne Projektleiter', siteNumber: null, managerLabel: ''},
+  ] })]);
+  assert.match(html, /href="\/matrix\?site=27&amp;projectManager=12"/);
+  assert.match(html, /href="\/matrix\?site=28&amp;projectManager=all"/);
+});
 
 test('renders at most four bubbles and an exact overflow count, without truncating the data',()=>{
   const data = day(14);

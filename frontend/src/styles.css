@@ -24183,6 +24183,7 @@ body.mobile-modal-scroll-locked {
 .dashboard-staffing-needs-list { min-height: 0; }
 .dashboard-staffing-needs > .dashboard-staffing-more { align-self: flex-start; }
 .dashboard-staffing-site {
+  text-decoration: none;
   display: grid;
   gap: 2px;
   border: 1px solid #ead9b8;
@@ -24199,6 +24200,8 @@ body.mobile-modal-scroll-locked {
   white-space: nowrap;
 }
 .dashboard-staffing-site > span { color: #877654; font-size: 0.62rem; }
+.dashboard-staffing-site:hover { border-color: #ccae76; }
+.dashboard-staffing-site:focus-visible { outline: 2px solid #1d5c99; outline-offset: 1px; }
 .dashboard-staffing-worker {
   display: flex;
   justify-content: space-between;

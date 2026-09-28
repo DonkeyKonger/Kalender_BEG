@@ -237,6 +237,8 @@ export type DashboardOverviewAssignedSite = {
 
 export type DashboardOverviewStaffingNeed = {
   date: string;
+  siteId: number;
+  projectManagerPersonId: number | null;
   siteName: string;
   siteNumber: string | null;
   managerLabel: string;

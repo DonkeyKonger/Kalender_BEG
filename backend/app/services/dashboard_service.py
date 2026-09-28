@@ -212,6 +212,8 @@ class DashboardService:
                 needs.append(
                     {
                         "date": cell.date.isoformat(),
+                        "siteId": row.site.id,
+                        "projectManagerPersonId": row.site.project_manager_person_id,
                         "siteName": row.site.name,
                         "siteNumber": row.site.site_number,
                         "managerLabel": self._manager_label(row.site.project_manager),

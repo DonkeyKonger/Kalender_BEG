@@ -1,7 +1,7 @@
 import { Check, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
@@ -19,6 +19,7 @@ import {
 } from "../lib/planningAbsenceSort";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
 import { currentlyPlannedRows } from "../lib/currentPlanning";
+import { matrixNavigationTarget, matrixSiteScrollTop } from "../lib/matrixNavigation";
 import { matrixSearchRangeAtViewport, searchMatrixRows, type MatrixSearchRange } from "../lib/matrixSearch";
 import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
@@ -202,6 +203,9 @@ const EMPTY_MATRIX_NOTE_DRAFT: MatrixNoteDraft = {
 
 export function MatrixPage() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigationTarget = useMemo(() => matrixNavigationTarget(location.search), [location.search]);
+  const navigatedSiteRef = useRef<string | null>(null);
   const [planningReferenceDate, setPlanningReferenceDate] = useState(() => new Date());
   const defaultRange = useMemo(() => getDefaultPlanningRange(planningReferenceDate), [planningReferenceDate]);
   const [matrix, setMatrix] = useState<MatrixResponse | null>(null);
@@ -267,7 +271,7 @@ export function MatrixPage() {
     weekStart: getIsoWeekStartDate(planningReferenceDate),
   }));
   const [projectManagerFilter, setProjectManagerFilter] = useState(() => (
-    initialMatrixProjectManagerFilterFromUser(user)
+    navigationTarget?.managerFilter ?? initialMatrixProjectManagerFilterFromUser(user)
   ));
   const [matrixSearch, setMatrixSearch] = useState("");
   const isMatrixSearchActive = matrixSearch.trim().length > 0;
@@ -726,10 +730,10 @@ export function MatrixPage() {
     if (!user || !matrix || initializedProjectManagerFilterUserIdRef.current === user.id) {
       return;
     }
-    const initialFilter = resolveInitialMatrixProjectManagerFilter(user, matrix.project_managers, people);
+    const initialFilter = navigationTarget?.managerFilter ?? resolveInitialMatrixProjectManagerFilter(user, matrix.project_managers, people);
     initializedProjectManagerFilterUserIdRef.current = user.id;
     updateProjectManagerFilter(initialFilter);
-  }, [matrix, people, updateProjectManagerFilter, user]);
+  }, [matrix, navigationTarget, people, updateProjectManagerFilter, user]);
 
   const scheduleScrollToCurrentWeek = useCallback(() => {
     if (!matrix || !matrixScrollRef.current) {
@@ -2155,6 +2159,22 @@ export function MatrixPage() {
     }
     return groupMatrixRows(rows, projectManagerFilter);
   }, [matrix, projectManagerFilter, isCurrentPlanningOnly, isMatrixSearchActive, matrixSearch, people, searchVisibleRange]);
+
+  useEffect(() => {
+    if (!navigationTarget || isLoading || navigatedSiteRef.current === location.key) return;
+    const container = matrixScrollRef.current;
+    const row = container?.querySelector<HTMLElement>(`tr[data-matrix-row-site-id="${navigationTarget.siteId}"]`);
+    if (!container || !row) return;
+    const frame = window.requestAnimationFrame(() => {
+      const headerHeight = container.querySelector("thead")?.getBoundingClientRect().height ?? 0;
+      const absenceHeight = container.querySelector(".matrix-absence-row")?.getBoundingClientRect().height ?? 0;
+      const absenceGap = absenceHeight ? parseFloat(window.getComputedStyle(container).getPropertyValue("--matrix-absence-separator-height")) || 0 : 0;
+      container.scrollTop = matrixSiteScrollTop(container.scrollTop, row.getBoundingClientRect().top,
+        container.getBoundingClientRect().top, headerHeight + absenceHeight + absenceGap);
+      navigatedSiteRef.current = location.key;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isLoading, location.key, navigationTarget, visibleRowGroups]);
 
   return (
     <section className={["matrix-page", isCompactView ? "is-compact" : "", isYearView ? "is-year-view" : "", isCurrentPlanningOnly ? "is-current-planning" : ""].filter(Boolean).join(" ")}>
@@ -4160,7 +4180,7 @@ function MatrixTableRow({ row, ...props }: MatrixTableRowProps) {
   const hasSiteAddress = matrixSiteHasAddress(row.site);
 
   return (
-    <tr>
+    <tr data-matrix-row-site-id={row.site.id}>
       <td className="sticky-col site-number-col matrix-site-number-cell">
         <div className="matrix-site-number-content">
           <span className="matrix-site-number-stack">

@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import type { DashboardStaffingDay } from "../lib/api";
+import { matrixSiteHref } from "../lib/matrixNavigation";
 
 const MAX_VISIBLE_ITEMS = 4;
 const MAX_VISIBLE_SITES = 3;
@@ -30,10 +32,10 @@ export function DashboardStaffingOverview({ days, today }: { days: DashboardStaf
 }
 
 function SiteBubble({ need }: { need: DashboardStaffingDay["needs"][number] }) {
-  return <div className="dashboard-staffing-site" title={`${need.siteNumber ?? ""} · ${need.siteName} · ${need.managerLabel}`}>
+  return <Link className="dashboard-staffing-site" to={matrixSiteHref(need.siteId, need.projectManagerPersonId)} title={`${need.siteNumber ?? ""} · ${need.siteName} · ${need.managerLabel}`}>
     <strong>{need.siteName}</strong>
     <span>{[need.siteNumber, need.managerLabel].filter(Boolean).join(" · ")}</span>
-  </div>;
+  </Link>;
 }
 
 function WorkerBubble({ person, fullName = false }: { person: DashboardStaffingDay["freeWorkers"][number]; fullName?: boolean }) {

@@ -113,6 +113,8 @@ def test_overview_returns_only_orange_unstaffed_needs_and_all_free_people(db):
     days = overview["staffingDays"]
     assert len(days) == 8
     assert [need["siteName"] for need in days[0]["needs"]] == ["Needs people"]
+    assert days[0]["needs"][0]["siteId"] == site.id
+    assert days[0]["needs"][0]["projectManagerPersonId"] == site.project_manager_person_id
     assert all(not day["needs"] for day in days[1:])
     assert len(days[0]["freeWorkers"]) == 12  # Presentation, not the API, limits the preview.
     assert len(days[3]["freeWorkers"]) == 11
