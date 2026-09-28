@@ -70,6 +70,25 @@ test("equal primary values use the filename as a stable tie-breaker", () => {
   );
 });
 
+for (const key of ["name", "type", "uploaded"]) {
+  for (const direction of ["asc", "desc"]) {
+    test(`subfolders always precede files when sorting ${key} ${direction}`, () => {
+      const folders = [
+        documentItem({ id: "folder-old", name: "8.1 Zusatzaufträge", isFolder: true, uploaded: "2020-01-01T10:00:00Z" }),
+        documentItem({ id: "folder-new", name: "Z Unterordner", isFolder: true, uploaded: "2030-01-01T10:00:00Z" }),
+        documentItem({ id: "folder-missing", name: "A Unterordner", isFolder: true }),
+      ];
+      const mixed = [documents[0], folders[0], ...documents.slice(1), ...folders.slice(1)];
+      const original = [...mixed];
+      const sort = { key, direction };
+      const sorted = sortProjectDocumentItems(mixed, sort);
+      assert.deepEqual(sorted.slice(0, folders.length), sortProjectDocumentItems(folders, sort));
+      assert.deepEqual(sorted.slice(folders.length), sortProjectDocumentItems(documents, sort));
+      assert.deepEqual(mixed, original);
+    });
+  }
+}
+
 test("header changes share one sort state and use the required first-click directions", () => {
   assert.deepEqual(getNextProjectDocumentSort(DEFAULT_PROJECT_DOCUMENT_SORT, "uploaded"), { key: "uploaded", direction: "asc" });
   assert.deepEqual(getNextProjectDocumentSort(DEFAULT_PROJECT_DOCUMENT_SORT, "name"), { key: "name", direction: "asc" });

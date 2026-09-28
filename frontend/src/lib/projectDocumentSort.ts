@@ -48,6 +48,10 @@ export function sortProjectDocumentItems(
   sort: ProjectDocumentSort,
 ): ProjectFolderDocumentItem[] {
   return [...items].sort((left, right) => {
+    // Folder priority is independent of the selected column and direction.
+    if (left.is_folder !== right.is_folder) {
+      return left.is_folder ? -1 : 1;
+    }
     const primaryResult = compareProjectDocumentItems(left, right, sort);
     if (primaryResult !== 0) {
       return primaryResult;
