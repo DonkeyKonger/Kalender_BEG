@@ -24494,12 +24494,15 @@ body.mobile-modal-scroll-locked {
 
 .dashboard-site-group-list {
   display: grid;
+  align-content: start;
+  grid-auto-rows: max-content;
   gap: 8px;
   padding: 8px;
 }
 
 .dashboard-site-group {
   display: grid;
+  align-content: start;
   border: 1px solid #dce3ee;
   background: #ffffff;
 }
@@ -24531,6 +24534,7 @@ body.mobile-modal-scroll-locked {
 
 .dashboard-site-tile-grid {
   display: grid;
+  align-items: start;
   grid-template-columns: repeat(auto-fill, minmax(132px, 190px));
   gap: 6px;
   justify-content: flex-start;
