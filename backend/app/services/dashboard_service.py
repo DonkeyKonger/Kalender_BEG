@@ -11,11 +11,13 @@ from app.models.enums import AbsenceStatus, AbsenceType, PersonType, UserRole
 from app.models.person import Person
 from app.models.site import Site
 from app.models.user import User
+from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.matrix import MatrixPerson, MatrixResponse, MatrixRow
 from app.services.conflict_service import BLOCKED_SITE_STATUSES, HARD_ABSENCE_TYPES
 from app.services.matrix_service import MatrixService
 from app.services.person_display import calendar_short_code, calendar_short_code_from_values
 from app.services.payroll_daily_ledger_service import lower_saxony_public_holidays
+from app.services.person_hours_account_service import effective_weekly_work_minutes
 
 
 def staffing_dates(today: date) -> list[date]:
@@ -142,6 +144,7 @@ class DashboardService:
             worker for worker in workers
             if worker.person_type == PersonType.INTERNAL or worker.id in recent_person_ids
         ]
+        four_day_worker_ids = self._four_day_worker_ids({worker.id for worker in workers}, today)
         needs = self._open_staffing_needs(rows, today, end)
         holidays = lower_saxony_public_holidays(today, end)
         result = []
@@ -151,6 +154,8 @@ class DashboardService:
                 entry.person_id for entry in [*assignments, *absences]
                 if entry.start_date <= day <= entry.end_date
             }
+            if day.weekday() == 4:
+                unavailable.update(four_day_worker_ids)
             result.append({
                 "date": day.isoformat(),
                 "isWorkday": is_workday,
@@ -162,6 +167,35 @@ class DashboardService:
                 ],
             })
         return result
+
+    def _four_day_worker_ids(self, person_ids: set[int], today: date) -> set[int]:
+        """Infer Mon–Thu availability only from three complete recorded weeks.
+
+        Freeze the lookback at the current week's Monday for the entire forecast.
+        Incomplete/new payroll records must not turn missing Fridays into a rule.
+        This is a display filter, never a change to contracts, payroll or planning.
+        """
+        if not person_ids:
+            return set()
+        current_monday = today - timedelta(days=today.weekday())
+        history_start = current_monday - timedelta(weeks=3)
+        entries = self.db.scalars(select(WorkTimeEntry).where(
+            WorkTimeEntry.person_id.in_(person_ids),
+            WorkTimeEntry.work_date >= history_start,
+            WorkTimeEntry.work_date < current_monday,
+        ))
+        work_dates_by_person: dict[int, set[date]] = {}
+        for entry in entries:
+            if effective_weekly_work_minutes(entry) > 0:
+                work_dates_by_person.setdefault(entry.person_id, set()).add(entry.work_date)
+        expected_dates = {
+            history_start + timedelta(days=week * 7 + weekday)
+            for week in range(3) for weekday in range(4)
+        }
+        return {
+            person_id for person_id, work_dates in work_dates_by_person.items()
+            if work_dates == expected_dates
+        }
 
     def _assigned_sites_for_day(self, matrix: MatrixResponse, target_date: date) -> list[dict]:
         summaries: list[dict] = []

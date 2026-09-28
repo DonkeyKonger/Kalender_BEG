@@ -12,6 +12,7 @@ from app.models.person import Person
 from app.models.planning_cell_mark import PlanningCellMark
 from app.models.site import Site
 from app.models.user import User
+from app.models.work_time_entry import WorkTimeEntry
 from app.services.dashboard_service import DashboardService, staffing_dates
 
 
@@ -33,6 +34,98 @@ def worker(db, name="Worker", **kwargs):
 
 def ids(day):
     return {person["id"] for person in day["freeWorkers"]}
+
+
+def record_four_day_weeks(db, person, today, *, missing_days=()):
+    monday = today - timedelta(days=today.weekday())
+    entries = []
+    for week in range(1, 4):
+        for weekday in range(4):
+            work_date = monday - timedelta(weeks=week) + timedelta(days=weekday)
+            if work_date not in missing_days:
+                entry = WorkTimeEntry(person_id=person.id, work_date=work_date, work_minutes=600)
+                db.add(entry)
+                entries.append(entry)
+    db.flush()
+    return entries
+
+
+@pytest.mark.parametrize("today", [date(2026, 9, 28), date(2026, 9, 30), date(2026, 10, 2), date(2027, 1, 4)])
+def test_three_complete_mon_thu_weeks_hide_only_fridays(db, today):
+    four_days = worker(db, "Four days")
+    unknown = worker(db, "No records")
+    record_four_day_weeks(db, four_days, today)
+    days = DashboardService(db)._staffing_days([], today)
+    for day in days:
+        if not day["isWorkday"]:
+            continue
+        assert unknown.id in ids(day)
+        assert (four_days.id in ids(day)) == (date.fromisoformat(day["date"]).weekday() != 4)
+    assert not db.deleted
+
+
+@pytest.mark.parametrize("extra_weekday", [4, 5, 6])
+@pytest.mark.parametrize("week", [1, 2, 3])
+def test_any_friday_or_weekend_work_prevents_four_day_inference(db, extra_weekday, week):
+    today = date(2026, 9, 28)
+    person = worker(db)
+    record_four_day_weeks(db, person, today)
+    db.add(WorkTimeEntry(person_id=person.id, work_date=today - timedelta(weeks=week) + timedelta(days=extra_weekday), work_minutes=60))
+    db.flush()
+    assert DashboardService(db)._four_day_worker_ids({person.id}, today) == set()
+
+
+@pytest.mark.parametrize("missing", [date(2026, 9, 7), date(2026, 9, 15), date(2026, 9, 24)])
+def test_incomplete_payroll_does_not_hide_workers_on_friday(db, missing):
+    person = worker(db)
+    today = date(2026, 9, 28)
+    record_four_day_weeks(db, person, today, missing_days={missing})
+    # Several entries on another day do not compensate for a missing day.
+    db.add(WorkTimeEntry(person_id=person.id, work_date=date(2026, 9, 8), work_minutes=60))
+    db.flush()
+    assert DashboardService(db)._four_day_worker_ids({person.id}, today) == set()
+
+
+@pytest.mark.parametrize("raw,corrected,travel,excluded", [(480, 0, 0, True), (0, 60, 0, False), (0, None, 60, False), (0, None, 0, True)])
+def test_four_day_pattern_uses_effective_payroll_minutes_including_corrections(db, raw, corrected, travel, excluded):
+    person = worker(db)
+    today = date(2026, 9, 28)
+    record_four_day_weeks(db, person, today)
+    db.add(WorkTimeEntry(person_id=person.id, work_date=date(2026, 9, 25), work_minutes=raw,
+                         payroll_corrected_work_minutes=corrected, travel_minutes=travel))
+    db.flush()
+    assert (person.id in DashboardService(db)._four_day_worker_ids({person.id}, today)) == excluded
+
+
+def test_lookback_ignores_older_and_current_week_but_updates_after_new_week(db):
+    person = worker(db)
+    today = date(2026, 9, 28)
+    record_four_day_weeks(db, person, today)
+    for work_date in [date(2026, 9, 4), date(2026, 10, 2)]:
+        db.add(WorkTimeEntry(person_id=person.id, work_date=work_date, work_minutes=480))
+    db.flush()
+    service = DashboardService(db)
+    assert service._four_day_worker_ids({person.id}, today) == {person.id}
+    assert service._four_day_worker_ids({person.id}, date(2026, 10, 5)) == set()
+    assert service._four_day_worker_ids(set(), today) == set()
+
+
+def test_four_day_rule_applies_to_recent_externals_without_changing_plans_or_absences(db):
+    today = date(2026, 9, 28)
+    person = worker(db, person_type=PersonType.EXTERNAL_TEMP)
+    record_four_day_weeks(db, person, today)
+    db.add(Absence(person_id=person.id, absence_type=AbsenceType.OTHER,
+                   start_date=today - timedelta(days=3), end_date=today - timedelta(days=3)))
+    site = Site(name="Booked Friday")
+    db.add(site)
+    db.flush()
+    plan = Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 10, 2), end_date=date(2026, 10, 2))
+    db.add(plan)
+    db.flush()
+    days = DashboardService(db)._staffing_days([], today)
+    assert person.id in ids(days[0]) and person.id not in ids(days[4])
+    assert db.get(Assignment, plan.id) is plan
+    assert person.id in ids(days[5])
 
 
 def test_exactly_eight_weekdays_including_today_across_year_boundary(db):
