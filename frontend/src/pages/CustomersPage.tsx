@@ -1,9 +1,9 @@
 import {
   ArrowLeft,
+  ArrowRight,
   Briefcase,
   Building2,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   MapPin,
   Pencil,
@@ -23,7 +23,6 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
 import { AddressDisplayItem, AddressSearch } from "../components/AddressSearch";
-import { EntityCard } from "../components/EntityCard";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { ApiError, api } from "../lib/api";
 import { getSiteColorDisplayValue, getSiteColorLabel } from "../lib/siteColors";
@@ -75,6 +74,10 @@ export function CustomersPage() {
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [letterFilter, setLetterFilter] = useState("all");
+  const [sortDescending, setSortDescending] = useState(false);
+  const [previewCustomerId, setPreviewCustomerId] = useState<number | null>(null);
+  const [previewTab, setPreviewTab] = useState<"master" | "contacts">("master");
   const [isLoading, setIsLoading] = useState(true);
   const [savingCustomerId, setSavingCustomerId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,12 +107,21 @@ export function CustomersPage() {
 
   const filteredCustomers = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
-    if (!needle) {
-      return customers;
-    }
-    return customers.filter((customer) => customerSearchText(customer).includes(needle));
-  }, [customers, searchTerm]);
-  const customerGroups = useMemo(() => groupCustomersAlphabetically(filteredCustomers), [filteredCustomers]);
+    return customers.filter((customer) =>
+      (!needle || customerSearchText(customer).includes(needle))
+      && (letterFilter === "all" || customerInitial(customer.company_name) === letterFilter),
+    ).sort((left, right) => compareCustomers(left, right) * (sortDescending ? -1 : 1));
+  }, [customers, searchTerm, letterFilter, sortDescending]);
+  const customerGroups = useMemo(() => {
+    const groups = groupCustomersAlphabetically(filteredCustomers);
+    return sortDescending ? groups.reverse() : groups;
+  }, [filteredCustomers, sortDescending]);
+  const previewCustomer = filteredCustomers.find((customer) => customer.id === previewCustomerId)
+    ?? filteredCustomers[0] ?? null;
+
+  useEffect(() => {
+    setPreviewTab("master");
+  }, [previewCustomer?.id]);
 
   const selectedCustomer = drawer?.mode === "edit"
     ? customers.find((customer) => customer.id === drawer.customerId) ?? null
@@ -137,6 +149,9 @@ export function CustomersPage() {
       setCustomers((current) => [...current, created].sort(compareCustomers));
       setDrafts((current) => ({ ...current, [created.id]: toEditableCustomer(created) }));
       setCreateForm(emptyCustomer);
+      setSearchTerm("");
+      setLetterFilter("all");
+      setPreviewCustomerId(created.id);
       setDrawer(null);
       setMessage("Kunde angelegt.");
     } catch (requestError) {
@@ -293,58 +308,92 @@ export function CustomersPage() {
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-info">{message}</p>}
 
-      <div className="overview-toolbar">
-        <div className="overview-toolbar-left">
-          <label className="overview-search">
-            <Search aria-hidden="true" size={17} />
-            <input
-              placeholder="Kunde suchen"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
-          </label>
-        </div>
-      </div>
-
       {isLoading && <div className="matrix-state">Kunden werden geladen...</div>}
 
       {!isLoading && (
-        <>
-          {customerGroups.length ? (
-            <div className="overview-group-list">
+        <div className="customer-directory">
+          <div className="customer-directory-list">
+            <div className="customer-directory-tools">
+              <label className="overview-search">
+                <Search aria-hidden="true" size={16} />
+                <input aria-label="Kunden suchen" placeholder="Kunden suchen …" value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)} />
+              </label>
+              <div className="customer-directory-filters">
+                <div className="customer-alphabet" role="group" aria-label="Anfangsbuchstabe">
+                  {["all", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "#"].map((letter) => (
+                    <button key={letter} type="button" aria-pressed={letterFilter === letter}
+                      onClick={() => setLetterFilter(letter)}>{letter === "all" ? "Alle" : letter}</button>
+                  ))}
+                </div>
+                <select aria-label="Kunden sortieren" value={sortDescending ? "desc" : "asc"}
+                  onChange={(event) => setSortDescending(event.target.value === "desc")}>
+                  <option value="asc">Name A–Z</option><option value="desc">Name Z–A</option>
+                </select>
+              </div>
+            </div>
+            <div className="customer-directory-results" aria-label="Kundenliste">
+              {customerGroups.length ? <>
               {customerGroups.map((group) => (
-                <section className="overview-group-section" key={group.key}>
-                  <div className="overview-group-header">
-                    <h2>
-                      <ChevronDown aria-hidden="true" size={16} />
-                      <span>{group.label}</span>
-                    </h2>
-                    <span className="overview-group-count">{group.customers.length}</span>
-                  </div>
-                  <div className="entity-card-list overview-card-grid">
+                <section className="customer-letter-group" key={group.key} aria-label={group.label}>
+                  <h2>{group.label}</h2>
                     {group.customers.map((customer) => (
-                      <EntityCard
-                        key={customer.id}
-                        className="overview-card customer-overview-card"
-                        color={customer.is_active ? "#1d5c99" : "#94a3b8"}
-                        title={customer.company_name}
-                        subtitle={formatCustomerAddress(customer) || "Keine Adresse hinterlegt"}
-                        meta={customerCardMeta(customer)}
-                        icon={<Building2 aria-hidden="true" size={17} />}
-                        isInactive={!customer.is_active}
-                        onClick={() => openCustomerDrawer(customer.id)}
-                      />
+                      <button key={customer.id} type="button"
+                        className={`customer-directory-row${!customer.is_active ? " is-inactive" : ""}`}
+                        aria-pressed={previewCustomer?.id === customer.id}
+                        onClick={() => setPreviewCustomerId(customer.id)}>
+                        <Building2 aria-hidden="true" size={19} />
+                        <span className="customer-directory-row-copy">
+                          <strong title={customer.company_name}>{customer.company_name}</strong>
+                          <span title={formatCustomerAddress(customer)}>{formatCustomerAddress(customer) || "Keine Adresse hinterlegt"}</span>
+                        </span>
+                        {!customer.is_active && <small>Inaktiv</small>}
+                        <ChevronRight aria-hidden="true" size={16} />
+                      </button>
                     ))}
-                  </div>
                 </section>
               ))}
+              </> : <p className="customer-directory-empty">{customers.length ? "Keine Treffer gefunden." : "Noch keine Kunden vorhanden."}</p>}
             </div>
-          ) : (
-            <div className="empty-panel">
-              <p>{customers.length ? "Keine Treffer gefunden." : "Noch keine Kunden vorhanden."}</p>
-            </div>
-          )}
-        </>
+          </div>
+          <section className="customer-preview" aria-label="Kundendetails">
+            {previewCustomer ? <>
+              <div className="customer-preview-actions">
+                {canEdit && <button className="icon-button secondary" type="button" onClick={() => {
+                  openCustomerDrawer(previewCustomer.id);
+                  setIsEditingCustomer(true);
+                }}><Pencil aria-hidden="true" size={15} /><span>Bearbeiten</span></button>}
+              </div>
+              <header className="customer-preview-heading">
+                <Building2 aria-hidden="true" size={34} />
+                <div><p className="eyebrow">Kunde{!previewCustomer.is_active ? " · Inaktiv" : ""}</p><h2>{previewCustomer.company_name}</h2></div>
+              </header>
+              <div className="customer-preview-tabs" role="tablist" aria-label="Kundendetails">
+                <button id="customer-master-tab" type="button" role="tab" aria-selected={previewTab === "master"}
+                  aria-controls="customer-preview-panel" onClick={() => setPreviewTab("master")}>Stammdaten</button>
+                <button id="customer-contacts-tab" type="button" role="tab" aria-selected={previewTab === "contacts"}
+                  aria-controls="customer-preview-panel" onClick={() => setPreviewTab("contacts")}>Ansprechpartner</button>
+              </div>
+              <div className="customer-preview-body" id="customer-preview-panel" role="tabpanel"
+                aria-labelledby={previewTab === "master" ? "customer-master-tab" : "customer-contacts-tab"}>
+                {previewTab === "master" ? <>
+                  <section><h3>Anschrift</h3>
+                    {customerAddressLines(previewCustomer).length
+                      ? customerAddressLines(previewCustomer).map((line) => <p key={line}>{line}</p>)
+                      : <p className="detail-empty">Keine Adresse hinterlegt.</p>}
+                  </section>
+                  <section><h3>Kontakt</h3><span className="customer-preview-phone-label">Telefon</span>
+                    <CustomerPhoneLink phone={previewCustomer.company_phone} />
+                  </section>
+                </> : <CustomerContactEditor key={previewCustomer.id} canEdit={canEdit}
+                  contactRows={customerContactRows(previewCustomer)} isSaving={savingCustomerId === previewCustomer.id}
+                  onSaveContacts={(contacts) => saveCustomerContacts(previewCustomer.id, contacts)} />}
+              </div>
+              <div className="customer-preview-footer"><button className="icon-button secondary" type="button"
+                onClick={() => openCustomerDrawer(previewCustomer.id)}>Kundenakte öffnen<ArrowRight aria-hidden="true" size={16} /></button></div>
+            </> : <p className="customer-directory-empty">Wählen Sie einen Kunden aus der Liste.</p>}
+          </section>
+        </div>
       )}
 
       <EntityDetailDrawer
@@ -1029,11 +1078,15 @@ function compareCustomers(left: Customer, right: Customer): number {
   return left.company_name.localeCompare(right.company_name, "de");
 }
 
+function customerInitial(name: string): string {
+  const firstLetter = name.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").charAt(0).toUpperCase();
+  return /^[A-Z]$/.test(firstLetter) ? firstLetter : "#";
+}
+
 function groupCustomersAlphabetically(customers: Customer[]): Array<{ key: string; label: string; customers: Customer[] }> {
   const groups = new Map<string, Customer[]>();
   customers.forEach((customer) => {
-    const firstLetter = customer.company_name.trim().charAt(0).toUpperCase();
-    const key = /^[A-ZÄÖÜ]$/.test(firstLetter) ? firstLetter : "#";
+    const key = customerInitial(customer.company_name);
     groups.set(key, [...(groups.get(key) ?? []), customer]);
   });
   return Array.from(groups.entries())
@@ -1207,12 +1260,6 @@ function displayCustomerContactRole(value: string | null | undefined): string {
     return "";
   }
   return customerContactTypeLabels[role] ?? role;
-}
-
-function customerCardMeta(customer: Customer): string[] {
-  return [
-    customer.company_phone,
-  ].filter((item): item is string => Boolean(item));
 }
 
 function customerSearchText(customer: Customer): string {

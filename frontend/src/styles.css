@@ -11185,59 +11185,124 @@ body.mobile-modal-scroll-locked {
   border-radius: 3px;
 }
 
-.customers-page .overview-group-section {
-  border-radius: 3px;
+.customer-directory {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  height: calc(100dvh - 132px);
+  min-height: 480px;
+  border: 1px solid #d8e2ed;
+  background: #fff;
 }
 
-.customers-page .overview-group-count {
-  border-radius: 3px;
+.customer-directory-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid #d8e2ed;
 }
 
-.customers-page .customer-overview-card {
-  height: 112px;
-  min-height: 112px;
-  max-height: 112px;
-  border-radius: 3px;
+.customer-directory-tools { padding: 10px; }
+.customer-directory-tools .overview-search { min-height: 34px; }
+.customer-directory-tools .overview-search input { min-height: 32px; font-size: 12px; }
+.customer-directory-filters { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.customer-alphabet { display: flex; flex: 1; min-width: 0; overflow-x: auto; gap: 1px; }
+.customer-alphabet button {
+  flex: 1 0 auto;
+  min-width: 16px;
+  padding: 5px 2px;
+  border: 0;
+  background: transparent;
+  color: #657b9a;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 2px;
 }
-
-.customers-page .customer-overview-card .entity-card-title {
+.customer-alphabet button:first-child { padding-inline: 9px; }
+.customer-alphabet button[aria-pressed="true"] { background: #1d5c99; color: #fff; }
+.customer-directory-filters select {
+  width: 96px;
+  min-height: 28px;
+  padding: 4px;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.customer-directory-results { overflow: auto; min-height: 0; flex: 1; }
+.customer-letter-group h2 {
+  margin: 0;
+  padding: 4px 15px;
+  background: #edf1f5;
+  font-size: 10px;
+  line-height: 15px;
+  color: #33455e;
+}
+.customer-directory-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  height: 44px;
+  padding: 4px 16px;
+  border: 0;
+  border-bottom: 1px solid #e6edf5;
+  border-left: 3px solid transparent;
+  background: #fff;
+  color: #29496c;
+  text-align: left;
+}
+.customer-directory-row:hover { background: #f3f7fc; }
+.customer-directory-row[aria-pressed="true"] { background: #e7f1ff; border-left-color: #2166b2; }
+.customer-directory-row > svg { flex-shrink: 0; }
+.customer-directory-row-copy { flex: 1; min-width: 0; }
+.customer-directory-row-copy strong, .customer-directory-row-copy > span {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 16px;
+}
+.customer-directory-row-copy strong { color: #17253a; font-size: 12px; }
+.customer-directory-row-copy > span { color: #677b96; font-size: 11px; }
+.customer-directory-row.is-inactive strong, .customer-directory-row small { color: #78869a; }
+.customer-directory-empty { padding: 20px; color: #677b96; font-size: 13px; }
+.customer-preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: auto; padding: 18px 24px 30px; }
+.customer-preview-actions { display: flex; justify-content: flex-end; min-height: 32px; }
+.customer-preview .icon-button { min-height: 32px; padding: 6px 12px; font-size: 11px; white-space: nowrap; }
+.customer-preview-heading { display: flex; gap: 16px; align-items: center; margin: 20px 8px 28px; color: #29496c; }
+.customer-preview-heading > svg { flex-shrink: 0; }
+.customer-preview-heading > div { min-width: 0; }
+.customer-preview-heading .eyebrow { margin: 0 0 4px; font-size: 11px; color: #91a0b6; }
+.customer-preview-heading h2 { margin: 0; font-size: 26px; line-height: 1.2; color: #122239; overflow-wrap: anywhere; }
+.customer-preview-tabs { display: flex; border-bottom: 1px solid #e1e8f1; gap: 12px; }
+.customer-preview-tabs button { padding: 12px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #8698b0; font-size: 13px; font-weight: 700; }
+.customer-preview-tabs button[aria-selected="true"] { color: #1d5c99; border-bottom-color: #2166b2; }
+.customer-preview-body { padding: 8px 14px; }
+.customer-preview-body > section { padding: 22px 0 28px; }
+.customer-preview-body > section + section { border-top: 1px solid #e6edf5; }
+.customer-preview-body h3 { margin: 0 0 9px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #8b9eb8; }
+.customer-preview-body p { margin: 2px 0; font-size: 14px; color: #33455e; }
+.customer-preview-phone-label { display: block; margin-left: 26px; font-size: 11px; color: #677b96; }
+.customer-preview-body .customer-detail-phone-link { font-size: 14px; font-weight: 400; }
+.customer-preview-footer { margin-top: auto; padding: 24px 8px 8px; }
+.customer-preview .customer-contact-editor { padding-top: 16px; }
+.customer-preview .customer-contact-editor-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.customer-preview .customer-contact-editor-row input { min-width: 0; }
+
+@media (max-width: 1100px) {
+  .customer-directory-filters { flex-wrap: wrap; }
+  .customer-alphabet { flex-basis: 100%; }
+  .customer-preview { padding-inline: 14px; }
+  .customer-preview-heading { gap: 10px; margin-inline: 0; }
+  .customer-preview-heading h2 { font-size: 22px; }
 }
 
-.customers-page .customer-overview-card .entity-card-subtitle {
-  display: -webkit-box;
-  height: 2.7em;
-  min-height: 2.7em;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  word-break: break-word;
-}
-
-.customers-page .customer-overview-card .entity-card-meta {
-  min-height: 1.35em;
-  overflow: hidden;
-}
-
-.customers-page .customer-overview-card:hover,
-.customers-page .customer-overview-card:focus-visible {
-  transform: none;
-}
-
-.customers-page .customer-overview-card .entity-card-color {
-  border-radius: 0;
-}
-
-.customers-page .customer-overview-card .entity-card-icon {
-  border-radius: 3px;
-}
-
-.customers-page .customer-overview-card .status-badge {
-  border-radius: 3px;
+@media (max-width: 760px) {
+  .customer-directory { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; }
+  .customer-directory-list { border-right: 0; border-bottom: 1px solid #d8e2ed; }
+  .customer-directory-results { max-height: 330px; flex: auto; }
+  .customer-preview { min-height: 420px; }
+  .customer-directory-row { gap: 10px; padding-inline: 10px; }
+  .customer-preview-heading h2 { font-size: 22px; }
 }
 
 .persons-page .overview-create {
