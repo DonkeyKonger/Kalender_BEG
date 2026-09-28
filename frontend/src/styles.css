@@ -30441,6 +30441,7 @@ body.mobile-modal-scroll-locked {
   border: 1px solid var(--project-extra-work-divider);
   border-radius: 2px;
   background: #f8fafc;
+  font-weight: 500;
 }
 
 .project-extra-work-materials {
@@ -30601,7 +30602,6 @@ body.mobile-modal-scroll-locked {
   margin: 0;
   color: #213a5a;
   font-size: 0.82rem;
-  font-weight: 500;
   line-height: 1.45;
   padding: 9px 10px;
   white-space: pre-wrap;

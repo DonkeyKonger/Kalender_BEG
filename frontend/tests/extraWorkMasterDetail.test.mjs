@@ -31,6 +31,7 @@ test("detail removes only the three headings and keeps an always-visible materia
   assert.doesNotMatch(materialStyles, /grid-template-columns/);
   assert.match(detail, /materials\.length > 0[\s\S]*<li key=\{index\}>\{material\}<\/li>[\s\S]*: <span>-<\/span>/);
   assert.match(styles, /\.project-extra-work-materials ul \{[\s\S]*flex-wrap: wrap/);
+  assert.match(sharedSurface, /font-weight: 500;/, "Material and description share the same text weight");
 });
 
 test("desktop extra-work overview uses one lightweight master-detail workspace", () => {
