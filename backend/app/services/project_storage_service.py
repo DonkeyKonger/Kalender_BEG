@@ -558,6 +558,26 @@ class ProjectStorageService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ordner können nicht heruntergeladen werden.")
         return _document_item(drive_item)
 
+    def rename_file_from_folder(
+        self, *, drive_id: str | None, folder_item_id: str | None,
+        item_id: str, name: str,
+    ) -> dict[str, Any]:
+        document = self.get_file_item_from_folder(
+            drive_id=drive_id, folder_item_id=folder_item_id, item_id=item_id,
+        )
+        if document["name"] == name:
+            return document
+        try:
+            updated = self.graph_client.patch(
+                f"/drives/{quote(drive_id, safe='')}/items/{quote(item_id, safe='')}",
+                {"name": name, "@microsoft.graph.conflictBehavior": "fail"},
+            )
+        except MicrosoftGraphRequestError as error:
+            if error.status_code == 409:
+                raise HTTPException(status.HTTP_409_CONFLICT, "Eine Datei mit diesem Namen existiert bereits.") from error
+            raise _safe_graph_files_exception(error) from error
+        return _document_item(updated)
+
     def delete_file_from_folder(
         self,
         *,

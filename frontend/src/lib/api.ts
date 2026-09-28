@@ -1261,6 +1261,13 @@ export const api = {
     );
   },
 
+  async renameProjectFolderDocument(siteId: number, folderKey: string, itemId: string, name: string): Promise<ProjectFolderDocumentItem> {
+    return request<ProjectFolderDocumentItem>(
+      `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/items/${encodeURIComponent(itemId)}/name`,
+      { method: "PATCH", body: JSON.stringify({ name }) },
+    );
+  },
+
   async deleteProjectFolderDocument(siteId: number, folderKey: string, itemId: string): Promise<void> {
     return request<void>(
       `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/items/${encodeURIComponent(itemId)}`,

@@ -1,5 +1,6 @@
 import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
+import { ProjectDocumentFilename } from "../components/ProjectDocumentFilename";
 import { MeasurementReviewOverview } from "../components/MeasurementReviewOverview";
 import { MeasurementLabelDialog } from "../components/MeasurementLabelDialog";
 import { MeasurementImportDialog } from "../components/MeasurementImportDialog";
@@ -2510,6 +2511,7 @@ function ProjectFolderDocumentBrowser({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [deletedItemIds, setDeletedItemIds] = useState<Set<string>>(() => new Set());
+  const [renamedItems, setRenamedItems] = useState<Record<string, ProjectFolderDocumentItem>>({});
   const deletePendingRef = useRef(false);
   const browserMountedRef = useRef(false);
   useEffect(() => {
@@ -2536,6 +2538,18 @@ function ProjectFolderDocumentBrowser({
     } finally {
       deletePendingRef.current = false;
       if (browserMountedRef.current) setDeletingItemId(null);
+    }
+  }
+
+  async function handleRename(item: ProjectFolderDocumentItem, name: string): Promise<void> {
+    if (!canDeleteDocuments || item.is_folder || !item.id) return;
+    try {
+      const renamed = await api.renameProjectFolderDocument(siteId, folder.folder_key, item.id, name);
+      if (browserMountedRef.current) {
+        setRenamedItems((current) => ({ ...current, [item.id]: { ...renamed, caption: item.caption } }));
+      }
+    } catch (requestError) {
+      throw new Error(readApiError(requestError, "Datei konnte nicht umbenannt werden."));
     }
   }
 
@@ -2642,8 +2656,9 @@ function ProjectFolderDocumentBrowser({
   const sourceDocuments = currentLevel?.documents ?? documents;
   const currentDocuments = useMemo(() => sourceDocuments ? {
     ...sourceDocuments,
-    items: sourceDocuments.items.filter((item) => !deletedItemIds.has(item.id)),
-  } : null, [sourceDocuments, deletedItemIds]);
+    items: sourceDocuments.items.filter((item) => !deletedItemIds.has(item.id))
+      .map((item) => renamedItems[item.id] ?? item),
+  } : null, [sourceDocuments, deletedItemIds, renamedItems]);
   const isInSubfolder = Boolean(currentLevel);
   const currentFolderTitle = currentLevel?.name ?? `${folder.sort_order}. ${folder.name}`;
   const normalizedQuery = query.trim().toLowerCase();
@@ -2907,7 +2922,9 @@ function ProjectFolderDocumentBrowser({
                         </span>
                       ) : null}
                       <DocumentTypeIcon item={item} />
-                      <strong>{item.name}</strong>
+                      <ProjectDocumentFilename name={item.name}
+                        editable={canDeleteDocuments && !item.is_folder && Boolean(item.id) && deletingItemId !== item.id}
+                        onRename={(name) => handleRename(item, name)} />
                     </div>
                   </td>
                   <td>{formatProjectDocumentType(item)}</td>

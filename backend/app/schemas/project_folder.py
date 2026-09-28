@@ -18,6 +18,20 @@ class ProjectSubfolderCreate(BaseModel):
         return name
 
 
+class ProjectDocumentRename(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        name = value.strip()
+        if not name or name.endswith(".") or any(
+            char in '\\/:*?"<>|' or ord(char) < 32 for char in name
+        ):
+            raise ValueError("Bitte einen gültigen Dateinamen ohne Sonderzeichen oder abschließenden Punkt eingeben.")
+        return name
+
+
 class ProjectFolderRead(BaseModel):
     id: int
     site_id: int

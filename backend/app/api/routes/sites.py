@@ -52,6 +52,7 @@ from app.schemas.measurement import (
 from app.schemas.photo import PhotoCaptionUpdate
 from app.schemas.person import PersonRead
 from app.schemas.project_folder import (
+    ProjectDocumentRename,
     ProjectFolderDocumentItem,
     ProjectFolderDocumentList,
     ProjectFolderFileCount,
@@ -327,6 +328,26 @@ def create_project_subfolder(
         name=payload.name,
     )
     return ProjectFolderDocumentItem.model_validate(created)
+
+
+@router.patch(
+    "/{site_id}/documents/folders/{folder_key}/items/{item_id}/name",
+    response_model=ProjectFolderDocumentItem,
+)
+def rename_project_folder_document(
+    site_id: int,
+    folder_key: str,
+    item_id: str,
+    payload: ProjectDocumentRename,
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> ProjectFolderDocumentItem:
+    folder = ProjectFolderService(db).get_project_folder_for_site_by_key(site_id, folder_key, current_user)
+    renamed = ProjectStorageService().rename_file_from_folder(
+        drive_id=folder.external_drive_id, folder_item_id=folder.external_item_id,
+        item_id=item_id, name=payload.name,
+    )
+    return ProjectFolderDocumentItem.model_validate(renamed)
 
 
 @router.delete(
