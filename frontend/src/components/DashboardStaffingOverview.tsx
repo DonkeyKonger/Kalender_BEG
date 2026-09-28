@@ -36,9 +36,9 @@ function SiteBubble({ need }: { need: DashboardStaffingDay["needs"][number] }) {
   </div>;
 }
 
-function WorkerBubble({ person }: { person: DashboardStaffingDay["freeWorkers"][number] }) {
+function WorkerBubble({ person, fullName = false }: { person: DashboardStaffingDay["freeWorkers"][number]; fullName?: boolean }) {
   return <div className="dashboard-staffing-worker" title={`${person.display_name}${person.isExternal ? " · Extern" : ""}`}>
-    <span>{person.short_code || person.display_name}</span>{person.isExternal && <small>extern</small>}
+    <span>{fullName ? person.display_name : person.short_code || person.display_name}</span>{person.isExternal && <small>extern</small>}
   </div>;
 }
 
@@ -47,16 +47,14 @@ function FreeWorkers({ day }: { day: DashboardStaffingDay }) {
     <h4>Freie Monteure {day.isWorkday && <span>{day.freeWorkers.length}</span>}</h4>
     {day.freeWorkers.slice(0, MAX_VISIBLE_ITEMS).map(person => <WorkerBubble key={person.id} person={person} />)}
     {!day.freeWorkers.length && <p className="dashboard-staffing-empty">{day.isWorkday ? "Keine freien Monteure" : day.nonWorkdayLabel}</p>}
-    <StaffingOverflow id={`dashboard-free-workers-${day.date}`} date={day.date} count={day.freeWorkers.length} label="Freie Monteure">
-      {day.freeWorkers.map(person => <div className="dashboard-staffing-person" key={person.id}>
-        <span>{person.display_name}</span>{person.isExternal && <small>extern</small>}
-      </div>)}
+    <StaffingOverflow id={`dashboard-free-workers-${day.date}`} date={day.date} count={day.freeWorkers.length} label="Freie Monteure" preferAbove>
+      {day.freeWorkers.map(person => <WorkerBubble key={person.id} person={person} fullName />)}
     </StaffingOverflow>
   </div>;
 }
 
-function StaffingOverflow({ id: popupId, date, count, label, children, limit = MAX_VISIBLE_ITEMS }: {
-  id: string; date: string; count: number; label: string; children: ReactNode; limit?: number;
+function StaffingOverflow({ id: popupId, date, count, label, children, limit = MAX_VISIBLE_ITEMS, preferAbove = false }: {
+  id: string; date: string; count: number; label: string; children: ReactNode; limit?: number; preferAbove?: boolean;
 }) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -73,10 +71,12 @@ function StaffingOverflow({ id: popupId, date, count, label, children, limit = M
     const bounds = popupRef.current.getBoundingClientRect();
     setPosition({
       left: Math.max(8, Math.min(anchor.left, window.innerWidth - bounds.width - 8)),
-      top: anchor.bottom + bounds.height + 6 <= window.innerHeight - 8
+      top: preferAbove && anchor.top - bounds.height - 6 >= 8
+        ? anchor.top - bounds.height - 6
+        : anchor.bottom + bounds.height + 6 <= window.innerHeight - 8
         ? anchor.bottom + 6 : Math.max(8, anchor.top - bounds.height - 6),
     });
-  }, [anchor]);
+  }, [anchor, preferAbove, count]);
   useEffect(() => {
     if (!anchor) return;
     const close = () => setAnchor(null);

@@ -78,3 +78,13 @@ test('Einsatzplanung gets about twenty percent more height, entirely for sites a
   assert.match(styles,/grid-template-rows: auto calc\(112px \+ var\(--dashboard-staffing-extra-height, 68px\)\) minmax\(150px, auto\)/);
   assert.match(styles,/height: calc\(clamp\(440px, 50vh, 540px\) - var\(--dashboard-staffing-extra-height\)\)/);
 });
+test('worker popup reuses blue bubbles with full names and prefers opening upwards',()=>{
+  const source=readFileSync(new URL('../src/components/DashboardStaffingOverview.tsx',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/styles.css',import.meta.url),'utf8');
+  assert.match(source,/label="Freie Monteure" preferAbove/);
+  assert.match(source,/day.freeWorkers.map\(person => <WorkerBubble key=\{person.id\} person=\{person\} fullName/);
+  assert.match(source,/fullName \? person.display_name : person.short_code/);
+  assert.match(source,/preferAbove && anchor.top - bounds.height - 6 >= 8/);
+  assert.match(styles,/\.dashboard-staffing-popover \.dashboard-staffing-worker > span \{[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/s);
+  assert.doesNotMatch(source,/dashboard-staffing-person/);
+});

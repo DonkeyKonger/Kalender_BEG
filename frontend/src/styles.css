@@ -24225,7 +24225,7 @@ body.mobile-modal-scroll-locked {
   line-height: 1.3;
   font-weight: 650;
 }
-.dashboard-staffing-worker small, .dashboard-staffing-person small { color: #718096; font-size: 0.62rem; }
+.dashboard-staffing-worker small { color: #718096; font-size: 0.62rem; flex-shrink: 0; }
 .dashboard-staffing-empty { margin: 0; color: #8795a6; font-size: 0.68rem; line-height: 1.4; }
 .dashboard-staffing-more {
   display: block;
@@ -24258,7 +24258,17 @@ body.mobile-modal-scroll-locked {
 .dashboard-staffing-popover > strong { margin-bottom: 8px; }
 .dashboard-staffing-popover .dashboard-staffing-site strong { white-space: normal; overflow-wrap: anywhere; }
 .dashboard-staffing-popover-list { overflow-y: auto; max-height: 300px; min-height: 0; }
-.dashboard-staffing-person { display: flex; justify-content: space-between; gap: 8px; padding: 5px; border-bottom: 1px solid #edf1f6; }
+.dashboard-staffing-popover .dashboard-staffing-worker {
+  gap: 8px;
+  align-items: center;
+  padding: 4px 5px;
+  margin-bottom: 4px;
+}
+.dashboard-staffing-popover .dashboard-staffing-worker > span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .dashboard-staffing-conflicts { border-top: 1px solid #dedbe3; }
 .dashboard-staffing-conflicts summary { cursor: pointer; padding: 8px 12px; color: #716477; font-size: 0.75rem; font-weight: 700; }
 .dashboard-staffing-conflicts .dashboard-alert-list { max-height: 180px; overflow: auto; }
