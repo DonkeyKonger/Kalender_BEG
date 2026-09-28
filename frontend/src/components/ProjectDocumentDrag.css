@@ -1,0 +1,7 @@
+.project-folder-workspace .is-move-target,
+.project-folder-workspace .is-move-target > td {
+  background: #e7f0ed;
+  box-shadow: inset 0 0 0 2px #7c9c91;
+}
+.project-folder-workspace [draggable="true"] { cursor: grab; }
+.project-folder-workspace [draggable="true"]:active { cursor: grabbing; }

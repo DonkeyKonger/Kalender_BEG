@@ -52,6 +52,7 @@ from app.schemas.measurement import (
 from app.schemas.photo import PhotoCaptionUpdate
 from app.schemas.person import PersonRead
 from app.schemas.project_folder import (
+    ProjectDocumentMove,
     ProjectDocumentRename,
     ProjectFolderDocumentItem,
     ProjectFolderDocumentList,
@@ -354,6 +355,28 @@ def rename_project_folder_document(
         item_id=item_id, name=payload.name,
     )
     return ProjectFolderDocumentItem.model_validate(renamed)
+
+
+@router.patch(
+    "/{site_id}/documents/folders/{folder_key}/items/{item_id}/move",
+    response_model=ProjectFolderDocumentItem,
+)
+def move_project_folder_document(
+    site_id: int, folder_key: str, item_id: str, payload: ProjectDocumentMove,
+    current_user: User = Depends(CAN_SITES_WRITE), db: Session = Depends(get_db),
+) -> ProjectFolderDocumentItem:
+    folders = ProjectFolderService(db)
+    source = folders.get_project_folder_for_site_by_key(site_id, folder_key, current_user)
+    target = folders.get_project_folder_for_site_by_key(site_id, payload.target_folder_key, current_user)
+    moved = ProjectStorageService().move_file_from_folder(
+        drive_id=source.external_drive_id, folder_item_id=source.external_item_id,
+        item_id=item_id, target_drive_id=target.external_drive_id,
+        target_folder_item_id=target.external_item_id,
+        target_parent_item_id=payload.target_parent_item_id,
+    )
+    invalidate_site_counts(db, site_id)
+    db.commit()
+    return ProjectFolderDocumentItem.model_validate(moved)
 
 
 @router.delete(

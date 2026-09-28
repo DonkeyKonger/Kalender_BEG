@@ -2,6 +2,9 @@ import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
 import { ProjectDocumentFilename } from "../components/ProjectDocumentFilename";
 import { ProjectFolderPhotoGrid } from "../components/ProjectFolderPhotoGrid";
+import { useProjectDocumentDrag, type ProjectDocumentDrag } from "./useProjectDocumentDrag";
+import { applyDocumentMoves, PROJECT_DOCUMENT_DRAG_TYPE } from "../lib/projectDocumentMove";
+import "../components/ProjectDocumentDrag.css";
 import { MeasurementReviewOverview } from "../components/MeasurementReviewOverview";
 import { MeasurementLabelDialog } from "../components/MeasurementLabelDialog";
 import { MeasurementImportDialog } from "../components/MeasurementImportDialog";
@@ -1686,6 +1689,7 @@ export function SiteDetailPage() {
       ) : null}
       {activeTab === "folders" ? (
         <ProjectFoldersPanel
+          key={site.id}
           site={site}
           folders={folders}
           isLoading={foldersLoading}
@@ -2387,6 +2391,8 @@ function ProjectFoldersPanel({
   onRetryDocuments: () => void;
 }) {
   const fileCounts = useProjectFolderFileCounts(site.id, folders);
+  const { user } = useAuth();
+  const documentDrag = useProjectDocumentDrag(site.id, canEditMainPage(user, "sites"), onRetryDocuments);
 
   if (isLoading) {
     return <div className="matrix-state">Ordnerstruktur wird geladen...</div>;
@@ -2403,6 +2409,9 @@ function ProjectFoldersPanel({
 
   return (
     <div className="project-record-tab-panel">
+      {documentDrag.isMoving ? <div className="project-record-empty-state" role="status">Datei wird verschoben …</div> : null}
+      {documentDrag.message ? <div className="project-record-empty-state is-success" role="status">{documentDrag.message}</div> : null}
+      {documentDrag.error ? <div className="project-record-empty-state is-error" role="alert">{documentDrag.error}</div> : null}
       {site.project_folder_status === "error" && site.project_folder_error ? (
         <div className="project-record-empty-state is-error">{site.project_folder_error}</div>
       ) : null}
@@ -2416,18 +2425,24 @@ function ProjectFoldersPanel({
               {folders.map((folder) => {
                 const isSelected = selectedFolder?.id === folder.id;
                 const fileCount = fileCounts[folder.folder_key];
+                const target = { folderKey: folder.folder_key, parentId: null };
+                const dropProps = documentDrag.targetProps(target);
                 return (
                   <button
                     key={folder.id}
                     type="button"
-                    className={`project-folder-card${folder.visible_for_monteurs ? " is-monteur-visible" : ""}${isSelected ? " is-selected" : ""}${dragOverFolderKey === folder.folder_key ? " is-drag-over" : ""}`}
+                    className={`project-folder-card${folder.visible_for_monteurs ? " is-monteur-visible" : ""}${isSelected ? " is-selected" : ""}${documentDrag.isHighlighted(target) ? " is-move-target" : ""}${dragOverFolderKey === folder.folder_key ? " is-drag-over" : ""}`}
                     onClick={() => onSelectFolder(folder)}
                     onDragOver={(event) => {
+                      if (documentDrag.isInternal(event)) { dropProps.onDragOver?.(event); return; }
+                      if (!containsDraggedFiles(event.dataTransfer.types)) return;
                       event.preventDefault();
                       onDragOverFolder(folder.folder_key);
                     }}
-                    onDragLeave={() => onDragOverFolder(null)}
+                    onDragLeave={(event) => { dropProps.onDragLeave?.(event); onDragOverFolder(null); }}
                     onDrop={(event) => {
+                      if (documentDrag.isInternal(event)) { dropProps.onDrop?.(event); return; }
+                      if (!containsDraggedFiles(event.dataTransfer.types)) return;
                       event.preventDefault();
                       event.stopPropagation();
                       onDragOverFolder(null);
@@ -2436,7 +2451,7 @@ function ProjectFoldersPanel({
                     title={`${folder.sort_order}. ${folder.name} Dateien anzeigen${folder.visible_for_monteurs ? " · Für Monteure sichtbar" : ""}`}
                   >
                     <span>{folder.sort_order}.</span>
-                    <strong>{dragOverFolderKey === folder.folder_key ? "Hier ablegen zum Hochladen" : folder.name}</strong>
+                    <strong>{documentDrag.isHighlighted(target) ? "Hierher verschieben" : dragOverFolderKey === folder.folder_key ? "Hier ablegen zum Hochladen" : folder.name}</strong>
                     <span className="project-folder-count-slot">
                       {typeof fileCount === "number" && fileCount > 0 ? (
                         <span
@@ -2457,6 +2472,7 @@ function ProjectFoldersPanel({
           <div className="project-folder-content">
             {selectedFolder ? (
               <ProjectFolderDocumentBrowser
+                documentDrag={documentDrag}
                 key={`${site.id}:${selectedFolder.id}`}
                 siteId={site.id}
                 folder={selectedFolder}
@@ -2481,6 +2497,7 @@ function ProjectFoldersPanel({
 }
 
 function ProjectFolderDocumentBrowser({
+  documentDrag,
   siteId,
   folder,
   hasSharePointFolder,
@@ -2493,6 +2510,7 @@ function ProjectFolderDocumentBrowser({
   onUpload,
   onRetry,
 }: {
+  documentDrag: ProjectDocumentDrag;
   siteId: number;
   folder: ProjectFolder;
   hasSharePointFolder: boolean;
@@ -2556,6 +2574,13 @@ function ProjectFolderDocumentBrowser({
 
   const [query, setQuery] = useState("");
   const [folderStack, setFolderStack] = useState<ProjectFolderNavigationLevel[]>([]);
+  useEffect(() => {
+    const move = documentDrag.lastMove;
+    if (!move) return;
+    setFolderStack(stack => stack.map(level => ({ ...level, documents: { ...level.documents,
+      items: applyDocumentMoves(level.documents.items, { folderKey: folder.folder_key, parentId: level.itemId }, [move]),
+    } })));
+  }, [documentDrag.lastMove, folder.folder_key]);
   const [folderNavigationLoading, setFolderNavigationLoading] = useState(false);
   const folderNavigationPendingRef = useRef(false);
   const [folderNavigationError, setFolderNavigationError] = useState<string | null>(null);
@@ -2655,6 +2680,7 @@ function ProjectFolderDocumentBrowser({
 
   const currentLevel = folderStack.length > 0 ? folderStack[folderStack.length - 1] : undefined;
   const sourceDocuments = currentLevel?.documents ?? documents;
+  const currentLocation = { folderKey: folder.folder_key, parentId: currentLevel?.itemId ?? null };
   const currentDocuments = useMemo(() => sourceDocuments ? {
     ...sourceDocuments,
     items: sourceDocuments.items.filter((item) => !deletedItemIds.has(item.id))
@@ -2722,6 +2748,7 @@ function ProjectFolderDocumentBrowser({
   }
 
   function handleFileDragEnter(event: ReactDragEvent<HTMLElement>): void {
+    if (Array.from(event.dataTransfer.types).includes(PROJECT_DOCUMENT_DRAG_TYPE)) return;
     if (!containsDraggedFiles(event.dataTransfer.types)) {
       return;
     }
@@ -2736,6 +2763,7 @@ function ProjectFolderDocumentBrowser({
   }
 
   function handleFileDragOver(event: ReactDragEvent<HTMLElement>): void {
+    if (Array.from(event.dataTransfer.types).includes(PROJECT_DOCUMENT_DRAG_TYPE)) return;
     if (!containsDraggedFiles(event.dataTransfer.types)) {
       return;
     }
@@ -2759,6 +2787,7 @@ function ProjectFolderDocumentBrowser({
   }
 
   function handleFileDrop(event: ReactDragEvent<HTMLElement>): void {
+    if (Array.from(event.dataTransfer.types).includes(PROJECT_DOCUMENT_DRAG_TYPE)) return;
     if (!containsDraggedFiles(event.dataTransfer.types)) {
       return;
     }
@@ -2805,7 +2834,11 @@ function ProjectFolderDocumentBrowser({
             </label>
           ) : null}
           {isInSubfolder ? (
-            <button type="button" className="secondary-action" disabled={folderNavigationLoading || isUploading} onClick={handleBackToParentFolder}>
+            <button type="button"
+              {...documentDrag.targetProps({ folderKey: folder.folder_key, parentId: folderStack.at(-2)?.itemId ?? null })}
+              className={`secondary-action${documentDrag.isHighlighted({ folderKey: folder.folder_key, parentId: folderStack.at(-2)?.itemId ?? null }) ? " is-move-target" : ""}`}
+              title="Übergeordneten Ordner öffnen oder Datei hierher verschieben"
+              disabled={folderNavigationLoading || isUploading} onClick={handleBackToParentFolder}>
               <ArrowLeft aria-hidden="true" size={15} />
               <span>Zurück</span>
             </button>
@@ -2873,6 +2906,8 @@ function ProjectFolderDocumentBrowser({
       {hasSharePointFolder && !isCurrentLoading && !error && visibleItems.length > 0 ? (
         folder.folder_key === "fotos" ? (
           <ProjectFolderPhotoGrid siteId={siteId} folderKey={folder.folder_key} items={visibleItems}
+            itemDragProps={(item) => item.is_folder ? documentDrag.targetProps({ folderKey: folder.folder_key, parentId: item.id }) : documentDrag.sourceProps(item, currentLocation)}
+            isDropTarget={(item) => item.is_folder && documentDrag.isHighlighted({ folderKey: folder.folder_key, parentId: item.id })}
             sort={documentSort} onSort={handleDocumentSort} canEdit={canDeleteDocuments}
             openingItemId={openingItemId} downloadingItemId={downloadingItemId} deletingItemId={deletingItemId}
             folderNavigationLoading={folderNavigationLoading} onOpen={handleOpen} onOpenFolder={handleOpenFolder}
@@ -2905,7 +2940,9 @@ function ProjectFolderDocumentBrowser({
             </thead>
             <tbody>
               {visibleItems.map((item) => (
-                <tr key={item.id || item.name} className={`project-document-row${item.is_folder ? " is-folder" : ""}`}
+                <tr key={item.id || item.name}
+                  {...(item.is_folder ? documentDrag.targetProps({ folderKey: folder.folder_key, parentId: item.id }) : documentDrag.sourceProps(item, currentLocation))}
+                  className={`project-document-row${item.is_folder ? " is-folder" : ""}${item.is_folder && documentDrag.isHighlighted({ folderKey: folder.folder_key, parentId: item.id }) ? " is-move-target" : ""}`}
                   onDoubleClick={item.is_folder ? (event) => {
                     if (event.target instanceof Element && event.target.closest("button, a, input")) return;
                     void handleOpenFolder(item);

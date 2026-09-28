@@ -558,6 +558,33 @@ class ProjectStorageService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ordner können nicht heruntergeladen werden.")
         return _document_item(drive_item)
 
+    def move_file_from_folder(
+        self, *, drive_id: str | None, folder_item_id: str | None, item_id: str,
+        target_drive_id: str | None, target_folder_item_id: str | None,
+        target_parent_item_id: str | None,
+    ) -> dict[str, Any]:
+        # Both standard folders are authorized by the route; verify the full
+        # descendant chains as well before allowing any Graph mutation.
+        self.get_file_item_from_folder(
+            drive_id=drive_id, folder_item_id=folder_item_id, item_id=item_id,
+        )
+        if not target_drive_id or target_drive_id != drive_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Dateien können nur innerhalb desselben Laufwerks verschoben werden.")
+        parent_id = self.resolve_upload_folder(
+            drive_id=target_drive_id, root_folder_item_id=target_folder_item_id,
+            parent_item_id=target_parent_item_id or target_folder_item_id,
+        )
+        try:
+            updated = self.graph_client.patch(
+                f"/drives/{quote(drive_id, safe='')}/items/{quote(item_id, safe='')}",
+                {"parentReference": {"id": parent_id}, "@microsoft.graph.conflictBehavior": "fail"},
+            )
+        except MicrosoftGraphRequestError as error:
+            if error.status_code == 409:
+                raise HTTPException(status.HTTP_409_CONFLICT, "Im Zielordner existiert bereits eine Datei mit diesem Namen. Bitte zuerst umbenennen.") from error
+            raise _safe_graph_files_exception(error) from error
+        return _document_item(updated)
+
     def rename_file_from_folder(
         self, *, drive_id: str | None, folder_item_id: str | None,
         item_id: str, name: str,

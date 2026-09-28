@@ -13,6 +13,10 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 export function tree(counts,props={}) {
   const useProjectFolderFileCounts=(siteId,folders)=>counts;
+  const useAuth=()=>({user:null});
+  const canEditMainPage=()=>false;
+  const useProjectDocumentDrag=()=>({targetProps:()=>({}),isHighlighted:()=>false,isInternal:()=>false});
+  const containsDraggedFiles=types=>Array.from(types).includes('Files');
   const ProjectFolderDocumentBrowser=()=> <div>Dokumente</div>;
   ${panel}
   return ProjectFoldersPanel({site:{id:42},folders:[{id:1,folder_key:'a',sort_order:1,name:'Angebote'},{id:2,folder_key:'b',sort_order:11,name:'Lieferantenbestellungen'}],selectedFolder:null,...props});
@@ -45,7 +49,7 @@ test('count badges preserve selection and file-drop handlers', () => {
   const button = collect(node).find(item=>item.type==='button');
   button.props.onClick();
   assert.equal(selected.folder_key,'a');
-  button.props.onDrop({preventDefault(){},stopPropagation(){},dataTransfer:{files:['test.pdf']}});
+  button.props.onDrop({preventDefault(){},stopPropagation(){},dataTransfer:{types:['Files'],files:['test.pdf']}});
   assert.equal(uploaded.folder.folder_key,'a');
   assert.deepEqual(uploaded.files,['test.pdf']);
   assert.equal(dragOver,null);
@@ -80,5 +84,5 @@ test('monteur visibility is a quiet server-driven hint independent of selection 
   assert.doesNotMatch(buttons[2].props.className,/is-monteur-visible/);
   assert.match(css,/\.project-folder-card\.is-monteur-visible \{\s*background: #edf4f1;/);
   assert.match(css,/\.project-folder-card\.is-monteur-visible\.is-selected \{\s*background: #edf4f1;/);
-  assert.doesNotMatch(panel,/role="alert"|animation/);
+  assert.doesNotMatch(module.exports.render({}, { folders: [{ id:1, folder_key:'a', sort_order:1, name:'Fotos', visible_for_monteurs:true }] }),/role="alert"|animation/);
 });

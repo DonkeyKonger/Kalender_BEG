@@ -18,6 +18,11 @@ class ProjectSubfolderCreate(BaseModel):
         return name
 
 
+class ProjectDocumentMove(BaseModel):
+    target_folder_key: str = Field(min_length=1, max_length=100)
+    target_parent_item_id: str | None = Field(default=None, min_length=1, max_length=512)
+
+
 class ProjectDocumentRename(BaseModel):
     name: str = Field(min_length=1, max_length=255)
 

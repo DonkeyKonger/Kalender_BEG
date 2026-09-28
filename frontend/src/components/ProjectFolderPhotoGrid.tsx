@@ -1,4 +1,5 @@
 import { Download, ExternalLink, FileText, Folder, X } from "lucide-react";
+import type { HTMLAttributes } from "react";
 import { getProjectDocumentKind } from "../lib/projectFiles";
 import type { ProjectDocumentSort, ProjectDocumentSortKey } from "../lib/projectDocumentSort";
 import type { ProjectFolderDocumentItem } from "../types/site";
@@ -8,7 +9,7 @@ import "./ProjectFolderPhotoGrid.css";
 
 export function ProjectFolderPhotoGrid({ siteId, folderKey, items, sort, onSort, canEdit,
   openingItemId, downloadingItemId, deletingItemId, folderNavigationLoading,
-  onOpen, onOpenFolder, onDownload, onDelete, onRename,
+  onOpen, onOpenFolder, onDownload, onDelete, onRename, itemDragProps, isDropTarget,
 }: {
   siteId: number;
   folderKey: string;
@@ -25,6 +26,8 @@ export function ProjectFolderPhotoGrid({ siteId, folderKey, items, sort, onSort,
   onDownload: (item: ProjectFolderDocumentItem) => Promise<void>;
   onDelete: (item: ProjectFolderDocumentItem) => Promise<void>;
   onRename: (item: ProjectFolderDocumentItem, name: string) => Promise<void>;
+  itemDragProps?: (item: ProjectFolderDocumentItem) => HTMLAttributes<HTMLElement>;
+  isDropTarget?: (item: ProjectFolderDocumentItem) => boolean;
 }) {
   const sortOptions: [ProjectDocumentSortKey, string][] = [["name", "Dateiname"], ["type", "Typ"], ["uploaded", "Hochgeladen"]];
   return <>
@@ -38,12 +41,13 @@ export function ProjectFolderPhotoGrid({ siteId, folderKey, items, sort, onSort,
     </div>
     <div className="project-photo-grid">
       {items.map((item) => {
-        if (item.is_folder) return <button key={item.id} type="button" className="project-photo-subfolder"
+        if (item.is_folder) return <button key={item.id} type="button" {...itemDragProps?.(item)}
+          className={`project-photo-subfolder${isDropTarget?.(item) ? " is-move-target" : ""}`}
           disabled={folderNavigationLoading} onClick={() => void onOpenFolder(item)}>
           <Folder size={18} aria-hidden="true" /><strong>{item.name}</strong>
         </button>;
         const isPhoto = getProjectDocumentKind(item) === "image";
-        return <article key={item.id} className={`project-photo-card${isPhoto ? "" : " is-document"}`}>
+        return <article key={item.id} {...itemDragProps?.(item)} className={`project-photo-card${isPhoto ? "" : " is-document"}`}>
           {isPhoto ? <MobileFolderPhotoTile siteId={siteId} folderKey={folderKey} item={item}
             className="project-photo-preview" isOpening={openingItemId === item.id} onOpen={() => void onOpen(item)} />
             : <button type="button" className="project-photo-document-icon" onClick={() => void onOpen(item)}

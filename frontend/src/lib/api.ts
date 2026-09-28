@@ -1261,6 +1261,15 @@ export const api = {
     );
   },
 
+  async moveProjectFolderDocument(siteId: number, folderKey: string, itemId: string, targetFolderKey: string, targetParentItemId: string | null): Promise<ProjectFolderDocumentItem> {
+    const moved = await request<ProjectFolderDocumentItem>(
+      `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/items/${encodeURIComponent(itemId)}/move`,
+      { method: "PATCH", body: JSON.stringify({ target_folder_key: targetFolderKey, target_parent_item_id: targetParentItemId }) },
+    );
+    window.dispatchEvent(new Event("project-files-changed"));
+    return moved;
+  },
+
   async renameProjectFolderDocument(siteId: number, folderKey: string, itemId: string, name: string): Promise<ProjectFolderDocumentItem> {
     return request<ProjectFolderDocumentItem>(
       `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/items/${encodeURIComponent(itemId)}/name`,
