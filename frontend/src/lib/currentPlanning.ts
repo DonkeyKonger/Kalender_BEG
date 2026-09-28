@@ -6,9 +6,9 @@ export function currentlyPlannedRows(matrix: MatrixResponse): MatrixRow[] {
   const end = matrix.current_planning_end;
   if (!start || !end) return [];
   const hasCompleteWindow = matrix.start_date <= start && matrix.end_date >= end;
-  return matrix.rows.filter((row) => hasCompleteWindow
+  return matrix.rows.filter((row) => row.site.status !== "completed" && row.site.status !== "deleted" && (hasCompleteWindow
     // Use live cells so local edits immediately update the filter as well.
     ? row.cells.some((cell) => cell.date >= start && cell.date <= end && cell.assignments.length > 0)
     // In year view, the two-week window can cross into the adjacent year.
-    : row.has_current_planning === true);
+    : row.has_current_planning === true));
 }

@@ -10,7 +10,7 @@ from app.models.absence import Absence
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
 from app.models.dashboard_note import DashboardNote
-from app.models.enums import AbsenceStatus, MatrixCellMark
+from app.models.enums import AbsenceStatus, MatrixCellMark, SiteStatus
 from app.models.operational_absence import OperationalAbsence
 from app.models.person import Person
 from app.models.planning_cell_mark import PlanningCellMark
@@ -84,7 +84,11 @@ class MatrixService:
             if include_weekends or day.weekday() < 5 or day in planned_weekend_dates
         ]
 
-        all_visible_sites = self.sites.list(include_closed=include_closed)
+        all_visible_sites = self._sites_for_view(
+            self.sites.list(include_closed=include_closed or year_view),
+            assignments,
+            year_view=year_view,
+        )
         project_managers = self._build_project_managers(all_visible_sites)
         visible_sites = (
             all_visible_sites
@@ -146,13 +150,16 @@ class MatrixService:
     ) -> MatrixVersionResponse:
         self._validate_range(start=start, end=end, year_view=year_view)
         planning_start, planning_end = current_planning_range()
-        visible_sites = (
-            self.sites.list(include_closed=include_closed)
+        assignments = self.assignments.list(start=start, end=end)
+        visible_sites = self._sites_for_view(
+            self.sites.list(include_closed=include_closed or year_view)
             if project_manager_person_id is None
             else self.sites.list(
-                include_closed=include_closed,
+                include_closed=include_closed or year_view,
                 project_manager_person_id=project_manager_person_id,
-            )
+            ),
+            assignments,
+            year_view=year_view,
         )
         site_ids = {site.id for site in visible_sites}
         assignment_statement = select(
@@ -180,7 +187,6 @@ class MatrixService:
 
         assignment_latest, assignment_count = self.db.execute(assignment_statement).one()
         mark_latest, mark_count = self.db.execute(mark_statement).one()
-        assignments = self.assignments.list(start=start, end=end)
         if site_ids:
             assignments = [assignment for assignment in assignments if assignment.site_id in site_ids]
         else:
@@ -283,6 +289,7 @@ class MatrixService:
                 str(project_manager_person_id or "all"),
                 str(include_closed),
                 str(year_view),
+                ",".join(f"{site.id}:{site.status}" for site in sorted(visible_sites, key=lambda site: site.id)),
                 datetime_token(assignment_latest),
                 str(assignment_count or 0),
                 datetime_token(absence_latest),
@@ -562,6 +569,21 @@ class MatrixService:
 
     def _date_range(self, start: date, end: date) -> list[date]:
         return [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
+
+    @staticmethod
+    def _sites_for_view(
+        sites: list[Site], assignments: list[Assignment], *, year_view: bool
+    ) -> list[Site]:
+        if not year_view:
+            return sites
+        # Assignments are already restricted to the requested year's date range,
+        # including assignments that overlap either year boundary.
+        planned_site_ids = {assignment.site_id for assignment in assignments}
+        return [
+            site for site in sites
+            if site.status != SiteStatus.DELETED
+            and (site.status != SiteStatus.COMPLETED or site.id in planned_site_ids)
+        ]
 
     def _validate_range(self, *, start: date, end: date, year_view: bool) -> None:
         if end < start:

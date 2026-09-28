@@ -41,6 +41,16 @@ test("missing coverage never invents planning", () => {
   assert.deepEqual(currentlyPlannedRows({rows: []}), []);
 });
 
+test("current planning excludes completed historical rows even when year view loaded them", () => {
+  const data = matrix([row(1, "2026-09-14"), row(2, "2026-09-14"), row(3, "2026-09-14")]);
+  data.rows[1].site.status = "completed";
+  data.rows[2].site.status = "deleted";
+  assert.deepEqual(currentlyPlannedRows(data).map(r => r.site.id), [1]);
+  data.start_date = "2026-09-20";
+  data.rows.forEach(r => { r.has_current_planning = true; });
+  assert.deepEqual(currentlyPlannedRows(data).map(r => r.site.id), [1]);
+});
+
 test("toolbar replaces undo with a reversible read-only row filter before existing PM grouping", () => {
   const source = readFileSync(new URL("../src/pages/MatrixPage.tsx", import.meta.url),"utf8");
   assert.doesNotMatch(source, /Undo|undoLast|undoStack|RotateCcw/);

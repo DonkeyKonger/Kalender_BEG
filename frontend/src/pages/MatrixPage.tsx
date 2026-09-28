@@ -2016,7 +2016,7 @@ export function MatrixPage() {
       setError(null);
       updateMatrixSiteStatus(updated.id, updated.status);
       setSiteInfoDrafts((current) => {
-        if (isMatrixVisibleSiteStatus(updated.status)) {
+        if (isMatrixVisibleSiteStatus(updated.status, isYearView, currentRow.cells.some((cell) => cell.assignments.length > 0))) {
           return current;
         }
         const next = { ...current };
@@ -2050,7 +2050,8 @@ export function MatrixPage() {
       if (!current) {
         return current;
       }
-      if (!isMatrixVisibleSiteStatus(status)) {
+      const row = current.rows.find((item) => item.site.id === siteId);
+      if (!isMatrixVisibleSiteStatus(status, isYearView, row?.cells.some((cell) => cell.assignments.length > 0) ?? false)) {
         return {
           ...current,
           rows: current.rows.filter((row) => row.site.id !== siteId),
@@ -4616,8 +4617,8 @@ const FIXED_MATRIX_COLUMNS_WIDTH = 614;
 const COMPACT_FIXED_MATRIX_COLUMNS_WIDTH = 476;
 const SITE_STATUS_OPTIONS: SiteStatus[] = ["active", "paused", "planned", "completed", "deleted"];
 
-function isMatrixVisibleSiteStatus(status: SiteStatus): boolean {
-  return status !== "completed" && status !== "deleted";
+function isMatrixVisibleSiteStatus(status: SiteStatus, yearView = false, hasPlanning = false): boolean {
+  return status !== "deleted" && (status !== "completed" || (yearView && hasPlanning));
 }
 
 type ProjectManagerOption = {
