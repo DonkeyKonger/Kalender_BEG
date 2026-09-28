@@ -30,3 +30,21 @@ test('retired colors in stale responses are unstyled and toggle to orange', () =
 test('middle mouse down still toggles directly without default browser action', () => {
   assert.match(source, /if \(event.button === 1\) \{\s*event.preventDefault\(\);\s*event.stopPropagation\(\);\s*props.onCycleCellMark\(row, cell\);/);
 });
+
+test('orange marking reduces only its own fill and border saturation by thirty percent', async () => {
+  const css = await readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
+  const rule = css.match(/\.matrix-cell\.mark-orange\s*\{([^}]+)\}/)[1];
+  const colors = [...rule.matchAll(/hsl\(([\d.]+) ([\d.]+)% ([\d.]+)%(?: \/ (\d+)%)?\)/g)];
+  assert.equal(colors.length, 2);
+  const originals = [[255, 242, 214], [245, 158, 11]];
+  colors.forEach((color, i) => {
+    const max = Math.max(...originals[i]) / 255;
+    const min = Math.min(...originals[i]) / 255;
+    const lightness = (max + min) / 2;
+    const saturation = (max - min) / (1 - Math.abs(2 * lightness - 1));
+    assert.ok(Math.abs(Number(color[2]) - saturation * 70) < 0.01);
+    assert.ok(Math.abs(Number(color[3]) - lightness * 100) < 0.01);
+  });
+  assert.equal(colors[1][4], '32');
+  assert.doesNotMatch(rule, /filter\s*:/); // Never desaturate nested installer bubbles or text.
+});
