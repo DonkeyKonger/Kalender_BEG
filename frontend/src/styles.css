@@ -504,6 +504,8 @@ button:disabled {
 
   .sidebar {
     position: fixed;
+    display: flex;
+    flex-direction: column;
     top: 0;
     bottom: 0;
     left: 0;
@@ -546,6 +548,7 @@ button:disabled {
 
   .sidebar-brand-header {
     display: grid;
+    flex-shrink: 0;
     gap: 9px;
     pointer-events: none;
     width: 224px;
@@ -595,7 +598,11 @@ button:disabled {
     display: grid;
     width: 224px;
     margin-top: 22px;
-    overflow: visible;
+    margin-bottom: 16px;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
     pointer-events: none;
   }
 
@@ -612,6 +619,8 @@ button:disabled {
   }
 
   .sidebar-logout-button {
+    flex-shrink: 0;
+    margin-top: auto;
     visibility: hidden;
     opacity: 0;
     justify-content: flex-start;

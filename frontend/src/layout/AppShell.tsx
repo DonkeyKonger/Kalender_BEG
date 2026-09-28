@@ -95,16 +95,6 @@ export function AppShell() {
               <p className="brand-subtitle">Einsatzplanung</p>
             </div>
           </div>
-          <button
-            type="button"
-            className="sidebar-logout-button"
-            title="Abmelden"
-            aria-label="Abmelden"
-            onClick={() => void logout()}
-          >
-            <LogOut aria-hidden="true" size={18} />
-            <span className="sidebar-logout-label">Abmelden</span>
-          </button>
         </div>
 
         <nav className="nav-list">
@@ -124,6 +114,16 @@ export function AppShell() {
             );
           })}
         </nav>
+        <button
+          type="button"
+          className="sidebar-logout-button"
+          title="Abmelden"
+          aria-label="Abmelden"
+          onClick={() => void logout()}
+        >
+          <LogOut aria-hidden="true" size={18} />
+          <span className="sidebar-logout-label">Abmelden</span>
+        </button>
       </aside>
 
       <div className="app-main">
