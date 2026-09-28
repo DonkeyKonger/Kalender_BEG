@@ -81,7 +81,8 @@ test('popup can open through hover, focus and click and closes with Escape or ou
 test('Einsatzplanung gets about twenty percent more height, entirely for sites and taken from the upper desktop row',()=>{
   const page=readFileSync(new URL('../src/pages/DashboardPage.tsx',import.meta.url),'utf8');
   const styles=readFileSync(new URL('../src/styles.css',import.meta.url),'utf8');
-  assert.match(page,/title="Einsatzplanung"/);
+  assert.match(page, /<section className="dashboard-card dashboard-section--conflicts" aria-label="Baustellenbedarf und freie Monteure">\s*<DashboardStaffingOverview/);
+  assert.doesNotMatch(page, /title="Einsatzplanung"|<CalendarDays/);
   assert.doesNotMatch(page,/title="Prüfen \/ Konflikte"/);
   assert.match(styles,/--dashboard-staffing-extra-height: 68px/);
   assert.match(styles,/grid-template-rows: auto calc\(112px \+ var\(--dashboard-staffing-extra-height, 68px\)\) minmax\(150px, auto\)/);

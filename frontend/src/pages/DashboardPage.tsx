@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarDays, Check, ClipboardList, CloudSun, Pencil, Plus, Trash2, X } from "lucide-react";
+import { BriefcaseBusiness, Check, ClipboardList, CloudSun, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -958,11 +958,7 @@ export function DashboardPage() {
           </div>
 
           <div className="dashboard-main-grid dashboard-main-grid-secondary">
-            <DashboardCard
-              title="Einsatzplanung"
-              icon={<CalendarDays aria-hidden="true" size={20} />}
-              className="dashboard-section--conflicts"
-            >
+            <section className="dashboard-card dashboard-section--conflicts" aria-label="Baustellenbedarf und freie Monteure">
               <DashboardStaffingOverview days={dashboard.staffingDays ?? []} today={range.today} />
               {dashboard.conflicts.some(conflict => conflict.date <= (dashboard.staffingDays?.at(-1)?.date ?? range.today)) && (
                 <details className="dashboard-staffing-conflicts">
@@ -970,7 +966,7 @@ export function DashboardPage() {
                   <DashboardConflictList conflicts={dashboard.conflicts.filter(conflict => conflict.date <= (dashboard.staffingDays?.at(-1)?.date ?? range.today))} needs={[]} />
                 </details>
               )}
-            </DashboardCard>
+            </section>
           </div>
 
           {openedDashboardMessageNote ? (
