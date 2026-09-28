@@ -168,7 +168,7 @@ test("time inputs stay paired and the separate action row adapts without widenin
     styles,
     /@container dashboard-notes-card \(max-width: 430px\) \{[\s\S]*\.dashboard-card-notes \.dashboard-note-action-row \{[\s\S]*flex-wrap:\s*wrap/s,
   );
-  assert.match(styles, /@container dashboard-notes-card \(max-width: 430px\) \{[\s\S]*\.dashboard-card-notes \.dashboard-note-add-button \{[\s\S]*flex:\s*1 1 145px[\s\S]*white-space:\s*normal/s);
+  assert.match(styles, /@container dashboard-notes-card \(max-width: 430px\) \{[\s\S]*\.dashboard-card-notes \.dashboard-note-add-button \{[\s\S]*flex:\s*1 0 auto[\s\S]*white-space:\s*nowrap/s);
 });
 
 test("notes and messages use the same title-row sizing while note actions sit below it", () => {

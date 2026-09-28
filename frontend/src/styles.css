@@ -25475,8 +25475,8 @@ body.mobile-modal-scroll-locked {
   }
 
   .dashboard-card-notes .dashboard-note-add-button {
-    flex: 1 1 145px;
-    white-space: normal;
+    flex: 1 0 auto;
+    white-space: nowrap;
   }
 }
 
@@ -25489,6 +25489,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .dashboard-card-notes .dashboard-note-add-button svg {
+  flex-shrink: 0;
   width: 14px;
   height: 14px;
 }

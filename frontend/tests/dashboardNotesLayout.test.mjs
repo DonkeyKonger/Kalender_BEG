@@ -44,3 +44,13 @@ function cssRule(selector) {
   const end = styles.indexOf("}", start);
   return styles.slice(start, end + 1);
 }
+
+test("narrow note cards wrap whole action buttons rather than their labels", () => {
+  const query = styles.slice(styles.indexOf('@container dashboard-notes-card (max-width: 430px)'));
+  const row = query.slice(query.indexOf('.dashboard-card-notes .dashboard-note-action-row {')).split('}')[0];
+  const button = query.slice(query.indexOf('.dashboard-card-notes .dashboard-note-add-button {')).split('}')[0];
+  assert.match(row, /flex-wrap:\s*wrap/);
+  assert.match(button, /flex:\s*1 0 auto/);
+  assert.match(button, /white-space:\s*nowrap/);
+  assert.match(cssRule('.dashboard-card-notes .dashboard-note-add-button svg'), /flex-shrink:\s*0/);
+});
