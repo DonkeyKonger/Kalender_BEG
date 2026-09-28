@@ -29,6 +29,7 @@ from app.models.payroll_month import (
 from app.models.planning_cell_mark import PlanningCellMark
 from app.models.project_folder import ProjectFolder, ProjectFolderDocumentCaption
 from app.models.project_folder_count import ProjectFolderCount
+from app.models.project_manager_folder import ProjectManagerFolder
 from app.models.push_notification import PendingPlanPushNotification, UserPushDevice
 from app.models.site import Site
 from app.models.site_email_recipient import SiteEmailRecipient
@@ -86,6 +87,7 @@ __all__ = [
     "PendingPlanPushNotification",
     "ProjectFolder",
     "ProjectFolderCount",
+    "ProjectManagerFolder",
     "ProjectFolderDocumentCaption",
     "Site",
     "SiteInternalNote",

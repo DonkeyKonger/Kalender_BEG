@@ -40,9 +40,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ProjectStorageService:
-    def __init__(self, graph_client: MicrosoftGraphClient | None = None, config=settings) -> None:
+    def __init__(self, graph_client: MicrosoftGraphClient | None = None, config=settings, db=None) -> None:
         self.config = config
         self.graph_client = graph_client or MicrosoftGraphClient(config=config)
+        self.db = db
 
     def test_project_storage_connection(self) -> dict[str, Any]:
         diagnostics: dict[str, Any] = {
@@ -248,10 +249,12 @@ class ProjectStorageService:
                 )
                 parent_folder_id = _folder_id_or_raise(archive_folder)
 
-            project_manager_folder = self._ensure_folder(
-                parent_folder_id,
-                target["project_manager_folder_name"],
+            project_manager_folder = self.resolve_project_manager_folder(
+                parent_id=parent_folder_id,
+                name=target["project_manager_folder_name"],
+                person_id=project_manager_id,
             )
+            target["target_path"][-2] = project_manager_folder.get("name") or target["project_manager_folder_name"]
             parent_folder_id = _folder_id_or_raise(project_manager_folder)
 
             root_folder = self._resolve_site_folder(
@@ -764,6 +767,15 @@ class ProjectStorageService:
             str(template["name"]),
         )
 
+    def resolve_project_manager_folder(self, *, parent_id, name, person_id, create=True, previous_name=None):
+        if self.db is not None and person_id is not None:
+            from app.services.project_manager_folder_service import resolve_manager_folder
+            return resolve_manager_folder(
+                self, self.db, person_id=person_id, parent_id=parent_id, name=name,
+                create=create, previous_name=previous_name,
+            )
+        return self._ensure_folder(parent_id, name) if create else self._find_child_folder(parent_id, name)
+
     def _resolve_site_folder(
         self,
         *,
@@ -777,18 +789,24 @@ class ProjectStorageService:
                 current_parent_id = _parent_reference_id(existing)
                 current_name = existing.get("name")
                 if current_parent_id != target_parent_item_id or current_name != folder_name:
+                    target = self._find_child_folder(target_parent_item_id, folder_name)
+                    if target is not None and target["id"] != existing_folder_id:
+                        raise HTTPException(409, "Zielordner der Baustelle existiert bereits. Keine automatische Zusammenführung.")
                     return self._move_or_rename_folder(
                         item_id=existing_folder_id,
                         target_parent_item_id=target_parent_item_id,
                         folder_name=folder_name,
                     )
                 return existing
+            raise HTTPException(409, "Verknüpfter Baustellenordner fehlt. Bitte OneDrive-Zuordnung prüfen.")
 
         target_existing = self._find_child_folder(target_parent_item_id, folder_name)
+        flat_existing = self._find_child_folder(self.config.ms_project_root_folder_id, folder_name)
+        if target_existing is not None and flat_existing is not None and target_existing["id"] != flat_existing["id"]:
+            raise HTTPException(409, "Baustellenordner ist mehrfach vorhanden. Keine automatische Zusammenführung.")
         if target_existing is not None:
             return target_existing
 
-        flat_existing = self._find_child_folder(self.config.ms_project_root_folder_id, folder_name)
         if flat_existing is not None:
             return self._move_or_rename_folder(
                 item_id=str(flat_existing["id"]),
@@ -805,26 +823,39 @@ class ProjectStorageService:
         return self._create_folder(parent_item_id, folder_name)
 
     def _find_child_folder(self, parent_item_id: str, folder_name: str) -> dict[str, Any] | None:
-        encoded_parent_id = quote(parent_item_id, safe="")
-        try:
-            response = self.graph_client.get(
-                f"/drives/{self.config.ms_project_drive_id}/items/{encoded_parent_id}/children"
-                "?$select=id,name,webUrl,folder,parentReference"
-            )
-        except MicrosoftGraphRequestError as error:
-            raise _safe_graph_files_exception(error) from error
-
-        items = response.get("value")
-        if not isinstance(items, list):
-            return None
         expected = folder_name.casefold()
-        for item in items:
-            if not isinstance(item, dict) or not isinstance(item.get("folder"), dict):
-                continue
-            item_name = item.get("name")
-            if isinstance(item_name, str) and item_name.casefold() == expected and item.get("id"):
-                return item
-        return None
+        return next((item for item in self._folder_children(parent_item_id) if item["name"].casefold() == expected), None)
+
+    def _folder_children(self, parent_item_id: str) -> list[dict[str, Any]]:
+        """Read every page before deciding a folder is missing (or creating a duplicate)."""
+        encoded_parent_id = quote(parent_item_id, safe="")
+        collection = f"/drives/{self.config.ms_project_drive_id}/items/{encoded_parent_id}/children"
+        path = collection + "?$select=id,name,webUrl,folder,parentReference"
+        base_url = self.config.ms_graph_base_url.rstrip("/")
+        seen = set()
+        folders = []
+        while path:
+            if path in seen or len(seen) >= 100:
+                raise HTTPException(502, "Ordnerliste konnte nicht vollständig gelesen werden.")
+            seen.add(path)
+            try:
+                response = self.graph_client.get(path)
+            except MicrosoftGraphRequestError as error:
+                raise _safe_graph_files_exception(error) from error
+            items = response.get("value")
+            if not isinstance(items, list):
+                raise HTTPException(502, "Ungültige Ordnerliste von SharePoint.")
+            folders.extend(item for item in items if isinstance(item, dict)
+                           and isinstance(item.get("folder"), dict) and item.get("id")
+                           and isinstance(item.get("name"), str) and not item.get("remoteItem"))
+            next_link = response.get("@odata.nextLink")
+            if next_link:
+                if not isinstance(next_link, str) or not next_link.startswith(base_url + collection + "?"):
+                    raise HTTPException(502, "Ungültige Folgeseite von SharePoint.")
+                path = next_link[len(base_url):]
+            else:
+                path = ""
+        return folders
 
     def _try_get_drive_item(self, item_id: str) -> dict[str, Any] | None:
         encoded_item_id = quote(item_id, safe="")

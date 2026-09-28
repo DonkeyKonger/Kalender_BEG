@@ -634,3 +634,15 @@ def test_backfill_project_folders_respects_limit_and_continues_after_errors():
     assert first.project_folder_status == "created"
     assert second.project_folder_status == "error"
     assert "super-secret" not in str(result)
+
+
+def test_backfill_cursor_reaches_sites_beyond_the_first_batch():
+    db = db_session()
+    sites = [add_site(db, name=f"Baustelle {index}") for index in range(28)]
+    storage = FakeProjectStorage({"status": "created", "subfolders": []})
+    service = SiteService(db, project_storage=storage)
+    first = service.backfill_project_folders(limit=25)
+    assert first["next_after_site_id"] == sites[24].id
+    second = service.backfill_project_folders(limit=25, after_site_id=first["next_after_site_id"])
+    assert second["next_after_site_id"] is None
+    assert [call["site_id"] for call in storage.calls] == [site.id for site in sites]

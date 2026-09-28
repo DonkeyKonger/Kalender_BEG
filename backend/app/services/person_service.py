@@ -17,6 +17,7 @@ from app.schemas.person import ExternalPersonCreate, PersonCreate, PersonMapItem
 from app.services.audit_service import AuditService
 from app.services.geo_service import has_valid_coordinates
 from app.services.person_display import calendar_short_code, employee_short_code_from_values
+from app.services.project_manager_folder_service import sync_manager_rename
 
 
 REQUIRED_TEXT_FIELDS = {
@@ -157,6 +158,13 @@ class PersonService:
             old_value=old_value,
             new_value=person_snapshot(person),
         )
+        if old_value["display_name"] != person.display_name:
+            folder_errors = sync_manager_rename(self.db, person, old_value["display_name"])
+            if folder_errors:
+                self.audit.record(
+                    user_id=user_id, action="person.project_folder_sync_failed", entity_type="person",
+                    entity_id=person.id, old_value=None, new_value={"errors": folder_errors},
+                )
         self.db.commit()
         self.db.refresh(person)
         return person

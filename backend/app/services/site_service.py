@@ -68,7 +68,7 @@ class SiteService:
         self.sites = SiteRepository(db)
         self.people = PersonRepository(db)
         self.audit = AuditService(db)
-        self.project_storage = project_storage or ProjectStorageService()
+        self.project_storage = project_storage or ProjectStorageService(db=db)
 
     def list_sites(self, include_closed: bool = False) -> list[Site]:
         return self.sites.list(include_closed=include_closed)
@@ -186,10 +186,10 @@ class SiteService:
         self.db.refresh(site)
         return site
 
-    def backfill_project_folders(self, limit: int = PROJECT_FOLDER_BACKFILL_DEFAULT_LIMIT) -> dict:
+    def backfill_project_folders(self, limit: int = PROJECT_FOLDER_BACKFILL_DEFAULT_LIMIT, *, after_site_id: int = 0) -> dict:
         self._ensure_project_folder_creation_enabled()
         safe_limit = max(1, min(limit, PROJECT_FOLDER_BACKFILL_MAX_LIMIT))
-        candidates = self.db.scalars(select(Site).order_by(Site.id)).all()
+        candidates = self.db.scalars(select(Site).where(Site.id > after_site_id).order_by(Site.id)).all()
         skipped = []
 
         created = []
@@ -213,6 +213,7 @@ class SiteService:
 
         self.db.commit()
         return {
+            "next_after_site_id": candidates[safe_limit - 1].id if len(candidates) > safe_limit else None,
             "total_candidates": len(candidates),
             "created_count": len(created),
             "skipped_count": len(skipped),

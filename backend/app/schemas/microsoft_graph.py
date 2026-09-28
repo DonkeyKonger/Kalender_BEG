@@ -76,6 +76,7 @@ class MicrosoftGraphBackfillErrorSite(BaseModel):
 
 
 class MicrosoftGraphBackfillProjectFoldersResponse(BaseModel):
+    next_after_site_id: int | None = None
     total_candidates: int
     created_count: int
     skipped_count: int

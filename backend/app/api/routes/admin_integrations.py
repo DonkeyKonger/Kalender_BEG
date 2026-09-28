@@ -35,8 +35,9 @@ def create_microsoft_graph_test_project_folder(
 )
 def backfill_microsoft_graph_project_folders(
     limit: int = Query(default=10, ge=1, le=25),
+    after_site_id: int = Query(default=0, ge=0),
     _current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> MicrosoftGraphBackfillProjectFoldersResponse:
-    result = SiteService(db).backfill_project_folders(limit=limit)
+    result = SiteService(db).backfill_project_folders(limit=limit, after_site_id=after_site_id)
     return MicrosoftGraphBackfillProjectFoldersResponse.model_validate(result)
