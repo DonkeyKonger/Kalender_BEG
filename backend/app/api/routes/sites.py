@@ -1,6 +1,7 @@
 import logging
 from hashlib import sha256
 from pathlib import Path
+from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
@@ -516,12 +517,20 @@ async def upload_project_folder_document(
     file: UploadFile = File(...),
     current_user: User = Depends(CAN_FOLDER_READ),
     db: Session = Depends(get_db),
+    parent_item_id: Annotated[str | None, Form()] = None,
 ) -> ProjectFolderDocumentItem:
     folder = ProjectFolderService(db).get_project_folder_for_site_by_key(
         site_id, folder_key, current_user
     )
-    content = await file.read()
     storage = ProjectStorageService()
+    target_folder_id = folder.external_item_id
+    if parent_item_id is not None:
+        target_folder_id = storage.resolve_upload_folder(
+            drive_id=folder.external_drive_id,
+            root_folder_item_id=folder.external_item_id,
+            parent_item_id=parent_item_id,
+        )
+    content = await file.read()
     filename = file.filename
     if folder_key == PHOTO_UPLOAD_FOLDER_KEY and is_supported_photo_upload(
         filename=file.filename,
@@ -532,7 +541,7 @@ async def upload_project_folder_document(
             str(item.get("name"))
             for item in storage.list_folder_children(
                 drive_id=folder.external_drive_id,
-                folder_item_id=folder.external_item_id,
+                folder_item_id=target_folder_id,
             )
             if item.get("name")
         }
@@ -548,7 +557,7 @@ async def upload_project_folder_document(
         )
     uploaded = storage.upload_file_to_folder(
         drive_id=folder.external_drive_id,
-        folder_item_id=folder.external_item_id,
+        folder_item_id=target_folder_id,
         filename=filename,
         content=content,
         content_type=file.content_type,

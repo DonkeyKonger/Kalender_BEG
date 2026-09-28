@@ -11,6 +11,7 @@ function harness(load) {
   const state = { stack: [], errors: [], loading: [], calls: 0 };
   const dependencies = {
     folderNavigationPendingRef: { current: false }, browserMountedRef: { current: true },
+    isUploading: false, fileDropUploadPendingRef: { current: false },
     siteId: 7, folder: { folder_key: "dokumentation" },
     api: { projectFolderItemChildren: (...args) => { state.calls++; assert.deepEqual(args, [7, "dokumentation", "child"]); return load(); } },
     setFolderNavigationError: (value) => state.errors.push(value),

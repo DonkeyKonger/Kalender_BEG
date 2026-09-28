@@ -1527,7 +1527,7 @@ export function SiteDetailPage() {
     }
   }
 
-  async function uploadFilesToFolder(folder: ProjectFolder, files: FileList | File[]): Promise<void> {
+  async function uploadFilesToFolder(folder: ProjectFolder, files: FileList | File[], parentItemId?: string): Promise<void> {
     if (!site || uploadingFolderKey) {
       return;
     }
@@ -1553,7 +1553,7 @@ export function SiteDetailPage() {
     const failedFiles: string[] = [];
     for (const file of fileList) {
       try {
-        await api.uploadProjectFolderDocument(site.id, folder.folder_key, file);
+        await api.uploadProjectFolderDocument(site.id, folder.folder_key, file, parentItemId);
         uploadedCount += 1;
       } catch {
         failedFiles.push(file.name);
@@ -2379,7 +2379,7 @@ function ProjectFoldersPanel({
   uploadError: string | null;
   dragOverFolderKey: string | null;
   onSelectFolder: (folder: ProjectFolder | null) => void;
-  onUploadFiles: (folder: ProjectFolder, files: FileList | File[]) => Promise<void>;
+  onUploadFiles: (folder: ProjectFolder, files: FileList | File[], parentItemId?: string) => Promise<void>;
   onDragOverFolder: (folderKey: string | null) => void;
   onRetry: () => void;
   onRetryDocuments: () => void;
@@ -2465,7 +2465,7 @@ function ProjectFoldersPanel({
                 isUploading={uploadingFolderKey === selectedFolder.folder_key}
                 uploadMessage={uploadMessage}
                 uploadError={uploadError}
-                onUpload={(files) => onUploadFiles(selectedFolder, files)}
+                onUpload={(files, parentItemId) => onUploadFiles(selectedFolder, files, parentItemId)}
                 onRetry={onRetryDocuments}
               />
             ) : (
@@ -2500,7 +2500,7 @@ function ProjectFolderDocumentBrowser({
   isUploading: boolean;
   uploadMessage: string | null;
   uploadError: string | null;
-  onUpload: (files: FileList | File[]) => Promise<void>;
+  onUpload: (files: FileList | File[], parentItemId?: string) => Promise<void>;
   onRetry: () => void;
 }) {
   const { user } = useAuth();
@@ -2574,7 +2574,7 @@ function ProjectFolderDocumentBrowser({
   }, [folder.id]);
 
   async function handleOpenFolder(item: ProjectFolderDocumentItem): Promise<void> {
-    if (!item.is_folder || folderNavigationPendingRef.current) {
+    if (!item.is_folder || folderNavigationPendingRef.current || isUploading || fileDropUploadPendingRef.current) {
       return;
     }
     folderNavigationPendingRef.current = true;
@@ -2600,7 +2600,7 @@ function ProjectFolderDocumentBrowser({
   }
 
   function handleBackToParentFolder(): void {
-    if (folderNavigationPendingRef.current) return;
+    if (folderNavigationPendingRef.current || isUploading || fileDropUploadPendingRef.current) return;
     setFolderStack((currentStack) => currentStack.slice(0, -1));
     setFolderNavigationError(null);
     resetFileDropState();
@@ -2662,7 +2662,29 @@ function ProjectFolderDocumentBrowser({
   }, [currentDocuments, documentSort, normalizedQuery]);
   const hasLoadedItems = Boolean(currentDocuments && currentDocuments.items.length > 0);
   const isCurrentLoading = isInSubfolder ? folderNavigationLoading : isLoading;
-  const canUploadToCurrentFolder = hasSharePointFolder && !isInSubfolder;
+  const canUploadToCurrentFolder = hasSharePointFolder && !folderNavigationLoading;
+
+  async function handleUploadToCurrentFolder(files: FileList | File[]): Promise<void> {
+    if (!canUploadToCurrentFolder || isUploading || fileDropUploadPendingRef.current || files.length === 0) return;
+    const parentItemId = currentLevel?.itemId;
+    fileDropUploadPendingRef.current = true;
+    setFolderNavigationError(null);
+    try {
+      await onUpload(Array.from(files), parentItemId);
+      if (!browserMountedRef.current || !parentItemId) return;
+      const refreshed = await api.projectFolderItemChildren(siteId, folder.folder_key, parentItemId);
+      if (!browserMountedRef.current) return;
+      setFolderStack((stack) => stack.map((level) => level.itemId === parentItemId
+        ? { ...level, documents: refreshed }
+        : level));
+    } catch (requestError) {
+      if (browserMountedRef.current) {
+        setFolderNavigationError(readApiError(requestError, "Ordner konnte nach dem Hochladen nicht aktualisiert werden. Bitte erneut öffnen."));
+      }
+    } finally {
+      fileDropUploadPendingRef.current = false;
+    }
+  }
 
   async function handleCreateFolder(name: string): Promise<void> {
     if (!canDeleteDocuments) throw new Error("Keine Bearbeitungsberechtigung.");
@@ -2730,10 +2752,7 @@ function ProjectFolderDocumentBrowser({
     if (!canUploadToCurrentFolder || isUploading || fileDropUploadPendingRef.current || event.dataTransfer.files.length === 0) {
       return;
     }
-    fileDropUploadPendingRef.current = true;
-    void onUpload(event.dataTransfer.files).finally(() => {
-      fileDropUploadPendingRef.current = false;
-    });
+    void handleUploadToCurrentFolder(event.dataTransfer.files);
   }
 
   return (
@@ -2770,22 +2789,23 @@ function ProjectFolderDocumentBrowser({
             </label>
           ) : null}
           {isInSubfolder ? (
-            <button type="button" className="secondary-action" disabled={folderNavigationLoading} onClick={handleBackToParentFolder}>
+            <button type="button" className="secondary-action" disabled={folderNavigationLoading || isUploading} onClick={handleBackToParentFolder}>
               <ArrowLeft aria-hidden="true" size={15} />
               <span>Zurück</span>
             </button>
           ) : null}
-          {hasSharePointFolder && !isInSubfolder ? (
+          {hasSharePointFolder ? (
             <label className={`secondary-action project-upload-action${isUploading ? " is-disabled" : ""}`}>
               <UploadCloud aria-hidden="true" size={15} />
               <span>{isUploading ? "Lädt..." : "Hochladen"}</span>
               <input
                 className="project-upload-input"
                 type="file"
-                disabled={isUploading}
+                multiple
+                disabled={isUploading || !canUploadToCurrentFolder}
                 onChange={(event) => {
                   if (event.target.files) {
-                    void onUpload(event.target.files);
+                    void handleUploadToCurrentFolder(event.target.files);
                     event.target.value = "";
                   }
                 }}

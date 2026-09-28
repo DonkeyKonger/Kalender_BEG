@@ -1334,9 +1334,11 @@ export const api = {
     siteId: number,
     folderKey: string,
     file: File,
+    parentItemId?: string,
   ): Promise<ProjectFolderDocumentItem> {
     const formData = new FormData();
     formData.append("file", file);
+    if (parentItemId) formData.append("parent_item_id", parentItemId);
     return request<ProjectFolderDocumentItem>(
       `/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/upload`,
       {

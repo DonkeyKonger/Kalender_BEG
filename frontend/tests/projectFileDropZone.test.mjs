@@ -30,8 +30,19 @@ test("the full document browser uses a counter-backed, browser-safe drop target"
 test("drop and upload button share the existing upload callback with a synchronous duplicate guard", () => {
   assert.match(pageSource, /onUploadFiles=\{uploadFilesToFolder\}/);
   assert.match(pageSource, /const fileDropUploadPendingRef = useRef\(false\)/);
-  assert.match(pageSource, /fileDropUploadPendingRef\.current = true;\s*void onUpload\(event\.dataTransfer\.files\)\.finally/);
-  assert.match(pageSource, /className="project-upload-input"[\s\S]*void onUpload\(event\.target\.files\)/);
+  assert.match(pageSource, /void handleUploadToCurrentFolder\(event\.dataTransfer\.files\)/);
+  assert.match(pageSource, /className="project-upload-input"[\s\S]*void handleUploadToCurrentFolder\(event\.target\.files\)/);
+  assert.match(pageSource, /fileDropUploadPendingRef\.current = true;[\s\S]*await onUpload\(Array\.from\(files\), parentItemId\)/);
+});
+
+test("subfolder uploads target the current level and refresh it without leaving the folder", () => {
+  assert.match(pageSource, /const parentItemId = currentLevel\?\.itemId;/);
+  assert.match(pageSource, /onUpload=\{\(files, parentItemId\) => onUploadFiles\(selectedFolder, files, parentItemId\)\}/);
+  assert.match(pageSource, /uploadProjectFolderDocument\(site.id, folder.folder_key, file, parentItemId\)/);
+  assert.match(pageSource, /const refreshed = await api.projectFolderItemChildren\(siteId, folder.folder_key, parentItemId\)/);
+  assert.match(pageSource, /level.itemId === parentItemId\s*\? \{ \.\.\.level, documents: refreshed \}/);
+  assert.match(pageSource, /const canUploadToCurrentFolder = hasSharePointFolder && !folderNavigationLoading/);
+  assert.doesNotMatch(pageSource, /hasSharePointFolder && !isInSubfolder \? \(\s*<label/);
 });
 
 test("the drag hint is a temporary square Office-style overlay over the whole right pane", () => {

@@ -451,6 +451,25 @@ class ProjectStorageService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ausgewähltes Element ist kein Ordner.")
         return self.list_folder_children(drive_id=drive_id, folder_item_id=item_id)
 
+    def resolve_upload_folder(
+        self,
+        *,
+        drive_id: str | None,
+        root_folder_item_id: str | None,
+        parent_item_id: str,
+    ) -> str:
+        """Only allow uploads into folders within the authorized standard folder."""
+        if not self.config.ms_graph_enabled:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
+        if not drive_id or not root_folder_item_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "SharePoint-Ordner ist noch nicht angebunden.")
+        parent = self._get_descendant_drive_item(
+            drive_id=drive_id, root_folder_item_id=root_folder_item_id, item_id=parent_item_id,
+        )
+        if not isinstance(parent.get("folder"), dict):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ausgewähltes Element ist kein Ordner.")
+        return parent_item_id
+
     def create_subfolder(
         self,
         *,
