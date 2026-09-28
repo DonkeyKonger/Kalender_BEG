@@ -192,3 +192,32 @@ def test_long_external_absence_overlapping_recent_window_qualifies_but_still_blo
     days = DashboardService(db)._staffing_days([], date(2026, 9, 28))
     assert not ids(days[0]) and not ids(days[1])
     assert ids(days[2]) == {person.id}
+
+
+@pytest.mark.parametrize("internal_count", [0, 2, 6])
+def test_internal_workers_precede_all_external_types_in_preview_and_full_list(db, internal_count):
+    today = date(2026, 9, 28)
+    internals = [worker(db, f"Z Internal {i}") for i in reversed(range(internal_count))]
+    externals = [
+        worker(db, "B External", person_type=PersonType.EXTERNAL),
+        worker(db, "A Temporary", person_type=PersonType.EXTERNAL_TEMP),
+    ]
+    for person in externals:
+        db.add(Absence(person_id=person.id, absence_type=AbsenceType.OTHER,
+                       start_date=today-timedelta(days=1), end_date=today-timedelta(days=1)))
+    site = Site(name="Assignment")
+    db.add(site)
+    db.flush()
+    if internals:
+        db.add(Assignment(person_id=internals[0].id, site_id=site.id, start_date=today, end_date=today))
+    db.flush()
+    days = DashboardService(db)._staffing_days([], today)
+    for day in days:
+        available_internals = sorted(
+            [person for person in internals if day["date"] != today.isoformat() or person != internals[0]],
+            key=lambda person: person.display_name,
+        )
+        expected = [person.id for person in available_internals] + [externals[1].id, externals[0].id]
+        actual = [person["id"] for person in day["freeWorkers"]]
+        assert actual == expected  # Same order supplies the popup and the first four bubbles.
+        assert actual[:4] == expected[:4]

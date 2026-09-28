@@ -124,7 +124,7 @@ class DashboardService:
             Person.employment_status == "active",
             Person.id.not_in(manager_ids),
             Person.id.not_in(non_worker_ids),
-        ).order_by(Person.display_name, Person.id)))
+        ).order_by(Person.person_type != PersonType.INTERNAL, Person.display_name, Person.id)))
         # Query all assignments/absences, including people with no recent planning
         # and assignments on sites omitted from the matrix.
         assignments = list(self.db.scalars(select(Assignment).where(
