@@ -31,6 +31,60 @@ test('middle mouse down still toggles directly without default browser action', 
   assert.match(source, /if \(event.button === 1\) \{\s*event.preventDefault\(\);\s*event.stopPropagation\(\);\s*props.onCycleCellMark\(row, cell\);/);
 });
 
+test('mark targets cover the full selection only when clicking inside the same site', () => {
+  const cells = Array.from({ length: 7 }, (_, i) => ({ date: `2026-10-0${i + 1}`, mark: null }));
+  const row = { site: { id: 42 }, cells };
+  const range = { siteId: 42, startDate: cells[1].date, endDate: cells[5].date };
+  assert.deepEqual(context.matrixCellMarkTargets(row, cells[3], range), cells.slice(1, 6));
+  assert.deepEqual(Array.from(context.matrixCellMarkTargets(row, cells[0], range)), [cells[0]]);
+  assert.deepEqual(Array.from(context.matrixCellMarkTargets(row, cells[3], { ...range, siteId: 43 })), [cells[3]]);
+  assert.deepEqual(Array.from(context.matrixCellMarkTargets(row, cells[3], null)), [cells[3]]);
+});
+
+test('selected marks are saved in one request, toggle together and keep planning untouched', async () => {
+  const cells = [1, 2, 3, 4, 5].map(day => ({ date: `2026-10-0${day}`, mark: day === 3 ? 'orange' : null, assignments: [{ id: day }] }));
+  const row = { site: { id: 42 }, cells };
+  const calls = [];
+  const feedback = [];
+  const state = vm.createContext({
+    matrixIsEditable: true, cellMarkSavePendingRef: { current: false },
+    highlightedCellRange: { siteId: 42, startDate: cells[0].date, endDate: cells[4].date },
+    matrixCellMarkTargets: context.matrixCellMarkTargets, nextMatrixCellMark: context.nextMatrixCellMark,
+    cellKey: (id, date) => `${id}:${date}`, clearTemporaryCellFeedback: () => {},
+    setSaveStatus: () => {}, setCellMessage: () => {}, setError: () => {},
+    showTemporaryCellFeedback: (...args) => feedback.push(args), syncMatrixVersionSilently: () => {},
+    api: { patchMatrixCellMark: async params => {
+      calls.push(params);
+      return { updated_cells: cells.map(cell => ({ ...cell, mark: params.mark })) };
+    } },
+    replaceMatrixCells: (_, updated) => { row.cells = updated; },
+    readApiError: () => 'failed', CELL_ERROR_MESSAGE: 'failed',
+  });
+  const handler = source.slice(source.indexOf('  async function cycleCellMark('), source.indexOf('  function handleMatrixContextMenu('));
+  vm.runInContext(ts.transpileModule(handler, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, state);
+  const assignments = JSON.stringify(cells.map(cell => cell.assignments));
+  await state.cycleCellMark(row, cells[2]); // Clicking an already marked cell fills a mixed selection.
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].date, '2026-10-01');
+  assert.equal(calls[0].endDate, '2026-10-05');
+  assert.equal(calls[0].mark, 'orange');
+  assert.equal(feedback.length, 5);
+  await state.cycleCellMark(row, row.cells[2]);
+  assert.equal(calls[1].mark, null);
+  assert.equal(JSON.stringify(row.cells.map(cell => cell.assignments)), assignments);
+  state.matrixIsEditable = false;
+  await state.cycleCellMark(row, row.cells[0]);
+  state.matrixIsEditable = true;
+  state.cellMarkSavePendingRef.current = true;
+  await state.cycleCellMark(row, row.cells[0]);
+  assert.equal(calls.length, 2);
+  state.cellMarkSavePendingRef.current = false;
+  state.api.patchMatrixCellMark = async () => { throw new Error('failure'); };
+  await state.cycleCellMark(row, row.cells[0]);
+  assert.equal(state.cellMarkSavePendingRef.current, false);
+  assert.ok(row.cells.every(cell => cell.mark === null));
+});
+
 test('orange marking keeps the original colors with forty percent transparency only on the marking', async () => {
   const css = await readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
   const rule = css.match(/\.matrix-cell\.mark-orange\s*\{([^}]+)\}/)[1];

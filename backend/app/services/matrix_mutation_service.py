@@ -60,46 +60,54 @@ class MatrixMutationService:
 
 
     def patch_cell_mark(self, payload: MatrixCellMarkPatch, user_id: int) -> dict:
+        end_date = payload.end_date or payload.date
+        if end_date < payload.date:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
         if self.sites.get(payload.site_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Baustelle nicht gefunden.")
 
-        existing = self.db.scalar(
+        existing_by_date = {item.mark_date: item for item in self.db.scalars(
             select(PlanningCellMark).where(
                 PlanningCellMark.site_id == payload.site_id,
-                PlanningCellMark.mark_date == payload.date,
+                PlanningCellMark.mark_date >= payload.date,
+                PlanningCellMark.mark_date <= end_date,
             )
-        )
-        old_value = {
-            "site_id": payload.site_id,
-            "date": payload.date.isoformat(),
-            "mark": existing.mark.value if existing else None,
-        }
+        )}
+        # One transaction for the complete selection; assignments are never modified.
+        for offset in range((end_date - payload.date).days + 1):
+            mark_date = payload.date + timedelta(days=offset)
+            existing = existing_by_date.get(mark_date)
+            old_value = {
+                "site_id": payload.site_id,
+                "date": mark_date.isoformat(),
+                "mark": existing.mark.value if existing else None,
+            }
 
-        if payload.mark is None:
-            if existing is not None:
-                self.db.delete(existing)
-        elif existing is None:
-            self.db.add(
-                PlanningCellMark(
-                    site_id=payload.site_id,
-                    mark_date=payload.date,
-                    mark=payload.mark,
-                    created_by_user_id=user_id,
-                    updated_by_user_id=user_id,
+            if payload.mark is None:
+                if existing is not None:
+                    self.db.delete(existing)
+            elif existing is None:
+                self.db.add(
+                    PlanningCellMark(
+                        site_id=payload.site_id,
+                        mark_date=mark_date,
+                        mark=payload.mark,
+                        created_by_user_id=user_id,
+                        updated_by_user_id=user_id,
+                    )
                 )
-            )
-        else:
-            existing.mark = payload.mark
-            existing.updated_by_user_id = user_id
+            else:
+                existing.mark = payload.mark
+                existing.updated_by_user_id = user_id
 
-        self.audit.record(
-            user_id=user_id,
-            action="matrix.cell.mark.updated",
-            entity_type="matrix_cell_mark",
-            entity_id=payload.site_id,
-            old_value=old_value,
-            new_value={**old_value, "mark": payload.mark.value if payload.mark else None},
-        )
+            self.audit.record(
+                user_id=user_id,
+                action="matrix.cell.mark.updated",
+                entity_type="matrix_cell_mark",
+                entity_id=payload.site_id,
+                old_value=old_value,
+                new_value={**old_value, "mark": payload.mark.value if payload.mark else None},
+            )
         self.db.commit()
         return {
             "warnings": [],
@@ -107,7 +115,7 @@ class MatrixMutationService:
             "updated_cells": MatrixService(self.db).get_site_cells(
                 site_id=payload.site_id,
                 start=payload.date,
-                end=payload.date,
+                end=end_date,
             ),
         }
 

@@ -110,6 +110,7 @@ class MatrixRangePatch(BaseModel):
 class MatrixCellMarkPatch(BaseModel):
     site_id: int
     date: Date
+    end_date: Date | None = None
     mark: Literal[MatrixCellMark.ORANGE] | None = None
 
 

@@ -2445,6 +2445,7 @@ export const api = {
   async patchMatrixCellMark(params: {
     siteId: number;
     date: string;
+    endDate?: string;
     mark: MatrixCellMark | null;
   }): Promise<MatrixMutationResponse> {
     return request<MatrixMutationResponse>("/matrix/cell-mark", {
@@ -2452,6 +2453,7 @@ export const api = {
       body: JSON.stringify({
         site_id: params.siteId,
         date: params.date,
+        end_date: params.endDate,
         mark: params.mark,
       }),
     });

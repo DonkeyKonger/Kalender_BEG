@@ -239,6 +239,7 @@ export function MatrixPage() {
   const skipNextDraftAutosaveRef = useRef(false);
   const activeCellRef = useRef<ActiveCell | null>(null);
   const activeEditorRangeRef = useRef<CellRange | null>(null);
+  const cellMarkSavePendingRef = useRef(false);
   const matrixScrollRef = useRef<HTMLDivElement | null>(null);
   const selectionAnchorRef = useRef<EditorAnchor | null>(null);
   const assignmentDragRef = useRef<AssignmentDragState | null>(null);
@@ -1370,7 +1371,7 @@ export function MatrixPage() {
   }
 
   function finishCellSelection(row: MatrixRow, cell: MatrixCell, cellIndex: number, event: MatrixCellMouseEvent) {
-    if (!isSelecting || !selectionStartCell || row.site.id !== selectionStartCell.siteId) {
+    if (event.button !== 0 || !isSelecting || !selectionStartCell || row.site.id !== selectionStartCell.siteId) {
       return;
     }
     event.preventDefault();
@@ -1881,9 +1882,10 @@ export function MatrixPage() {
 
 
   async function clearCellMark(row: MatrixRow, cell: MatrixCell) {
-    if (!matrixIsEditable || !cell.mark) {
+    if (!matrixIsEditable || !cell.mark || cellMarkSavePendingRef.current) {
       return;
     }
+    cellMarkSavePendingRef.current = true;
     const key = cellKey(row.site.id, cell.date);
     clearTemporaryCellFeedback(key);
     setSaveStatus((current) => ({ ...current, [key]: "saving" }));
@@ -1903,33 +1905,40 @@ export function MatrixPage() {
       setError(message);
       setSaveStatus((current) => ({ ...current, [key]: "error" }));
       setCellMessage((current) => ({ ...current, [key]: CELL_ERROR_MESSAGE }));
+    } finally {
+      cellMarkSavePendingRef.current = false;
     }
   }
 
   async function cycleCellMark(row: MatrixRow, cell: MatrixCell) {
-    if (!matrixIsEditable) {
+    if (!matrixIsEditable || cellMarkSavePendingRef.current) {
       return;
     }
-    const key = cellKey(row.site.id, cell.date);
-    const nextMark = nextMatrixCellMark(cell.mark);
-    clearTemporaryCellFeedback(key);
-    setSaveStatus((current) => ({ ...current, [key]: "saving" }));
-    setCellMessage((current) => ({ ...current, [key]: "" }));
+    const cells = matrixCellMarkTargets(row, cell, highlightedCellRange);
+    const nextMark = nextMatrixCellMark(cells.every((target) => target.mark === "orange") ? "orange" : null);
+    const keys = cells.map((target) => cellKey(row.site.id, target.date));
+    cellMarkSavePendingRef.current = true;
+    keys.forEach(clearTemporaryCellFeedback);
+    setSaveStatus((current) => ({ ...current, ...Object.fromEntries(keys.map((key) => [key, "saving" as const])) }));
+    setCellMessage((current) => ({ ...current, ...Object.fromEntries(keys.map((key) => [key, ""])) }));
     try {
       const response = await api.patchMatrixCellMark({
         siteId: row.site.id,
-        date: cell.date,
+        date: cells[0].date,
+        endDate: cells[cells.length - 1].date,
         mark: nextMark,
       });
       setError(null);
-      showTemporaryCellFeedback(key, nextMark ? "Markierung gespeichert" : "Markierung entfernt");
+      keys.forEach((key) => showTemporaryCellFeedback(key, nextMark ? "Markierung gespeichert" : "Markierung entfernt"));
       replaceMatrixCells(row.site.id, response.updated_cells);
       void syncMatrixVersionSilently();
     } catch (requestError) {
       const message = readApiError(requestError, "Markierung konnte nicht gespeichert werden.");
       setError(message);
-      setSaveStatus((current) => ({ ...current, [key]: "error" }));
-      setCellMessage((current) => ({ ...current, [key]: CELL_ERROR_MESSAGE }));
+      setSaveStatus((current) => ({ ...current, ...Object.fromEntries(keys.map((key) => [key, "error" as const])) }));
+      setCellMessage((current) => ({ ...current, ...Object.fromEntries(keys.map((key) => [key, CELL_ERROR_MESSAGE])) }));
+    } finally {
+      cellMarkSavePendingRef.current = false;
     }
   }
 
@@ -5198,6 +5207,13 @@ function isWeekStartDate(value: string): boolean {
 
 function nextMatrixCellMark(current: MatrixCellMark | null): MatrixCellMark | null {
   return current === "orange" ? null : "orange";
+}
+
+function matrixCellMarkTargets(row: MatrixRow, cell: MatrixCell, range: CellRange | null): MatrixCell[] {
+  if (!range || range.siteId !== row.site.id || cell.date < range.startDate || cell.date > range.endDate) {
+    return [cell];
+  }
+  return row.cells.filter((target) => target.date >= range.startDate && target.date <= range.endDate);
 }
 
 function isCellInCellRange(siteId: number, dayIndex: number, range: CellRange | null): boolean {
