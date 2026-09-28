@@ -24160,6 +24160,10 @@ body.mobile-modal-scroll-locked {
 }
 
 .dashboard-staffing-day:last-child { border-right: 0; }
+.dashboard-staffing-day.has-weekend-gap {
+  border-left: 8px solid #edf0f5;
+  box-shadow: inset 1px 0 #dce3ee;
+}
 .dashboard-staffing-day.is-non-workday { background: #f5f6f8; }
 .dashboard-staffing-day h3 {
   display: flex;

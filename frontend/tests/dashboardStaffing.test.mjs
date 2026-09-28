@@ -8,7 +8,7 @@ import { build } from 'esbuild';
 const compiled = await build({
   stdin: { contents: `import React from 'react'; import {renderToStaticMarkup} from 'react-dom/server';
     import {DashboardStaffingOverview} from './src/components/DashboardStaffingOverview';
-    export const render = days => renderToStaticMarkup(<DashboardStaffingOverview days={days}/>);`,
+    export const render = (days,today='2026-09-28') => renderToStaticMarkup(<DashboardStaffingOverview days={days} today={today}/>);`,
     resolveDir: fileURLToPath(new URL('..', import.meta.url)), loader: 'tsx' },
   bundle: true, write: false, format: 'cjs', platform: 'node', packages: 'external', jsx: 'automatic',
 });
@@ -34,14 +34,21 @@ test('four workers have no overflow; empty working and weekend states differ',()
   assert.doesNotMatch(weekend,/Keine freien Monteure/);
 });
 test('renders all eight dates and needs independently from worker availability',()=>{
-  const days = Array.from({length:8},(_,i)=>day(0,{date:`2026-10-${String(i+1).padStart(2,'0')}`}));
+  const days = [1,2,5,6,7,8,9,12].map(i=>day(0,{date:`2026-10-${String(i).padStart(2,'0')}`}));
   days[0].needs=[{siteName:'Baustelle & Test',siteNumber:'8007',managerLabel:'CE'}];
-  const html=result.exports.render(days);
+  const html=result.exports.render(days,'2026-10-01');
   assert.equal((html.match(/<time /g)||[]).length,8);
   assert.equal((html.match(/>Heute</g)||[]).length,1);
   assert.match(html,/Baustelle &amp; Test/);
   assert.match(html,/8007 · CE/);
   assert.match(html,/Kein offener Bedarf/);
+  assert.equal((html.match(/has-weekend-gap/g)||[]).length,2);
+  assert.doesNotMatch(html,/2026-10-03|2026-10-04/);
+});
+test('a forecast starting next Monday on a weekend does not label Monday as today or add a leading gap',()=>{
+  const html=result.exports.render([day(0,{date:'2026-10-05'})],'2026-10-03');
+  assert.doesNotMatch(html,/>Heute</);
+  assert.doesNotMatch(html,/has-weekend-gap/);
 });
 test('popup can open through hover, focus and click and closes with Escape or outside interaction',()=>{
   const source=readFileSync(new URL('../src/components/DashboardStaffingOverview.tsx',import.meta.url),'utf8');

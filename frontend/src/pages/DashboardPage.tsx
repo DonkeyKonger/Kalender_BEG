@@ -963,7 +963,7 @@ export function DashboardPage() {
               icon={<AlertTriangle aria-hidden="true" size={20} />}
               className="dashboard-section--conflicts"
             >
-              <DashboardStaffingOverview days={dashboard.staffingDays ?? []} />
+              <DashboardStaffingOverview days={dashboard.staffingDays ?? []} today={range.today} />
               {dashboard.conflicts.some(conflict => conflict.date <= (dashboard.staffingDays?.at(-1)?.date ?? range.today)) && (
                 <details className="dashboard-staffing-conflicts">
                   <summary>Konflikte im Zeitraum ({dashboard.conflicts.filter(conflict => conflict.date <= (dashboard.staffingDays?.at(-1)?.date ?? range.today)).length})</summary>

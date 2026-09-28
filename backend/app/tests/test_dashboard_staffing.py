@@ -12,7 +12,7 @@ from app.models.person import Person
 from app.models.planning_cell_mark import PlanningCellMark
 from app.models.site import Site
 from app.models.user import User
-from app.services.dashboard_service import DashboardService
+from app.services.dashboard_service import DashboardService, staffing_dates
 
 
 @pytest.fixture
@@ -35,14 +35,14 @@ def ids(day):
     return {person["id"] for person in day["freeWorkers"]}
 
 
-def test_exactly_eight_calendar_days_including_today_across_year_boundary(db):
+def test_exactly_eight_weekdays_including_today_across_year_boundary(db):
     person = worker(db)
     days = DashboardService(db)._staffing_days([], date(2026, 12, 28))
-    assert [day["date"] for day in days] == [(date(2026, 12, 28) + timedelta(days=i)).isoformat() for i in range(8)]
+    assert [day["date"] for day in days] == ["2026-12-28", "2026-12-29", "2026-12-30", "2026-12-31", "2027-01-01", "2027-01-04", "2027-01-05", "2027-01-06"]
     assert ids(days[0]) == {person.id}
     assert days[4]["nonWorkdayLabel"] == "Feiertag"
-    assert days[5]["nonWorkdayLabel"] == "Wochenende"
-    assert all(not days[i]["freeWorkers"] for i in [4, 5, 6])
+    assert not days[4]["freeWorkers"]
+    assert ids(days[5]) == {person.id}
     assert ids(days[7]) == {person.id}
 
 
@@ -116,7 +116,36 @@ def test_overview_returns_only_orange_unstaffed_needs_and_all_free_people(db):
     assert all(not day["needs"] for day in days[1:])
     assert len(days[0]["freeWorkers"]) == 12  # Presentation, not the API, limits the preview.
     assert len(days[3]["freeWorkers"]) == 11
-    assert days[-1]["date"] == "2026-10-05"
+    assert days[-1]["date"] == "2026-10-07"
+
+
+@pytest.mark.parametrize("offset", range(7))
+def test_weekday_forecast_skips_weekends_for_every_start_day(offset):
+    today = date(2026, 9, 28) + timedelta(days=offset)
+    days = staffing_dates(today)
+    assert len(days) == 8
+    assert all(day.weekday() < 5 for day in days)
+    assert days[0] == today + timedelta(days=max(0, 7 - today.weekday()) if today.weekday() >= 5 else 0)
+    assert all((right - left).days == (3 if left.weekday() == 4 else 1) for left, right in zip(days, days[1:]))
+
+
+def test_weekend_start_loads_marks_and_assignments_beyond_next_week_end(db):
+    person = worker(db)
+    site = Site(name="Future need", site_number="9000")
+    db.add(site)
+    db.flush()
+    last = date(2026, 10, 14)
+    db.add(PlanningCellMark(site_id=site.id, mark_date=last, mark=MatrixCellMark.ORANGE))
+    db.add(Assignment(person_id=person.id, site_id=site.id, start_date=last-timedelta(days=1), end_date=last-timedelta(days=1)))
+    db.flush()
+    days = DashboardService(db).get_overview(history_start=date(2026, 9, 1), today=date(2026, 10, 3),
+        tomorrow=date(2026, 10, 4), week_end=date(2026, 10, 4), next_week_start=date(2026, 10, 5),
+        next_week_end=date(2026, 10, 11))["staffingDays"]
+    assert days[0]["date"] == "2026-10-05"
+    assert days[-1]["date"] == last.isoformat()
+    assert days[-1]["needs"][0]["siteName"] == "Future need"
+    assert not ids(days[-2])
+    assert ids(days[-1]) == {person.id}
 
 
 @pytest.mark.parametrize("person_type", [PersonType.EXTERNAL, PersonType.EXTERNAL_TEMP])

@@ -18,6 +18,17 @@ from app.services.person_display import calendar_short_code, calendar_short_code
 from app.services.payroll_daily_ledger_service import lower_saxony_public_holidays
 
 
+def staffing_dates(today: date) -> list[date]:
+    """Eight weekdays from today; public holidays remain visible weekdays."""
+    days = []
+    cursor = today
+    while len(days) < 8:
+        if cursor.weekday() < 5:
+            days.append(cursor)
+        cursor += timedelta(days=1)
+    return days
+
+
 class DashboardService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -32,15 +43,16 @@ class DashboardService:
         next_week_start: date,
         next_week_end: date,
     ) -> dict:
+        overview_end = max(next_week_end, staffing_dates(today)[-1])
         matrix = MatrixService(self.db).get_matrix(
             start=history_start,
-            end=max(next_week_end, today + timedelta(days=7)),
+            end=overview_end,
             include_weekends=True,
         )
         today_assigned_sites = self._assigned_sites_for_day(matrix, today)
         tomorrow_assigned_sites = self._assigned_sites_for_day(matrix, tomorrow)
-        open_staffing_needs = self._open_staffing_needs(matrix.rows, today, next_week_end)
-        conflicts = self._conflicts(matrix.rows, today, next_week_end)
+        open_staffing_needs = self._open_staffing_needs(matrix.rows, today, overview_end)
+        conflicts = self._conflicts(matrix.rows, today, overview_end)
         active_workers = self._active_dashboard_workers(matrix.rows)
         today_assigned_person_ids = self._assigned_person_ids_for_day(matrix.rows, today)
         today_absences = self._absences_for_day(matrix.rows, today)
@@ -92,8 +104,9 @@ class DashboardService:
         }
 
     def _staffing_days(self, rows: list[MatrixRow], today: date) -> list[dict]:
-        """Eight calendar days; availability must not depend on visible matrix rows."""
-        end = today + timedelta(days=7)
+        """Eight weekdays; availability must not depend on visible matrix rows."""
+        days = staffing_dates(today)
+        end = days[-1]
         # External staff remain available only after recent calendar activity.
         # Use the same seven-day window (today plus six previous days) for the
         # whole forecast, not a window moving with each future column.
@@ -132,8 +145,7 @@ class DashboardService:
         needs = self._open_staffing_needs(rows, today, end)
         holidays = lower_saxony_public_holidays(today, end)
         result = []
-        for offset in range(8):
-            day = today + timedelta(days=offset)
+        for day in days:
             is_workday = day.weekday() < 5 and day not in holidays
             unavailable = {
                 entry.person_id for entry in [*assignments, *absences]
