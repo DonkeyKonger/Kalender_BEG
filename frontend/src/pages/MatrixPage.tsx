@@ -1,4 +1,4 @@
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
@@ -19,6 +19,7 @@ import {
 } from "../lib/planningAbsenceSort";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
 import { currentlyPlannedRows } from "../lib/currentPlanning";
+import { matrixSearchRangeAtViewport, searchMatrixRows, type MatrixSearchRange } from "../lib/matrixSearch";
 import { SiteCreateDrawer } from "./SitesPage";
 import type { Absence } from "../types/absence";
 import type { CurrentUser } from "../types/auth";
@@ -268,6 +269,11 @@ export function MatrixPage() {
   const [projectManagerFilter, setProjectManagerFilter] = useState(() => (
     initialMatrixProjectManagerFilterFromUser(user)
   ));
+  const [matrixSearch, setMatrixSearch] = useState("");
+  const isMatrixSearchActive = matrixSearch.trim().length > 0;
+  const dataProjectManagerFilter = isMatrixSearchActive ? "all" : projectManagerFilter;
+  const [searchVisibleRange, setSearchVisibleRange] = useState<MatrixSearchRange | null>(null);
+  const searchScrollRestoreRef = useRef<{ left: number; top: number } | null>(null);
   const [isCompactView, setIsCompactView] = useState(false);
   const [isYearView, setIsYearView] = useState(false);
   const [siteInfoDrafts, setSiteInfoDrafts] = useState<Record<number, string>>({});
@@ -390,7 +396,7 @@ export function MatrixPage() {
     setError(null);
     try {
       const shouldLoadPeople = !hasLoadedPeopleRef.current;
-      const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
+      const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(dataProjectManagerFilter);
       const [matrixData, personData, absenceData, operationalAbsenceData, versionData] = await Promise.all([
         api.matrix({
           start: activeRange.start,
@@ -436,11 +442,11 @@ export function MatrixPage() {
         setIsLoading(false);
       }
     }
-  }, [activeRange.end, activeRange.start, applyOperationalAbsenceData, isYearView, projectManagerFilter]);
+  }, [activeRange.end, activeRange.start, applyOperationalAbsenceData, isYearView, dataProjectManagerFilter]);
 
   const refreshMatrixOnly = useCallback(async () => {
     const contextVersion = matrixContextVersionRef.current;
-    const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
+    const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(dataProjectManagerFilter);
     const matrixData = await api.matrix({
       start: activeRange.start,
       end: activeRange.end,
@@ -454,7 +460,7 @@ export function MatrixPage() {
     matrixDataContextVersionRef.current = contextVersion;
     setMatrix(matrixData);
     setSiteInfoDrafts(siteInfoDraftsFromRows(matrixData.rows));
-  }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
+  }, [activeRange.end, activeRange.start, isYearView, dataProjectManagerFilter]);
 
   const refreshAbsencesOnly = useCallback(async () => {
     const contextVersion = matrixContextVersionRef.current;
@@ -501,7 +507,7 @@ export function MatrixPage() {
 
   const syncMatrixVersionSilently = useCallback(async () => {
     const contextVersion = matrixContextVersionRef.current;
-    const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
+    const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(dataProjectManagerFilter);
     try {
       const versionData = await api.matrixVersion({
         start: activeRange.start,
@@ -516,13 +522,13 @@ export function MatrixPage() {
     } catch {
       // Hintergrund-Sync darf den Nutzer nicht stören.
     }
-  }, [activeRange.end, activeRange.start, isYearView, projectManagerFilter]);
+  }, [activeRange.end, activeRange.start, isYearView, dataProjectManagerFilter]);
 
   const refreshMatrixInBackground = useCallback(async (nextVersion: string, contextVersion: number) => {
     if (contextVersion !== matrixContextVersionRef.current) {
       return;
     }
-    const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
+    const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(dataProjectManagerFilter);
     const matrixScroll = matrixScrollRef.current;
     const scrollSnapshot = matrixScroll
       ? { left: matrixScroll.scrollLeft, top: matrixScroll.scrollTop }
@@ -564,7 +570,7 @@ export function MatrixPage() {
       }
       window.scrollTo(windowScrollSnapshot.left, windowScrollSnapshot.top);
     });
-  }, [activeRange.end, activeRange.start, applyOperationalAbsenceData, isYearView, projectManagerFilter]);
+  }, [activeRange.end, activeRange.start, applyOperationalAbsenceData, isYearView, dataProjectManagerFilter]);
 
   const checkMatrixVersionInBackground = useCallback(async () => {
     if (!matrix || isCheckingMatrixVersionRef.current) {
@@ -577,7 +583,7 @@ export function MatrixPage() {
     const contextVersion = matrixContextVersionRef.current;
     isCheckingMatrixVersionRef.current = true;
     try {
-      const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(projectManagerFilter);
+      const projectManagerPersonId = matrixProjectManagerPersonIdFromFilter(dataProjectManagerFilter);
       const versionData = await api.matrixVersion({
         start: activeRange.start,
         end: activeRange.end,
@@ -606,7 +612,7 @@ export function MatrixPage() {
     isMatrixInteractionActive,
     isYearView,
     matrix,
-    projectManagerFilter,
+    dataProjectManagerFilter,
     refreshMatrixInBackground,
   ]);
 
@@ -2088,13 +2094,67 @@ export function MatrixPage() {
     return projectManagerOptionsFromPeople(matrix.project_managers);
   }, [matrix]);
 
+  // Restore the date position when changing the server-side PM scope for a search.
+  // Scrolling and resizing then update installer results without reloading the matrix.
+  useLayoutEffect(() => {
+    const element = matrixScrollRef.current;
+    if (!element || !matrix || isLoading) return;
+    if (searchScrollRestoreRef.current) {
+      element.scrollLeft = searchScrollRestoreRef.current.left;
+      element.scrollTop = searchScrollRestoreRef.current.top;
+      searchScrollRestoreRef.current = null;
+    }
+    const columns = matrix.days.map((day) => ({ date: day.date, width: matrixColumnWidthForDate(day.date, isCompactView) }));
+    const fixedWidth = isCompactView ? COMPACT_FIXED_MATRIX_COLUMNS_WIDTH : FIXED_MATRIX_COLUMNS_WIDTH;
+    const updateRange = () => {
+      const next = matrixSearchRangeAtViewport(columns, element.scrollLeft, element.clientWidth - fixedWidth);
+      setSearchVisibleRange((current) => current?.start === next?.start && current?.end === next?.end ? current : next);
+    };
+    let frame: number | null = null;
+    const scheduleUpdate = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => { frame = null; updateRange(); });
+    };
+    updateRange();
+    element.addEventListener("scroll", scheduleUpdate, { passive: true });
+    const observer = new ResizeObserver(scheduleUpdate);
+    observer.observe(element);
+    return () => {
+      element.removeEventListener("scroll", scheduleUpdate);
+      observer.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [matrix, isLoading, isCompactView]);
+
+  const searchIsBlocked = hasPendingMatrixSave || Boolean(activeCell && !sameEntries(initialEntries, draftEntries))
+    || Boolean(activeAbsenceCell || assignmentDrag || assignmentResize || isSelecting)
+    || savingInfoSiteId !== null || savingStatusSiteId !== null;
+
+  function updateMatrixSearch(value: string) {
+    if (searchIsBlocked) return;
+    closeActiveEditor();
+    const nextFilter = value.trim() ? "all" : projectManagerFilter;
+    if (nextFilter !== dataProjectManagerFilter) {
+      const scroll = matrixScrollRef.current;
+      if (scroll) searchScrollRestoreRef.current = { left: scroll.scrollLeft, top: scroll.scrollTop };
+      clearScheduledMatrixRangeScroll();
+      invalidateMatrixDataContext();
+      setIsLoading(true);
+    }
+    setMatrixSearch(value);
+  }
+
   const visibleRowGroups = useMemo(() => {
     if (!matrix) {
       return [];
     }
     const rows = isCurrentPlanningOnly ? currentlyPlannedRows(matrix) : matrix.rows;
+    if (isMatrixSearchActive) {
+      const matches = searchMatrixRows(rows, matrixSearch, people, searchVisibleRange).slice().sort(compareMatrixRowsByNumber);
+      return matches.length ? [{ key: "search", label: "", rows: matches, showHeading: true }] : [];
+    }
     return groupMatrixRows(rows, projectManagerFilter);
-  }, [matrix, projectManagerFilter, isCurrentPlanningOnly]);
+  }, [matrix, projectManagerFilter, isCurrentPlanningOnly, isMatrixSearchActive, matrixSearch, people, searchVisibleRange]);
 
   return (
     <section className={["matrix-page", isCompactView ? "is-compact" : "", isYearView ? "is-year-view" : "", isCurrentPlanningOnly ? "is-current-planning" : ""].filter(Boolean).join(" ")}>
@@ -2104,10 +2164,27 @@ export function MatrixPage() {
           <h1>Baustellenkalender</h1>
         </div>
         <div className="matrix-actions">
+          <div className="matrix-search" role="search">
+            <Search aria-hidden="true" size={15} />
+            <input
+              aria-label="Monteur oder Baustelle suchen"
+              placeholder="Monteur / Baustelle suchen …"
+              title="Projektleiterübergreifend suchen. Monteure: nur Einplanungen im sichtbaren Datumsausschnitt."
+              type="search"
+              value={matrixSearch}
+              disabled={searchIsBlocked}
+              onChange={(event) => updateMatrixSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") { event.preventDefault(); updateMatrixSearch(""); }
+              }}
+            />
+            {matrixSearch && <button aria-label="Suche leeren" disabled={searchIsBlocked} type="button" onClick={() => updateMatrixSearch("")}><X aria-hidden="true" size={14} /></button>}
+          </div>
           {projectManagerOptions.length > 0 && (
-            <div className="matrix-pm-filter" aria-label="Projektleiter filtern">
+            <div className="matrix-pm-filter" aria-label="Projektleiter filtern" title={isMatrixSearchActive ? "Die Suche berücksichtigt alle Projektleiter." : undefined}>
               <button
-                className={projectManagerFilter === "all" ? "is-active" : ""}
+                className={dataProjectManagerFilter === "all" ? "is-active" : ""}
+                disabled={isMatrixSearchActive}
                 type="button"
                 onClick={() => selectProjectManagerFilter("all")}
               >
@@ -2115,7 +2192,8 @@ export function MatrixPage() {
               </button>
               {projectManagerOptions.map((manager) => (
                 <button
-                  className={projectManagerFilter === String(manager.id) ? "is-active" : ""}
+                  className={dataProjectManagerFilter === String(manager.id) ? "is-active" : ""}
+                  disabled={isMatrixSearchActive}
                   key={manager.id}
                   type="button"
                   onClick={() => selectProjectManagerFilter(String(manager.id))}
@@ -2161,7 +2239,12 @@ export function MatrixPage() {
       {isLoading && <div className="matrix-state">Matrix wird geladen...</div>}
       {!isLoading && matrix && (
         <>
-          {isCurrentPlanningOnly && visibleRowGroups.length === 0 && (
+          {isMatrixSearchActive && visibleRowGroups.length === 0 && (
+            <p className="matrix-current-planning-empty" role="status">
+              Keine passenden Baustellen oder Monteur-Einplanungen im sichtbaren Datumsausschnitt{isCurrentPlanningOnly ? " mit aktueller Planung" : ""}.
+            </p>
+          )}
+          {!isMatrixSearchActive && isCurrentPlanningOnly && visibleRowGroups.length === 0 && (
             <p className="matrix-current-planning-empty" role="status">
               Keine Baustellen mit Planung in dieser oder der nächsten Kalenderwoche für die gewählte Projektleiter-Auswahl.
             </p>
@@ -2171,7 +2254,7 @@ export function MatrixPage() {
             absences={absences}
             absenceOverflowDetail={absenceOverflowDetail}
             operationalAbsences={operationalAbsences}
-            canCreateSites={matrixIsEditable && !isCurrentPlanningOnly}
+            canCreateSites={matrixIsEditable && !isCurrentPlanningOnly && !isMatrixSearchActive}
             cellMessage={cellMessage}
             dayColumnWidth={dayColumnWidth}
             isCompactView={isCompactView}

@@ -61,7 +61,7 @@ test("current planning hides the complete absence row only while the filter is a
 
 test("current planning hides add-site rows while retaining permission checks in normal mode", () => {
   const source = readFileSync(new URL("../src/pages/MatrixPage.tsx", import.meta.url), "utf8");
-  assert.match(source, /canCreateSites=\{matrixIsEditable && !isCurrentPlanningOnly\}/);
+  assert.match(source, /canCreateSites=\{matrixIsEditable && !isCurrentPlanningOnly && !isMatrixSearchActive\}/);
   assert.match(source, /props\.canCreateSites && \(\s*<MatrixAddSiteRow/);
 });
 

@@ -753,6 +753,54 @@ button:disabled {
   gap: 10px;
 }
 
+.matrix-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 250px;
+  min-width: 200px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid #cad5e5;
+  border-radius: 2px;
+  background: #fff;
+  color: #657b98;
+}
+
+.matrix-search:focus-within {
+  border-color: #759cc8;
+}
+
+.matrix-search input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  color: #243348;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.matrix-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.matrix-search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  color: #657b98;
+  cursor: pointer;
+}
+
 .icon-button.secondary {
   border: 1px solid #cbd7e6;
   background: #ffffff;
