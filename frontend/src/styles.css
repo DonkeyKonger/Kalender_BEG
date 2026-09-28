@@ -24129,6 +24129,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .dashboard-main-grid {
+  /* About 20% of the former staffing card; transferred from the upper row. */
+  --dashboard-staffing-extra-height: 68px;
   display: grid;
   align-items: stretch;
   gap: 12px;
@@ -24154,7 +24156,7 @@ body.mobile-modal-scroll-locked {
 .dashboard-staffing-day {
   min-width: 0;
   display: grid;
-  grid-template-rows: auto 112px minmax(150px, auto);
+  grid-template-rows: auto calc(112px + var(--dashboard-staffing-extra-height, 68px)) minmax(150px, auto);
   border-right: 1px solid #dce3ee;
   background: #fff;
 }
@@ -25726,7 +25728,7 @@ body.mobile-modal-scroll-locked {
 
 @media (min-width: 1101px) {
   .dashboard-main-grid-primary {
-    height: clamp(440px, 50vh, 540px);
+    height: calc(clamp(440px, 50vh, 540px) - var(--dashboard-staffing-extra-height));
     min-height: 0;
   }
 

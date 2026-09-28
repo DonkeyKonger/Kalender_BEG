@@ -1,4 +1,4 @@
-import { AlertTriangle, BriefcaseBusiness, Check, ClipboardList, CloudSun, Pencil, Plus, Trash2, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, Check, ClipboardList, CloudSun, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -959,8 +959,8 @@ export function DashboardPage() {
 
           <div className="dashboard-main-grid dashboard-main-grid-secondary">
             <DashboardCard
-              title="Prüfen / Konflikte"
-              icon={<AlertTriangle aria-hidden="true" size={20} />}
+              title="Einsatzplanung"
+              icon={<CalendarDays aria-hidden="true" size={20} />}
               className="dashboard-section--conflicts"
             >
               <DashboardStaffingOverview days={dashboard.staffingDays ?? []} today={range.today} />
