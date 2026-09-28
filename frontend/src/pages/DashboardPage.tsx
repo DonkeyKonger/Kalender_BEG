@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { DashboardMessageCard } from "../components/DashboardMessageCard";
 import { DashboardInbox } from "../components/DashboardInbox";
+import { DashboardStaffingOverview } from "../components/DashboardStaffingOverview";
 import {
   DashboardNoteEmployeeSelect,
   DashboardNoteShareUserSelect,
@@ -193,7 +194,14 @@ export function DashboardPage() {
   const freeSummaryRef = useRef<HTMLDivElement | null>(null);
   const dashboardMessageListCountRef = useRef<number | null>(null);
 
-  const range = useMemo(() => getDashboardRange(new Date()), []);
+  const [todayKey, setTodayKey] = useState(() => toDateKey(new Date()));
+  const range = useMemo(() => getDashboardRange(new Date(`${todayKey}T12:00:00`)), [todayKey]);
+  useEffect(() => {
+    const refreshDate = () => setTodayKey(toDateKey(new Date()));
+    const timer = window.setInterval(refreshDate, 60_000);
+    window.addEventListener("focus", refreshDate);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", refreshDate); };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -955,7 +963,13 @@ export function DashboardPage() {
               icon={<AlertTriangle aria-hidden="true" size={20} />}
               className="dashboard-section--conflicts"
             >
-              <DashboardConflictList conflicts={dashboard.conflicts} needs={dashboard.openStaffingNeeds} />
+              <DashboardStaffingOverview days={dashboard.staffingDays ?? []} />
+              {dashboard.conflicts.some(conflict => conflict.date <= (dashboard.staffingDays?.at(-1)?.date ?? range.today)) && (
+                <details className="dashboard-staffing-conflicts">
+                  <summary>Konflikte im Zeitraum ({dashboard.conflicts.filter(conflict => conflict.date <= (dashboard.staffingDays?.at(-1)?.date ?? range.today)).length})</summary>
+                  <DashboardConflictList conflicts={dashboard.conflicts.filter(conflict => conflict.date <= (dashboard.staffingDays?.at(-1)?.date ?? range.today))} needs={[]} />
+                </details>
+              )}
             </DashboardCard>
           </div>
 

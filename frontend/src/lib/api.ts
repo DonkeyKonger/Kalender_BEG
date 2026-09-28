@@ -259,7 +259,16 @@ export type DashboardOverviewPerson = {
   detail?: string;
 };
 
+export type DashboardStaffingDay = {
+  date: string;
+  isWorkday: boolean;
+  nonWorkdayLabel: string | null;
+  needs: DashboardOverviewStaffingNeed[];
+  freeWorkers: Array<DashboardOverviewPerson & { isExternal: boolean }>;
+};
+
 export type DashboardOverview = {
+  staffingDays: DashboardStaffingDay[];
   todayAssignedSites: DashboardOverviewAssignedSite[];
   todayAssignedSiteGroups: Array<{
     manager: {

@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.enums import AbsenceType, PersonType
+from app.models.absence import Absence
+from app.models.assignment import Assignment
+from app.models.enums import AbsenceStatus, AbsenceType, PersonType, UserRole
 from app.models.person import Person
+from app.models.site import Site
+from app.models.user import User
 from app.schemas.matrix import MatrixPerson, MatrixResponse, MatrixRow
 from app.services.conflict_service import BLOCKED_SITE_STATUSES, HARD_ABSENCE_TYPES
 from app.services.matrix_service import MatrixService
 from app.services.person_display import calendar_short_code, calendar_short_code_from_values
+from app.services.payroll_daily_ledger_service import lower_saxony_public_holidays
 
 
 class DashboardService:
@@ -29,7 +34,7 @@ class DashboardService:
     ) -> dict:
         matrix = MatrixService(self.db).get_matrix(
             start=history_start,
-            end=next_week_end,
+            end=max(next_week_end, today + timedelta(days=7)),
             include_weekends=True,
         )
         today_assigned_sites = self._assigned_sites_for_day(matrix, today)
@@ -53,6 +58,7 @@ class DashboardService:
         )
 
         return {
+            "staffingDays": self._staffing_days(matrix.rows, today),
             "todayAssignedSites": today_assigned_sites,
             "todayAssignedSiteGroups": self._group_assigned_sites_by_manager(today_assigned_sites),
             "workerSummaryGroups": worker_summary_groups,
@@ -84,6 +90,54 @@ class DashboardService:
                 last_manager_by_person_id,
             ),
         }
+
+    def _staffing_days(self, rows: list[MatrixRow], today: date) -> list[dict]:
+        """Eight calendar days; availability must not depend on visible matrix rows."""
+        end = today + timedelta(days=7)
+        manager_ids = select(Site.project_manager_person_id).where(
+            Site.project_manager_person_id.is_not(None)
+        )
+        non_worker_ids = select(User.person_id).where(
+            User.person_id.is_not(None),
+            User.role.in_([UserRole.ADMIN, UserRole.OFFICE, UserRole.PROJECT_MANAGER]),
+        )
+        workers = list(self.db.scalars(select(Person).where(
+            Person.deleted_at.is_(None),
+            Person.is_active.is_(True),
+            Person.employment_status == "active",
+            Person.id.not_in(manager_ids),
+            Person.id.not_in(non_worker_ids),
+        ).order_by(Person.display_name, Person.id)))
+        # Query all assignments/absences, including people with no recent planning
+        # and assignments on sites omitted from the matrix.
+        assignments = list(self.db.scalars(select(Assignment).where(
+            Assignment.start_date <= end, Assignment.end_date >= today,
+        )))
+        absences = list(self.db.scalars(select(Absence).where(
+            Absence.status == AbsenceStatus.ACTIVE,
+            Absence.start_date <= end, Absence.end_date >= today,
+        )))
+        needs = self._open_staffing_needs(rows, today, end)
+        holidays = lower_saxony_public_holidays(today, end)
+        result = []
+        for offset in range(8):
+            day = today + timedelta(days=offset)
+            is_workday = day.weekday() < 5 and day not in holidays
+            unavailable = {
+                entry.person_id for entry in [*assignments, *absences]
+                if entry.start_date <= day <= entry.end_date
+            }
+            result.append({
+                "date": day.isoformat(),
+                "isWorkday": is_workday,
+                "nonWorkdayLabel": "Feiertag" if day in holidays else "Wochenende" if not is_workday else None,
+                "needs": [need for need in needs if need["date"] == day.isoformat()],
+                "freeWorkers": [
+                    {**self._worker_person_summary(worker), "isExternal": worker.person_type != PersonType.INTERNAL}
+                    for worker in workers if is_workday and worker.id not in unavailable
+                ],
+            })
+        return result
 
     def _assigned_sites_for_day(self, matrix: MatrixResponse, target_date: date) -> list[dict]:
         summaries: list[dict] = []
