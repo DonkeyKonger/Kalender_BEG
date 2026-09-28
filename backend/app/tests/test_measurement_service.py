@@ -3983,6 +3983,7 @@ def test_site_measurement_batches_include_customer_email_status():
 
     assert read_batch.customer_email_sent_at is not None
     assert read_batch.customer_email_signature_present is False
+    assert read_batch.customer_email_recipients == ["kunde@example.de"]
 
 
 def test_batch_mounting_locations_use_current_visible_entries_and_explicit_rows():

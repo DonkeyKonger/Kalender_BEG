@@ -321,6 +321,7 @@ class ExtraWorkTicketRead(BaseModel):
     customer_signature_place: str | None
     customer_signed_at: datetime | None
     customer_email_sent_at: datetime | None = None
+    customer_email_recipients: list[str] = Field(default_factory=list)
     customer_email_signature_present: bool | None = None
     worker_signature_name: str | None
     worker_signature_place: str | None = None

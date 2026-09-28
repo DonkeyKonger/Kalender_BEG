@@ -80,6 +80,7 @@ from app.services.project_storage_service import ProjectStorageService
 from app.services.push_notification_service import PushNotificationService
 from app.services.time_entry_service import TimeEntryService
 from app.services.audit_service import AuditService
+from app.services.customer_email_status import CustomerEmailStatus, audit_email_recipients
 from app.services.project_record_status import validate_measurement_status_promotion
 from app.services.measurement_status_history import active_transitions, ensure_signature_barrier, has_signature_barrier, record_status_transition, rollback_status, rollback_target, rollback_uses_fallback
 from app.services.measurement_content import measurement_item_content, measurement_item_minutes
@@ -105,8 +106,6 @@ MEASUREMENT_PHOTO_CONTENT_TYPES = {
     "image/heif": ".heif",
 }
 LOGGER = logging.getLogger(__name__)
-
-CustomerEmailStatus = tuple[datetime, bool | None]
 
 
 def _measurement_entry_area_key(value: str) -> str:
@@ -3058,6 +3057,7 @@ class MeasurementService:
             customer_signature_name=batch.customer_signature_name,
             customer_signature_place=batch.customer_signature_place,
             customer_email_sent_at=customer_email_status[0] if customer_email_status else None,
+            customer_email_recipients=customer_email_status[2] if customer_email_status else [],
             customer_email_signature_present=(
                 customer_email_status[1]
                 if customer_email_status and customer_email_status[1] is not None
@@ -3140,6 +3140,7 @@ class MeasurementService:
             statuses[log.entity_id] = (
                 log.created_at,
                 signature_present if isinstance(signature_present, bool) else None,
+                audit_email_recipients(payload),
             )
         return statuses
 

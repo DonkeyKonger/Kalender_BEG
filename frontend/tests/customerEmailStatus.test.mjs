@@ -26,7 +26,7 @@ test("customer delivery status keeps sent state even when a legacy timestamp is 
 
   assert.equal(presentation.isSent, true);
   assert.equal(presentation.className, "is-signature-open");
-  assert.equal(presentation.accessibleLabel, "An Kunden gesendet · Unterschrift fehlt · -");
+  assert.equal(presentation.accessibleLabel, "An Kunden gesendet · Unterschrift fehlt · -\nEmpfänger nicht hinterlegt");
 });
 
 test("customer delivery tooltip preserves the formatted send date", () => {
@@ -36,7 +36,7 @@ test("customer delivery tooltip preserves the formatted send date", () => {
   });
 
   assert.equal(presentation.isSent, true);
-  assert.match(presentation.accessibleLabel, /^An Kunden gesendet · Unterschrift fehlt · 24\.08\.26$/);
+  assert.match(presentation.accessibleLabel, /^An Kunden gesendet · Unterschrift fehlt · 24\.08\.26\nEmpfänger nicht hinterlegt$/);
 });
 
 test("customer delivery tooltip reports a received signature", () => {
@@ -44,9 +44,20 @@ test("customer delivery tooltip reports a received signature", () => {
     ...baseStatus,
     customer_email_sent_at: "2026-08-24T10:15:00Z",
     customer_email_signature_present: true,
+    customer_email_recipients: ["kunde@example.de", "bauleitung@example.de"],
   });
 
   assert.equal(presentation.isSent, true);
   assert.equal(presentation.className, "is-complete");
-  assert.match(presentation.accessibleLabel, /^An Kunden gesendet - Unterschrift erhalten · 24\.08\.26$/);
+  assert.equal(presentation.accessibleLabel, "An Kunden gesendet - Unterschrift erhalten · 24.08.26\nEmpfänger: kunde@example.de, bauleitung@example.de");
+});
+
+test("sent documents without a signature also expose recorded recipients", () => {
+  const result = getCustomerEmailStatus({ ...baseStatus, customer_email_sent_at: "2026-09-28T08:00:00Z", customer_email_recipients: [" kunde@example.de ", ""] });
+  assert.equal(result.className, "is-signature-open");
+  assert.match(result.accessibleLabel, /\nEmpfänger: kunde@example.de$/);
+});
+
+test("unsent documents never claim a recipient even if stale recipient metadata exists", () => {
+  assert.equal(getCustomerEmailStatus({ ...baseStatus, customer_email_recipients: ["kunde@example.de"] }).accessibleLabel, "Noch nicht an Kunden gesendet");
 });

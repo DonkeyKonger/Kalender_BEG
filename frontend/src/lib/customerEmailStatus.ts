@@ -1,5 +1,6 @@
 export type CustomerEmailStatusItem = {
   customer_email_sent_at: string | null;
+  customer_email_recipients?: string[];
   customer_email_signature_present: boolean | null;
   customer_signed_at: string | null;
   customer_signature_name?: string | null;
@@ -29,10 +30,14 @@ export function getCustomerEmailStatus(
     item.customer_signed_at || item.customer_signature_name || item.is_locked_for_worker,
   ) || item.customer_email_signature_present === true;
   const sentAt = formatCustomerEmailSentDate(item.customer_email_sent_at);
+  const recipients = (item.customer_email_recipients ?? []).map(email => email.trim()).filter(Boolean);
+  const recipientHint = recipients.length > 0
+    ? `\nEmpfänger: ${recipients.join(", ")}`
+    : "\nEmpfänger nicht hinterlegt";
   if (signaturePresent) {
     const label = `An Kunden gesendet - Unterschrift erhalten · ${sentAt}`;
     return {
-      accessibleLabel: label,
+      accessibleLabel: label + recipientHint,
       className: "is-complete",
       isSent: true,
       label,
@@ -41,7 +46,7 @@ export function getCustomerEmailStatus(
 
   const label = `An Kunden gesendet · Unterschrift fehlt · ${sentAt}`;
   return {
-    accessibleLabel: label,
+    accessibleLabel: label + recipientHint,
     className: "is-signature-open",
     isSent: true,
     label,

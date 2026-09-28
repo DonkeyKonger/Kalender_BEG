@@ -2008,6 +2008,7 @@ def test_site_extra_work_tickets_include_customer_email_status():
 
     assert read_ticket.customer_email_sent_at is not None
     assert read_ticket.customer_email_signature_present is True
+    assert read_ticket.customer_email_recipients == ["kunde@example.de"]
 
 
 def test_list_site_tickets_orders_newest_first_before_pagination_and_ignores_mutable_fields():

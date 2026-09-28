@@ -30587,7 +30587,8 @@ body.mobile-modal-scroll-locked {
   transform: translateY(-2px);
   transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
   visibility: hidden;
-  white-space: normal;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 .project-extra-work-delivery-status:hover .project-extra-work-delivery-tooltip,

@@ -66,6 +66,7 @@ from app.services.project_folder_count_cache import invalidate_site_counts
 from app.services.project_storage_service import ProjectStorageService
 from app.services.measurement_service import format_site_signature_location
 from app.services.audit_service import AuditService
+from app.services.customer_email_status import CustomerEmailStatus, audit_email_recipients
 from app.services.project_record_status import validate_extra_work_status_promotion
 
 EXTRA_WORK_SUBMITTABLE_STATUSES = {"draft"}
@@ -86,8 +87,6 @@ EXTRA_WORK_CUSTOMER_SIGNATURE_TYPES = {
     EXTRA_WORK_APPROVAL_KIND: "approval_customer",
 }
 LOGGER = logging.getLogger(__name__)
-
-CustomerEmailStatus = tuple[datetime, bool | None]
 
 
 class ExtraWorkService:
@@ -1374,6 +1373,7 @@ class ExtraWorkService:
             ]
         if customer_email_status is not None:
             result.customer_email_sent_at = customer_email_status[0]
+            result.customer_email_recipients = customer_email_status[2]
             result.customer_email_signature_present = (
                 customer_email_status[1]
                 if customer_email_status[1] is not None
@@ -1432,6 +1432,7 @@ class ExtraWorkService:
             statuses[log.entity_id] = (
                 log.created_at,
                 signature_present if isinstance(signature_present, bool) else None,
+                audit_email_recipients(payload),
             )
         return statuses
 
