@@ -94,6 +94,10 @@ class DashboardService:
     def _staffing_days(self, rows: list[MatrixRow], today: date) -> list[dict]:
         """Eight calendar days; availability must not depend on visible matrix rows."""
         end = today + timedelta(days=7)
+        # External staff remain available only after recent calendar activity.
+        # Use the same seven-day window (today plus six previous days) for the
+        # whole forecast, not a window moving with each future column.
+        recent_start = today - timedelta(days=6)
         manager_ids = select(Site.project_manager_person_id).where(
             Site.project_manager_person_id.is_not(None)
         )
@@ -111,12 +115,20 @@ class DashboardService:
         # Query all assignments/absences, including people with no recent planning
         # and assignments on sites omitted from the matrix.
         assignments = list(self.db.scalars(select(Assignment).where(
-            Assignment.start_date <= end, Assignment.end_date >= today,
+            Assignment.start_date <= end, Assignment.end_date >= recent_start,
         )))
         absences = list(self.db.scalars(select(Absence).where(
             Absence.status == AbsenceStatus.ACTIVE,
-            Absence.start_date <= end, Absence.end_date >= today,
+            Absence.start_date <= end, Absence.end_date >= recent_start,
         )))
+        recent_person_ids = {
+            entry.person_id for entry in [*assignments, *absences]
+            if entry.start_date <= today and entry.end_date >= recent_start
+        }
+        workers = [
+            worker for worker in workers
+            if worker.person_type == PersonType.INTERNAL or worker.id in recent_person_ids
+        ]
         needs = self._open_staffing_needs(rows, today, end)
         holidays = lower_saxony_public_holidays(today, end)
         result = []

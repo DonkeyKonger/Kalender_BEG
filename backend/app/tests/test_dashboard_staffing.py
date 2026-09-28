@@ -78,6 +78,9 @@ def test_only_active_installers_including_external_are_available(db):
     internal = worker(db, "Internal")
     external = worker(db, "External", person_type=PersonType.EXTERNAL)
     temp = worker(db, "Temp", person_type=PersonType.EXTERNAL_TEMP)
+    for person in [external, temp]:
+        db.add(Absence(person_id=person.id, absence_type=AbsenceType.OTHER,
+                       start_date=date(2026, 9, 25), end_date=date(2026, 9, 25)))
     worker(db, "Inactive", is_active=False)
     worker(db, "Paused", employment_status="paused")
     worker(db, "Departed", employment_status="departed")
@@ -114,3 +117,49 @@ def test_overview_returns_only_orange_unstaffed_needs_and_all_free_people(db):
     assert len(days[0]["freeWorkers"]) == 12  # Presentation, not the API, limits the preview.
     assert len(days[3]["freeWorkers"]) == 11
     assert days[-1]["date"] == "2026-10-05"
+
+
+@pytest.mark.parametrize("person_type", [PersonType.EXTERNAL, PersonType.EXTERNAL_TEMP])
+@pytest.mark.parametrize("activity", ["assignment", *list(AbsenceType)])
+@pytest.mark.parametrize("offset, expected", [(-7, False), (-6, True), (-1, True), (0, True), (1, False)])
+def test_external_recent_activity_window_is_fixed_for_entire_forecast(db, person_type, activity, offset, expected):
+    today = date(2026, 9, 28)
+    person = worker(db, person_type=person_type)
+    activity_date = today + timedelta(days=offset)
+    if activity == "assignment":
+        site = Site(name="Previous site", status=SiteStatus.COMPLETED)
+        db.add(site)
+        db.flush()
+        db.add(Assignment(person_id=person.id, site_id=site.id,
+                          start_date=activity_date, end_date=activity_date))
+    else:
+        db.add(Absence(person_id=person.id, absence_type=activity,
+                       start_date=activity_date, end_date=activity_date))
+    db.flush()
+    days = DashboardService(db)._staffing_days([], today)
+    # None of the activity dates overlaps the final day, and tomorrow-only
+    # entries must not qualify external staff as recently present today.
+    assert (person.id in ids(days[-1])) is expected
+    assert (person.id in ids(days[0])) is (expected and offset != 0)
+
+
+def test_external_without_activity_or_with_cancelled_absence_is_not_available(db):
+    internal = worker(db, "Internal without planning")
+    worker(db, "External without planning", person_type=PersonType.EXTERNAL)
+    cancelled = worker(db, "Cancelled only", person_type=PersonType.EXTERNAL_TEMP)
+    db.add(Absence(person_id=cancelled.id, absence_type=AbsenceType.VACATION,
+                   status=AbsenceStatus.CANCELLED, start_date=date(2026, 9, 22), end_date=date(2026, 9, 27)))
+    db.flush()
+    days = DashboardService(db)._staffing_days([], date(2026, 9, 28))
+    assert all(ids(day) == ({internal.id} if day["isWorkday"] else set()) for day in days)
+    assert cancelled.is_active is True  # Display eligibility never changes employee records.
+
+
+def test_long_external_absence_overlapping_recent_window_qualifies_but_still_blocks_absent_days(db):
+    person = worker(db, person_type=PersonType.EXTERNAL)
+    db.add(Absence(person_id=person.id, absence_type=AbsenceType.SICK,
+                   start_date=date(2026, 8, 1), end_date=date(2026, 9, 29)))
+    db.flush()
+    days = DashboardService(db)._staffing_days([], date(2026, 9, 28))
+    assert not ids(days[0]) and not ids(days[1])
+    assert ids(days[2]) == {person.id}
