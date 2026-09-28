@@ -33,6 +33,16 @@ test('four workers have no overflow; empty working and weekend states differ',()
   assert.match(weekend,/Wochenende/);
   assert.doesNotMatch(weekend,/Keine freien Monteure/);
 });
+test('site needs show three bubbles and their exact overflow count while workers keep four',()=>{
+  const needs=Array.from({length:13},(_,i)=>({siteName:`Baustelle ${i}`,siteNumber:`80${i}`,managerLabel:'CE'}));
+  const html=result.exports.render([day(0,{needs})]);
+  assert.equal((html.match(/class="dashboard-staffing-site"/g)||[]).length,3);
+  assert.match(html,/\+10 mehr/);
+  assert.match(html,/aria-haspopup="dialog"/);
+  assert.doesNotMatch(result.exports.render([day(0,{needs:needs.slice(0,3)})]),/dashboard-staffing-more/);
+  assert.match(result.exports.render([day(0,{needs:needs.slice(0,4)})]),/\+1 mehr/);
+  assert.equal(needs.length,13);
+});
 test('renders all eight dates and needs independently from worker availability',()=>{
   const days = [1,2,5,6,7,8,9,12].map(i=>day(0,{date:`2026-10-${String(i).padStart(2,'0')}`}));
   days[0].needs=[{siteName:'Baustelle & Test',siteNumber:'8007',managerLabel:'CE'}];

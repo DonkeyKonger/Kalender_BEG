@@ -24192,7 +24192,8 @@ body.mobile-modal-scroll-locked {
   color: #62758e;
   font-weight: 700;
 }
-.dashboard-staffing-needs-list { overflow: auto; min-height: 0; }
+.dashboard-staffing-needs-list { min-height: 0; }
+.dashboard-staffing-needs > .dashboard-staffing-more { align-self: flex-start; }
 .dashboard-staffing-site {
   display: grid;
   gap: 2px;
@@ -24255,6 +24256,7 @@ body.mobile-modal-scroll-locked {
   font-size: 0.76rem;
 }
 .dashboard-staffing-popover > strong { margin-bottom: 8px; }
+.dashboard-staffing-popover .dashboard-staffing-site strong { white-space: normal; overflow-wrap: anywhere; }
 .dashboard-staffing-popover-list { overflow-y: auto; max-height: 300px; min-height: 0; }
 .dashboard-staffing-person { display: flex; justify-content: space-between; gap: 8px; padding: 5px; border-bottom: 1px solid #edf1f6; }
 .dashboard-staffing-conflicts { border-top: 1px solid #dedbe3; }

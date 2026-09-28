@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { DashboardStaffingDay } from "../lib/api";
 
-const MAX_VISIBLE_WORKERS = 4;
+const MAX_VISIBLE_ITEMS = 4;
+const MAX_VISIBLE_SITES = 3;
 const dayFormatter = new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
 
 export function DashboardStaffingOverview({ days, today }: { days: DashboardStaffingDay[]; today: string }) {
@@ -14,20 +15,25 @@ export function DashboardStaffingOverview({ days, today }: { days: DashboardStaf
           <div className="dashboard-staffing-needs">
             <h4>Baustellenbedarf <span>{day.needs.length}</span></h4>
             <div className="dashboard-staffing-needs-list">
-              {day.needs.map((need, index) => (
-                <div className="dashboard-staffing-site" key={`${need.siteNumber}:${need.siteName}:${index}`} title={`${need.siteNumber ?? ""} · ${need.siteName} · ${need.managerLabel}`}>
-                  <strong>{need.siteName}</strong>
-                  <span>{[need.siteNumber, need.managerLabel].filter(Boolean).join(" · ")}</span>
-                </div>
-              ))}
+              {day.needs.slice(0, MAX_VISIBLE_SITES).map((need, index) => <SiteBubble need={need} key={`${need.siteNumber}:${need.siteName}:${index}`} />)}
               {!day.needs.length && <p className="dashboard-staffing-empty">Kein offener Bedarf</p>}
             </div>
+            <StaffingOverflow id={`dashboard-site-needs-${day.date}`} date={day.date} count={day.needs.length} limit={MAX_VISIBLE_SITES} label="Baustellenbedarf">
+              {day.needs.map((need, index) => <SiteBubble need={need} key={`${need.siteNumber}:${need.siteName}:${index}`} />)}
+            </StaffingOverflow>
           </div>
           <FreeWorkers day={day} />
         </section>
       ))}
     </div>
   );
+}
+
+function SiteBubble({ need }: { need: DashboardStaffingDay["needs"][number] }) {
+  return <div className="dashboard-staffing-site" title={`${need.siteNumber ?? ""} · ${need.siteName} · ${need.managerLabel}`}>
+    <strong>{need.siteName}</strong>
+    <span>{[need.siteNumber, need.managerLabel].filter(Boolean).join(" · ")}</span>
+  </div>;
 }
 
 function WorkerBubble({ person }: { person: DashboardStaffingDay["freeWorkers"][number] }) {
@@ -37,12 +43,26 @@ function WorkerBubble({ person }: { person: DashboardStaffingDay["freeWorkers"][
 }
 
 function FreeWorkers({ day }: { day: DashboardStaffingDay }) {
+  return <div className="dashboard-staffing-free">
+    <h4>Freie Monteure {day.isWorkday && <span>{day.freeWorkers.length}</span>}</h4>
+    {day.freeWorkers.slice(0, MAX_VISIBLE_ITEMS).map(person => <WorkerBubble key={person.id} person={person} />)}
+    {!day.freeWorkers.length && <p className="dashboard-staffing-empty">{day.isWorkday ? "Keine freien Monteure" : day.nonWorkdayLabel}</p>}
+    <StaffingOverflow id={`dashboard-free-workers-${day.date}`} date={day.date} count={day.freeWorkers.length} label="Freie Monteure">
+      {day.freeWorkers.map(person => <div className="dashboard-staffing-person" key={person.id}>
+        <span>{person.display_name}</span>{person.isExternal && <small>extern</small>}
+      </div>)}
+    </StaffingOverflow>
+  </div>;
+}
+
+function StaffingOverflow({ id: popupId, date, count, label, children, limit = MAX_VISIBLE_ITEMS }: {
+  id: string; date: string; count: number; label: string; children: ReactNode; limit?: number;
+}) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
-  const popupId = `dashboard-free-workers-${day.date}`;
   const cancelClose = () => { if (closeTimer.current) clearTimeout(closeTimer.current); };
   const scheduleClose = () => { cancelClose(); closeTimer.current = setTimeout(() => setAnchor(null), 200); };
   const open = () => { cancelClose(); setAnchor(triggerRef.current?.getBoundingClientRect() ?? null); };
@@ -77,26 +97,22 @@ function FreeWorkers({ day }: { day: DashboardStaffingDay }) {
     };
   }, [anchor]);
 
-  return <div className="dashboard-staffing-free">
-    <h4>Freie Monteure {day.isWorkday && <span>{day.freeWorkers.length}</span>}</h4>
-    {day.freeWorkers.slice(0, MAX_VISIBLE_WORKERS).map(person => <WorkerBubble key={person.id} person={person} />)}
-    {!day.freeWorkers.length && <p className="dashboard-staffing-empty">{day.isWorkday ? "Keine freien Monteure" : day.nonWorkdayLabel}</p>}
-    {day.freeWorkers.length > MAX_VISIBLE_WORKERS && <button
+  if (count <= limit) return null;
+  return <>
+    <button
       type="button" ref={triggerRef} className="dashboard-staffing-more"
       aria-expanded={!!anchor} aria-controls={anchor ? popupId : undefined} aria-haspopup="dialog"
       onMouseEnter={open} onMouseLeave={scheduleClose} onFocus={open} onBlur={scheduleClose} onClick={open}
-    >+{day.freeWorkers.length - MAX_VISIBLE_WORKERS} mehr</button>}
+    >+{count - limit} mehr</button>
     {anchor && createPortal(<div
-      ref={popupRef} id={popupId} role="dialog" aria-label={`Freie Monteure am ${dayFormatter.format(new Date(`${day.date}T12:00:00`))}`}
+      ref={popupRef} id={popupId} role="dialog" aria-label={`${label} am ${dayFormatter.format(new Date(`${date}T12:00:00`))}`}
       className="dashboard-staffing-popover" style={position}
       onMouseEnter={cancelClose} onMouseLeave={scheduleClose}
     >
-      <strong>{day.freeWorkers.length} freie Monteure · {dayFormatter.format(new Date(`${day.date}T12:00:00`))}</strong>
+      <strong>{label}: {count} · {dayFormatter.format(new Date(`${date}T12:00:00`))}</strong>
       <div className="dashboard-staffing-popover-list" tabIndex={0} onFocus={cancelClose} onBlur={scheduleClose}>
-        {day.freeWorkers.map(person => <div className="dashboard-staffing-person" key={person.id}>
-          <span>{person.display_name}</span>{person.isExternal && <small>extern</small>}
-        </div>)}
+        {children}
       </div>
     </div>, document.body)}
-  </div>;
+  </>;
 }
