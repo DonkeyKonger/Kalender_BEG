@@ -612,13 +612,15 @@ button:disabled {
   }
 
   .sidebar-logout-button {
+    visibility: hidden;
+    opacity: 0;
     justify-content: flex-start;
     width: 224px;
     min-height: 36px;
     clip-path: inset(0 172px 0 0);
     contain: layout paint;
     overflow: hidden;
-    pointer-events: auto;
+    pointer-events: none;
     padding: 8px 10px;
   }
 
@@ -636,6 +638,9 @@ button:disabled {
 
   .sidebar.is-pointer-expanded .sidebar-logout-button,
   .sidebar.is-keyboard-expanded .sidebar-logout-button {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
     clip-path: inset(0 0 0 0);
   }
 
