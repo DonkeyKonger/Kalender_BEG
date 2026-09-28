@@ -144,7 +144,12 @@ class DashboardService:
             worker for worker in workers
             if worker.person_type == PersonType.INTERNAL or worker.id in recent_person_ids
         ]
-        four_day_worker_ids = self._four_day_worker_ids({worker.id for worker in workers}, today)
+        friday_unavailable_ids = self._four_day_worker_ids(
+            {worker.id for worker in workers if worker.person_type == PersonType.INTERNAL}, today,
+        )
+        friday_unavailable_ids.update(self._external_friday_off_ids(
+            {worker.id for worker in workers if worker.person_type != PersonType.INTERNAL}, today,
+        ))
         needs = self._open_staffing_needs(rows, today, end)
         holidays = lower_saxony_public_holidays(today, end)
         result = []
@@ -155,7 +160,7 @@ class DashboardService:
                 if entry.start_date <= day <= entry.end_date
             }
             if day.weekday() == 4:
-                unavailable.update(four_day_worker_ids)
+                unavailable.update(friday_unavailable_ids)
             result.append({
                 "date": day.isoformat(),
                 "isWorkday": is_workday,
@@ -195,6 +200,36 @@ class DashboardService:
         return {
             person_id for person_id, work_dates in work_dates_by_person.items()
             if work_dates == expected_dates
+        }
+
+    def _external_friday_off_ids(self, person_ids: set[int], today: date) -> set[int]:
+        """External staff use planning, not payroll: some Mon–Thu planning in
+        each of the last three completed weeks, and no Friday in those weeks.
+        Missing entire weeks are not evidence of a regular Friday off.
+        """
+        if not person_ids:
+            return set()
+        current_monday = today - timedelta(days=today.weekday())
+        history_start = current_monday - timedelta(weeks=3)
+        assignments = self.db.scalars(select(Assignment).where(
+            Assignment.person_id.in_(person_ids),
+            Assignment.start_date < current_monday,
+            Assignment.end_date >= history_start,
+        ))
+        planned_weeks: dict[int, set[int]] = {}
+        friday_planned_ids: set[int] = set()
+        for assignment in assignments:
+            day = max(assignment.start_date, history_start)
+            end = min(assignment.end_date, current_monday - timedelta(days=1))
+            while day <= end:
+                if day.weekday() == 4:
+                    friday_planned_ids.add(assignment.person_id)
+                elif day.weekday() < 4:
+                    planned_weeks.setdefault(assignment.person_id, set()).add((day - history_start).days // 7)
+                day += timedelta(days=1)
+        return {
+            person_id for person_id, weeks in planned_weeks.items()
+            if len(weeks) == 3 and person_id not in friday_planned_ids
         }
 
     def _assigned_sites_for_day(self, matrix: MatrixResponse, target_date: date) -> list[dict]:

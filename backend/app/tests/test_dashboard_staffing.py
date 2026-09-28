@@ -110,7 +110,7 @@ def test_lookback_ignores_older_and_current_week_but_updates_after_new_week(db):
     assert service._four_day_worker_ids(set(), today) == set()
 
 
-def test_four_day_rule_applies_to_recent_externals_without_changing_plans_or_absences(db):
+def test_booked_external_friday_remains_unavailable_without_changing_plans_or_absences(db):
     today = date(2026, 9, 28)
     person = worker(db, person_type=PersonType.EXTERNAL_TEMP)
     record_four_day_weeks(db, person, today)
@@ -126,6 +126,94 @@ def test_four_day_rule_applies_to_recent_externals_without_changing_plans_or_abs
     assert person.id in ids(days[0]) and person.id not in ids(days[4])
     assert db.get(Assignment, plan.id) is plan
     assert person.id in ids(days[5])
+
+
+def record_external_planning(db, person, today, *, weekdays=(2,), weeks=(1, 2, 3)):
+    monday = today - timedelta(days=today.weekday())
+    site = Site(name="Historical planning", status=SiteStatus.COMPLETED)
+    db.add(site)
+    db.flush()
+    for week in weeks:
+        for weekday in weekdays:
+            day = monday - timedelta(weeks=week) + timedelta(days=weekday)
+            db.add(Assignment(person_id=person.id, site_id=site.id, start_date=day, end_date=day))
+    db.flush()
+    return site
+
+
+@pytest.mark.parametrize("person_type", [PersonType.EXTERNAL, PersonType.EXTERNAL_TEMP])
+@pytest.mark.parametrize("weekdays", [(2,), (1, 3), (0, 1, 2, 3)])
+def test_external_friday_rule_accepts_less_than_four_planned_days_each_week(db, person_type, weekdays):
+    today = date(2026, 9, 28)
+    person = worker(db, person_type=person_type)
+    record_external_planning(db, person, today, weekdays=weekdays)
+    days = DashboardService(db)._staffing_days([], today)
+    for day in days:
+        assert (person.id in ids(day)) == (date.fromisoformat(day["date"]).weekday() != 4)
+
+
+@pytest.mark.parametrize("week", [1, 2, 3])
+def test_any_external_friday_assignment_including_spanning_ranges_prevents_exclusion(db, week):
+    today = date(2026, 9, 28)
+    person = worker(db, person_type=PersonType.EXTERNAL)
+    site = record_external_planning(db, person, today)
+    thursday = today - timedelta(weeks=week) + timedelta(days=3)
+    db.add(Assignment(person_id=person.id, site_id=site.id, start_date=thursday, end_date=thursday + timedelta(days=2)))
+    db.flush()
+    assert person.id in ids(DashboardService(db)._staffing_days([], today)[4])
+
+
+@pytest.mark.parametrize("weeks", [(1,), (1, 2), (1, 3)])
+def test_external_missing_weeks_do_not_count_as_friday_off(db, weeks):
+    today = date(2026, 9, 28)
+    person = worker(db, person_type=PersonType.EXTERNAL_TEMP)
+    record_external_planning(db, person, today, weeks=weeks)
+    assert person.id in ids(DashboardService(db)._staffing_days([], today)[4])
+
+
+def test_internal_and_external_rules_use_separate_sources(db):
+    today = date(2026, 9, 28)
+    internal = worker(db, "Internal")
+    external = worker(db, "External", person_type=PersonType.EXTERNAL)
+    record_external_planning(db, internal, today)
+    record_four_day_weeks(db, external, today)
+    # Recent activity qualifies the external, but absence is not planning history.
+    db.add(Absence(person_id=external.id, absence_type=AbsenceType.OTHER,
+                   start_date=today - timedelta(days=1), end_date=today - timedelta(days=1)))
+    db.flush()
+    assert ids(DashboardService(db)._staffing_days([], today)[4]) == {internal.id, external.id}
+
+
+def test_external_payroll_friday_does_not_override_planning_pattern(db):
+    today = date(2026, 9, 28)
+    person = worker(db, person_type=PersonType.EXTERNAL)
+    record_external_planning(db, person, today)
+    db.add(WorkTimeEntry(person_id=person.id, work_date=date(2026, 9, 25), work_minutes=480))
+    db.flush()
+    assert person.id not in ids(DashboardService(db)._staffing_days([], today)[4])
+
+
+@pytest.mark.parametrize("today", [date(2026, 9, 28), date(2026, 10, 2), date(2027, 1, 4)])
+def test_external_lookback_uses_completed_weeks_and_ignores_older_fridays(db, today):
+    person = worker(db, person_type=PersonType.EXTERNAL)
+    site = record_external_planning(db, person, today)
+    monday = today - timedelta(days=today.weekday())
+    for friday in [monday - timedelta(days=24), monday + timedelta(days=4)]:
+        db.add(Assignment(person_id=person.id, site_id=site.id, start_date=friday, end_date=friday))
+    db.flush()
+    service = DashboardService(db)
+    assert service._external_friday_off_ids({person.id}, today) == {person.id}
+    assert service._external_friday_off_ids({person.id}, monday + timedelta(weeks=1)) == set()
+    assert service._external_friday_off_ids(set(), today) == set()
+
+
+def test_external_long_assignment_covering_all_weeks_includes_fridays(db):
+    today = date(2026, 9, 28)
+    person = worker(db, person_type=PersonType.EXTERNAL)
+    site = record_external_planning(db, person, today)
+    db.add(Assignment(person_id=person.id, site_id=site.id, start_date=date(2026, 8, 1), end_date=today))
+    db.flush()
+    assert DashboardService(db)._external_friday_off_ids({person.id}, today) == set()
 
 
 def test_exactly_eight_weekdays_including_today_across_year_boundary(db):
