@@ -34,7 +34,7 @@ test('middle mouse down still toggles directly without default browser action', 
 test('orange marking reduces only its own fill and border saturation by thirty percent', async () => {
   const css = await readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
   const rule = css.match(/\.matrix-cell\.mark-orange\s*\{([^}]+)\}/)[1];
-  const colors = [...rule.matchAll(/hsl\(([\d.]+) ([\d.]+)% ([\d.]+)%(?: \/ (\d+)%)?\)/g)];
+  const colors = [...rule.matchAll(/hsl\(([\d.]+) ([\d.]+)% ([\d.]+)%(?: \/ ([\d.]+)%)?\)/g)];
   assert.equal(colors.length, 2);
   const originals = [[255, 242, 214], [245, 158, 11]];
   colors.forEach((color, i) => {
@@ -45,6 +45,7 @@ test('orange marking reduces only its own fill and border saturation by thirty p
     assert.ok(Math.abs(Number(color[2]) - saturation * 70) < 0.01);
     assert.ok(Math.abs(Number(color[3]) - lightness * 100) < 0.01);
   });
-  assert.equal(colors[1][4], '32');
-  assert.doesNotMatch(rule, /filter\s*:/); // Never desaturate nested installer bubbles or text.
+  assert.equal(Number(colors[0][4]), 100 * 0.6);
+  assert.equal(Number(colors[1][4]), 32 * 0.6);
+  assert.doesNotMatch(rule, /(?:filter|opacity)\s*:/); // Keep nested installer bubbles and text fully opaque.
 });
