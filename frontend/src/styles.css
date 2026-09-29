@@ -29898,7 +29898,7 @@ body.mobile-modal-scroll-locked {
   border: 0;
   border-bottom: 1px solid var(--pf-border);
   border-radius: 0;
-  background: var(--pf-surface);
+  background: #edf2f7;
   gap: 0;
   padding: 0 18px;
 }
@@ -29924,7 +29924,7 @@ body.mobile-modal-scroll-locked {
 
 .site-detail-page.is-project-file-workspace .project-record-tabs button.is-active {
   border-bottom-color: var(--pf-active);
-  background: #eff6ff;
+  background: #ffffff;
   color: #1e40af;
   box-shadow: none;
 }
@@ -32461,7 +32461,7 @@ body.mobile-modal-scroll-locked {
   border: 0;
   border-bottom: 1px solid var(--figma-border);
   border-radius: 0;
-  background: var(--figma-surface);
+  background: #edf2f7;
   gap: 0;
   padding: 0 18px;
 }
@@ -32484,7 +32484,7 @@ body.mobile-modal-scroll-locked {
 
 .site-detail-page.is-measurement-review-workspace .project-record-tabs button.is-active {
   border-bottom-color: var(--figma-active);
-  background: #eff6ff;
+  background: #ffffff;
   color: #1e40af;
   box-shadow: none;
 }

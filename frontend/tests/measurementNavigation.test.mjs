@@ -29,6 +29,20 @@ test("measurement navigation prioritizes review without removing the other secti
   ]);
 });
 
+test("main navigation has a continuous blue-gray strip and white active tabs in every workspace", () => {
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  for (const workspace of ["is-project-file-workspace", "is-measurement-review-workspace"]) {
+    const selector = `.site-detail-page.${workspace} .project-record-tabs`;
+    const strip = css.slice(css.indexOf(`${selector} {`)).split("}")[0];
+    const active = css.slice(css.indexOf(`${selector} button.is-active {`)).split("}")[0];
+    assert.match(strip, /background: #edf2f7;/);
+    assert.match(strip, /gap: 0;/);
+    assert.match(strip, /padding: 0 18px;/);
+    assert.match(active, /background: #ffffff;/);
+    assert.match(active, /border-bottom-color: var\(--(?:pf|figma)-active\);/);
+  }
+});
+
 test("initial and default URL navigation open review while explicit deep links are retained", () => {
   assert.match(source, /\[measurementSubtab, setMeasurementSubtab\] = useState<MeasurementSubtab>\("review"\)/);
   assert.match(source, /setMeasurementSubtab\(\s*measurementSubtabs.some\(\(tab\) => tab.key === requestedMeasurementSubtab\)\s*\? requestedMeasurementSubtab as MeasurementSubtab\s*: "review"/);
