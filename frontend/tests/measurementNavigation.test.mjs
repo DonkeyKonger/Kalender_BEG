@@ -12,11 +12,11 @@ test("project tabs follow the requested order and labels without changing naviga
   ]);
 });
 
-test("all main tabs retain the compact width in overview and other workspaces", () => {
+test("main tabs use their label width without artificial widening in any workspace", () => {
   const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.site-detail-page\.is-project-file-workspace \.project-record-tabs \{\s*\/\*[^]*?\*\/\s*--project-record-tab-width: 136px;/);
-  assert.match(css, /\.site-detail-page\.is-project-file-workspace \.project-record-tabs button \{\s*box-sizing: border-box;\s*flex: 0 0 var\(--project-record-tab-width\);\s*width: var\(--project-record-tab-width\);/);
-  assert.match(css, /\.site-detail-page\.is-project-overview \.project-record-tabs button \{\s*flex: 0 0 var\(--project-record-tab-width\);/);
+  assert.doesNotMatch(css, /--project-record-tab-width/);
+  assert.match(css, /\.site-detail-page\.is-project-file-workspace \.project-record-tabs button \{\s*box-sizing: border-box;\s*flex: 0 0 auto;\s*width: auto;/);
+  assert.match(css, /\.site-detail-page\.is-project-overview \.project-record-tabs button \{\s*flex: 0 0 auto;/);
   // Only the navigation label is shortened, not the tools/material content.
   assert.match(source, /title="Werkzeuge & Material"/);
 });
