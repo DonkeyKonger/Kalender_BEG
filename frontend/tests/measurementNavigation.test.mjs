@@ -7,8 +7,8 @@ const source = readFileSync(new URL("../src/pages/SiteDetailPage.tsx", import.me
 test("project tabs follow the requested order and labels without changing navigation keys", () => {
   const config = source.slice(source.indexOf("const projectRecordTabs:"), source.indexOf("const timeEntryStatusLabels:"));
   assert.deepEqual([...config.matchAll(/key: "([^"]+)", label: "([^"]+)"/g)].map(match => [match[1], match[2]]), [
-    ["overview", "Übersicht"], ["folders", "Dateien"], ["measurement", "Aufmaß"],
-    ["extra-work", "Zusatzaufträge"], ["assembly-times", "Auswertung"], ["tools-material", "Werkzeuge"],
+    ["overview", "Übersicht"], ["folders", "Projektdateien"], ["measurement", "Aufmaß"],
+    ["extra-work", "Zusatzaufträge"], ["assembly-times", "Projektauswertung"], ["tools-material", "Werkzeuge"],
   ]);
 });
 
