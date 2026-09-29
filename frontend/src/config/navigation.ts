@@ -4,7 +4,6 @@ import {
   CalendarDays,
   CalendarX,
   Clock3,
-  Download,
   FolderKanban,
   Home,
   MapPinned,
@@ -71,13 +70,6 @@ export const navigationItems: NavigationItem[] = [
     icon: Users,
     roles: ["admin", "project_manager", "office"],
     officePermission: "employees",
-  },
-  {
-    label: "Export",
-    path: "/exports",
-    icon: Download,
-    roles: ["admin", "project_manager", "office"],
-    officePermission: "export",
   },
   {
     label: "Sonstige",

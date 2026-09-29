@@ -16,7 +16,7 @@ def workbook_parts(content):
         return {name: workbook.read(name) for name in workbook.namelist()}
 
 
-@pytest.mark.parametrize("kind", ["monthly", "weekly_worker", "weekly_all_workers"])
+@pytest.mark.parametrize("kind", ["weekly_worker", "weekly_all_workers"])
 def test_export_batches_gps_queries_without_changing_workbook(kind, monkeypatch):
     with database() as db:
         admin, worker = payroll_users(db)
@@ -31,8 +31,6 @@ def test_export_batches_gps_queries_without_changing_workbook(kind, monkeypatch)
         db.commit()
         service = TimeEntryXlsxExportService(db)
         def export():
-            if kind == "monthly":
-                return service.monthly_export(year=2026, month=8, current_user=admin)
             if kind == "weekly_worker":
                 return service.weekly_worker_export(person_id=worker.id, week_start=start, current_user=admin)
             return service.weekly_all_workers_export(week_start=start, current_user=admin)

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.enums import PersonType, UserRole
 from app.models.person import Person
 from app.models.work_time_entry import WorkTimeEntry
-from app.services.pdf_export_service import SimplePdf
+from app.services.simple_pdf import SimplePdf
 
 GERMAN_WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 

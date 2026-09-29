@@ -1867,24 +1867,6 @@ export const api = {
     return request<void>(`/absences/${absenceId}`, { method: "DELETE" });
   },
 
-  async dailyPlanPdf(planDate: string): Promise<Blob> {
-    const search = new URLSearchParams({ date: planDate });
-    return requestBlob(`/exports/daily-plan?${search.toString()}`);
-  },
-
-  async weeklyPlanPdf(weekStart: string): Promise<Blob> {
-    const search = new URLSearchParams({ week_start: weekStart });
-    return requestBlob(`/exports/weekly-plan?${search.toString()}`);
-  },
-
-  async monthlyTimeEntriesXlsx(params: { year: number; month: number }): Promise<Blob> {
-    const search = new URLSearchParams({
-      year: String(params.year),
-      month: String(params.month),
-    });
-    return requestBlob(`/exports/time-entries/monthly-xlsx?${search.toString()}`);
-  },
-
   async payrollMonthlyWorkersXlsx(params: { year: number; month: number; version?: number }): Promise<Blob> {
     const search = new URLSearchParams({
       year: String(params.year),

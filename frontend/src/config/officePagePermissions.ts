@@ -14,7 +14,6 @@ export const officePagePermissionOptions: OfficePagePermissionOption[] = [
   { key: "payroll", label: "Lohnprüfung" },
   { key: "customers", label: "Kunden" },
   { key: "employees", label: "Mitarbeiter" },
-  { key: "export", label: "Export" },
   { key: "miscellaneous", label: "Sonstige" },
 ];
 

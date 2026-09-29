@@ -1,11 +1,3 @@
-from datetime import date, datetime, timedelta
-
-from sqlalchemy.orm import Session
-
-from app.schemas.matrix import MatrixRow
-from app.services.matrix_service import MatrixService
-from app.services.person_display import calendar_short_code_from_values
-
 PAGE_WIDTH = 595
 PAGE_HEIGHT = 842
 MARGIN = 42
@@ -83,96 +75,6 @@ class SimplePdf:
             objects.append(b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream")
 
         return build_pdf(objects)
-
-
-class PdfExportService:
-    def __init__(self, db: Session) -> None:
-        self.matrix = MatrixService(db)
-
-    def daily_plan(self, plan_date: date) -> bytes:
-        matrix = self.matrix.get_matrix(
-            start=plan_date,
-            end=plan_date,
-            include_weekends=True,
-            include_closed=False,
-        )
-        pdf = SimplePdf()
-        pdf.add_heading(
-            f"Tagesplan - {format_date(plan_date)}",
-            f"Erstellt am {datetime.now().strftime('%d.%m.%Y %H:%M')}",
-        )
-
-        planned_rows = [row for row in matrix.rows if row.cells and row.cells[0].assignments]
-        if not planned_rows:
-            pdf.text("Keine Einsaetze fuer diesen Tag geplant.")
-            return pdf.render()
-
-        for row in planned_rows:
-            cell = row.cells[0]
-            pdf.text(site_title(row), bold=True)
-            pdf.text(f"Ort: {row.site.location or '-'}", indent=12)
-            pdf.text(f"PL: {project_manager_code(row)}", indent=12)
-            pdf.text("Personen: " + ", ".join(item.person.display_name for item in cell.assignments), indent=12)
-            notes = [item.note for item in cell.assignments if item.note]
-            if row.site.info:
-                pdf.text(f"Info: {row.site.info}", indent=12)
-            if notes:
-                pdf.text("Notizen: " + " | ".join(notes), indent=12)
-            pdf.space(8)
-        return pdf.render()
-
-    def weekly_plan(self, week_start: date) -> bytes:
-        start = week_start - timedelta(days=week_start.weekday())
-        end = start + timedelta(days=6)
-        matrix = self.matrix.get_matrix(
-            start=start,
-            end=end,
-            include_weekends=True,
-            include_closed=False,
-        )
-        pdf = SimplePdf()
-        pdf.add_heading(
-            f"Wochenplan - KW {start.isocalendar().week}",
-            f"{format_date(start)} bis {format_date(end)} | Erstellt am {datetime.now().strftime('%d.%m.%Y %H:%M')}",
-        )
-
-        planned_rows = [row for row in matrix.rows if any(cell.assignments for cell in row.cells)]
-        if not planned_rows:
-            pdf.text("Keine Einsaetze fuer diese Woche geplant.")
-            return pdf.render()
-
-        for row in planned_rows:
-            pdf.text(site_title(row), bold=True)
-            pdf.text(f"Ort: {row.site.location or '-'} | PL: {project_manager_code(row)}", indent=12)
-            for day, cell in zip(matrix.days, row.cells, strict=True):
-                if not cell.assignments:
-                    continue
-                names = ", ".join(item.person.display_name for item in cell.assignments)
-                pdf.text(f"{weekday_label(day.date)} {format_date(day.date)}: {names}", indent=12)
-            if row.site.info:
-                pdf.text(f"Info: {row.site.info}", indent=12)
-            pdf.space(8)
-        return pdf.render()
-
-
-def site_title(row: MatrixRow) -> str:
-    number = f"{row.site.site_number} - " if row.site.site_number else ""
-    return f"{number}{row.site.name}"
-
-
-def project_manager_code(row: MatrixRow) -> str:
-    manager = row.site.project_manager
-    if manager is None:
-        return "-"
-    return calendar_short_code_from_values(display_name=manager.display_name, short_code=manager.short_code)
-
-
-def format_date(value: date) -> str:
-    return value.strftime("%d.%m.%Y")
-
-
-def weekday_label(value: date) -> str:
-    return ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][value.weekday()]
 
 
 def wrap_text(value: str, max_chars: int) -> list[str]:

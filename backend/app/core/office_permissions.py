@@ -11,7 +11,6 @@ OFFICE_PAGE_MAP = "map"
 OFFICE_PAGE_PAYROLL = "payroll"
 OFFICE_PAGE_CUSTOMERS = "customers"
 OFFICE_PAGE_EMPLOYEES = "employees"
-OFFICE_PAGE_EXPORT = "export"
 OFFICE_PAGE_MISCELLANEOUS = "miscellaneous"
 
 OFFICE_PAGE_PERMISSIONS = (
@@ -23,7 +22,6 @@ OFFICE_PAGE_PERMISSIONS = (
     OFFICE_PAGE_PAYROLL,
     OFFICE_PAGE_CUSTOMERS,
     OFFICE_PAGE_EMPLOYEES,
-    OFFICE_PAGE_EXPORT,
     OFFICE_PAGE_MISCELLANEOUS,
 )
 OFFICE_PAGE_PERMISSION_SET = set(OFFICE_PAGE_PERMISSIONS)
@@ -34,14 +32,14 @@ DEFAULT_EXISTING_OFFICE_PAGE_PERMISSIONS = [
     OFFICE_PAGE_SITES,
     OFFICE_PAGE_MAP,
     OFFICE_PAGE_PAYROLL,
-    OFFICE_PAGE_EXPORT,
 ]
 
 
 def normalize_office_page_permissions(value: Iterable[str] | None) -> list[str]:
     if value is None:
         return []
-    requested = list(value)
+    # Ignore the retired Export permission on existing accounts and old clients.
+    requested = [permission for permission in value if permission != "export"]
     invalid = [permission for permission in requested if permission not in OFFICE_PAGE_PERMISSION_SET]
     if invalid:
         raise ValueError("Ungueltige Büro-Sichtrechte.")

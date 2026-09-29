@@ -9,7 +9,6 @@ import { AbsencesPage } from "./pages/AbsencesPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { CustomersPage } from "./pages/CustomersPage";
 import { DashboardPage } from "./pages/DashboardPage";
-import { ExportsPage } from "./pages/ExportsPage";
 import { LoginPage, PasswordChangePage } from "./pages/LoginPage";
 import { MobileTimeEntryPage } from "./pages/MobileTimeEntryPage";
 import {
@@ -92,9 +91,7 @@ export function App() {
           <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="absences" />}>
             <Route path="absences" element={<AbsencesPage />} />
           </Route>
-          <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="export" />}>
-            <Route path="exports" element={<ExportsPage />} />
-          </Route>
+          <Route path="exports" element={<Navigate to="/" replace />} />
           <Route element={<ProtectedRoute roles={["admin", "office"]} officePermission="miscellaneous" />}>
             <Route path="sonstige" element={<MiscellaneousPage />} />
           </Route>
