@@ -46,3 +46,14 @@ test('tablet descriptions show five fixed lines with slightly wider columns',()=
  assert.match(css,/height: 6\.75em;\s*max-height: 6\.75em;/);
  assert.match(css,/height: calc\(6\.75em \+ 14px\)/);
 });
+test('tablet freezes all four header rows in a viewport-bounded scroller',()=>{
+ const page=readFileSync(new URL('../src/pages/MobileAssignmentDetailPage.tsx',import.meta.url),'utf8');
+ const table=page.slice(page.indexOf('function MobileMeasurementTable('));
+ const header=table.slice(table.indexOf('<thead>'),table.indexOf('</thead>'));
+ for(const label of ['Pos.-Nr.','Beschreibung','Einheit','Bauteil / Ort']) assert.ok(header.includes(label));
+ const css=readFileSync(new URL('../src/pages/MobileMeasurementTablet.css',import.meta.url),'utf8');
+ assert.match(css,/thead \{\s*position: sticky;\s*top: 0;\s*z-index: 10;/);
+ assert.match(css,/max-height: calc\(100dvh - var\(--measurement-table-top, 180px\) - 24px\);\s*overflow: auto;/);
+ assert.match(table,/observer\.disconnect\(\)/);
+ assert.match(table,/window\.removeEventListener\("resize", updateViewport\)/);
+});

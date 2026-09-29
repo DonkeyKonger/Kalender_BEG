@@ -37,3 +37,18 @@ test('clearing an existing quantity removes the entry without inserting zero',as
   const result=await exports.run('',[{id:7,area_or_comment:'EG',quantity}]);assert.deepEqual(result.calls,[['delete',7]]);
  }
 });
+test('decimal commas save numeric values and existing comma decimals are not mistaken for zero',async()=>{
+ for(const [input,expected] of [['2,5',2.5],['0,25',.25],['-12,75',-12.75],['2.5',2.5]]) {
+  const result=await exports.run(input);
+  assert.deepEqual(result.calls,[['create',{area_or_comment:'EG',quantity:expected}]]);
+  const unchanged=await exports.run(input,[{id:7,area_or_comment:'EG',quantity:input}]);
+  assert.deepEqual(unchanged.calls,[['cancel']]);
+ }
+});
+test('table formatting displays comma and dot decimals consistently',()=>{
+ const fn=source.match(/^function formatMeasurementNumber\([^]*?^}\n/m)[0];
+ const js=ts.transpileModule(`${fn}; exports.format=formatMeasurementNumber;`,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+ const result={};new Function('exports',js)(result);
+ for(const input of ['2,5','2.5',2.5]) assert.equal(result.format(input),'2,50');
+ assert.equal(result.format('-0,25'),'-0,25');
+});

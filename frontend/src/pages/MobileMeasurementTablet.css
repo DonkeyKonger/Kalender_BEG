@@ -1,14 +1,34 @@
 /* Keep the tablet controls in the same blue/white family as phone capture. */
-@media (min-width: 700px) {
+/* The component is selected by device size, including small tablets and split view. */
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view {
+    padding-bottom: 0;
+  }
   .app-shell.is-mobile-workspace .mobile-measurement-table-shell.is-touch-table {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     border: 1px solid #dce7f2;
     border-radius: 12px;
     background: #fff;
     box-shadow: none;
     scroll-padding-left: 156px;
     scrollbar-color: #bdccdd #f4f8fc;
+    max-height: calc(100dvh - var(--measurement-table-top, 180px) - 24px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    scroll-padding-top: var(--measurement-table-header-height, 230px);
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #f7faff;
+    box-shadow: 0 1px #cbdced;
   }
   .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table {
+    width: max-content;
+    min-width: max-content;
     border: 0;
     color: #27486e;
     font-size: 14px;
@@ -27,6 +47,9 @@
     line-height: 1.35;
   }
   .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-axis {
+    position: sticky;
+    left: 0;
+    z-index: 6;
     width: 156px;
     min-width: 156px;
     max-width: 156px;
@@ -61,6 +84,9 @@
     font-size: 14px;
   }
   .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-description-text {
+    display: block;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
     height: 6.75em;
     max-height: 6.75em;
     color: #526b88;
@@ -115,6 +141,15 @@
   .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-draft-field-description {
     height: calc(6.75em + 14px);
   }
+
+.app-shell.is-mobile-workspace .mobile-measurement-table-shell.is-touch-table .mobile-measurement-table-wrap {
+  display: block;
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
 }
 
 .app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-axis:has(.measurement-matrix-area-editor) {

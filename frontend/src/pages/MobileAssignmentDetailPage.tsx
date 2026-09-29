@@ -1,4 +1,5 @@
 import { MobileMeasurementAreaLabel } from "../components/MobileMeasurementAreaLabel";
+import { usesMeasurementTable } from "../lib/mobileMeasurementDevice";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -80,25 +81,20 @@ import { MobileFolderPhotoTile } from "../components/MobileFolderPhotoTile";
 
 const CACHE_KEY = "kb_mobile_assignments_cache_v1";
 
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return false;
-    }
-    return window.matchMedia(query).matches;
-  });
-
+function useMeasurementTableDevice(): boolean {
+  const readDevice = () => typeof window !== "undefined"
+    && usesMeasurementTable(window.screen.width, window.screen.height);
+  const [matches, setMatches] = useState(readDevice);
   useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return undefined;
-    }
-    const mediaQuery = window.matchMedia(query);
-    const handleChange = () => setMatches(mediaQuery.matches);
+    const handleChange = () => setMatches(readDevice());
     handleChange();
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, [query]);
-
+    window.addEventListener("resize", handleChange);
+    window.addEventListener("orientationchange", handleChange);
+    return () => {
+      window.removeEventListener("resize", handleChange);
+      window.removeEventListener("orientationchange", handleChange);
+    };
+  }, []);
   return matches;
 }
 
@@ -164,7 +160,6 @@ type PdfPinchState = {
   latestFocal: PdfFocalPoint | null;
 };
 
-const TABLET_INLINE_MEASUREMENT_QUERY = "(min-width: 700px) and (max-width: 1199px)";
 const EXTRA_WORK_WEEK_DAYS = [
   { key: "monday_hours", surcharge25Key: "monday_surcharge_25_hours", surcharge50Key: "monday_surcharge_50_hours", label: "Mo" },
   { key: "tuesday_hours", surcharge25Key: "tuesday_surcharge_25_hours", surcharge50Key: "tuesday_surcharge_50_hours", label: "Di" },
@@ -4458,7 +4453,7 @@ function MobileMeasurementTab({
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const inlineFreePositionDraftIdRef = useRef(-1);
   const photoLibraryInputRef = useRef<HTMLInputElement | null>(null);
-  const canUseInlineMeasurementTable = useMediaQuery(TABLET_INLINE_MEASUREMENT_QUERY);
+  const canUseInlineMeasurementTable = useMeasurementTableDevice();
   const viewMode: MeasurementViewMode = canUseInlineMeasurementTable ? "table" : "list";
   const isFreePositionDialogTopModal = useMobileModalStack(Boolean(
     selectedBatch && isBatchPositionOverviewOpen && isFreePositionFormOpen && canUseInlineMeasurementTable
@@ -6375,6 +6370,26 @@ function MobileMeasurementTable({
   const draftAreaInputRef = useRef<HTMLInputElement | null>(null);
   const areaSavingRef = useRef(false);
   const [areaError, setAreaError] = useState<string | null>(null);
+  const tableShellRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const shell = tableShellRef.current;
+    if (!shell) return;
+    const header = shell.querySelector("thead");
+    const updateViewport = () => {
+      shell.style.setProperty("--measurement-table-top", `${Math.max(0, shell.getBoundingClientRect().top)}px`);
+      shell.style.setProperty("--measurement-table-header-height", `${header?.getBoundingClientRect().height ?? 0}px`);
+    };
+    updateViewport();
+    const observer = new ResizeObserver(updateViewport);
+    if (shell.parentElement) observer.observe(shell.parentElement);
+    if (header) observer.observe(header);
+    window.addEventListener("resize", updateViewport);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateViewport);
+    };
+  }, []);
   const editableCells = useMemo(() => {
     const cells: Array<{ item: MobileMeasurementItem; area: string; mode: InlineMeasurementEditMode }> = [];
     areaRows.forEach((area) => {
@@ -6695,7 +6710,7 @@ function MobileMeasurementTable({
 
   return (
     <>
-      <div className="mobile-measurement-table-shell is-touch-table">
+      <div ref={tableShellRef} className="mobile-measurement-table-shell is-touch-table">
         <div className="mobile-measurement-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
           <table className={`measurement-table-view measurement-matrix-table mobile-measurement-table is-touch-table${isInlineEditingEnabled ? " is-inline-editing-enabled" : ""}`}>
           <thead>
@@ -6768,13 +6783,13 @@ function MobileMeasurementTable({
               ))}
               {canAddFromTable ? <th className="measurement-matrix-add-column-heading is-spacer" aria-hidden="true" /> : null}
             </tr>
-          </thead>
-          <tbody>
             <tr className="measurement-matrix-section-row">
               <th className="measurement-matrix-axis">Bauteil / Ort</th>
-              {displayItems.map((item) => <td className={getMeasurementMatrixCellClassName(item)} key={item.id} />)}
-              {canAddFromTable ? <td className="measurement-matrix-add-column-cell" /> : null}
+              {displayItems.map((item) => <th className={getMeasurementMatrixCellClassName(item)} key={item.id} />)}
+              {canAddFromTable ? <th className="measurement-matrix-add-column-cell" /> : null}
             </tr>
+          </thead>
+          <tbody>
             {areaRows.map((area) => (
               <Fragment key={area}>
                 <tr>
@@ -8376,7 +8391,7 @@ function updateMobileMeasurementItemsAfterInlineSave(
 }
 
 function getMeasurementEntryQuantity(entry: MeasurementEntry): number {
-  const quantity = typeof entry.quantity === "number" ? entry.quantity : Number(entry.quantity);
+  const quantity = typeof entry.quantity === "number" ? entry.quantity : Number((entry.quantity ?? "").trim().replace(",", "."));
   return Number.isFinite(quantity) ? quantity : 0;
 }
 
@@ -8492,7 +8507,7 @@ function formatMeasurementNumber(value: string | number | null): string {
   if (value === null || value === undefined || value === "") {
     return "-";
   }
-  const numeric = typeof value === "number" ? value : Number(value);
+  const numeric = typeof value === "number" ? value : Number(value.trim().replace(",", "."));
   if (!Number.isFinite(numeric)) {
     return String(value);
   }
