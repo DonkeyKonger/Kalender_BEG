@@ -29891,6 +29891,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .site-detail-page.is-project-file-workspace .project-record-tabs {
+  /* Rounded width of the former "Ausführungsstand" main tab. */
+  --project-record-tab-width: 157px;
   display: flex;
   width: 100%;
   border: 0;
@@ -29902,12 +29904,15 @@ body.mobile-modal-scroll-locked {
 }
 
 .site-detail-page.is-project-file-workspace .project-record-tabs button {
+  box-sizing: border-box;
+  flex: 0 0 var(--project-record-tab-width);
+  width: var(--project-record-tab-width);
   border-radius: 0;
   border-bottom: 2px solid transparent;
   color: var(--pf-muted);
   font-size: 0.84rem;
   font-weight: 800;
-  padding: 11px 15px 10px;
+  padding: 11px 12px 10px;
 }
 
 .site-detail-page.is-project-file-workspace .project-record-tabs button:hover,
@@ -32467,7 +32472,7 @@ body.mobile-modal-scroll-locked {
   color: var(--figma-muted);
   font-size: 0.84rem;
   font-weight: 800;
-  padding: 11px 15px 10px;
+  padding: 11px 12px 10px;
 }
 
 .site-detail-page.is-measurement-review-workspace .project-record-tabs button:hover,
@@ -34588,7 +34593,7 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   overflow: visible;
 }
 .site-detail-page.is-project-overview .project-record-tabs button {
-  flex: 0 0 auto;
+  flex: 0 0 var(--project-record-tab-width);
 }
 .site-detail-page.is-project-overview :is(button, a:not(.back-link), input, select, textarea):focus-visible {
   outline: 2px solid var(--pf-active);

@@ -171,7 +171,7 @@ const projectRecordTabs: { key: ProjectRecordTab; label: string }[] = [
   { key: "extra-work", label: "Zusatzaufträge" },
   { key: "folders", label: "Dateien" },
   { key: "assembly-times", label: "Projektauswertung" },
-  { key: "tools-material", label: "Werkzeuge & Material" },
+  { key: "tools-material", label: "Werkzeuge" },
 ];
 
 const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
