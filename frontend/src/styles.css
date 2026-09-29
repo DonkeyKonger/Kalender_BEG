@@ -31989,10 +31989,6 @@ body.mobile-modal-scroll-locked {
   box-shadow: none;
 }
 
-.site-detail-page.is-project-file-workspace .project-folder-card.is-monteur-visible {
-  background: #eaf0f7;
-}
-
 .site-detail-page.is-project-file-workspace .project-folder-card:hover,
 .site-detail-page.is-project-file-workspace .project-folder-card:focus-visible,
 .site-detail-page.is-project-file-workspace .project-document-item:hover {
@@ -32005,25 +32001,25 @@ body.mobile-modal-scroll-locked {
   box-shadow: inset 3px 0 0 var(--pf-active);
 }
 
-.site-detail-page.is-project-file-workspace .project-folder-card.is-monteur-visible.is-selected {
-  background: #eaf0f7;
-}
-
 .site-detail-page.is-project-file-workspace .project-folder-card span {
   color: #94a3b8;
   font-size: 0.78rem;
-  font-weight: 850;
+  font-weight: 400;
 }
 
 .site-detail-page.is-project-file-workspace .project-folder-card strong {
   color: #40516b;
   font-size: 0.84rem;
-  font-weight: 830;
+  font-weight: 400;
 }
 
 .site-detail-page.is-project-file-workspace .project-folder-card.is-selected strong {
   color: #1d4ed8;
-  font-weight: 900;
+}
+
+.site-detail-page.is-project-file-workspace .project-folder-card.is-monteur-visible strong,
+.site-detail-page.is-project-file-workspace .project-folder-card.is-monteur-visible > span:first-child {
+  font-weight: 830;
 }
 
 .site-detail-page.is-project-file-workspace .project-folder-card .project-folder-count-slot {

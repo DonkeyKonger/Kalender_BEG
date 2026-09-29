@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.enums import UserRole
+from app.models.audit_log import AuditLog
 from app.models.project_folder import ProjectFolder, ProjectFolderDocumentCaption
 from app.models.site import Site
 from app.models.user import User
@@ -111,6 +112,29 @@ class ProjectFolderService:
             )
         return folder
 
+    def update_monteur_visibility(
+        self, site_id: int, folder_key: str, visible: bool, current_user: User
+    ) -> ProjectFolder:
+        if current_user.role not in FULL_ACCESS_ROLES:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Keine Berechtigung zur Ordnerfreigabe.")
+        folder = self.get_project_folder_for_site_by_key(site_id, folder_key, current_user)
+        if folder_key not in PROJECT_FOLDER_TEMPLATE_BY_KEY:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Projektordner nicht gefunden.")
+        previous = role_can_access_project_folder(UserRole.MONTEUR, folder)
+        folder.monteur_visibility_override = visible
+        if previous != visible:
+            self.db.add(AuditLog(
+                user_id=current_user.id,
+                action="project_folder_visibility_updated",
+                entity_type="project_folder",
+                entity_id=folder.id,
+                old_value_json={"visible_for_monteurs": previous},
+                new_value_json={"visible_for_monteurs": visible, "site_id": site_id},
+            ))
+        self.db.commit()
+        self.db.refresh(folder)
+        return folder
+
     def add_document_captions(
         self,
         *,
@@ -186,4 +210,6 @@ def role_can_access_project_folder(role: UserRole, project_folder: ProjectFolder
     template = PROJECT_FOLDER_TEMPLATE_BY_KEY.get(project_folder.folder_key)
     if template is None:
         return False
+    if role == UserRole.MONTEUR and project_folder.monteur_visibility_override is not None:
+        return project_folder.monteur_visibility_override
     return role.value in template["visible_for_roles"]

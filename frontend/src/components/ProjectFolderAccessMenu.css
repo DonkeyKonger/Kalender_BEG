@@ -1,0 +1,37 @@
+.project-folder-access-menu {
+  position: fixed;
+  z-index: 1200;
+  width: 250px;
+  max-width: calc(100vw - 16px);
+  padding: 6px;
+  border: 1px solid #cbd8e8;
+  border-radius: 4px;
+  background: #fff;
+  color: #40516b;
+  box-shadow: 0 6px 20px #17355424;
+  font-size: 13px;
+}
+.project-folder-access-menu-title {
+  padding: 5px 8px 8px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.project-folder-access-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  background: #fff;
+  color: #29476b;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.project-folder-access-menu button:hover,
+.project-folder-access-menu button:focus-visible { background: #eef4fb; outline: 1px solid #abc3e2; }
+.project-folder-access-menu button[aria-disabled="true"] { cursor: wait; opacity: .6; }
+.project-folder-access-check { display: flex; width: 16px; height: 16px; flex: 0 0 16px; border: 1px solid #a9bad0; }
+.project-folder-access-menu p { margin: 8px; font-size: 12px; color: #64748b; }
+.project-folder-access-menu .project-folder-access-error { color: #a12c2c; overflow-wrap: anywhere; }

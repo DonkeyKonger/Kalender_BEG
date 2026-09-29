@@ -14,6 +14,7 @@ class ProjectFolder(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     folder_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    monteur_visibility_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     external_provider: Mapped[str | None] = mapped_column(String(80))
     external_drive_id: Mapped[str | None] = mapped_column(String(200))
     external_item_id: Mapped[str | None] = mapped_column(String(200))

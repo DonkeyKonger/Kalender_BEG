@@ -1246,6 +1246,13 @@ export const api = {
     return request<ProjectFolder[]>(`/sites/${siteId}/project-folders`);
   },
 
+  async updateProjectFolderVisibility(siteId: number, folderKey: string, visible: boolean): Promise<ProjectFolder> {
+    return request<ProjectFolder>(`/sites/${siteId}/project-folders/${encodeURIComponent(folderKey)}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visible_for_monteurs: visible }),
+    });
+  },
+
   async projectFolderFileCount(siteId: number, folderKey: string): Promise<{ file_count: number | null; refreshing?: boolean }> {
     return request<{ file_count: number | null; refreshing?: boolean }>(`/sites/${siteId}/documents/folders/${encodeURIComponent(folderKey)}/file-count`);
   },

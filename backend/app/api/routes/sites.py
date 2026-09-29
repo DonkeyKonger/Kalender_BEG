@@ -58,6 +58,7 @@ from app.schemas.project_folder import (
     ProjectFolderDocumentList,
     ProjectFolderFileCount,
     ProjectFolderRead,
+    ProjectFolderVisibilityUpdate,
     ProjectSubfolderCreate,
 )
 from app.schemas.site import (
@@ -222,6 +223,22 @@ def list_project_folders(
         })
         for folder in folders
     ]
+
+
+@router.patch("/{site_id}/project-folders/{folder_key}/visibility", response_model=ProjectFolderRead)
+def update_project_folder_visibility(
+    site_id: int,
+    folder_key: str,
+    payload: ProjectFolderVisibilityUpdate,
+    current_user: User = Depends(CAN_SITES_WRITE),
+    db: Session = Depends(get_db),
+) -> ProjectFolderRead:
+    folder = ProjectFolderService(db).update_monteur_visibility(
+        site_id, folder_key, payload.visible_for_monteurs, current_user
+    )
+    return ProjectFolderRead.model_validate(folder).model_copy(update={
+        "visible_for_monteurs": role_can_access_project_folder(UserRole.MONTEUR, folder),
+    })
 
 
 @router.get("/{site_id}/project-photos/photo-appendix")

@@ -14,7 +14,8 @@ import {renderToStaticMarkup} from 'react-dom/server';
 export function tree(counts,props={}) {
   const useProjectFolderFileCounts=(siteId,folders)=>counts;
   const useAuth=()=>({user:null});
-  const canEditMainPage=()=>false;
+  const canEditMainPage=()=>Boolean(props.canManageAccess);
+  const useState=initial=>[initial,value=>props.onMenuChange?.(value)];
   const useProjectDocumentDrag=()=>({targetProps:()=>({}),isHighlighted:()=>false,isInternal:()=>false});
   const containsDraggedFiles=types=>Array.from(types).includes('Files');
   const ProjectFolderDocumentBrowser=()=> <div>Dokumente</div>;
@@ -82,8 +83,30 @@ test('monteur visibility is a quiet server-driven hint independent of selection 
   assert.match(buttons[0].props.title,/Für Monteure sichtbar/);
   assert.doesNotMatch(buttons[1].props.className,/is-monteur-visible/);
   assert.doesNotMatch(buttons[2].props.className,/is-monteur-visible/);
-  assert.match(css,/\.project-folder-card\.is-monteur-visible \{\s*background: #eaf0f7;/);
-  assert.match(css,/\.project-folder-card\.is-monteur-visible\.is-selected \{\s*background: #eaf0f7;/);
+  assert.match(css,/\.project-folder-card strong \{[^}]*font-weight: 400;/);
+  assert.match(css,/\.project-folder-card\.is-monteur-visible strong,[^}]*font-weight: 830;/);
+  assert.doesNotMatch(css,/\.project-folder-card\.is-monteur-visible(?:\.is-selected)? \{[^}]*background:/);
   assert.doesNotMatch(css, /#edf4f1/);
   assert.doesNotMatch(module.exports.render({}, { folders: [{ id:1, folder_key:'a', sort_order:1, name:'Fotos', visible_for_monteurs:true }] }),/role="alert"|animation/);
+});
+
+test('right click and keyboard menu preserve selection and require edit access', () => {
+  let menu, selected, prevented = 0;
+  const props = {canManageAccess:true,onMenuChange:value=>{menu=value;},onSelectFolder:()=>{selected=true;}};
+  const button = collect(module.exports.tree({},props)).find(item=>item.type==='button');
+  const trigger = {getBoundingClientRect:()=>({left:10,bottom:42})};
+  button.props.onContextMenu({preventDefault(){prevented++;},clientX:50,clientY:60,currentTarget:trigger});
+  assert.equal(menu.folder.name,'Angebote');
+  assert.equal(menu.x,50);
+  assert.equal(menu.y,60);
+  assert.equal(selected,undefined);
+  button.props.onKeyDown({key:'F10',shiftKey:true,preventDefault(){prevented++;},currentTarget:trigger});
+  assert.equal(menu.x,30);
+  assert.equal(menu.y,42);
+  menu=null;
+  const blocked = collect(module.exports.tree({},{...props,canManageAccess:false})).find(item=>item.type==='button');
+  blocked.props.onContextMenu({preventDefault(){prevented++;}});
+  assert.equal(menu,null);
+  assert.equal(prevented,2);
+  assert.equal(blocked.props['aria-haspopup'],undefined);
 });

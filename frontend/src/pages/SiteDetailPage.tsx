@@ -1,5 +1,6 @@
 import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
+import { ProjectFolderAccessMenu, type FolderAccessMenuTarget } from "../components/ProjectFolderAccessMenu";
 import { ProjectDocumentFilename } from "../components/ProjectDocumentFilename";
 import { ProjectFolderPhotoGrid } from "../components/ProjectFolderPhotoGrid";
 import { useProjectDocumentDrag, type ProjectDocumentDrag } from "./useProjectDocumentDrag";
@@ -1711,6 +1712,10 @@ export function SiteDetailPage() {
           uploadError={uploadError}
           dragOverFolderKey={dragOverFolderKey}
           onSelectFolder={setSelectedFolder}
+          onFolderUpdated={(updated) => {
+            setFolders((previous) => previous.map((folder) => folder.id === updated.id ? updated : folder));
+            setSelectedFolder((previous) => previous?.id === updated.id ? updated : previous);
+          }}
           onUploadFiles={uploadFilesToFolder}
           onDragOverFolder={setDragOverFolderKey}
           onRetry={() => {
@@ -2375,6 +2380,7 @@ function ProjectFoldersPanel({
   uploadError,
   dragOverFolderKey,
   onSelectFolder,
+  onFolderUpdated,
   onUploadFiles,
   onDragOverFolder,
   onRetry,
@@ -2393,6 +2399,7 @@ function ProjectFoldersPanel({
   uploadError: string | null;
   dragOverFolderKey: string | null;
   onSelectFolder: (folder: ProjectFolder | null) => void;
+  onFolderUpdated: (folder: ProjectFolder) => void;
   onUploadFiles: (folder: ProjectFolder, files: FileList | File[], parentItemId?: string) => Promise<void>;
   onDragOverFolder: (folderKey: string | null) => void;
   onRetry: () => void;
@@ -2401,6 +2408,8 @@ function ProjectFoldersPanel({
   const fileCounts = useProjectFolderFileCounts(site.id, folders);
   const { user } = useAuth();
   const documentDrag = useProjectDocumentDrag(site.id, canEditMainPage(user, "sites"), onRetryDocuments);
+  const [accessMenu, setAccessMenu] = useState<FolderAccessMenuTarget | null>(null);
+  const canManageAccess = canEditMainPage(user, "sites");
 
   if (isLoading) {
     return <div className="matrix-state">Ordnerstruktur wird geladen...</div>;
@@ -2441,6 +2450,18 @@ function ProjectFoldersPanel({
                     type="button"
                     className={`project-folder-card${folder.visible_for_monteurs ? " is-monteur-visible" : ""}${isSelected ? " is-selected" : ""}${documentDrag.isHighlighted(target) ? " is-move-target" : ""}${dragOverFolderKey === folder.folder_key ? " is-drag-over" : ""}`}
                     onClick={() => onSelectFolder(folder)}
+                    aria-haspopup={canManageAccess ? "menu" : undefined}
+                    onContextMenu={(event) => {
+                      if (!canManageAccess) return;
+                      event.preventDefault();
+                      setAccessMenu({ folder, x: event.clientX, y: event.clientY, trigger: event.currentTarget });
+                    }}
+                    onKeyDown={(event) => {
+                      if (!canManageAccess || !(event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) return;
+                      event.preventDefault();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setAccessMenu({ folder, x: rect.left + 20, y: rect.bottom, trigger: event.currentTarget });
+                    }}
                     onDragOver={(event) => {
                       if (documentDrag.isInternal(event)) { dropProps.onDragOver?.(event); return; }
                       if (!containsDraggedFiles(event.dataTransfer.types)) return;
@@ -2500,6 +2521,10 @@ function ProjectFoldersPanel({
           </div>
         </div>
       )}
+      {accessMenu && canManageAccess ? (
+        <ProjectFolderAccessMenu key={accessMenu.folder.id} target={accessMenu}
+          onUpdated={onFolderUpdated} onClose={() => setAccessMenu(null)} />
+      ) : null}
     </div>
   );
 }

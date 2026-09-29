@@ -37,6 +37,10 @@ class ProjectDocumentRename(BaseModel):
         return name
 
 
+class ProjectFolderVisibilityUpdate(BaseModel):
+    visible_for_monteurs: bool = Field(strict=True)
+
+
 class ProjectFolderRead(BaseModel):
     id: int
     site_id: int
