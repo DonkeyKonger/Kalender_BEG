@@ -1,11 +1,30 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import vm from "node:vm";
+import ts from "typescript";
 
 const [pageSource, styles] = await Promise.all([
   readFile(new URL("../src/pages/SitesPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
 ]);
+
+test("site cards and filters use the project manager code, not an employee-style prefix", () => {
+  const context = vm.createContext({});
+  const helpers = pageSource.slice(pageSource.indexOf('function compactProjectManagerFilterLabel('), pageSource.indexOf('function projectManagerOptionsFromSites('))
+    + pageSource.slice(pageSource.indexOf('function siteProjectManagerLabel('), pageSource.indexOf('function siteGroupCardsId('));
+  vm.runInContext(ts.transpileModule(helpers, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
+  for (const code of ['CE', 'AB', 'KE', 'TW']) {
+    const legacy = `${code[0]}.${code}`;
+    assert.equal(context.siteProjectManagerLabel({ project_manager: { display_name: code, short_code: legacy, first_name: 'Christopher', last_name: code } }), code);
+    assert.equal(context.compactProjectManagerFilterLabel({ name: code, shortCode: legacy }), code);
+    assert.equal(context.compactSiteGroupLabel(code), code);
+  }
+  assert.equal(context.siteProjectManagerLabel({ project_manager: { display_name: '  CE  ', short_code: 'C.CE' } }), 'CE');
+  assert.equal(context.siteProjectManagerLabel({ project_manager: { display_name: '', short_code: 'CE' } }), 'CE');
+  assert.equal(context.siteProjectManagerLabel({ project_manager: { display_name: 'Carl Erik', short_code: 'C.Erik' } }), 'CE');
+  assert.equal(context.siteProjectManagerLabel({ project_manager: null }), 'offen');
+});
 
 test("site overview cards keep one compact fixed height", () => {
   const cardRule = cssRule(".site-overview-page .site-card");

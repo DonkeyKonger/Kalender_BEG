@@ -1139,7 +1139,7 @@ function siteStatusFilterOptions(): Array<{ value: SiteStatusFilter; label: stri
 }
 
 function compactProjectManagerFilterLabel(manager: ProjectManagerOption): string {
-  return compactCodeFromText(manager.shortCode || manager.name);
+  return compactCodeFromText(manager.name.trim() || manager.shortCode);
 }
 
 function compactCodeFromText(value: string): string {
@@ -1192,7 +1192,9 @@ function groupSites(sites: SiteSummary[], projectManagerFilter: string): SiteGro
 }
 
 function siteProjectManagerLabel(site: SiteSummary): string {
-  return site.project_manager ? calendarPersonCode(site.project_manager) : "offen";
+  return site.project_manager
+    ? compactCodeFromText(site.project_manager.display_name.trim() || site.project_manager.short_code)
+    : "offen";
 }
 
 function compactSiteGroupLabel(label: string): string {
