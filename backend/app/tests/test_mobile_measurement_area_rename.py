@@ -67,10 +67,13 @@ def test_empty_and_legacy_entry_only_rows_can_be_renamed(case):
 @pytest.mark.parametrize("state", ["submitted", "reviewed", "approved", "billed", "signed"])
 def test_workflow_locks_remain_enforced(case, state):
     c = case
-    if state == "signed": c.batch.customer_signed_at = datetime.now(timezone.utc)
-    else: c.batch.status = state
+    if state == "signed":
+        c.batch.customer_signed_at = datetime.now(timezone.utc)
+    else:
+        c.batch.status = state
     c.db.commit()
-    with pytest.raises(HTTPException) as error: c.rename()
+    with pytest.raises(HTTPException) as error:
+        c.rename()
     assert error.value.status_code == 409
     assert c.row.area_or_comment == c.entries[0].area_or_comment == "EG"
 
@@ -80,21 +83,25 @@ def test_invalid_or_conflicting_labels_do_not_change_any_entries(case, previous,
     c = case
     c.db.add(SiteMeasurementAreaRow(site_id=c.site.id, measurement_batch=c.batch, area_or_comment="RAUM 2", sort_order=2))
     c.db.commit()
-    with pytest.raises(HTTPException) as error: c.rename(previous, replacement)
+    with pytest.raises(HTTPException) as error:
+        c.rename(previous, replacement)
     assert error.value.status_code == code
     assert c.entries[0].area_or_comment == c.row.area_or_comment == "EG"
 
 
 def test_assignment_and_batch_scope_are_enforced(case):
     c = case
-    with pytest.raises(HTTPException) as error: c.rename(assignment_id=99999)
+    with pytest.raises(HTTPException) as error:
+        c.rename(assignment_id=99999)
     assert error.value.status_code == 404
     foreign = create_site(c.db)
     batch = SiteMeasurementBatch(site=foreign, number=1, title="Foreign", status="draft")
     c.db.add(batch)
     c.db.commit()
-    with pytest.raises(HTTPException) as error: c.rename(batch_id=batch.id)
+    with pytest.raises(HTTPException) as error:
+        c.rename(batch_id=batch.id)
     assert error.value.status_code == 404
     stranger = User(username="stranger", display_name="Stranger", password_hash="x", role=UserRole.MONTEUR)
-    with pytest.raises(HTTPException) as error: c.rename(current_user=stranger)
+    with pytest.raises(HTTPException) as error:
+        c.rename(current_user=stranger)
     assert error.value.status_code == 403
