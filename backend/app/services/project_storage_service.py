@@ -5,11 +5,13 @@ import re
 from time import monotonic
 from datetime import UTC, datetime
 from importlib import resources
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from fastapi import HTTPException, status
+from PIL import Image, UnidentifiedImageError
 
 from app.core.config import settings
 from app.services.microsoft_graph_client import (
@@ -505,6 +507,7 @@ class ProjectStorageService:
         drive_id: str | None,
         folder_item_id: str | None,
         item_id: str,
+        prefer_photo_thumbnail: bool = False,
     ) -> dict[str, Any]:
         if not self.config.ms_graph_enabled:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "MS_GRAPH_ENABLED is false.")
@@ -521,6 +524,25 @@ class ProjectStorageService:
         )
 
         encoded_item_id = quote(item_id, safe="")
+        if prefer_photo_thumbnail:
+            try:
+                # Keep the UI's 320px previews; fetch a larger prepared source
+                # instead of transferring/decoding the full camera original.
+                content, content_type = self.graph_client.get_content(
+                    f"/drives/{drive_id}/items/{encoded_item_id}/thumbnails/0/largeSquare/content"
+                )
+                if _usable_photo_preview(content, content_type):
+                    return {
+                        "content": content,
+                        "content_type": content_type,
+                        "filename": document.get("name") or "download",
+                    }
+            except MicrosoftGraphRequestError as error:
+                # Some formats/new uploads do not have a generated thumbnail yet.
+                # Never retry authorization failures, throttling or outages as a
+                # more expensive original download.
+                if error.status_code not in {400, 404, 415, 501}:
+                    raise _safe_graph_files_exception(error) from error
         try:
             content, content_type = self.graph_client.get_content(
                 f"/drives/{drive_id}/items/{encoded_item_id}/content"
@@ -1077,6 +1099,20 @@ def _resource_summary(resource: dict[str, Any]) -> dict[str, Any]:
         "name": resource.get("name") or resource.get("displayName"),
         "web_url": resource.get("webUrl"),
     }
+
+
+def _usable_photo_preview(content: bytes, content_type: str | None) -> bool:
+    if not str(content_type or "").split(";", 1)[0].lower().startswith("image/"):
+        return False
+    try:
+        with Image.open(BytesIO(content)) as image:
+            # A too-small/invalid remote preview must not degrade the existing UI.
+            if min(image.size) < 320:
+                return False
+            image.verify()
+    except (OSError, ValueError, UnidentifiedImageError):
+        return False
+    return True
 
 
 def _document_item(item: dict[str, Any]) -> dict[str, Any]:

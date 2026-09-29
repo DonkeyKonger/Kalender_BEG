@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { api, ApiError } from "../lib/api";
+import { projectThumbnailCache } from "../lib/projectThumbnailCache";
 import { canUsePushNotifications, initializePushNotifications } from "../lib/pushNotifications";
 import type { CurrentUser } from "../types/auth";
 
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus("authenticated");
     } catch (error) {
       localStorage.removeItem("kb_access_token");
+      projectThumbnailCache.clear();
       setUser(null);
       setStatus("anonymous");
       if (!(error instanceof ApiError && error.status === 401)) {
@@ -82,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await api.logout();
     } finally {
       localStorage.removeItem("kb_access_token");
+      projectThumbnailCache.clear();
       setUser(null);
       setStatus("anonymous");
     }

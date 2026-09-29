@@ -1,4 +1,5 @@
 import type { MeasurementGroup, SiteNotes, SiteNoteBlock, SiteNoteBlockUpdate } from "../types/site";
+import { projectThumbnailCache } from "./projectThumbnailCache";
 import type { Absence, AbsenceCreate, AbsenceUpdate, VacationCarryover, VacationCarryoverUpdate } from "../types/absence";
 import type { CurrentUser, LoginResponse } from "../types/auth";
 import type { PayrollRemarks } from "./payrollRemarks";
@@ -1352,8 +1353,9 @@ export const api = {
     const encodedSiteId = encodeURIComponent(String(siteId));
     const encodedFolderKey = encodeURIComponent(folderKey);
     const encodedItemId = encodeURIComponent(itemId);
-    return requestBlob(
-      `/sites/${encodedSiteId}/documents/folders/${encodedFolderKey}/items/${encodedItemId}/thumbnail${version ? `?v=${encodeURIComponent(version)}` : ""}`,
+    const path = `/sites/${encodedSiteId}/documents/folders/${encodedFolderKey}/items/${encodedItemId}/thumbnail${version ? `?v=${encodeURIComponent(version)}` : ""}`;
+    return projectThumbnailCache.load(
+      localStorage.getItem("kb_access_token"), path, () => requestBlob(path), Boolean(version),
     );
   },
 

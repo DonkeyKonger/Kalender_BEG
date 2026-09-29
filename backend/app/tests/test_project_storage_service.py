@@ -1,8 +1,10 @@
 import hashlib
+from io import BytesIO
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from PIL import Image
 
 from app.services.microsoft_graph_client import MicrosoftGraphRequestError
 from app.services.project_storage_service import ProjectStorageService
@@ -715,6 +717,79 @@ def test_download_file_from_folder_verifies_child_and_returns_content():
         "filename": "Angebot.pdf",
     }
     assert "super-secret-value" not in str(result)
+
+
+def _preview_photo(size=(800, 800)):
+    output = BytesIO()
+    Image.new('RGB', size, '#7194a6').save(output, 'JPEG')
+    return output.getvalue()
+
+
+def test_prepared_photo_preview_avoids_the_original_download():
+    graph = FakeGraphClient()
+    preview = _preview_photo()
+    calls = []
+
+    def content(path):
+        calls.append(path)
+        return preview, 'image/jpeg'
+
+    graph.get_content = content
+    result = ProjectStorageService(config=enabled_config(), graph_client=graph).download_file_from_folder(
+        drive_id='drive-1', folder_item_id='folder-1', item_id='nested-file-1', prefer_photo_thumbnail=True,
+    )
+    assert calls == ['/drives/drive-1/items/nested-file-1/thumbnails/0/largeSquare/content']
+    assert result['content'] == preview
+
+
+@pytest.mark.parametrize('failure', [400, 404, 415, 501, 'invalid', 'small', 'wrong-type'])
+def test_unavailable_photo_preview_falls_back_to_original(failure):
+    graph = FakeGraphClient()
+    calls = []
+
+    def content(path):
+        calls.append(path)
+        if '/thumbnails/' in path:
+            if isinstance(failure, int):
+                raise MicrosoftGraphRequestError(failure, 'unavailable')
+            if failure == 'small':
+                return _preview_photo((96, 96)), 'image/jpeg'
+            return b'invalid', 'text/html' if failure == 'wrong-type' else 'image/jpeg'
+        return b'original', 'image/png'
+
+    graph.get_content = content
+    result = ProjectStorageService(config=enabled_config(), graph_client=graph).download_file_from_folder(
+        drive_id='drive-1', folder_item_id='folder-1', item_id='nested-file-1', prefer_photo_thumbnail=True,
+    )
+    assert result['content'] == b'original'
+    assert len(calls) == 2 and calls[-1].endswith('/nested-file-1/content')
+
+
+@pytest.mark.parametrize('status_code', [401, 403, 429, 503])
+def test_preview_errors_do_not_trigger_more_expensive_original_retry(status_code):
+    graph = FakeGraphClient()
+    calls = []
+
+    def content(path):
+        calls.append(path)
+        raise MicrosoftGraphRequestError(status_code, 'failed')
+
+    graph.get_content = content
+    with pytest.raises(HTTPException):
+        ProjectStorageService(config=enabled_config(), graph_client=graph).download_file_from_folder(
+            drive_id='drive-1', folder_item_id='folder-1', item_id='nested-file-1', prefer_photo_thumbnail=True,
+        )
+    assert len(calls) == 1
+
+
+def test_photo_preview_cannot_bypass_folder_access():
+    graph = FakeGraphClient()
+    with pytest.raises(HTTPException) as error:
+        ProjectStorageService(config=enabled_config(), graph_client=graph).download_file_from_folder(
+            drive_id='drive-1', folder_item_id='folder-1', item_id='foreign-file-1', prefer_photo_thumbnail=True,
+        )
+    assert error.value.status_code == 404
+    assert graph.downloads == []
 
 
 def test_download_file_from_folder_allows_nested_file_inside_root():

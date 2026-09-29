@@ -54,6 +54,7 @@ def test_photo_route_checks_access_and_descendants_before_cache_and_download(mon
             return document
 
         def download_file_from_folder(self, **kwargs):
+            assert kwargs["prefer_photo_thumbnail"] is True
             calls.append("download")
             return {"content": photo()}
 

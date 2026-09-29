@@ -537,6 +537,7 @@ def get_project_folder_document_thumbnail(
         drive_id=folder.external_drive_id,
         folder_item_id=folder.external_item_id,
         item_id=item_id,
+        prefer_photo_thumbnail=is_photo,
     )
     try:
         renderer = thumbnail_service.get_or_create_photo_thumbnail if is_photo else thumbnail_service.get_or_create_pdf_thumbnail
