@@ -29891,8 +29891,8 @@ body.mobile-modal-scroll-locked {
 }
 
 .site-detail-page.is-project-file-workspace .project-record-tabs {
-  /* Rounded width of the former "Ausführungsstand" main tab. */
-  --project-record-tab-width: 157px;
+  /* Equal compact tabs sized for the longest label, "Zusatzaufträge". */
+  --project-record-tab-width: 136px;
   display: flex;
   width: 100%;
   border: 0;

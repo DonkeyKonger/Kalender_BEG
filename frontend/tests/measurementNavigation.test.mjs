@@ -7,14 +7,14 @@ const source = readFileSync(new URL("../src/pages/SiteDetailPage.tsx", import.me
 test("project tabs follow the requested order and labels without changing navigation keys", () => {
   const config = source.slice(source.indexOf("const projectRecordTabs:"), source.indexOf("const timeEntryStatusLabels:"));
   assert.deepEqual([...config.matchAll(/key: "([^"]+)", label: "([^"]+)"/g)].map(match => [match[1], match[2]]), [
-    ["overview", "Übersicht"], ["measurement", "Aufmaß"], ["extra-work", "Zusatzaufträge"],
-    ["folders", "Dateien"], ["assembly-times", "Projektauswertung"], ["tools-material", "Werkzeuge"],
+    ["overview", "Übersicht"], ["folders", "Dateien"], ["measurement", "Aufmaß"],
+    ["extra-work", "Zusatzaufträge"], ["assembly-times", "Auswertung"], ["tools-material", "Werkzeuge"],
   ]);
 });
 
-test("all main tabs retain the reference width in overview and other workspaces", () => {
+test("all main tabs retain the compact width in overview and other workspaces", () => {
   const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.site-detail-page\.is-project-file-workspace \.project-record-tabs \{\s*\/\*[^]*?\*\/\s*--project-record-tab-width: 157px;/);
+  assert.match(css, /\.site-detail-page\.is-project-file-workspace \.project-record-tabs \{\s*\/\*[^]*?\*\/\s*--project-record-tab-width: 136px;/);
   assert.match(css, /\.site-detail-page\.is-project-file-workspace \.project-record-tabs button \{\s*box-sizing: border-box;\s*flex: 0 0 var\(--project-record-tab-width\);\s*width: var\(--project-record-tab-width\);/);
   assert.match(css, /\.site-detail-page\.is-project-overview \.project-record-tabs button \{\s*flex: 0 0 var\(--project-record-tab-width\);/);
   // Only the navigation label is shortened, not the tools/material content.
