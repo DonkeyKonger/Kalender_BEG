@@ -46,6 +46,13 @@ test('tablet descriptions show five fixed lines with slightly wider columns',()=
  assert.match(css,/height: 6\.75em;\s*max-height: 6\.75em;/);
  assert.match(css,/height: calc\(6\.75em \+ 14px\)/);
 });
+test('empty area cells have no native button decoration at any tablet width',()=>{
+ const css=readFileSync(new URL('../src/pages/MobileMeasurementTablet.css',import.meta.url),'utf8');
+ const button=css.match(/\.measurement-matrix-empty-area-button \{([^}]+)\}/)[1];
+ for(const rule of ['display: block','width: 100%','min-height: 40px','appearance: none','-webkit-appearance: none','border: 0','background: transparent','box-shadow: none','padding: 0','cursor: text']) assert.ok(button.includes(rule),rule);
+ assert.doesNotMatch(css,/@media/);
+ assert.match(css,/\.measurement-matrix-empty-area-button:focus-visible/);
+});
 test('tablet freezes all four header rows in a viewport-bounded scroller',()=>{
  const page=readFileSync(new URL('../src/pages/MobileAssignmentDetailPage.tsx',import.meta.url),'utf8');
  const table=page.slice(page.indexOf('function MobileMeasurementTable('));
