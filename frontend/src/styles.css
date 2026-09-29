@@ -31987,7 +31987,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .site-detail-page.is-project-file-workspace .project-folder-card.is-monteur-visible {
-  background: #edf4f1;
+  background: #eaf0f7;
 }
 
 .site-detail-page.is-project-file-workspace .project-folder-card:hover,
@@ -32003,7 +32003,7 @@ body.mobile-modal-scroll-locked {
 }
 
 .site-detail-page.is-project-file-workspace .project-folder-card.is-monteur-visible.is-selected {
-  background: #edf4f1;
+  background: #eaf0f7;
 }
 
 .site-detail-page.is-project-file-workspace .project-folder-card span {

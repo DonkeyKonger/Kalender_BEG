@@ -82,7 +82,8 @@ test('monteur visibility is a quiet server-driven hint independent of selection 
   assert.match(buttons[0].props.title,/Für Monteure sichtbar/);
   assert.doesNotMatch(buttons[1].props.className,/is-monteur-visible/);
   assert.doesNotMatch(buttons[2].props.className,/is-monteur-visible/);
-  assert.match(css,/\.project-folder-card\.is-monteur-visible \{\s*background: #edf4f1;/);
-  assert.match(css,/\.project-folder-card\.is-monteur-visible\.is-selected \{\s*background: #edf4f1;/);
+  assert.match(css,/\.project-folder-card\.is-monteur-visible \{\s*background: #eaf0f7;/);
+  assert.match(css,/\.project-folder-card\.is-monteur-visible\.is-selected \{\s*background: #eaf0f7;/);
+  assert.doesNotMatch(css, /#edf4f1/);
   assert.doesNotMatch(module.exports.render({}, { folders: [{ id:1, folder_key:'a', sort_order:1, name:'Fotos', visible_for_monteurs:true }] }),/role="alert"|animation/);
 });
