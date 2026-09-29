@@ -2257,6 +2257,12 @@ export const api = {
     });
   },
 
+  async renameMobileMeasurementArea(assignmentId: number, batchId: number, previous: string, replacement: string): Promise<{ batch: MobileMeasurementBatch; items: MobileMeasurementItem[] }> {
+    return request(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/areas`, {
+      method: "PATCH", body: JSON.stringify({ previous, replacement }),
+    });
+  },
+
   async mobileMeasurementBatchPhotos(
     assignmentId: number,
     batchId: number,

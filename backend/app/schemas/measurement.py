@@ -276,6 +276,11 @@ class MeasurementAreaRename(BaseModel):
     replacement: str = Field(min_length=1)
 
 
+class MobileMeasurementAreaRenameRead(BaseModel):
+    batch: MobileMeasurementBatchRead
+    items: list[MobileMeasurementItemRead]
+
+
 class MeasurementBatchInvoicedUpdate(BaseModel):
     is_invoiced: bool
 

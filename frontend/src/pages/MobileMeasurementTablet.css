@@ -1,0 +1,181 @@
+/* Keep the tablet controls in the same blue/white family as phone capture. */
+@media (min-width: 700px) {
+  .app-shell.is-mobile-workspace .mobile-measurement-table-shell.is-touch-table {
+    border: 1px solid #dce7f2;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: none;
+    scroll-padding-left: 156px;
+    scrollbar-color: #bdccdd #f4f8fc;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table {
+    border: 0;
+    color: #27486e;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table th,
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table td {
+    width: 140px;
+    min-width: 140px;
+    max-width: 140px;
+    padding: 6px 8px;
+    border-color: #e3ebf4;
+    background: #fff;
+    color: #27486e;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-axis {
+    width: 156px;
+    min-width: 156px;
+    max-width: 156px;
+    background: #f7faff;
+    color: #315575;
+    font-weight: 600;
+    box-shadow: 3px 0 8px #17355409;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table thead th {
+    background: #f7faff;
+    font-weight: 600;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table thead tr:first-child th {
+    padding: 8px;
+    background: #eef4fa;
+    color: #102b50;
+    line-height: 1.35;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-header-button {
+    min-height: 32px;
+    border-radius: 7px;
+    color: #102b50;
+    font-size: 14px;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table thead tr:first-child .measurement-matrix-axis {
+    font-size: 14px;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table thead tr:first-child .measurement-matrix-position-text {
+    max-height: none;
+    line-height: 1.35;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-description-text {
+    height: 6.75em;
+    max-height: 6.75em;
+    color: #526b88;
+    line-height: 1.35;
+    font-weight: 400;
+    font-size: 14px;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-section-row th,
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-section-row td {
+    background: #f2f7fc;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-cell-button,
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-active-cell {
+    min-height: 40px;
+    padding: 7px 8px;
+    border-radius: 7px;
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .is-inline-editing {
+    box-shadow: none;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-active-cell {
+    background: #edf5fd;
+    box-shadow: inset 0 0 0 1px #89add0;
+    outline: none;
+    font-weight: 600;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-empty-area-row th,
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-empty-area-row td,
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-add-row th,
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-add-row td {
+    height: 48px;
+    background: #fbfdff;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-total-row th,
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-total-row td {
+    background: #eef4fa;
+    border-top: 1px solid #cbdced;
+    font-weight: 700;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-draft-field {
+    padding: 6px;
+    border: 1px solid #dce7f2;
+    border-radius: 7px;
+    background: #fff;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table .measurement-matrix-draft-field-description {
+    height: calc(6.75em + 14px);
+  }
+}
+
+.app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-axis:has(.measurement-matrix-area-editor) {
+  padding: 0;
+  background: #f7faff;
+}
+.app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-area-editor input,
+.app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-area-draft-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #27486e;
+  font: inherit;
+  font-size: 16px;
+  box-shadow: none;
+  outline: none;
+}
+.app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-area-editor input:focus,
+.app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-area-draft-input:focus {
+  background: #edf5fd;
+  box-shadow: inset 0 -2px #89add0;
+  outline: none;
+}
+.measurement-matrix-area-editor [role="alert"] { display: block; color: #b42318; font-size: 12px; white-space: normal; }
+.app-shell.is-mobile-workspace .mobile-measurement-table .measurement-matrix-empty-area-button {
+  min-height: 40px;
+  border-radius: 7px;
+}
+.app-shell.is-mobile-workspace .mobile-measurement-fixed-keypad.mobile-measurement-capture-page {
+  width: min(340px, calc(100vw - 28px));
+  max-height: calc(100dvh - 28px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #dce7f2;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 28px #17355426;
+}
+.app-shell.is-mobile-workspace .mobile-measurement-fixed-keypad .mobile-quantity-keypad.is-entry-keypad {
+  grid-template-rows: repeat(4, minmax(52px, 1fr));
+  gap: 8px;
+}
+.app-shell.is-mobile-workspace .mobile-measurement-fixed-keypad .mobile-quantity-key {
+  min-height: 52px;
+  font-size: 1.15rem;
+}
+.app-shell.is-mobile-workspace .mobile-measurement-keypad-next {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 10px;
+  border: 1px solid #315575;
+  border-radius: 7px;
+  background: #315575;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mobile-measurement-keypad-next:disabled { opacity: .65; cursor: wait; }

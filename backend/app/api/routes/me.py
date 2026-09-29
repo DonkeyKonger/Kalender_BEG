@@ -28,6 +28,8 @@ from app.schemas.measurement import (
     CustomerSignatureCreate,
     MeasurementAreaRowCreate,
     MeasurementAreaRowRead,
+    MeasurementAreaRename,
+    MobileMeasurementAreaRenameRead,
     MeasurementEntryCreate,
     MeasurementEntryRead,
     MobileMeasurementBatchRead,
@@ -915,6 +917,23 @@ def create_my_assignment_measurement_area_row(
         batch_id=batch_id,
         current_user=current_user,
         payload=payload,
+    )
+
+
+@router.patch(
+    "/assignments/{assignment_id}/measurement-batches/{batch_id}/areas",
+    response_model=MobileMeasurementAreaRenameRead,
+)
+def rename_my_assignment_measurement_area(
+    assignment_id: int,
+    batch_id: int,
+    payload: MeasurementAreaRename,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MobileMeasurementAreaRenameRead:
+    return MeasurementService(db).rename_mobile_batch_area(
+        assignment_id=assignment_id, batch_id=batch_id, current_user=current_user,
+        previous=payload.previous, replacement=payload.replacement,
     )
 
 

@@ -59,7 +59,8 @@ test("mobile keeps the existing position selection and grouping behavior", () =>
 
 test("mobile measurement entry supports signed quantities through keypad and physical keyboard", () => {
   assert.match(mobilePageSource, /type MeasurementQuantityKey = [^;]*\| "minus" \| "backspace" \| "clear";/);
-  assert.equal((mobilePageSource.match(/key: "minus", label: "−"/g) ?? []).length, 2);
+  assert.equal((mobilePageSource.match(/key: "minus", label: "−"/g) ?? []).length, 1);
+  assert.match(mobilePageSource, /<MeasurementQuantityKeypad variant="entry" disabled=\{disabled\} onKeyPress=\{onKeyPress\}/);
   assert.match(mobilePageSource, /if \(event\.key === "-" \|\| event\.key === "Subtract"\)/);
   assert.match(mobilePageSource, /if \(key === "minus"\)/);
   assert.match(stylesSource, /\.measurement-negative-quantity,\s*\.measurement-negative-quantity input \{\s*color: #8b3f46 !important;/s);

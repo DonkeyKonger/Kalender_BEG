@@ -1,3 +1,4 @@
+import { MobileMeasurementAreaLabel } from "../components/MobileMeasurementAreaLabel";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -66,6 +67,7 @@ import type { CustomerSignatureStroke, ExtraWorkTicketEmailSendResponse, Measure
 import { getIsoWeekInfo, getIsoWeekRange, getIsoWeeksInYear, toDateInputValue } from "../utils/dateRange";
 import "./MobileMeasurementPositions.css";
 import "./MobileMeasurementEntry.css";
+import "./MobileMeasurementTablet.css";
 import "./MobileMeasurementOverview.css";
 import "./MobileProjectEmailRecipients.css";
 import "./MobileMeasurementEmailSend.css";
@@ -4515,15 +4517,34 @@ function MobileMeasurementTab({
 
   async function createMeasurementAreaRow(areaOrComment: string): Promise<void> {
     if (!selectedBatch) {
-      return;
+      throw new Error("Bitte ein Aufmaß auswählen.");
     }
+    setIsSaving(true);
     try {
       const areaRow = await api.createMobileMeasurementAreaRow(assignment.id, selectedBatch.id, {
         area_or_comment: areaOrComment,
       });
       updateBatchAreaRows(selectedBatch.id, areaRow);
-    } catch (requestError) {
-      setError(readApiError(requestError, "Bereich / Ort konnte nicht gespeichert werden."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function renameMeasurementArea(previous: string, replacement: string): Promise<void> {
+    if (!selectedBatch) throw new Error("Bitte ein Aufmaß auswählen.");
+    setIsSaving(true);
+    try {
+      const result = await api.renameMobileMeasurementArea(assignment.id, selectedBatch.id, previous, replacement);
+      const replaceBatch = (batch: MobileMeasurementBatch) => batch.id === result.batch.id ? result.batch : batch;
+      setBatches((current) => current.map(replaceBatch));
+      setSelectedBatch((current) => current ? replaceBatch(current) : current);
+      setSignatureBatch((current) => current ? replaceBatch(current) : current);
+      setWorkerSignatureBatch((current) => current ? replaceBatch(current) : current);
+      setPhotoGalleryBatch((current) => current ? replaceBatch(current) : current);
+      setItems((current) => [...result.items, ...current.filter(isInlineFreePositionDraftItem)]);
+      setSelectedItem((current) => current ? result.items.find((item) => item.id === current.id) ?? current : null);
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -4824,7 +4845,7 @@ function MobileMeasurementTab({
       setInlineError("Bitte eine gültige Menge eingeben.");
       return false;
     }
-    if (isAddRow && !hasInlineQuantityInput) {
+    if (!hasInlineQuantityInput && (isAddRow || existingEntries.length === 0)) {
       cancelInlineMeasurementEdit();
       return true;
     }
@@ -4832,7 +4853,7 @@ function MobileMeasurementTab({
       setInlineError("Bitte Bereich oder Kommentar angeben.");
       return false;
     }
-    if (!isAddRow && Math.abs(quantity - existingQuantity) < 0.0001) {
+    if (!isAddRow && hasInlineQuantityInput && existingEntries.length > 0 && Math.abs(quantity - existingQuantity) < 0.0001) {
       cancelInlineMeasurementEdit();
       return true;
     }
@@ -5149,6 +5170,7 @@ function MobileMeasurementTab({
           onInlineCreatePosition={addInlineFreePositionColumn}
           onInlineFreePositionDraftChange={updateInlineFreePositionDraft}
           onAreaRowCreate={createMeasurementAreaRow}
+          onAreaRename={renameMeasurementArea}
         />
         {isFreePositionFormOpen ? (
           <div
@@ -5978,6 +6000,7 @@ function MeasurementBatchDetail({
   onInlineCreatePosition,
   onInlineFreePositionDraftChange,
   onAreaRowCreate,
+  onAreaRename,
 }: {
   batch: MobileMeasurementBatch;
   items: MobileMeasurementItem[];
@@ -6002,6 +6025,7 @@ function MeasurementBatchDetail({
   onInlineCreatePosition: () => void;
   onInlineFreePositionDraftChange: (itemId: number, patch: Partial<Pick<MobileMeasurementItem, "position" | "description" | "unit">>) => void;
   onAreaRowCreate: (areaOrComment: string) => Promise<void>;
+  onAreaRename: (previous: string, replacement: string) => Promise<void>;
 }) {
   const positionGroups = useMemo(() => buildMeasurementPositionGroups(allItems), [allItems]);
   const [activePositionGroupKey, setActivePositionGroupKey] = useState<string | null>(null);
@@ -6159,6 +6183,7 @@ function MeasurementBatchDetail({
               onInlineCreatePosition={onInlineCreatePosition}
               onInlineFreePositionDraftChange={onInlineFreePositionDraftChange}
               onAreaRowCreate={onAreaRowCreate}
+              onAreaRename={onAreaRename}
               onSelectItem={onSelectItem}
             />
           ) : (
@@ -6314,6 +6339,7 @@ function MobileMeasurementTable({
   onInlineCreatePosition,
   onInlineFreePositionDraftChange,
   onAreaRowCreate,
+  onAreaRename,
   onSelectItem,
 }: {
   batch: MobileMeasurementBatch;
@@ -6331,6 +6357,7 @@ function MobileMeasurementTable({
   onInlineCreatePosition: () => void;
   onInlineFreePositionDraftChange: (itemId: number, patch: Partial<Pick<MobileMeasurementItem, "position" | "description" | "unit">>) => void;
   onAreaRowCreate: (areaOrComment: string) => Promise<void>;
+  onAreaRename: (previous: string, replacement: string) => Promise<void>;
   onSelectItem: (item: MobileMeasurementItem) => void;
 }) {
   const displayItems = useMemo(() => buildMeasurementTableDisplayItems(items, batch), [batch, items]);
@@ -6346,6 +6373,8 @@ function MobileMeasurementTable({
   }, [areaRows.length]);
   const [draftAreaRow, setDraftAreaRow] = useState<{ anchor: string; value: string; area: string | null } | null>(null);
   const draftAreaInputRef = useRef<HTMLInputElement | null>(null);
+  const areaSavingRef = useRef(false);
+  const [areaError, setAreaError] = useState<string | null>(null);
   const editableCells = useMemo(() => {
     const cells: Array<{ item: MobileMeasurementItem; area: string; mode: InlineMeasurementEditMode }> = [];
     areaRows.forEach((area) => {
@@ -6446,11 +6475,12 @@ function MobileMeasurementTable({
         return;
       }
     }
+    setAreaError(null);
     setDraftAreaRow({ anchor, value: "", area: null });
   }
 
-  function commitDraftAreaRow(): void {
-    if (!draftAreaRow || !canAddFromTable) {
+  async function commitDraftAreaRow(): Promise<void> {
+    if (!draftAreaRow || !canAddFromTable || areaSavingRef.current) {
       return;
     }
     const normalizedArea = normalizeMeasurementAreaInput(normalizeMeasurementArea(draftAreaRow.value));
@@ -6458,14 +6488,18 @@ function MobileMeasurementTable({
       setDraftAreaRow(null);
       return;
     }
-    setPendingAreaRows((currentRows) => (
-      currentRows.some((area) => getMeasurementAreaKey(area) === getMeasurementAreaKey(normalizedArea))
-        ? currentRows
-        : [...currentRows, normalizedArea]
-    ));
-    setDraftAreaRow(null);
-    if (!areaRows.some((area) => getMeasurementAreaKey(area) === getMeasurementAreaKey(normalizedArea))) {
-      void onAreaRowCreate(normalizedArea);
+    areaSavingRef.current = true;
+    setAreaError(null);
+    try {
+      if (!areaRows.some((area) => getMeasurementAreaKey(area) === getMeasurementAreaKey(normalizedArea))) {
+        await onAreaRowCreate(normalizedArea);
+        setPendingAreaRows((currentRows) => mergeMeasurementAreaRows(currentRows, [normalizedArea]));
+      }
+      setDraftAreaRow(null);
+    } catch (cause) {
+      setAreaError(readApiError(cause, "Bauteil / Ort konnte nicht gespeichert werden."));
+    } finally {
+      areaSavingRef.current = false;
     }
   }
 
@@ -6519,7 +6553,7 @@ function MobileMeasurementTable({
   }
 
   function renderActiveCell(item: MobileMeasurementItem, area: string, mode: InlineMeasurementEditMode): ReactElement {
-    const displayValue = inlineQuantity || "0";
+    const displayValue = inlineQuantity;
     return (
       <button
         autoFocus
@@ -6582,6 +6616,10 @@ function MobileMeasurementTable({
         type="text"
         value={draftAreaRow?.value ?? ""}
         placeholder="Bauteil / Ort"
+        aria-label="Neuer Bauteil / Ort"
+        maxLength={1000}
+        disabled={isInlineSaving}
+        aria-invalid={Boolean(areaError)}
         autoCapitalize="characters"
         autoCorrect="off"
         spellCheck={false}
@@ -6589,11 +6627,11 @@ function MobileMeasurementTable({
           const nextValue = normalizeMeasurementAreaInput(event.target.value);
           setDraftAreaRow((currentRow) => (currentRow ? { ...currentRow, value: nextValue } : currentRow));
         }}
-        onBlur={commitDraftAreaRow}
+        onBlur={() => void commitDraftAreaRow()}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
-            commitDraftAreaRow();
+            void commitDraftAreaRow();
           }
           if (event.key === "Escape") {
             event.preventDefault();
@@ -6657,9 +6695,9 @@ function MobileMeasurementTable({
 
   return (
     <>
-      <div className="mobile-measurement-table-shell">
+      <div className="mobile-measurement-table-shell is-touch-table">
         <div className="mobile-measurement-table-wrap" role="region" aria-label="Tabellarische Aufmaßaufstellung">
-          <table className={`measurement-table-view measurement-matrix-table mobile-measurement-table${isInlineEditingEnabled ? " is-inline-editing-enabled" : ""}`}>
+          <table className={`measurement-table-view measurement-matrix-table mobile-measurement-table is-touch-table${isInlineEditingEnabled ? " is-inline-editing-enabled" : ""}`}>
           <thead>
             <tr>
               <th className="measurement-matrix-axis">Pos.-Nr.</th>
@@ -6740,7 +6778,16 @@ function MobileMeasurementTable({
             {areaRows.map((area) => (
               <Fragment key={area}>
                 <tr>
-                  <th className="measurement-matrix-axis">{area}</th>
+                  <th className="measurement-matrix-axis">
+                    {isInlineEditingEnabled ? (
+                      <MobileMeasurementAreaLabel area={area} disabled={isInlineSaving}
+                        onStart={async () => !inlineCell || await onInlineSave()}
+                        onSave={async (replacement) => {
+                          await onAreaRename(area, replacement);
+                          setPendingAreaRows((current) => current.map((row) => getMeasurementAreaKey(row) === getMeasurementAreaKey(area) ? replacement : row));
+                        }} />
+                    ) : area}
+                  </th>
                   {displayItems.map((item) => {
                     const quantity = getMobileMeasurementAreaQuantity(item, area);
                     const isActive = isInlineCellActive(item, area, "cell");
@@ -6802,10 +6849,10 @@ function MobileMeasurementTable({
         <MeasurementTableFixedKeypad
           disabled={isInlineSaving}
           onKeyPress={handleQuantityKey}
-          onEnter={() => void onInlineSave()}
           onNext={handleNumpadNext}
         />
       ) : null}
+      {areaError ? <p className="form-error" role="alert">{areaError}</p> : null}
     </>
   );
 }
@@ -6813,59 +6860,18 @@ function MobileMeasurementTable({
 function MeasurementTableFixedKeypad({
   disabled,
   onKeyPress,
-  onEnter,
   onNext,
 }: {
   disabled: boolean;
   onKeyPress: (key: MeasurementQuantityKey) => void;
-  onEnter: () => void;
   onNext: () => void;
 }) {
-  const keys: Array<{ key: MeasurementQuantityKey; label: string; className?: string; ariaLabel?: string }> = [
-    { key: "7", label: "7" },
-    { key: "8", label: "8" },
-    { key: "9", label: "9" },
-    { key: "4", label: "4" },
-    { key: "5", label: "5" },
-    { key: "6", label: "6" },
-    { key: "1", label: "1" },
-    { key: "2", label: "2" },
-    { key: "3", label: "3" },
-    { key: ",", label: "," },
-    { key: "0", label: "0" },
-    { key: ".", label: "." },
-    { key: "minus", label: "−", ariaLabel: "Vorzeichen wechseln" },
-    { key: "backspace", label: "Zurück", className: "is-muted", ariaLabel: "Letzte Ziffer entfernen" },
-    { key: "clear", label: "Leeren", className: "is-muted", ariaLabel: "Menge leeren" },
-  ];
-
   return (
-    <div className="mobile-measurement-fixed-keypad" aria-label="Tabellenmenge eingeben">
-      <div className="mobile-measurement-fixed-keypad-grid">
-        {keys.map((keyConfig) => (
-          <button
-            aria-label={keyConfig.ariaLabel}
-            className={keyConfig.className ? `mobile-measurement-fixed-key ${keyConfig.className}` : "mobile-measurement-fixed-key"}
-            disabled={disabled}
-            key={keyConfig.key}
-            type="button"
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={() => onKeyPress(keyConfig.key)}
-          >
-            {keyConfig.label}
-          </button>
-        ))}
+    <div className="mobile-measurement-fixed-keypad mobile-measurement-entry-page mobile-measurement-capture-page"
+      aria-label="Tabellenmenge eingeben" onPointerDown={(event) => event.preventDefault()}>
+        <MeasurementQuantityKeypad variant="entry" disabled={disabled} onKeyPress={onKeyPress} />
         <button
-          className="mobile-measurement-fixed-key is-commit"
-          disabled={disabled}
-          type="button"
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={onEnter}
-        >
-          Enter
-        </button>
-        <button
-          className="mobile-measurement-fixed-key is-commit"
+          className="mobile-measurement-keypad-next"
           disabled={disabled}
           type="button"
           onPointerDown={(event) => event.preventDefault()}
@@ -6873,7 +6879,6 @@ function MeasurementTableFixedKeypad({
         >
           Weiter
         </button>
-      </div>
     </div>
   );
 }

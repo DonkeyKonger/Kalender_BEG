@@ -58,6 +58,7 @@ from app.schemas.measurement import (
     MeasurementTimesheetRead,
     MeasurementTimesheetRowRead,
     MobileMeasurementBatchRead,
+    MobileMeasurementAreaRenameRead,
     MobileMeasurementBatchPhotoRead,
     MobileMeasurementItemRead,
     WorkerSignatureCreate,
@@ -2047,11 +2048,34 @@ class MeasurementService:
     def rename_site_batch_area(self, *, site_id: int, batch_id: int, previous: str, replacement: str) -> list[MobileMeasurementItemRead]:
         batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
         self._ensure_site_batch_can_be_edited_in_office(batch)
+        self._rename_batch_area(batch, previous, replacement)
+        self.db.commit()
+        return self.list_site_batch_items(site_id=site_id, batch_id=batch_id)
+
+    def rename_mobile_batch_area(
+        self, *, assignment_id: int, batch_id: int, current_user: User,
+        previous: str, replacement: str,
+    ) -> MobileMeasurementAreaRenameRead:
+        assignment = self._get_user_assignment(assignment_id, current_user)
+        batch = self._get_batch_for_site(batch_id, assignment.site_id, for_update=True)
+        if batch.status != "draft":
+            raise HTTPException(status.HTTP_409_CONFLICT, "Dieses Aufmaß wurde bereits zur Prüfung gesendet.")
+        self._ensure_mobile_batch_can_be_edited_by_worker(batch)
+        self._rename_batch_area(batch, previous, replacement)
+        self.db.commit()
+        return MobileMeasurementAreaRenameRead(
+            batch=self._build_mobile_batch(batch),
+            items=self.list_mobile_batch_items(assignment_id=assignment_id, batch_id=batch_id, current_user=current_user),
+        )
+
+    def _rename_batch_area(self, batch: SiteMeasurementBatch, previous: str, replacement: str) -> None:
         label = " ".join(replacement.split())
         old_key = _measurement_entry_area_key(previous)
         new_key = _measurement_entry_area_key(label)
         if not label:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Montageort darf nicht leer sein.")
+        if len(label) > 1000:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Montageort darf höchstens 1000 Zeichen enthalten.")
         records = [*batch.entries, *batch.area_rows]
         matches = [row for row in records if _measurement_entry_area_key(row.area_or_comment) == old_key]
         if not matches:
@@ -2061,8 +2085,6 @@ class MeasurementService:
         for row in matches:
             row.area_or_comment = label
         batch.updated_at = datetime.now(timezone.utc)
-        self.db.commit()
-        return self.list_site_batch_items(site_id=site_id, batch_id=batch_id)
 
     def reset_site_batch_to_submitted(
         self, *, site_id: int, batch_id: int
