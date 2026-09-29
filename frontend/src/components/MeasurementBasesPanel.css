@@ -1,0 +1,210 @@
+.site-detail-page.is-project-file-workspace .project-record-tab-panel.is-measurement-bases-panel {
+  gap: 0;
+  padding: 0;
+  background: var(--pf-surface);
+}
+
+.site-detail-page.is-project-file-workspace .is-measurement-bases-panel > .project-record-subtab-bar {
+  width: 100%;
+  margin: 0;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-bases-panel {
+  gap: 0;
+  border: 0;
+  background: var(--pf-surface);
+  padding-bottom: 20px;
+}
+
+.measurement-bases-panel .measurement-bases-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  border-bottom: 1px solid var(--pf-border);
+  padding: 14px 18px;
+  color: #142d4e;
+}
+
+.measurement-bases-panel .measurement-bases-heading h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.25;
+}
+
+.measurement-bases-panel .measurement-base-group {
+  min-width: 0;
+  padding: 16px 18px 0;
+}
+
+.measurement-bases-panel .measurement-base-group h3 {
+  margin: 0 0 8px;
+  color: #52657c;
+  font-size: 0.94rem;
+  line-height: 1.4;
+}
+
+.measurement-bases-panel .measurement-base-list {
+  margin: 0;
+  gap: 10px;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-base-card {
+  min-height: 96px;
+  gap: 20px;
+  padding: 16px 20px;
+  border-radius: 0;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-base-card.is-active {
+  border-color: #b6d5fc;
+  background: #f0f7ff;
+  box-shadow: inset 4px 0 0 #3b82f6;
+}
+
+.measurement-bases-panel .measurement-base-card > .measurement-base-main {
+  flex: 1 1 auto;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
+.measurement-bases-panel .measurement-base-document-icon {
+  color: #183554;
+}
+
+.measurement-bases-panel .measurement-base-copy {
+  gap: 4px;
+}
+
+.measurement-bases-panel .measurement-base-title-row {
+  display: grid;
+  gap: 2px;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-base-title-row strong {
+  color: #142d4e;
+  font-size: 1.06rem;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-offer-note-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 24px;
+  margin-left: -4px;
+  padding: 1px 3px;
+  color: #2b405d;
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-offer-note-input:hover,
+.site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-offer-note-input:focus {
+  border-color: #b6cce7;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-base-card > .measurement-base-actions {
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.measurement-bases-panel .measurement-base-visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #187231;
+  font-size: 0.84rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.measurement-bases-panel .measurement-base-visibility > span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #36b855;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-base-actions > :is(.primary-action, .secondary-action) {
+  min-width: 110px;
+  min-height: 36px;
+  border-radius: 0;
+}
+
+.site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-base-delete-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 36px;
+  width: 44px;
+  border: 0;
+  border-left: 1px solid var(--pf-border);
+  border-radius: 0;
+  padding: 6px 0 6px 16px;
+  background: transparent;
+  color: #52657c;
+  cursor: pointer;
+}
+
+.measurement-bases-panel .measurement-base-delete-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.measurement-bases-panel .measurement-base-delete-action:hover:not(:disabled) {
+  color: #1d4ed8;
+}
+
+.measurement-bases-panel .measurement-base-delete-action:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.measurement-bases-panel > .project-record-empty-state {
+  margin: 16px 20px 0;
+}
+
+@media (max-width: 1000px) {
+  .site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-base-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-base-card > .measurement-base-actions {
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  .measurement-bases-panel .measurement-base-visibility {
+    margin-right: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .measurement-bases-panel .measurement-bases-heading,
+  .measurement-bases-panel .measurement-base-group {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .site-detail-page.is-project-file-workspace .measurement-bases-panel .measurement-base-card {
+    padding: 14px 12px;
+  }
+
+  .measurement-bases-panel .measurement-base-card > .measurement-base-main {
+    gap: 10px;
+  }
+
+  .measurement-bases-panel .measurement-base-visibility {
+    flex-basis: 100%;
+  }
+}

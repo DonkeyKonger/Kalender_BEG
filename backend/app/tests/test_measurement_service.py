@@ -1164,6 +1164,34 @@ def test_measurement_base_activate_and_delete_rules():
     assert all(base.id != delete_base.id for base in deleted_bases)
 
 
+def test_measurement_base_can_be_deactivated_and_reactivated_without_deletion():
+    from app.schemas.measurement import MeasurementBaseUpdate
+
+    db = db_session()
+    site = create_site(db)
+    base = create_measurement_base(db, site)
+    db.commit()
+    service = MeasurementService(db)
+
+    updated = service.update_measurement_base(
+        site_id=site.id,
+        measurement_base_id=base.id,
+        payload=MeasurementBaseUpdate(status="draft", released_to_mobile=False),
+    )
+    assert updated.status == "draft"
+    assert updated.released_to_mobile is False
+    assert [entry.id for entry in service.list_measurement_bases(site.id)] == [base.id]
+    assert service.list_items(site.id, active_only=True) == []
+    with pytest.raises(HTTPException) as unavailable:
+        service._get_mobile_measurement_base_for_site(site.id)
+    assert unavailable.value.status_code == 409
+
+    restored = service.activate_measurement_base(site_id=site.id, measurement_base_id=base.id)
+    assert restored[0].id == base.id
+    assert restored[0].status == "active"
+    assert restored[0].released_to_mobile is True
+
+
 def test_mobile_batch_uses_only_active_released_measurement_base():
     from datetime import date
 

@@ -10,6 +10,7 @@ import { MeasurementLabelDialog } from "../components/MeasurementLabelDialog";
 import { MeasurementImportDialog } from "../components/MeasurementImportDialog";
 import { MeasurementReviewStatusBar } from "../components/MeasurementReviewStatusBar";
 import { MeasurementOfferViewer } from "../components/MeasurementOfferViewer";
+import "../components/MeasurementBasesPanel.css";
 import type { MeasurementOverviewState } from "../lib/measurementReviewOverview";
 import { canEditMeasurementContent } from "../lib/measurementReviewContent";
 import { navigateMeasurementTable } from "../lib/measurementTableNavigation";
@@ -19,7 +20,7 @@ import "../components/MeasurementReviewMarks.css";
 import type { OverviewPhoto, OverviewPhotoKind } from "../lib/extraWorkPhotoPreview";
 import { ProjectNoteTextarea } from "../components/ProjectNoteTextarea";
 import { SiteProjectNotes } from "../components/SiteProjectNotes";
-import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Plus, RotateCcw, Ruler, Search, UploadCloud, UserPlus, Wrench, X } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, File as FileIcon, FileImage, FileSpreadsheet, FileText, Flag, Folder, Mail, MailCheck, MailX, MapPin, Minus, MoreHorizontal, Pencil, Plus, RotateCcw, Ruler, Search, Trash2, UploadCloud, UserPlus, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
@@ -1271,11 +1272,18 @@ export function SiteDetailPage() {
     if (!site || measurementImporting) {
       return;
     }
+    setMeasurementImportMessage(null);
     setMeasurementImportError(null);
     try {
       const updated = await api.updateMeasurementBase(site.id, base.id, payload);
       setMeasurementBases((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setMeasurementCatalogItems(await api.measurementItems(site.id, { activeOnly: true }));
+      if (payload.status !== undefined || payload.released_to_mobile !== undefined) {
+        setMeasurementTimesheet(await api.measurementTimesheet(site.id));
+        setMeasurementBatches([]);
+        setMeasurementBatchesLoaded(false);
+        setMeasurementImportMessage("Zeitenliste wurde deaktiviert.");
+      }
     } catch (requestError) {
       setMeasurementImportError(readApiError(requestError, "Angebot konnte nicht aktualisiert werden."));
     }
@@ -5235,7 +5243,7 @@ function MeasurementTab({
   }
 
   return (
-    <div className="project-record-tab-panel">
+    <div className={`project-record-tab-panel${activeSubtab === "bases" ? " is-measurement-bases-panel" : ""}`}>
       <div className="project-record-subtab-bar">
         <div className="project-record-subtabs" role="tablist" aria-label="Aufmaß Bereiche">
           {measurementSubtabs.map((tab) => (
@@ -5971,22 +5979,33 @@ function MeasurementBasesPanel({
     () => new Map(sortedBases.map((base, index) => [base.id, index + 1])),
     [sortedBases],
   );
+  const groups = [
+    { title: "Aktuell für Monteure", active: true },
+    { title: "Inaktive Zeitenlisten", active: false },
+  ];
 
   return (
     <section className="measurement-bases-panel">
-      <div className="project-record-toolbar">
-        <div>
-          <h2><Ruler aria-hidden="true" size={18} />Angebotsübersicht</h2>
-          <p>Angebote verwalten. Der Monteur sieht immer genau ein Angebot für die Aufmaßerstellung.</p>
-        </div>
-      </div>
+      <header className="measurement-bases-heading">
+        <FileText aria-hidden="true" size={24} />
+        <h2>Zeitenlisten</h2>
+      </header>
       {message ? <div className="project-record-empty-state is-success">{message}</div> : null}
       {error ? <div className="project-record-empty-state is-error"><strong>{error}</strong></div> : null}
       {bases.length === 0 ? (
-        <div className="project-record-empty-state">Noch kein Angebot vorhanden.</div>
+        <div className="project-record-empty-state">Noch keine Zeitenliste vorhanden.</div>
       ) : (
-        <div className="measurement-base-list">
-          {sortedBases.map((base) => {
+        groups.map((group) => (
+        <section className="measurement-base-group" key={group.title} aria-label={group.title}>
+          <h3>{group.title}</h3>
+          {group.active && !sortedBases.some((base) => base.status === "active" && base.released_to_mobile) ? (
+            <div className="project-record-empty-state">Aktuell ist keine Zeitenliste für Monteure freigegeben.</div>
+          ) : null}
+          {!group.active && sortedBases.every((base) => base.status === "active" && base.released_to_mobile) ? (
+            <div className="project-record-empty-state">Keine inaktiven Zeitenlisten.</div>
+          ) : null}
+          <div className="measurement-base-list">
+          {sortedBases.filter((base) => (base.status === "active" && base.released_to_mobile) === group.active).map((base) => {
             const isActive = base.status === "active" && base.released_to_mobile;
             const positionCount = base.item_count ?? 0;
             const hasMeasurementData = (base.batch_count ?? 0) > 0;
@@ -5995,9 +6014,10 @@ function MeasurementBasesPanel({
             return (
               <article className={`measurement-base-card${isActive ? " is-active" : ""}`} key={base.id}>
                 <div className="measurement-base-main">
+                  <FileText className="measurement-base-document-icon" aria-hidden="true" size={28} />
                   <div className="measurement-base-copy">
                     <div className="measurement-base-title-row">
-                      <strong>{offerLabel}</strong>
+                      <strong title={offerLabel}>{offerLabel}</strong>
                       <input
                         className="measurement-offer-note-input"
                         key={`${base.id}-${base.source_note ?? ""}`}
@@ -6022,36 +6042,40 @@ function MeasurementBasesPanel({
                       />
                     </div>
                     <small>
-                      {isActive ? "Aktiv" : "Inaktiv"} · {positionCount} Positionen · erstellt {formatDateTime(base.created_at)}
+                      {positionCount} Positionen · Importiert am {formatDateTime(base.created_at)}
                     </small>
                   </div>
                 </div>
-                <div>
+                <div className="measurement-base-actions">
+                  {isActive ? <span className="measurement-base-visibility"><span aria-hidden="true" />Für Monteure sichtbar</span> : null}
                   {!isActive ? (
-                    <button type="button" className="secondary-action" onClick={() => onActivateBase(base)}>Aktivieren</button>
+                    <button type="button" className="primary-action" onClick={() => onActivateBase(base)}>Aktivieren</button>
                   ) : (
-                    <span className="measurement-status is-active">Aktiv</span>
+                    <button type="button" className="secondary-action" onClick={() => onUpdateBase(base, { status: "draft", released_to_mobile: false })}>Deaktivieren</button>
                   )}
                   <button
                     type="button"
-                    className="secondary-action"
-                    disabled={isActive || hasMeasurementData}
+                    className="measurement-base-delete-action"
+                    aria-label={`Zeitenliste ${offerLabel} löschen`}
+                    disabled={base.status === "active" || base.released_to_mobile || hasMeasurementData}
                     title={
-                      isActive
-                        ? "Aktive Angebote können nicht gelöscht werden."
+                      base.status === "active" || base.released_to_mobile
+                        ? "Aktive Zeitenlisten können nicht gelöscht werden."
                         : hasMeasurementData
-                          ? "Angebote mit erfassten Aufmaßen können nicht gelöscht werden."
-                          : undefined
+                          ? "Zeitenlisten mit erfassten Aufmaßen können nicht gelöscht werden."
+                          : "Zeitenliste löschen"
                     }
                     onClick={() => onDeleteBase(base)}
                   >
-                    Löschen
+                    <Trash2 aria-hidden="true" size={20} />
                   </button>
                 </div>
               </article>
             );
           })}
-        </div>
+          </div>
+        </section>
+        ))
       )}
     </section>
   );
