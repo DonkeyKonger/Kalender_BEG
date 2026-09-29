@@ -166,10 +166,10 @@ const measurementSubtabs: { key: MeasurementSubtab; label: string }[] = [
 
 const projectRecordTabs: { key: ProjectRecordTab; label: string }[] = [
   { key: "overview", label: "Übersicht" },
-  { key: "folders", label: "Projektdateien" },
-  { key: "assembly-times", label: "Ausführungsstand" },
   { key: "measurement", label: "Aufmaß" },
   { key: "extra-work", label: "Zusatzaufträge" },
+  { key: "folders", label: "Dateien" },
+  { key: "assembly-times", label: "Projektauswertung" },
   { key: "tools-material", label: "Werkzeuge & Material" },
 ];
 

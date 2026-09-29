@@ -4,6 +4,14 @@ import test from "node:test";
 
 const source = readFileSync(new URL("../src/pages/SiteDetailPage.tsx", import.meta.url), "utf8");
 
+test("project tabs follow the requested order and labels without changing navigation keys", () => {
+  const config = source.slice(source.indexOf("const projectRecordTabs:"), source.indexOf("const timeEntryStatusLabels:"));
+  assert.deepEqual([...config.matchAll(/key: "([^"]+)", label: "([^"]+)"/g)].map(match => [match[1], match[2]]), [
+    ["overview", "Übersicht"], ["measurement", "Aufmaß"], ["extra-work", "Zusatzaufträge"],
+    ["folders", "Dateien"], ["assembly-times", "Projektauswertung"], ["tools-material", "Werkzeuge & Material"],
+  ]);
+});
+
 test("measurement navigation prioritizes review without removing the other sections", () => {
   const config = source.slice(source.indexOf("const measurementSubtabs:"), source.indexOf("const projectRecordTabs:"));
   assert.deepEqual([...config.matchAll(/key: "([^"]+)", label: "([^"]+)"/g)].map(match => [match[1], match[2]]), [
