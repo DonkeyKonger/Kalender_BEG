@@ -79,7 +79,12 @@ def resolve_manager_folder(storage, db, *, person_id, parent_id, name, create=Tr
 
     candidates = storage._folder_children(parent_id)
     target = next((item for item in candidates if item["name"].casefold() == name.casefold()), None)
-    if not binding:
+    if not binding and target is not None:
+        # Bootstrap old installations using the current calendar name. Legacy
+        # aliases may still exist, but must not block new projects. Do not merge
+        # their contents or replace an already persisted folder identity.
+        current = target
+    elif not binding:
         aliases = {name.casefold()}
         if previous_name:
             aliases.add(normalized(previous_name))

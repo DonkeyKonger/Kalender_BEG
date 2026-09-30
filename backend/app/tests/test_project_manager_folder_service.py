@@ -7,10 +7,12 @@ from sqlalchemy.orm import Session
 
 from app.models import Base, AuditLog, Person, ProjectFolder, ProjectManagerFolder, Site
 from app.schemas.person import PersonUpdate
+from app.schemas.site import SiteCreate, SiteUpdate
 from app.services.person_service import PersonService
 from app.services.project_manager_folder_service import sync_manager_rename
 from app.services.project_storage_service import ProjectStorageService
 from app.services.microsoft_graph_client import MicrosoftGraphRequestError
+from app.services.site_service import SiteService
 
 
 class FolderGraph:
@@ -156,16 +158,111 @@ def test_failed_rename_is_visible_and_retried_from_audit_history(env, monkeypatc
     assert graph.posts == []
 
 
-def test_multiple_historical_folders_are_not_merged(env):
+@pytest.mark.parametrize("parent", ["root", "archive"])
+def test_current_calendar_name_wins_over_unbound_historical_folders(env, parent):
     db, person, graph, storage = env
-    graph.folder("old", "CE")
-    graph.folder("new", "Christopher_Erichsen")
+    graph.folder("old", "CE", parent)
+    graph.folder("old-site", "8007_Klinik", "old")
+    graph.folder("new", "Christopher_Erichsen", parent)
     person.display_name = "Christopher Erichsen"
     db.add(AuditLog(action="person.updated", entity_type="person", entity_id=person.id,
         old_value_json={"display_name": "CE"}, new_value_json={"display_name": person.display_name}))
+
+    assert resolve(env, "Christopher_Erichsen", parent=parent)["id"] == "new"
+    assert resolve(env, "Christopher_Erichsen", parent=parent)["id"] == "new"
+    assert db.scalar(select(ProjectManagerFolder)).folder_id == "new"
+    assert graph.items["old-site"]["parentReference"]["id"] == "old"
+    assert graph.items["old"]["name"] == "CE"
+    assert graph.posts == graph.patches == []
+
+    # The chosen identity also survives the next rename; no third container.
+    assert resolve(env, "Christopher_E", parent=parent)["id"] == "new"
+    assert graph.items["old"]["name"] == "CE"
+    assert graph.posts == []
+    assert len(graph.patches) == 1
+
+
+def test_multiple_historical_folders_without_current_name_remain_ambiguous(env):
+    db, person, graph, storage = env
+    graph.folder("old", "CE")
+    graph.folder("old2", "CC")
+    db.add(AuditLog(action="person.updated", entity_type="person", entity_id=person.id,
+        old_value_json={"display_name": "CE"}, new_value_json={"display_name": "CC"}))
     with pytest.raises(HTTPException, match="Mehrere"):
         resolve(env, "Christopher_Erichsen")
     assert graph.posts == graph.patches == []
+
+
+def test_create_site_with_legacy_manager_folders_and_retry_keeps_one_project(env, monkeypatch):
+    db, person, graph, storage = env
+    graph.folder("old", "CE")
+    graph.folder("current", "Christopher_Erichsen")
+    graph.folder("old-site", "8007_Klinik", "old")
+    person.display_name = "Christopher Erichsen"
+    db.add(AuditLog(action="person.updated", entity_type="person", entity_id=person.id,
+        old_value_json={"display_name": "CE"}, new_value_json={"display_name": person.display_name}))
+    monkeypatch.setattr(storage, "_ensure_material_order_template", lambda folder_id: None)
+    service = SiteService(db, project_storage=storage)
+
+    site = service.create_site(SiteCreate(
+        name="Neubau", site_number="8038", project_manager_person_id=person.id, color="#60a5fa",
+    ), user_id=None)
+
+    assert site.project_folder_status == "created"
+    folder_id = site.project_folder_id
+    assert graph.items[folder_id]["parentReference"]["id"] == "current"
+    assert len(db.scalars(select(ProjectFolder).where(
+        ProjectFolder.site_id == site.id, ProjectFolder.external_item_id.is_not(None),
+    )).all()) == 15
+    post_count = len(graph.posts)
+    service.update_site(site.id, SiteUpdate(name="Neubau"), user_id=None)
+    assert site.project_folder_id == folder_id
+    assert len(graph.posts) == post_count
+    assert graph.items["old-site"]["parentReference"]["id"] == "old"
+    assert graph.patches == []
+
+
+def test_new_sites_after_repeated_manager_renames_reuse_the_same_container(env, monkeypatch):
+    db, person, graph, storage = env
+    monkeypatch.setattr(storage, "_ensure_material_order_template", lambda folder_id: None)
+    monkeypatch.setattr("app.services.project_manager_folder_service.ProjectStorageService", lambda **kwargs: storage)
+    service = SiteService(db, project_storage=storage)
+    first = service.create_site(SiteCreate(
+        name="Erste Baustelle", site_number="8038", project_manager_person_id=person.id, color="#60a5fa",
+    ), user_id=None)
+    manager_id = graph.items[first.project_folder_id]["parentReference"]["id"]
+    for name in ("Christopher Erichsen", "C. Erichsen", "CE"):
+        PersonService(db).update_person(person.id, PersonUpdate(display_name=name), user_id=None)
+    second = service.create_site(SiteCreate(
+        name="Zweite Baustelle", site_number="8039", project_manager_person_id=person.id, color="#60a5fa",
+    ), user_id=None)
+
+    assert graph.items[first.project_folder_id]["parentReference"]["id"] == manager_id
+    assert graph.items[second.project_folder_id]["parentReference"]["id"] == manager_id
+    assert graph.items[manager_id]["name"] == "CE"
+    assert sum(path == "/drives/drive/items/root/children" for path, _ in graph.posts) == 1
+    assert len(graph.patches) == 3
+
+
+def test_previously_failed_site_can_retry_using_current_manager_name(env, monkeypatch):
+    db, person, graph, storage = env
+    graph.folder("old", "CE")
+    graph.folder("current", "Christopher_Erichsen")
+    person.display_name = "Christopher Erichsen"
+    db.add(AuditLog(action="person.updated", entity_type="person", entity_id=person.id,
+        old_value_json={"display_name": "CE"}, new_value_json={"display_name": person.display_name}))
+    site = Site(name="Neubau", site_number="8038", project_manager_person_id=person.id,
+                project_folder_status="error", project_folder_error="Mehrere alte/neue Projektleiterordner gefunden.")
+    db.add(site)
+    db.flush()
+    monkeypatch.setattr(storage, "_ensure_material_order_template", lambda folder_id: None)
+
+    SiteService(db, project_storage=storage).update_site(site.id, SiteUpdate(name=site.name), user_id=None)
+
+    assert site.project_folder_status == "created"
+    assert site.project_folder_error is None
+    assert graph.items[site.project_folder_id]["parentReference"]["id"] == "current"
+    assert not any(path == "/drives/drive/items/root/children" for path, _ in graph.posts)
 
 
 def test_bound_folder_with_conflicting_destination_is_not_renamed(env):
@@ -203,16 +300,21 @@ def test_duplicate_person_names_cannot_share_folder(env):
     assert graph.posts == graph.patches == []
 
 
-def test_other_person_binding_cannot_be_adopted(env):
+@pytest.mark.parametrize("with_legacy", [False, True])
+def test_other_person_binding_cannot_be_adopted(env, with_legacy):
     db, person, graph, storage = env
     other = Person(first_name="Other", last_name="Person", display_name="Other", short_code="OP")
     db.add(other)
     db.flush()
     graph.folder("ce", "CE")
+    if with_legacy:
+        graph.folder("legacy", "CC")
+        db.add(AuditLog(action="person.updated", entity_type="person", entity_id=person.id,
+            old_value_json={"display_name": "CC"}, new_value_json={"display_name": "CE"}))
     db.add(ProjectManagerFolder(person_id=other.id, drive_id="drive", parent_folder_id="root", folder_id="ce"))
     with pytest.raises(HTTPException, match="Konflikt"):
         resolve(env)
-    assert graph.patches == []
+    assert graph.posts == graph.patches == []
 
 
 def test_normal_employee_rename_and_disabled_graph_do_not_touch_cloud(env):

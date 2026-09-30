@@ -12,6 +12,14 @@ kopiert. Bei der ersten Zuordnung helfen die im Änderungsprotokoll hinterlegten
 früheren Anzeigenamen. Der Vorgang erstellt keine leeren Projektleiterordner;
 neue Container entstehen weiterhin erst bei der Baustellenanlage.
 
+Der aktuelle Anzeigename im Kalender ist für den Sollnamen maßgeblich. Gibt es
+noch keine gespeicherte Ordnerzuordnung, wird zuerst der Ordner mit genau diesem
+normalisierten Namen übernommen. Parallel vorhandene Ordner früherer Namen
+blockieren die Anlage neuer Baustellen dann nicht mehr und werden nicht verändert.
+Nur wenn der aktuelle Name noch nicht existiert, wird ein eindeutig zuordenbarer
+Altordner umbenannt. Anschließend bleibt die Ordner-ID auch bei weiteren
+Namensänderungen erhalten; es wird kein zweiter Projektleiterordner angelegt.
+
 Die Datenbankmigration `20260928_0123` legt ausschließlich die Zuordnungstabelle
 an. Sie löst keine Cloud-Aufrufe und keinen automatischen Altbestand-Lauf aus.
 
@@ -42,7 +50,12 @@ manuell zugeordnet werden. Es gibt keine unscharfe Suche nach ähnlichen Namen.
 ## Konflikte und Wiederholung
 
 - Mehrere alte/neue Projektleiterordner (z. B. `CE` und
-  `Christopher_Erichsen`) werden nicht automatisch zusammengeführt.
+  `Christopher_Erichsen`) werden nicht automatisch zusammengeführt. Bei der
+  Erstzuordnung hat der aktuelle Kalendername Vorrang. Ohne exakten aktuellen
+  Treffer bleiben mehrere historische Treffer ein Konflikt.
+- Eine bestehende Ordner-ID wird nicht durch einen anderen gleichnamigen
+  Zielordner ersetzt. Eine solche Namenskollision erfordert weiterhin Klärung,
+  damit vorhandene Inhalte nicht stillschweigend vom Projektleiter getrennt werden.
 - Gleichnamige Baustellenordner im Ziel und Altbestand werden nicht überschrieben.
 - Fehlende verknüpfte Ordner werden nicht durch neue leere Ordner ersetzt.
 - Extern verschobene Projektleiterordner werden zur Prüfung gemeldet.
