@@ -40,6 +40,7 @@ export const roleLabels: Record<UserRole, string> = {
   project_manager: "Projektleiter",
   office: "Büro",
   monteur: "Monteur",
+  warehouse: "Lager",
 };
 
 export const absenceTypeLabels: Record<AbsenceType, string> = {

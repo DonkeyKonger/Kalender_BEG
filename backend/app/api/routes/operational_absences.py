@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_app_user, require_business_page
+from app.api.dependencies import require_calendar_user as get_current_app_user, require_business_page
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.operational_absence import (

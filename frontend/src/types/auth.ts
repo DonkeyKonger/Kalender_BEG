@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "project_manager" | "office" | "monteur";
+export type UserRole = "admin" | "project_manager" | "office" | "monteur" | "warehouse";
 export type OfficePagePermission =
   | "overview"
   | "calendar"

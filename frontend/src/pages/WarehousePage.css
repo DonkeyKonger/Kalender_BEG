@@ -1,0 +1,38 @@
+.warehouse-workspace {
+  min-height: 100dvh;
+  padding: clamp(16px, 3vw, 40px);
+  background: #f4f7fb;
+  color: #173658;
+}
+
+.warehouse-header, .warehouse-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.warehouse-header {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #d6e1ed;
+}
+
+.warehouse-brand { min-width: 0; }
+.warehouse-brand img { background: #082544; border-radius: 6px; padding: 4px; }
+.warehouse-brand h1 { margin: 0; font-size: 28px; }
+.warehouse-brand p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.warehouse-header button { min-height: 48px; flex-shrink: 0; }
+
+.warehouse-placeholder {
+  max-width: 760px;
+  margin: 40px auto;
+  padding: clamp(24px, 4vw, 48px);
+  border: 1px solid #d6e1ed;
+  border-radius: 12px;
+  background: white;
+  text-align: center;
+}
+
+.warehouse-placeholder h2 { margin: 16px 0; }
+.warehouse-placeholder p { color: #536b87; line-height: 1.6; }

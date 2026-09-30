@@ -315,6 +315,7 @@ def test_duplicate_username_is_blocked_on_create():
 
 def test_admin_password_reset_stores_last_admin_plain_password():
     user = SimpleNamespace(
+        role=UserRole.MONTEUR,
         id=2,
         password_hash="old-hash",
         last_admin_password_plain="old-start",

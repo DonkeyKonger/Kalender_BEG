@@ -16289,6 +16289,11 @@ body.mobile-modal-scroll-locked {
   letter-spacing: 0;
 }
 
+.admin-warehouse-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 .admin-form-grid {
   display: grid;
   gap: 12px;

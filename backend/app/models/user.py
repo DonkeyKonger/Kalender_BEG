@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, JSON, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, ForeignKey, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -9,6 +9,9 @@ from app.models.enums import UserRole, enum_values
 
 class User(TimestampMixin, Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("role <> 'warehouse' OR person_id IS NULL", name="ck_warehouse_user_without_person"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(80), nullable=False, unique=True, index=True)

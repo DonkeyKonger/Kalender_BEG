@@ -12,6 +12,9 @@ export function canEditMainPage(user: CurrentUser | null, pageKey: OfficePagePer
 }
 
 export function firstAccessiblePath(user: CurrentUser): string | null {
+  if (user.role === "warehouse") {
+    return "/warehouse";
+  }
   const item = navigationItems.find((navItem) => canShowNavItem(user, navItem));
   return item?.path ?? null;
 }

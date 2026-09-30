@@ -20,6 +20,7 @@ import { MiscellaneousPage } from "./pages/MiscellaneousPage";
 import { MyAssignmentsPage } from "./pages/MyAssignmentsPage";
 import { PersonsPage } from "./pages/PersonsPage";
 import { SitesPage } from "./pages/SitesPage";
+import { WarehousePage } from "./pages/WarehousePage";
 
 const MatrixPage = lazy(() =>
   import("./pages/MatrixPage").then((module) => ({ default: module.MatrixPage })),
@@ -45,6 +46,10 @@ export function App() {
         <Route path="/change-password" element={<PasswordChangePage />} />
       </Route>
       <Route element={<ProtectedRoute />}>
+        <Route element={<ProtectedRoute roles={["warehouse"]} />}>
+          <Route path="warehouse" element={<WarehousePage />} />
+        </Route>
+        <Route element={<ProtectedRoute roles={["admin", "project_manager", "office", "monteur"]} />}>
         <Route element={<AppShell />}>
           <Route index element={<HomeRoute />} />
           <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="calendar" />}>
@@ -129,6 +134,7 @@ export function App() {
             />
             <Route path="me/personal-file/tools" element={<MobilePersonalFileToolsPage />} />
           </Route>
+        </Route>
         </Route>
       </Route>
     </Routes>

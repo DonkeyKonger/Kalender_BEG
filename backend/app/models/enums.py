@@ -10,6 +10,7 @@ class UserRole(StrEnum):
     PROJECT_MANAGER = "project_manager"
     OFFICE = "office"
     MONTEUR = "monteur"
+    WAREHOUSE = "warehouse"
 
 
 class OvernightStatus(StrEnum):

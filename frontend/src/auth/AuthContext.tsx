@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadCurrentUser]);
 
   useEffect(() => {
-    if (status !== "authenticated" || !user || !canUsePushNotifications()) {
+    if (status !== "authenticated" || !user || user.role === "warehouse" || !canUsePushNotifications()) {
       return;
     }
     void initializePushNotifications(user).catch((pushError) => {

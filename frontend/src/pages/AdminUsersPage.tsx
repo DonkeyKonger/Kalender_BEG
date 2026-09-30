@@ -96,12 +96,15 @@ export function AdminUsersPage() {
         ...createForm,
         username: createForm.username.trim(),
         display_name: createForm.display_name.trim(),
+        person_id: createForm.role === "warehouse" ? null : createForm.person_id,
       });
       setUsers((current) => [...current, created].sort(compareUsers));
       setDrafts((current) => ({ ...current, [created.id]: toEditableUser(created) }));
       setCreateForm(emptyCreateForm);
       setDrawer(null);
-      setMessage("Benutzer angelegt. Beim ersten Login muss ein eigenes Passwort festgelegt werden.");
+      setMessage(created.role === "warehouse"
+        ? "Lager-Benutzer angelegt. Das Admin-Passwort kann direkt verwendet werden; kein Passwortwechsel erforderlich."
+        : "Benutzer angelegt. Beim ersten Login muss ein eigenes Passwort festgelegt werden.");
     } catch (requestError) {
       setError(readApiError(requestError, "Benutzer konnte nicht angelegt werden."));
     } finally {
@@ -123,7 +126,7 @@ export function AdminUsersPage() {
         display_name: draft.display_name.trim(),
         role: draft.role,
         is_active: draft.is_active,
-        person_id: draft.person_id,
+        person_id: draft.role === "warehouse" ? null : draft.person_id,
         office_page_permissions: draft.office_page_permissions,
       };
       const updated = await api.updateUser(userId, payload);
@@ -152,7 +155,9 @@ export function AdminUsersPage() {
         ...current,
         [userId]: { ...toEditableUser(updated), reset_password: "" },
       }));
-      setMessage("Temporaeres Passwort gesetzt. Beim naechsten Login muss ein eigenes Passwort festgelegt werden.");
+      setMessage(updated.role === "warehouse"
+        ? "Lager-Passwort gesetzt. Es kann direkt verwendet werden; kein Passwortwechsel erforderlich."
+        : "Temporaeres Passwort gesetzt. Beim naechsten Login muss ein eigenes Passwort festgelegt werden.");
     } catch (requestError) {
       setError(readApiError(requestError, "Passwort konnte nicht gesetzt werden."));
     } finally {
@@ -316,7 +321,7 @@ export function AdminUsersPage() {
           onChange={(values) => setCreateForm((current) => ({ ...current, ...values }))}
         />
         <label className="drawer-field">
-          <span>Startpasswort</span>
+          <span>{createForm.role === "warehouse" ? "Passwort" : "Startpasswort"}</span>
           <input
             autoComplete="off"
             type="text"
@@ -390,7 +395,7 @@ export function AdminUsersPage() {
               />
             </label>
             <label className="drawer-field">
-              <span>Neues temporäres Startpasswort</span>
+              <span>{selectedUser.role === "warehouse" ? "Neues Passwort" : "Neues temporäres Startpasswort"}</span>
               <input
                 autoComplete="off"
                 type="text"
@@ -432,6 +437,7 @@ function UserBaseFields({
             const role = event.target.value as UserRole;
             onChange({
               role,
+              ...(role === "warehouse" ? { person_id: null } : {}),
               ...(role === "office" ? {} : { office_page_permissions: [] }),
             });
           }}
@@ -439,13 +445,15 @@ function UserBaseFields({
           {roleOptions()}
         </select>
       </label>
-      <label>
+      {draft.role !== "warehouse" ? <label>
         <span>Person</span>
         <select value={draft.person_id ?? ""} onChange={(event) => onChange({ person_id: parsePersonId(event.target.value) })}>
           <option value="">Keine Zuordnung</option>
           {personOptions(people)}
         </select>
-      </label>
+      </label> : (
+        <p className="form-info admin-warehouse-hint">Lagerzugang ohne Personenverknüpfung. Das vom Admin gesetzte Passwort bleibt bei der ersten Anmeldung gültig.</p>
+      )}
           <label className="checkbox-field">
             <input checked={draft.is_active} type="checkbox" onChange={(event) => onChange({ is_active: event.target.checked })} />
             <span>Aktiv</span>
@@ -515,7 +523,7 @@ function compareUsers(left: AdminUser, right: AdminUser): number {
   return left.username.localeCompare(right.username);
 }
 
-const userRoleOrder: UserRole[] = ["admin", "project_manager", "office", "monteur"];
+const userRoleOrder: UserRole[] = ["admin", "project_manager", "office", "monteur", "warehouse"];
 
 function groupUsersByRole(users: AdminUser[]): Array<{ key: UserRole; label: string; users: AdminUser[] }> {
   return userRoleOrder

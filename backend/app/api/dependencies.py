@@ -108,3 +108,7 @@ def get_current_app_user(current_user: User = Depends(get_current_user)) -> User
 
 def require_admin(current_user: User = Depends(require_roles(UserRole.ADMIN))) -> User:
     return current_user
+
+
+# Shared legacy calendar/mobile endpoints must not implicitly admit new roles.
+require_calendar_user = require_roles(*BUSINESS_PAGE_ROLES, UserRole.MONTEUR)

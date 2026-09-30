@@ -29,6 +29,7 @@ class UserService:
     def create_user(self, payload: UserCreate) -> User:
         username = clean_username(payload.username)
         self._ensure_username_available(username)
+        self._ensure_role_person_allowed(payload.role, payload.person_id)
         self._ensure_person_exists(payload.person_id)
 
         user = User(
@@ -38,7 +39,7 @@ class UserService:
             last_admin_password_plain=payload.password,
             role=payload.role,
             is_active=payload.is_active,
-            must_change_password=True,
+            must_change_password=payload.role != UserRole.WAREHOUSE,
             office_page_permissions=(
                 payload.office_page_permissions
                 if payload.role == UserRole.OFFICE
@@ -55,6 +56,7 @@ class UserService:
         user = self._get_user(user_id)
         values = payload.model_dump(exclude_unset=True)
         previous_role = user.role
+        self._ensure_role_person_allowed(values.get("role") or user.role, values.get("person_id"))
 
         if "username" in values and values["username"] is not None:
             username = clean_username(values["username"])
@@ -79,6 +81,12 @@ class UserService:
         if "person_id" in values:
             self._ensure_person_exists(values["person_id"])
             user.person_id = values["person_id"]
+        if user.role == UserRole.WAREHOUSE:
+            user.person_id = None
+            user.must_change_password = False
+        elif previous_role == UserRole.WAREHOUSE:
+            # The shared-device password exception must not survive a role change.
+            user.must_change_password = True
         if user.role == UserRole.OFFICE:
             if "office_page_permissions" in values and values["office_page_permissions"] is not None:
                 user.office_page_permissions = values["office_page_permissions"]
@@ -95,7 +103,7 @@ class UserService:
         user = self._get_user(user_id)
         user.password_hash = hash_password(payload.password)
         user.last_admin_password_plain = payload.password
-        user.must_change_password = True
+        user.must_change_password = user.role != UserRole.WAREHOUSE
         self.db.commit()
         self.db.refresh(user)
         return user
@@ -163,6 +171,11 @@ class UserService:
     def _ensure_person_exists(self, person_id: int | None) -> None:
         if person_id is not None and self.people.get(person_id) is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Person nicht gefunden.")
+
+    @staticmethod
+    def _ensure_role_person_allowed(role: UserRole, person_id: int | None) -> None:
+        if role == UserRole.WAREHOUSE and person_id is not None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Lager-Benutzer werden keiner Person zugeordnet.")
 
     def _has_other_active_admin(self, user_id: int) -> bool:
         statement = (

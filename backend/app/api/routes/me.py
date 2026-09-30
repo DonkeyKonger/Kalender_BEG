@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Upload
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_app_user as get_current_user
+from app.api.dependencies import require_calendar_user as get_current_user
 from app.core.database import get_db
 from app.models.enums import AbsenceType
 from app.models.user import User
