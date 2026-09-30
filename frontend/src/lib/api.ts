@@ -19,6 +19,7 @@ import type { VehicleDatabaseItem, VehicleDatabaseOptions, VehicleDatabasePayloa
 import { buildToolMaterialSearchParams, type ToolMaterialListParams } from "./toolMaterialFilters";
 
 import { fetchWithAuthRefresh } from "./authenticatedFetch";
+import type { WarehouseBooking, WarehouseDirection, WarehousePerson, WarehouseReceipt, WarehouseToolPage } from "../types/warehouse";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 const AUTH_REFRESH_PATH = "/auth/refresh";
@@ -391,9 +392,9 @@ async function request<T>(path: string, options: RequestInit = {}, retryOnUnauth
     console.error("API request failed", {
       method: options.method ?? "GET",
       url: `${API_BASE_URL}${path}`,
-      requestBody: options.body,
+      requestBody: path.startsWith("/warehouse/") ? "[warehouse payload omitted]" : options.body,
       status: response.status,
-      responseBody: payload,
+      responseBody: path.startsWith("/warehouse/") ? "[warehouse response omitted]" : payload,
     });
     throw new ApiError(response.status, detail);
   }
@@ -477,6 +478,16 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 export const api = {
+  warehousePeople(direction: WarehouseDirection, signal?: AbortSignal): Promise<WarehousePerson[]> {
+    return request(`/warehouse/people?direction=${direction}`, { signal });
+  },
+  warehouseTools(direction: WarehouseDirection, employeeId: number, search: string, offset: number, signal?: AbortSignal): Promise<WarehouseToolPage> {
+    const params = new URLSearchParams({ direction, employee_id: String(employeeId), search, offset: String(offset), limit: "40" });
+    return request(`/warehouse/tools?${params}`, { signal });
+  },
+  bookWarehouseMovement(payload: WarehouseBooking): Promise<WarehouseReceipt> {
+    return request("/warehouse/movements", { method: "POST", body: JSON.stringify(payload) });
+  },
   async login(username: string, password: string): Promise<LoginResponse> {
     return request<LoginResponse>("/auth/login", {
       method: "POST",

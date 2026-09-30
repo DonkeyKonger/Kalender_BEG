@@ -22,6 +22,7 @@ from app.api.routes import (
     sites,
     time_entries,
     tool_material_items,
+    warehouse,
     users,
     vehicle_database,
 )
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(sites.router, prefix="/api")
     app.include_router(time_entries.router, prefix="/api")
     app.include_router(tool_material_items.router, prefix="/api")
+    app.include_router(warehouse.router, prefix="/api")
     app.include_router(vehicle_database.router, prefix="/api")
     app.include_router(project_folders.router, prefix="/api")
     app.include_router(assignments.router, prefix="/api")

@@ -55,6 +55,7 @@ from app.models.vehicle import (
     VehiclePositionLog,
 )
 from app.models.work_time_entry import WorkTimeEntry
+from app.models.warehouse_movement import WarehouseMovement
 
 __all__ = [
     "Absence",
@@ -113,4 +114,5 @@ __all__ = [
     "VehicleLatestPosition",
     "VehiclePositionLog",
     "WorkTimeEntry",
+    "WarehouseMovement",
 ]

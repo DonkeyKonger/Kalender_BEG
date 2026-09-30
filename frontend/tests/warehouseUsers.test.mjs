@@ -23,7 +23,7 @@ test("warehouse opens its own protected workspace outside the calendar shell", a
   assert.match(await source("auth/permissions.ts"), /user\.role === "warehouse"[\s\S]*?return "\/warehouse"/);
   const warehouse = await source("pages/WarehousePage.tsx");
   assert.match(warehouse, /logout\(\)/);
-  assert.doesNotMatch(warehouse, /api\.|AppShell|person_id/);
+  assert.doesNotMatch(warehouse, /AppShell|api\.listPersons|api\.listToolMaterialItems/);
 });
 
 test("admin warehouse form hides and clears person selection and explains password policy", async () => {

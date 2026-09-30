@@ -133,7 +133,7 @@ def test_warehouse_cannot_access_any_existing_business_or_mobile_api(account_env
     for route in client.app.routes:
         if not isinstance(route, APIRoute) or not route.path.startswith("/api/"):
             continue
-        if route.path.startswith(("/api/auth/", "/api/health")):
+        if route.path.startswith(("/api/auth/", "/api/health", "/api/warehouse/")):
             continue
         path = re.sub(r"\{[^}]+\}", "1", route.path)
         for method in route.methods:
