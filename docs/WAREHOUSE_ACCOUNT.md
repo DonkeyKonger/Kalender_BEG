@@ -63,9 +63,38 @@ gespeichert. Eine nicht mehr verfügbare Auswahl wird vollständig abgelehnt.
 Request-UUID und Payload-Prüfsumme schützen Wiederholungen vor Doppelbuchungen.
 Bei unklarer Netzwerkantwort bleibt die signierte Auswahl gesperrt und kann mit
 derselben Kennung erneut bestätigt werden. Unterschriften werden weder in
-Browser-Storage noch in API-Konsolenlogs abgelegt. Es gibt in diesem Schritt
-noch keine Belegübersicht oder Belegexport-Oberfläche.
+Browser-Storage noch in API-Konsolenlogs abgelegt. Eine Belegexport-Oberfläche
+ist nicht Bestandteil dieses Ablaufs.
 
 Ein Downgrade von `0126` löscht die neue Belegtabelle samt Unterschriften. Deshalb
 nicht nach produktiven Buchungen ohne Sicherung ausführen. Die Migration selbst
 verändert keine vorhandenen Inventar- oder Mitarbeiterdaten.
+
+## Desktop-Protokoll
+
+Unter **Sonstige → Werkzeuge und Material** stehen die Untertabs
+**Ausgaben / Rückgaben** und **Bestand** zur Verfügung. Bestand enthält die
+bisherige Inventarverwaltung; vorhandene Links zu Mitarbeitern oder einzelnen
+Werkzeugen öffnen weiterhin direkt diesen Bereich.
+
+Das Protokoll zeigt abgeschlossene Lagerbuchungen, neueste zuerst. Suche nach
+Monteur, Lagerkonto, Belegnummer oder Werkzeugdaten sowie Vorgangs- und
+Datumsfilter grenzen die Ergebnisse ein. Datumsgrenzen und Uhrzeiten verwenden
+Europe/Berlin. Je Seite werden 50 Belege geladen. Solange der Tab sichtbar ist,
+wird alle 15 Sekunden und bei Rückkehr ins Fenster aktualisiert; zusätzlich
+steht eine manuelle Aktualisierung zur Verfügung.
+
+Ein Klick auf einen Beleg öffnet die damals gespeicherten Mitarbeiter-,
+Lagerkonto- und Werkzeugdaten einschließlich Geräte-/Seriennummern und
+Unterschrift. Die Unterschrift wird erst beim Öffnen geladen. Das Protokoll ist
+rein lesend: Umbenennungen oder Bestandsänderungen schreiben alte Belege nicht
+um. Abgebrochene, noch nicht bestätigte Tablet-Vorgänge erzeugen keinen Beleg.
+
+Die APIs `GET /api/admin/tool-material-items/movements` und
+`GET /api/admin/tool-material-items/movements/{id}` verwenden dieselben Rechte
+wie die Bestandsverwaltung: Admin oder Büro mit Freigabe für Sonstige.
+Lagerkonten und Monteure haben keinen Zugriff auf das Desktop-Protokoll.
+Beide Antworten sind mit `Cache-Control: no-store` versehen.
+
+Migration `20260930_0127` ergänzt nur einen Index für die chronologische
+Belegabfrage. Upgrade und Downgrade verändern keine gespeicherten Belege.

@@ -6,6 +6,7 @@ import { useSearchParams } from "react-router-dom";
 import { DashboardNotePicker } from "../components/DashboardNotePickers";
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { VehicleDatabasePanel } from "../components/VehicleDatabasePanel";
+import { WarehouseHistoryPanel } from "../components/WarehouseHistoryPanel";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import { buildToolMaterialEmployeeOptions } from "../lib/toolMaterialEmployees";
@@ -38,6 +39,8 @@ import {
   getMiscellaneousTab,
   getToolMaterialEmployeeFilterValues,
   getToolMaterialIdFilter,
+  getToolMaterialSection,
+  setToolMaterialSection,
   normalizeToolMaterialRouteSearch,
   setToolMaterialEmployeeFilterValues,
   type MiscellaneousTabKey,
@@ -99,6 +102,7 @@ const TOOL_MATERIAL_PAGE_CACHE_MS = 30_000;
 export function MiscellaneousPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchKey = searchParams.toString();
+  const toolSection = getToolMaterialSection(searchParams);
   const activeTabKey = useMemo(
     () => getMiscellaneousTab(new URLSearchParams(searchKey)),
     [searchKey],
@@ -134,14 +138,14 @@ export function MiscellaneousPage() {
   }
 
   function updateEmployeeFilterUrl(values: readonly string[]) {
-    setSearchParams(setToolMaterialEmployeeFilterValues(searchParams, values), { replace: true });
+    setSearchParams(setToolMaterialSection(setToolMaterialEmployeeFilterValues(searchParams, values), "inventory"), { replace: true });
   }
 
   function resetToolMaterialRouteFilters() {
     const next = clearToolMaterialIdFilter(
       setToolMaterialEmployeeFilterValues(searchParams, []),
     );
-    setSearchParams(next, { replace: true });
+    setSearchParams(setToolMaterialSection(next, "inventory"), { replace: true });
   }
 
   return (
@@ -171,13 +175,21 @@ export function MiscellaneousPage() {
       </div>
 
       {activeTab.key === "toolsMaterial" ? (
-        <ToolMaterialList
+        <>
+        <div className="tool-material-subtabs" role="tablist" aria-label="Werkzeuge und Material Bereiche">
+          <button id="tool-movements-tab" type="button" role="tab" aria-selected={toolSection === "movements"}
+            aria-controls="tool-movements-panel" onClick={() => setSearchParams(setToolMaterialSection(searchParams, "movements"))}>Ausgaben / Rückgaben</button>
+          <button id="tool-inventory-tab" type="button" role="tab" aria-selected={toolSection === "inventory"}
+            aria-controls="tool-inventory-panel" onClick={() => setSearchParams(setToolMaterialSection(searchParams, "inventory"))}>Bestand</button>
+        </div>
+        {toolSection === "movements" ? <WarehouseHistoryPanel /> : <ToolMaterialList
           employeeFilterValues={employeeFilterValues}
           toolIdFilter={toolIdFilter}
           onEmployeeFilterChange={updateEmployeeFilterUrl}
-          onToolIdFilterClear={() => setSearchParams(clearToolMaterialIdFilter(searchParams), { replace: true })}
+          onToolIdFilterClear={() => setSearchParams(setToolMaterialSection(clearToolMaterialIdFilter(searchParams), "inventory"), { replace: true })}
           onAllRouteFiltersReset={resetToolMaterialRouteFilters}
-        />
+        />}
+        </>
       ) : activeTab.key === "vehicles" ? (
         <VehicleDatabasePanel />
       ) : (
@@ -720,7 +732,7 @@ function ToolMaterialList({
     : 0;
 
   return (
-    <section className="miscellaneous-tools-panel" role="tabpanel" aria-label="Werkzeuge und Material">
+    <section className="miscellaneous-tools-panel" id="tool-inventory-panel" role="tabpanel" aria-labelledby="tool-inventory-tab">
       <header className="miscellaneous-tools-header">
         <div>
           <h2>Werkzeuge und Material</h2>

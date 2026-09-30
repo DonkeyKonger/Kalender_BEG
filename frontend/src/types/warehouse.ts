@@ -27,3 +27,8 @@ export type WarehouseReceipt = {
   items: WarehouseTool[];
   created_at: string;
 };
+
+export type WarehouseHistoryEntry = WarehouseReceipt & { actor_name: string };
+export type WarehouseHistoryPage = { items: WarehouseHistoryEntry[]; total: number; page: number; page_size: number };
+export type WarehouseHistoryDetail = WarehouseHistoryEntry & { signature_strokes: CustomerSignatureStroke[] };
+export type WarehouseHistoryFilters = { search: string; direction: WarehouseDirection | ""; dateFrom: string; dateTo: string; page: number };

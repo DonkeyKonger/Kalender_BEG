@@ -1,0 +1,68 @@
+.tool-material-subtabs { display: flex; gap: 6px; flex: 0 0 auto; background: #fff; border: 1px solid #d8e2ee; padding: 10px 14px; margin-bottom: -15px; z-index: 1; }
+.tool-material-subtabs button { border: 0; border-radius: 0; background: #f0f4f8; color: #52627a; padding: 9px 14px; font: inherit; font-size: .8rem; font-weight: 750; cursor: pointer; }
+.tool-material-subtabs button[aria-selected="true"] { color: white; background: #203249; }
+.tool-material-subtabs button:focus-visible { outline: 2px solid #3974bb; outline-offset: 2px; }
+.warehouse-history-panel { overflow: hidden; }
+.warehouse-history-refresh { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.warehouse-history-refresh > span { color: #738398; font-size: .72rem; white-space: nowrap; }
+.warehouse-history-filters { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.warehouse-history-filters > label:not(.overview-search) { display: grid; gap: 4px; color: #52627a; font-size: .72rem; font-weight: 700; }
+.warehouse-history-filters input, .warehouse-history-filters select { height: 36px; min-height: 36px; border: 1px solid #cbd9e8; border-radius: 0; background: white; color: #334155; padding: 6px 9px; font: inherit; font-size: .8rem; }
+.warehouse-history-filters select { min-width: 142px; }
+.warehouse-history-search { flex: 1 1 320px; max-width: 490px; border-radius: 0; min-height: 36px; height: 36px; }
+.warehouse-history-search input { width: 100%; min-width: 0; border: 0; background: transparent; padding: 0; height: 34px; min-height: 34px; }
+.warehouse-history-table-wrap { min-height: 180px; flex: 1 1 auto; overflow: auto; border: 1px solid #d8e2ee; }
+.warehouse-history-table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 100%; min-width: 850px; font-size: .81rem; }
+.warehouse-history-table th { position: sticky; top: 0; z-index: 1; background: #edf3f9; border-bottom: 1px solid #d8e2ee; padding: 10px; text-align: left; color: #52627a; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .025em; }
+.warehouse-history-table th:first-child { width: 76px; }
+.warehouse-history-table th:nth-child(2) { width: 148px; }
+.warehouse-history-table th:nth-child(3) { width: 116px; }
+.warehouse-history-table th:nth-child(4) { width: 18%; }
+.warehouse-history-table th:nth-child(6) { width: 14%; }
+.warehouse-history-table th:last-child { width: 70px; }
+.warehouse-history-table td { padding: 12px 10px; border-bottom: 1px solid #e1e8f1; color: #334155; vertical-align: middle; overflow-wrap: anywhere; }
+.warehouse-history-table tbody tr { cursor: pointer; }
+.warehouse-history-table tbody tr:hover, .warehouse-history-table tbody tr:focus-visible { background: #f4f8fd; outline: none; }
+.warehouse-history-table tbody tr:focus-visible { box-shadow: inset 3px 0 #3974bb; }
+.warehouse-history-table .warehouse-history-receipt-id { font-weight: 750; color: #567499; }
+.warehouse-history-date { white-space: nowrap; font-size: .77rem; }
+.warehouse-history-direction { display: inline-flex; gap: 5px; align-items: center; padding: 4px 7px; border: 1px solid #d2e0ee; background: #edf4fc; color: #2c5b89; font-weight: 750; font-size: .73rem; white-space: nowrap; }
+.warehouse-history-direction.is-return { background: #f2f4f7; border-color: #dce2e9; color: #52627a; }
+.warehouse-history-tools { display: grid; gap: 3px; min-width: 0; }
+.warehouse-history-tools > span { color: #738398; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .76rem; }
+.warehouse-history-open { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; min-height: 36px; gap: 3px; border: 1px solid #d6e1ed; border-radius: 0; background: white; color: #3c608a; cursor: pointer; }
+.warehouse-history-open:focus-visible { outline: 2px solid #3974bb; }
+.warehouse-history-empty { max-width: 570px; margin: 50px auto; padding: 18px; color: #6b809a; text-align: center; }
+.warehouse-history-empty h3 { font-size: 1rem; color: #334155; margin: 12px 0 7px; }
+.warehouse-history-empty p { margin: 0; line-height: 1.5; font-size: .84rem; }
+.warehouse-receipt-detail { display: grid; gap: 22px; color: #334155; }
+.warehouse-receipt-meta { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
+.warehouse-receipt-meta dt { color: #738398; font-size: .75rem; margin-bottom: 5px; }
+.warehouse-receipt-meta dd { margin: 0; font-size: .86rem; font-weight: 650; overflow-wrap: anywhere; }
+.warehouse-receipt-detail h3 { font-size: .9rem; margin: 0 0 10px; color: #203249; }
+.warehouse-receipt-detail h3 > span { font-weight: 500; color: #738398; }
+.warehouse-receipt-items { list-style: none; margin: 0; padding: 0; border: 1px solid #d8e2ee; }
+.warehouse-receipt-items li { padding: 12px 14px; display: grid; gap: 4px; }
+.warehouse-receipt-items li + li { border-top: 1px solid #e1e8f1; }
+.warehouse-receipt-items li > span { color: #54739a; font-weight: 750; font-size: .74rem; }
+.warehouse-receipt-items strong { font-size: .86rem; overflow-wrap: anywhere; }
+.warehouse-receipt-items p { margin: 0; color: #738398; font-size: .76rem; overflow-wrap: anywhere; }
+.warehouse-receipt-signature p { font-size: .8rem; color: #61758f; line-height: 1.5; }
+.warehouse-receipt-signature svg { display: block; width: 100%; background: white; border: 1px solid #d4e0ed; margin: 12px 0; }
+.warehouse-receipt-signature strong { display: block; font-size: .83rem; }
+.warehouse-receipt-signature small { display: block; margin-top: 4px; color: #738398; }
+.warehouse-receipt-note { margin: 0; padding-top: 14px; border-top: 1px solid #d8e2ee; color: #738398; font-size: .73rem; line-height: 1.5; }
+.warehouse-history-panel .entity-drawer-panel { height: 100dvh; max-height: 100dvh; min-height: 0; }
+.warehouse-history-panel .entity-drawer-content { min-height: 0; }
+@media (max-width: 899px) {
+  .warehouse-history-table-wrap { max-height: 65vh; }
+  .warehouse-history-panel .miscellaneous-tools-header { flex-wrap: wrap; }
+  .warehouse-history-refresh { justify-content: flex-start; }
+  .warehouse-history-search { max-width: none; flex-basis: 100%; }
+}
+@media (max-width: 520px) {
+  .warehouse-history-filters { gap: 8px; }
+  .warehouse-history-filters > label:not(.overview-search) { flex: 1 1 125px; }
+  .warehouse-history-filters input, .warehouse-history-filters select { width: 100%; }
+  .warehouse-receipt-meta { grid-template-columns: minmax(0, 1fr); }
+}

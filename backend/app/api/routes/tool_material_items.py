@@ -22,6 +22,10 @@ from app.services.tool_material_responsibility_service import (
     ToolMaterialResponsibilityService,
 )
 from app.services.tool_material_service import ToolMaterialService
+from app.services.warehouse_history_service import WarehouseHistoryService
+from app.schemas.warehouse import (
+    WarehouseHistoryDetail, WarehouseHistoryPage, WarehouseHistoryQuery, WarehouseHistoryRead,
+)
 
 router = APIRouter(prefix="/admin/tool-material-items", tags=["tool-material-items"])
 CAN_MANAGE = require_admin_or_office_page("miscellaneous")
@@ -97,6 +101,32 @@ def update_tool_material_responsibility(
     return ToolMaterialResponsibilityService(db).update_responsible_user(
         payload.tool_responsible_user_id
     )
+
+
+@router.get("/movements", response_model=WarehouseHistoryPage)
+def list_warehouse_movements(
+    query: Annotated[WarehouseHistoryQuery, Query()],
+    response: Response,
+    _user=Depends(CAN_MANAGE),
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "no-store"
+    items, total = WarehouseHistoryService(db).list_page(query)
+    return WarehouseHistoryPage(
+        items=[WarehouseHistoryRead.model_validate(item) for item in items],
+        total=total, page=query.page, page_size=query.page_size,
+    )
+
+
+@router.get("/movements/{movement_id}", response_model=WarehouseHistoryDetail)
+def read_warehouse_movement(
+    movement_id: int,
+    response: Response,
+    _user=Depends(CAN_MANAGE),
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "no-store"
+    return WarehouseHistoryService(db).get_receipt(movement_id)
 
 
 @router.get("/{item_id}", response_model=ToolMaterialItemRead)

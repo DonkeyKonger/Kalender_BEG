@@ -19,7 +19,7 @@ import type { VehicleDatabaseItem, VehicleDatabaseOptions, VehicleDatabasePayloa
 import { buildToolMaterialSearchParams, type ToolMaterialListParams } from "./toolMaterialFilters";
 
 import { fetchWithAuthRefresh } from "./authenticatedFetch";
-import type { WarehouseBooking, WarehouseDirection, WarehousePerson, WarehouseReceipt, WarehouseToolPage } from "../types/warehouse";
+import type { WarehouseBooking, WarehouseDirection, WarehouseHistoryDetail, WarehouseHistoryPage, WarehousePerson, WarehouseReceipt, WarehouseToolPage } from "../types/warehouse";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 const AUTH_REFRESH_PATH = "/auth/refresh";
@@ -487,6 +487,12 @@ export const api = {
   },
   bookWarehouseMovement(payload: WarehouseBooking): Promise<WarehouseReceipt> {
     return request("/warehouse/movements", { method: "POST", body: JSON.stringify(payload) });
+  },
+  warehouseHistory(search: string, signal?: AbortSignal): Promise<WarehouseHistoryPage> {
+    return request(`/admin/tool-material-items/movements?${search}`, { signal, cache: "no-store" });
+  },
+  warehouseHistoryDetail(id: number, signal?: AbortSignal): Promise<WarehouseHistoryDetail> {
+    return request(`/admin/tool-material-items/movements/${id}`, { signal, cache: "no-store" });
   },
   async login(username: string, password: string): Promise<LoginResponse> {
     return request<LoginResponse>("/auth/login", {

@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Direction = Literal["issue", "return"]
 
@@ -70,3 +70,33 @@ class WarehouseReceiptRead(BaseModel):
     employee_name: str
     items: list[WarehouseToolRead]
     created_at: datetime
+
+
+class WarehouseHistoryQuery(BaseModel):
+    search: str = Field(default="", max_length=160)
+    direction: Direction | None = None
+    date_from: date | None = Field(default=None, ge=date(1900, 1, 1), le=date(9998, 12, 31))
+    date_to: date | None = Field(default=None, ge=date(1900, 1, 1), le=date(9998, 12, 31))
+    page: int = Field(default=1, ge=1, le=1_000_000)
+    page_size: int = Field(default=50, ge=1, le=100)
+
+    @model_validator(mode="after")
+    def ordered_dates(self):
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("Das Enddatum darf nicht vor dem Startdatum liegen.")
+        return self
+
+
+class WarehouseHistoryRead(WarehouseReceiptRead):
+    actor_name: str
+
+
+class WarehouseHistoryPage(BaseModel):
+    items: list[WarehouseHistoryRead]
+    total: int
+    page: int
+    page_size: int
+
+
+class WarehouseHistoryDetail(WarehouseHistoryRead):
+    signature_strokes: list[list[SignaturePoint]]

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, JSON, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -10,7 +10,10 @@ class WarehouseMovement(Base):
     """Immutable handover receipt; snapshots survive inventory/person changes."""
 
     __tablename__ = "warehouse_movements"
-    __table_args__ = (CheckConstraint("direction IN ('issue', 'return')", name="ck_warehouse_movement_direction"),)
+    __table_args__ = (
+        CheckConstraint("direction IN ('issue', 'return')", name="ck_warehouse_movement_direction"),
+        Index("ix_warehouse_movements_created_id", "created_at", "id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     request_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)

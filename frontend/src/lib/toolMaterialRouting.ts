@@ -2,6 +2,7 @@ export type MiscellaneousTabKey = "workerEvaluation" | "vehicles" | "toolsMateri
 
 export const defaultMiscellaneousTab: MiscellaneousTabKey = "workerEvaluation";
 export const toolMaterialTab: MiscellaneousTabKey = "toolsMaterial";
+export type ToolMaterialSection = "movements" | "inventory";
 const emptyEmployeeFilterValue = "__empty__";
 
 const miscellaneousTabKeys = new Set<MiscellaneousTabKey>([
@@ -9,6 +10,20 @@ const miscellaneousTabKeys = new Set<MiscellaneousTabKey>([
   "vehicles",
   toolMaterialTab,
 ]);
+
+export function getToolMaterialSection(search: URLSearchParams): ToolMaterialSection {
+  const section = search.get("toolSection");
+  if (section === "inventory" || section === "movements") return section;
+  // Keep links from employee files and defect notifications pointing to stock.
+  if (getToolMaterialIdFilter(search) !== null || getToolMaterialEmployeeFilterValues(search).length) return "inventory";
+  return "movements";
+}
+
+export function setToolMaterialSection(search: URLSearchParams, section: ToolMaterialSection): URLSearchParams {
+  const next = new URLSearchParams(search);
+  next.set("toolSection", section);
+  return next;
+}
 
 export function buildToolMaterialEditPath(employeeId: number): string {
   const search = new URLSearchParams({
