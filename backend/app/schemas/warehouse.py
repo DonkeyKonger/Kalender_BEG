@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Direction = Literal["issue", "return"]
+ReviewStatus = Literal["reviewed", "unreviewed"]
 
 
 class WarehousePersonRead(BaseModel):
@@ -75,6 +76,7 @@ class WarehouseReceiptRead(BaseModel):
 class WarehouseHistoryQuery(BaseModel):
     search: str = Field(default="", max_length=160)
     direction: Direction | None = None
+    review_status: ReviewStatus | None = None
     date_from: date | None = Field(default=None, ge=date(1900, 1, 1), le=date(9998, 12, 31))
     date_to: date | None = Field(default=None, ge=date(1900, 1, 1), le=date(9998, 12, 31))
     page: int = Field(default=1, ge=1, le=1_000_000)
@@ -89,6 +91,10 @@ class WarehouseHistoryQuery(BaseModel):
 
 class WarehouseHistoryRead(WarehouseReceiptRead):
     actor_name: str
+    review_status: ReviewStatus
+    reviewed_at: datetime | None
+    reviewed_by_name: str | None
+    review_version: int
 
 
 class WarehouseHistoryPage(BaseModel):
@@ -96,7 +102,14 @@ class WarehouseHistoryPage(BaseModel):
     total: int
     page: int
     page_size: int
+    can_review: bool
 
 
 class WarehouseHistoryDetail(WarehouseHistoryRead):
     signature_strokes: list[list[SignaturePoint]]
+
+
+class WarehouseReviewUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reviewed: bool = Field(strict=True)
+    expected_version: int = Field(ge=0)

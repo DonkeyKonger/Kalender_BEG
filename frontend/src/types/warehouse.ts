@@ -28,7 +28,8 @@ export type WarehouseReceipt = {
   created_at: string;
 };
 
-export type WarehouseHistoryEntry = WarehouseReceipt & { actor_name: string };
-export type WarehouseHistoryPage = { items: WarehouseHistoryEntry[]; total: number; page: number; page_size: number };
+export type WarehouseReviewStatus = "reviewed" | "unreviewed";
+export type WarehouseHistoryEntry = WarehouseReceipt & { actor_name: string; review_status: WarehouseReviewStatus; reviewed_at: string | null; reviewed_by_name: string | null; review_version: number };
+export type WarehouseHistoryPage = { items: WarehouseHistoryEntry[]; total: number; page: number; page_size: number; can_review: boolean };
 export type WarehouseHistoryDetail = WarehouseHistoryEntry & { signature_strokes: CustomerSignatureStroke[] };
-export type WarehouseHistoryFilters = { search: string; direction: WarehouseDirection | ""; dateFrom: string; dateTo: string; page: number };
+export type WarehouseHistoryFilters = { search: string; direction: WarehouseDirection | ""; reviewStatus?: WarehouseReviewStatus | ""; dateFrom: string; dateTo: string; page: number };

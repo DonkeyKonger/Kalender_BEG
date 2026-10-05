@@ -83,7 +83,7 @@ bisherige Inventarverwaltung; vorhandene Links zu Mitarbeitern oder einzelnen
 Werkzeugen öffnen weiterhin direkt diesen Bereich.
 
 Das Protokoll zeigt abgeschlossene Lagerbuchungen, neueste zuerst. Suche nach
-Monteur, Lagerkonto, Belegnummer oder Werkzeugdaten sowie Vorgangs- und
+Monteur, Lagerkonto, Belegnummer oder Werkzeugdaten sowie Vorgangs-, Prüfstatus- und
 Datumsfilter grenzen die Ergebnisse ein. Datumsgrenzen und Uhrzeiten verwenden
 Europe/Berlin. Je Seite werden 50 Belege geladen. Solange der Tab sichtbar ist,
 wird alle 15 Sekunden und bei Rückkehr ins Fenster aktualisiert; zusätzlich
@@ -91,9 +91,21 @@ steht eine manuelle Aktualisierung zur Verfügung.
 
 Ein Klick auf einen Beleg öffnet die damals gespeicherten Mitarbeiter-,
 Lagerkonto- und Werkzeugdaten einschließlich Geräte-/Seriennummern und
-Unterschrift. Die Unterschrift wird erst beim Öffnen geladen. Das Protokoll ist
-rein lesend: Umbenennungen oder Bestandsänderungen schreiben alte Belege nicht
-um. Abgebrochene, noch nicht bestätigte Tablet-Vorgänge erzeugen keinen Beleg.
+Unterschrift. Die Unterschrift wird erst beim Öffnen geladen. Die signierten
+Beleginhalte bleiben unveränderlich: Umbenennungen oder Bestandsänderungen schreiben
+alte Belege nicht um. Abgebrochene, noch nicht bestätigte Tablet-Vorgänge erzeugen keinen Beleg.
+
+Neue und bisherige Belege beginnen **Ungeprüft**. Rechts setzt der aus der
+Lohnprüfung bekannte Prüfhaken den Status auf **Geprüft**; ein weiterer Klick
+setzt ihn zurück. Nur der gültige, unter Bestand hinterlegte Werkzeug-Beauftragte
+und Admins dürfen den Status ändern. Andere freigeschaltete Büronutzer sehen ihn
+lesend. Prüfername und Zeitpunkt erscheinen im Beleg; Prüfung und Rücksetzung
+werden ohne Unterschriftsdaten im Audit-Protokoll aufgezeichnet.
+
+`PATCH /api/admin/tool-material-items/movements/{id}/review` erhält den expliziten
+Zielwert `reviewed` und `expected_version`. Wiederholungen desselben Zustands
+sind idempotent; veraltete Änderungen an einem anderen Zustand werden abgewiesen.
+Die Prüfung verändert weder Bestände noch Monteurunterschriften.
 
 Die APIs `GET /api/admin/tool-material-items/movements` und
 `GET /api/admin/tool-material-items/movements/{id}` verwenden dieselben Rechte
@@ -103,3 +115,6 @@ Beide Antworten sind mit `Cache-Control: no-store` versehen.
 
 Migration `20260930_0127` ergänzt nur einen Index für die chronologische
 Belegabfrage. Upgrade und Downgrade verändern keine gespeicherten Belege.
+Migration `20261005_0128` ergänzt die Prüffelder. Bestehende Belege und Signaturen
+bleiben erhalten. Ein Downgrade entfernt nur die neuen Prüffelder; deren aktueller
+Status geht dabei verloren, das Audit-Protokoll bleibt erhalten.

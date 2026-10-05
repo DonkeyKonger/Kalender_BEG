@@ -19,7 +19,7 @@ import type { VehicleDatabaseItem, VehicleDatabaseOptions, VehicleDatabasePayloa
 import { buildToolMaterialSearchParams, type ToolMaterialListParams } from "./toolMaterialFilters";
 
 import { fetchWithAuthRefresh } from "./authenticatedFetch";
-import type { WarehouseBooking, WarehouseDirection, WarehouseHistoryDetail, WarehouseHistoryPage, WarehousePerson, WarehouseReceipt, WarehouseToolPage } from "../types/warehouse";
+import type { WarehouseBooking, WarehouseDirection, WarehouseHistoryDetail, WarehouseHistoryEntry, WarehouseHistoryPage, WarehousePerson, WarehouseReceipt, WarehouseToolPage } from "../types/warehouse";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 const AUTH_REFRESH_PATH = "/auth/refresh";
@@ -493,6 +493,11 @@ export const api = {
   },
   warehouseHistoryDetail(id: number, signal?: AbortSignal): Promise<WarehouseHistoryDetail> {
     return request(`/admin/tool-material-items/movements/${id}`, { signal, cache: "no-store" });
+  },
+  reviewWarehouseMovement(id: number, reviewed: boolean, expectedVersion: number): Promise<WarehouseHistoryEntry> {
+    return request(`/admin/tool-material-items/movements/${id}/review`, {
+      method: "PATCH", body: JSON.stringify({ reviewed, expected_version: expectedVersion }), cache: "no-store",
+    });
   },
   async login(username: string, password: string): Promise<LoginResponse> {
     return request<LoginResponse>("/auth/login", {

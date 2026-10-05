@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, JSON, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -26,3 +26,11 @@ class WarehouseMovement(Base):
     items: Mapped[list[dict]] = mapped_column(JSON, nullable=False)
     signature_strokes: Mapped[list[list[dict]]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_by_name: Mapped[str | None] = mapped_column(String(200))
+    review_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+
+    @property
+    def review_status(self) -> str:
+        return "reviewed" if self.reviewed_at is not None else "unreviewed"

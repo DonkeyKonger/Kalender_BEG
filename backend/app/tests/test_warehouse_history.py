@@ -11,7 +11,8 @@ from sqlalchemy.pool import StaticPool
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.main import create_app
-from app.models import Base, Person, ToolMaterialItem, User, WarehouseMovement
+from app.models import AuditLog, Base, Person, ToolMaterialItem, User, WarehouseMovement
+from app.models.tool_material_settings import ToolMaterialSettings
 from app.models.enums import UserRole
 from app.schemas.warehouse import WarehouseHistoryQuery, WarehouseMovementCreate
 from app.services.warehouse_history_service import WarehouseHistoryService
@@ -25,9 +26,12 @@ def history_env():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     with Session(engine) as db:
+        admin = User(username="history-admin", display_name="Prüfadmin", role=UserRole.ADMIN, password_hash="unused")
+        db.add(admin)
+        db.commit()
         app = create_app()
         app.dependency_overrides[get_db] = lambda: db
-        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(role=UserRole.ADMIN, is_active=True, must_change_password=False)
+        app.dependency_overrides[get_current_user] = lambda: admin
         client = TestClient(app)
         yield db, client, app
         client.close()
@@ -55,7 +59,10 @@ def test_list_is_paginated_newest_first_and_omits_signature_and_request_data(his
     assert result["total"] == 3 and result["page"] == 1
     assert [item["id"] for item in result["items"]] == ids[::-1][:2]
     assert response.headers["Cache-Control"] == "no-store"
-    assert set(result["items"][0]) == {"id", "direction", "employee_name", "items", "created_at", "actor_name"}
+    assert set(result["items"][0]) == {"id", "direction", "employee_name", "items", "created_at", "actor_name",
+                                        "review_status", "reviewed_at", "reviewed_by_name", "review_version"}
+    assert result["items"][0]["review_status"] == "unreviewed"
+    assert result["items"][0]["review_version"] == 0
     assert client.get(BASE_URL + "?page_size=2&page=2").json()["items"][0]["id"] == ids[0]
     assert client.get(BASE_URL + "?page_size=2&page=3").json()["items"] == []
     db.expunge_all()
@@ -133,7 +140,7 @@ def test_real_tablet_bookings_appear_with_original_signature_after_master_data_c
 
 
 @pytest.mark.parametrize("params", [{"page": 0}, {"page_size": 101}, {"direction": "delete"},
-    {"search": "a" * 161}, {"date_from": "2026-09-30", "date_to": "2026-09-29"}, {"date_from": "bad"}])
+    {"search": "a" * 161}, {"date_from": "2026-09-30", "date_to": "2026-09-29"}, {"date_from": "bad"}, {"review_status": "invalid"}])
 def test_invalid_filters_rejected(history_env, params):
     _, client, _ = history_env
     assert client.get(BASE_URL, params=params).status_code == 422
@@ -161,3 +168,83 @@ def test_log_requires_login_and_has_no_mutation_routes(history_env):
     assert client.get(f"{BASE_URL}/{record.id}").status_code == 401
     for method in ("POST", "PATCH", "DELETE"):
         assert client.request(method, f"{BASE_URL}/{record.id}", json={}).status_code == 405
+    assert client.patch(f"{BASE_URL}/{record.id}/review", json={"reviewed": True, "expected_version": 0}).status_code == 401
+
+
+def test_review_toggle_is_persistent_audited_idempotent_and_preserves_receipt(history_env):
+    db, client, _ = history_env
+    receipt = add_receipt(db)
+    original = (receipt.items, receipt.signature_strokes, receipt.employee_name, receipt.created_at)
+    url = f"{BASE_URL}/{receipt.id}/review"
+    first = client.patch(url, json={"reviewed": True, "expected_version": 0})
+    assert first.status_code == 200, first.text
+    result = first.json()
+    assert result["review_status"] == "reviewed" and result["review_version"] == 1
+    assert result["reviewed_by_name"] == "Prüfadmin" and result["reviewed_at"]
+    assert "signature_strokes" not in result
+    assert client.patch(url, json={"reviewed": True, "expected_version": 0}).json() == result
+    assert client.get(BASE_URL + "?review_status=reviewed").json()["total"] == 1
+    assert client.get(BASE_URL + "?review_status=unreviewed").json()["total"] == 0
+    assert client.get(f"{BASE_URL}/{receipt.id}").json()["review_status"] == "reviewed"
+    reset = client.patch(url, json={"reviewed": False, "expected_version": 1})
+    assert reset.status_code == 200
+    assert reset.json()["review_status"] == "unreviewed" and reset.json()["review_version"] == 2
+    assert reset.json()["reviewed_at"] is None and reset.json()["reviewed_by_name"] is None
+    assert client.patch(url, json={"reviewed": True, "expected_version": 0}).status_code == 409
+    assert (receipt.items, receipt.signature_strokes, receipt.employee_name, receipt.created_at) == original
+    audits = db.scalars(select(AuditLog).order_by(AuditLog.id)).all()
+    assert [a.action for a in audits] == ["warehouse_movement.reviewed", "warehouse_movement.review_reset"]
+    assert audits[1].old_value_json["reviewed_by_name"] == "Prüfadmin"
+    assert "signature_strokes" not in audits[0].new_value_json
+
+
+@pytest.mark.parametrize("kind", ["responsible", "other_office", "inactive", "external_person", "no_permission", "monteur", "warehouse", "project_manager", "missing_settings"])
+def test_only_valid_responsible_user_or_admin_may_review(history_env, kind):
+    db, client, app = history_env
+    receipt = add_receipt(db)
+    person = Person(first_name="QA", last_name="Office", display_name="Office", short_code="QO")
+    db.add(person)
+    db.flush()
+    reviewer = User(username="responsible", display_name="Beauftragter", role=UserRole.OFFICE,
+                    person_id=person.id, password_hash="unused", office_page_permissions=["miscellaneous"])
+    db.add(reviewer)
+    db.flush()
+    db.add(ToolMaterialSettings(id=1, tool_responsible_user_id=None if kind == "missing_settings" else reviewer.id))
+    current = reviewer
+    if kind == "other_office":
+        current = User(username="other", display_name="Other", role=UserRole.OFFICE, password_hash="unused", office_page_permissions=["miscellaneous"])
+        db.add(current)
+    elif kind == "inactive":
+        person.is_active = False
+    elif kind == "external_person":
+        person.person_type = "external"
+    elif kind == "no_permission":
+        reviewer.office_page_permissions = []
+    elif kind in {"monteur", "warehouse", "project_manager"}:
+        reviewer.role = UserRole(kind)
+        if kind == "warehouse":
+            reviewer.person_id = None
+    db.commit()
+    app.dependency_overrides[get_current_user] = lambda: current
+    response = client.patch(f"{BASE_URL}/{receipt.id}/review", json={"reviewed": True, "expected_version": 0})
+    assert response.status_code == (200 if kind == "responsible" else 403), response.text
+    page = client.get(BASE_URL)
+    if page.status_code == 200:
+        assert page.json()["can_review"] == (kind == "responsible")
+    if kind != "responsible":
+        assert receipt.reviewed_at is None
+        assert not db.scalars(select(AuditLog)).all()
+
+
+@pytest.mark.parametrize("payload", [{}, {"reviewed": "true", "expected_version": 0}, {"reviewed": True, "expected_version": -1},
+    {"reviewed": True, "expected_version": 0, "reviewed_by_name": "Forged"}])
+def test_review_rejects_invalid_payload(history_env, payload):
+    db, client, _ = history_env
+    receipt = add_receipt(db)
+    assert client.patch(f"{BASE_URL}/{receipt.id}/review", json=payload).status_code == 422
+    assert receipt.reviewed_at is None
+
+
+def test_review_missing_receipt(history_env):
+    _, client, _ = history_env
+    assert client.patch(f"{BASE_URL}/99999/review", json={"reviewed": True, "expected_version": 0}).status_code == 404

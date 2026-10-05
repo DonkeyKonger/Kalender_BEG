@@ -24,7 +24,7 @@ from app.services.tool_material_responsibility_service import (
 from app.services.tool_material_service import ToolMaterialService
 from app.services.warehouse_history_service import WarehouseHistoryService
 from app.schemas.warehouse import (
-    WarehouseHistoryDetail, WarehouseHistoryPage, WarehouseHistoryQuery, WarehouseHistoryRead,
+    WarehouseHistoryDetail, WarehouseHistoryPage, WarehouseHistoryQuery, WarehouseHistoryRead, WarehouseReviewUpdate,
 )
 
 router = APIRouter(prefix="/admin/tool-material-items", tags=["tool-material-items"])
@@ -115,6 +115,7 @@ def list_warehouse_movements(
     return WarehouseHistoryPage(
         items=[WarehouseHistoryRead.model_validate(item) for item in items],
         total=total, page=query.page, page_size=query.page_size,
+        can_review=WarehouseHistoryService(db).can_review(_user),
     )
 
 
@@ -127,6 +128,15 @@ def read_warehouse_movement(
 ):
     response.headers["Cache-Control"] = "no-store"
     return WarehouseHistoryService(db).get_receipt(movement_id)
+
+
+@router.patch("/movements/{movement_id}/review", response_model=WarehouseHistoryRead)
+def review_warehouse_movement(
+    movement_id: int, payload: WarehouseReviewUpdate, response: Response,
+    user=Depends(CAN_MANAGE), db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "no-store"
+    return WarehouseHistoryService(db).review(movement_id, payload, user)
 
 
 @router.get("/{item_id}", response_model=ToolMaterialItemRead)

@@ -32,6 +32,19 @@ test("history builds bounded encoded filters and omits empty filters", () => {
   assert.equal(query.get("date_from"), "2026-09-01");
   assert.equal(query.get("date_to"), "2026-09-30");
   assert.equal(query.get("page"), "3");
+  const reviewed = new URLSearchParams(warehouseHistorySearch({ search: "", direction: "", reviewStatus: "reviewed", dateFrom: "", dateTo: "", page: 1 }));
+  assert.equal(reviewed.get("review_status"), "reviewed");
+});
+
+test("review uses payroll checkmark, server permission, explicit target and concurrency version", async () => {
+  const source = await readFile(new URL("../src/components/WarehouseHistoryPanel.tsx", import.meta.url), "utf8");
+  assert.match(source, /time-review-payroll-mark/);
+  assert.match(source, /time-review-reviewed-indicator/);
+  assert.match(source, /api\.reviewWarehouseMovement\(entry\.id, entry\.review_status !== "reviewed", entry\.review_version\)/);
+  assert.match(source, /disabled=\{!data\.can_review \|\| reviewingId !== null\}/);
+  assert.match(source, /event\.stopPropagation\(\); void toggleReview\(entry\)/);
+  assert.match(source, /epoch === reviewEpoch\.current/);
+  assert.match(source, /setReloadKey\(\(value\) => value \+ 1\)/);
 });
 
 test("receipts consistently display Berlin time including daylight saving changes", () => {
