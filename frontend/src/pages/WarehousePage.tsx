@@ -52,7 +52,7 @@ export function WarehousePage() {
     </header>
     <main className="warehouse-main">
       {!direction && !receipt && <>
-        <div className="wh-intro"><span className="wh-eyebrow">WERKZEUGE & MATERIAL</span><h1>Was möchtest du tun?</h1>
+        <div className="wh-intro"><h1>Was möchtest du tun?</h1>
           <p>Werkzeug abholen oder zurückgeben – in drei einfachen Schritten.</p></div>
         <div className="wh-start-grid">
           <button className="wh-start-card" type="button" onClick={() => setDirection("issue")}>

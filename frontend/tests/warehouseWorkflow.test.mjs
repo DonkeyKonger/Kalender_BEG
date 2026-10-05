@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { filterWarehousePeople, hasWarehouseSignature, toggleWarehouseTool, warehouseToolIdentity } from "../src/lib/warehouseWorkflow.ts";
 
+test("warehouse home starts with the question without an extra tools heading", async () => {
+  const page = await readFile(new URL("../src/pages/WarehousePage.tsx", import.meta.url), "utf8");
+  const intro = page.slice(page.indexOf('<div className="wh-intro">'), page.indexOf('<div className="wh-start-grid">'));
+  assert.match(intro, /<h1>Was möchtest du tun\?<\/h1>/);
+  assert.doesNotMatch(intro, /wh-eyebrow|WERKZEUGE & MATERIAL/);
+});
+
 test("warehouse search matches trimmed names and short codes", () => {
   const people = [{ id: 1, display_name: "Jens Köhle", short_code: "JK" }, { id: 2, display_name: "Bert Test", short_code: "BT" }];
   assert.equal(filterWarehousePeople(people, " köHLE ")[0].id, 1);
