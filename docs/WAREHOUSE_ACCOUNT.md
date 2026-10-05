@@ -34,10 +34,15 @@ Testkonten, darunter Tablets in 1024×768 und 768×1024.
 ## Werkzeugausgabe / Rückgabe
 
 1. Auf dem Startbildschirm **Werkzeug abholen** oder **Werkzeug zurückgeben** wählen.
-2. Mitarbeiter über Name oder Kürzel auswählen. Für Ausgaben stehen aktive
-   Mitarbeiter aus den vorhandenen Stammdaten zur Verfügung (kein eigenes
-   Benutzerkonto erforderlich). Rückgaben sind auch für ausgeschiedene oder
-   inaktive Mitarbeiter mit noch zugeordneten Werkzeugen möglich.
+2. Monteur über Name oder Kürzel auswählen. Für Ausgaben stehen ausschließlich
+   aktive interne Monteure aus den vorhandenen Stammdaten zur Verfügung (kein
+   eigenes Benutzerkonto erforderlich). Externe einschließlich Aushilfen sowie
+   Personen mit Büro-, Projektleiter- oder Admin-Zuordnung sind ausgeschlossen,
+   auch wenn deren Benutzerkonto deaktiviert ist. Als Projektleiter einer
+   Baustelle hinterlegte Personen ohne Benutzerkonto werden ebenfalls ausgeschlossen.
+   Die Regel wird bei Auswahl und Buchung serverseitig geprüft. Rückgaben sind
+   weiterhin für alle Personen mit noch zugeordneten Werkzeugen möglich, auch
+   für externe, ausgeschiedene oder inzwischen anders zugeordnete Mitarbeiter.
 3. Werkzeuge über **BEG-Nr.**, Bezeichnung, Hersteller, Geräte- oder Seriennummer
    suchen und einzeln auswählen. Gleiche BEG-Nummern werden nicht zusammengefasst,
    weil sie in Altbeständen verschiedene Geräte eines Sets bezeichnen können.

@@ -9,8 +9,8 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import get_db
 from app.main import create_app
-from app.models import Base, Person, ToolIssueReport, ToolMaterialItem, User, WarehouseMovement
-from app.models.enums import ToolIssueReason, ToolMaterialStatus, UserRole
+from app.models import Base, Person, Site, ToolIssueReport, ToolMaterialItem, User, WarehouseMovement
+from app.models.enums import PersonType, ToolIssueReason, ToolMaterialStatus, UserRole
 from app.services.auth_service import AuthService
 
 
@@ -151,6 +151,80 @@ def test_inactive_employee_can_return_but_not_receive_tools(warehouse_env):
     returned_people = client.get("/api/warehouse/people?direction=return", headers=headers[UserRole.WAREHOUSE]).json()
     assert [person["id"] for person in returned_people] == [people[2].id]
     assert post(warehouse_env, payload(people[2], [tools[3]], "return")).status_code == 201
+
+
+@pytest.mark.parametrize("kind", [
+    "external", "external_temp", "office", "project_manager", "admin",
+    "disabled_office", "disabled_project_manager", "disabled_admin", "mixed_roles",
+    "site_manager_without_login", "paused", "departed", "deleted", "inactive",
+])
+def test_only_internal_installers_can_receive_but_old_assignments_can_always_be_returned(warehouse_env, kind):
+    db, client, headers, people, tools = warehouse_env
+    person = people[0]
+    auth = headers[UserRole.WAREHOUSE]
+    body = payload(person, tools[:1])
+    # Simulate a change after the tablet has already selected this person.
+    assert person.id in [p["id"] for p in client.get("/api/warehouse/people?direction=issue", headers=auth).json()]
+    if kind in {"external", "external_temp"}:
+        person.person_type = PersonType(kind)
+    elif kind in {"paused", "departed"}:
+        person.employment_status = kind
+    elif kind == "deleted":
+        person.deleted_at = datetime.now(timezone.utc)
+    elif kind == "inactive":
+        person.is_active = False
+    elif kind == "site_manager_without_login":
+        db.add(Site(name="Legacy project manager", project_manager_person_id=person.id))
+    else:
+        role = UserRole.OFFICE if kind == "mixed_roles" else UserRole(kind.removeprefix("disabled_"))
+        db.add(User(username="linked-non-worker", display_name="Not an installer", role=role,
+                    person_id=person.id, password_hash="unused", is_active=not kind.startswith("disabled_")))
+        if kind == "mixed_roles":
+            db.add(User(username="also-monteur", display_name="Second account", role=UserRole.MONTEUR,
+                        person_id=person.id, password_hash="unused"))
+    db.commit()
+    assert [p["id"] for p in client.get("/api/warehouse/people?direction=issue", headers=auth).json()] == [people[1].id]
+    assert client.get(f"/api/warehouse/tools?direction=issue&employee_id={person.id}", headers=auth).status_code == 409
+    assert post(warehouse_env, body).status_code == 409
+    db.expire_all()
+    assert tools[0].status == ToolMaterialStatus.WAREHOUSE and tools[0].employee_id is None
+    assert not db.scalars(select(WarehouseMovement)).all()
+
+    # Historical inventory must not become impossible to return due to the new filter.
+    tools[3].employee_id = person.id
+    db.commit()
+    returned_people = client.get("/api/warehouse/people?direction=return", headers=auth).json()
+    assert [p["id"] for p in returned_people] == [person.id]
+    available = client.get(f"/api/warehouse/tools?direction=return&employee_id={person.id}", headers=auth)
+    assert available.status_code == 200
+    assert [item["id"] for item in available.json()["items"]] == [tools[3].id]
+    assert post(warehouse_env, payload(person, [tools[3]], "return")).status_code == 201
+
+
+@pytest.mark.parametrize("login_active", [None, True, False])
+def test_internal_installer_does_not_need_an_active_personal_login(warehouse_env, login_active):
+    db, client, headers, people, tools = warehouse_env
+    if login_active is not None:
+        # Multiple accounts must not duplicate the person in the list.
+        for index in range(2):
+            db.add(User(username=f"installer-{index}", display_name="Installer", role=UserRole.MONTEUR,
+                        person_id=people[0].id, password_hash="unused", is_active=login_active))
+        db.commit()
+    result = client.get("/api/warehouse/people?direction=issue", headers=headers[UserRole.WAREHOUSE])
+    assert [p["id"] for p in result.json()] == [people[0].id, people[1].id]
+    assert post(warehouse_env, payload(people[0], tools[:1])).status_code == 201
+
+
+def test_existing_receipt_replay_survives_a_later_person_type_change(warehouse_env):
+    db, _, _, people, tools = warehouse_env
+    body = payload(people[0], tools[:1])
+    first = post(warehouse_env, body)
+    assert first.status_code == 201
+    people[0].person_type = PersonType.EXTERNAL
+    db.commit()
+    assert post(warehouse_env, body).json() == first.json()
+    assert post(warehouse_env, payload(people[0], tools[1:2])).status_code == 409
+    assert len(db.scalars(select(WarehouseMovement)).all()) == 1
 
 
 def test_return_does_not_clear_defect_and_reported_item_cannot_be_reissued(warehouse_env):

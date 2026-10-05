@@ -7,15 +7,20 @@ from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Person, ToolIssueReport, ToolMaterialItem, User
-from app.models.enums import PersonEmploymentStatus, ToolMaterialStatus
+from app.models import Person, Site, ToolIssueReport, ToolMaterialItem, User
+from app.models.enums import PersonEmploymentStatus, PersonType, ToolMaterialStatus, UserRole
 from app.models.warehouse_movement import WarehouseMovement
 from app.schemas.warehouse import Direction, WarehouseMovementCreate, WarehouseToolRead
 
 
-def active_person():
+def eligible_issue_person():
+    # A personal login is optional. Office/manager accounts (even disabled ones)
+    # and legacy site-manager assignments must not turn into warehouse recipients.
+    non_worker = Person.users.any(User.role.in_([UserRole.ADMIN, UserRole.OFFICE, UserRole.PROJECT_MANAGER]))
+    site_manager = exists().where(Site.project_manager_person_id == Person.id)
     return (Person.is_active.is_(True), Person.deleted_at.is_(None),
-            Person.employment_status == PersonEmploymentStatus.ACTIVE.value)
+            Person.employment_status == PersonEmploymentStatus.ACTIVE.value,
+            Person.person_type == PersonType.INTERNAL, ~non_worker, ~site_manager)
 
 
 def eligible_tools(direction: Direction, employee_id: int):
@@ -33,7 +38,7 @@ class WarehouseService:
     def people(self, direction: Direction):
         statement = select(Person)
         if direction == "issue":
-            statement = statement.where(*active_person())
+            statement = statement.where(*eligible_issue_person())
         else:
             # Outstanding equipment can also be returned for departed/inactive employees.
             statement = statement.where(exists().where(
@@ -116,7 +121,7 @@ class WarehouseService:
     def _person(self, employee_id: int, direction: Direction):
         statement = select(Person).where(Person.id == employee_id)
         if direction == "issue":
-            statement = statement.where(*active_person())
+            statement = statement.where(*eligible_issue_person())
         person = self.db.scalar(statement)
         if person is None:
             raise HTTPException(409, "Der Mitarbeiter ist nicht mehr verfügbar. Bitte erneut auswählen.")
