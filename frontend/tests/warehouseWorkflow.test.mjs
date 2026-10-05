@@ -10,6 +10,14 @@ test("warehouse home starts with the question without an extra tools heading", a
   assert.doesNotMatch(intro, /wh-eyebrow|WERKZEUGE & MATERIAL/);
 });
 
+test("issue and return person selection omit the redundant name instruction", async () => {
+  const page = await readFile(new URL("../src/pages/WarehousePage.tsx", import.meta.url), "utf8");
+  const selection = page.slice(page.indexOf("function PersonSelection("), page.indexOf("function ToolSelection("));
+  assert.match(selection, /holt Werkzeug ab/);
+  assert.match(selection, /gibt Werkzeug zurück/);
+  assert.doesNotMatch(selection, /Bitte deinen Namen auswählen/);
+});
+
 test("warehouse search matches trimmed names and short codes", () => {
   const people = [{ id: 1, display_name: "Jens Köhle", short_code: "JK" }, { id: 2, display_name: "Bert Test", short_code: "BT" }];
   assert.equal(filterWarehousePeople(people, " köHLE ")[0].id, 1);

@@ -108,7 +108,7 @@ function PersonSelection({ direction, onSelect }: { direction: WarehouseDirectio
   }, [direction, retry]);
   const filtered = filterWarehousePeople(people, search);
   return <section className="wh-panel">
-    <div className="wh-section-heading"><h2>Wer {direction === "issue" ? "holt Werkzeug ab" : "gibt Werkzeug zurück"}?</h2><p>Bitte deinen Namen auswählen.</p></div>
+    <div className="wh-section-heading"><h2>Wer {direction === "issue" ? "holt Werkzeug ab" : "gibt Werkzeug zurück"}?</h2></div>
     <SearchField label="Monteur suchen" value={search} onChange={setSearch} placeholder="Name oder Kürzel suchen …" />
     {error ? <LoadError message={error} onRetry={() => setRetry((value) => value + 1)} /> : loading ? <p role="status">Monteure werden geladen …</p> : <>
       <div className="wh-people-grid">{filtered.map((entry) => <button className="wh-person" type="button" key={entry.id} onClick={() => onSelect(entry)}>
