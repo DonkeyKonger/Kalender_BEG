@@ -5,9 +5,9 @@ import { useAuth } from "../auth/AuthContext";
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
 import { api, ApiError } from "../lib/api";
 import { drawSignatureCanvas, getNormalizedSignaturePoint } from "../lib/signatureCanvas";
-import { filterWarehousePeople, hasWarehouseSignature, toggleWarehouseTool, warehouseToolIdentity } from "../lib/warehouseWorkflow";
+import { filterWarehousePeople, hasWarehouseSignature, toggleWarehouseTool, warehouseReturnReasonPayload, warehouseReturnReasons, warehouseToolIdentity } from "../lib/warehouseWorkflow";
 import type { CustomerSignatureStroke } from "../types/site";
-import type { WarehouseBooking, WarehouseDirection, WarehousePerson, WarehouseReceipt, WarehouseTool, WarehouseToolPage } from "../types/warehouse";
+import type { WarehouseBooking, WarehouseDirection, WarehousePerson, WarehouseReceipt, WarehouseReturnReason, WarehouseTool, WarehouseToolPage } from "../types/warehouse";
 import "./WarehousePage.css";
 
 const directionTitle = { issue: "Werkzeugausgabe", return: "Werkzeugrückgabe" };
@@ -18,6 +18,7 @@ export function WarehousePage() {
   const [direction, setDirection] = useState<WarehouseDirection | null>(null);
   const [person, setPerson] = useState<WarehousePerson | null>(null);
   const [selected, setSelected] = useState<WarehouseTool[]>([]);
+  const [returnReasons, setReturnReasons] = useState<Record<number, WarehouseReturnReason>>({});
   const [review, setReview] = useState(false);
   const [receipt, setReceipt] = useState<WarehouseReceipt | null>(null);
   const [locked, setLocked] = useState(false);
@@ -34,7 +35,7 @@ export function WarehousePage() {
   }, [dirty]);
 
   function reset() {
-    setDirection(null); setPerson(null); setSelected([]); setReview(false); setReceipt(null); setLocked(false);
+    setDirection(null); setPerson(null); setSelected([]); setReturnReasons({}); setReview(false); setReceipt(null); setLocked(false);
   }
   function cancel() {
     if (!dirty || window.confirm("Auswahl verwerfen und zurück zur Startseite? Es wird nichts gebucht.")) reset();
@@ -76,14 +77,14 @@ export function WarehousePage() {
         </ol>
         {!person && <PersonSelection direction={direction} onSelect={setPerson} />}
         {person && !review && <ToolSelection direction={direction} person={person} selected={selected} onToggle={(item) => setSelected((items) => toggleWarehouseTool(items, item))}
-          onBack={() => { if (!selected.length || window.confirm("Monteur wechseln und Werkzeugauswahl leeren?")) { setPerson(null); setSelected([]); } }} onNext={() => setReview(true)} />}
-        {person && review && <BookingReview direction={direction} person={person} items={selected} onBack={() => setReview(false)} onLock={setLocked} onSaved={(saved) => {
-          setSelected([]); setPerson(null); setReview(false); setLocked(false); setReceipt(saved);
+          onBack={() => { if (!selected.length || window.confirm("Monteur wechseln und Werkzeugauswahl leeren?")) { setPerson(null); setSelected([]); setReturnReasons({}); } }} onNext={() => setReview(true)} />}
+        {person && review && <BookingReview direction={direction} person={person} items={selected} returnReasons={returnReasons} onReasonChange={(id, reason) => setReturnReasons((current) => ({ ...current, [id]: reason }))} onBack={() => setReview(false)} onLock={setLocked} onSaved={(saved) => {
+          setSelected([]); setPerson(null); setReview(false); setReturnReasons({}); setLocked(false); setReceipt(saved);
         }} />}
       </>}
       {receipt && <section className="wh-success" aria-labelledby="wh-success-title">
         <span className="wh-large-icon"><CheckCircle2 size={42} /></span><span className="wh-eyebrow">VORGANG ABGESCHLOSSEN</span>
-        <h1 id="wh-success-title">{receipt.direction === "issue" ? "Werkzeug ausgegeben" : "Werkzeug zurückgenommen"}</h1>
+        <h1 id="wh-success-title">{receipt.direction === "issue" ? "Werkzeug ausgegeben" : "Rückgabe erfasst"}</h1>
         <p>{receipt.items.length} {receipt.items.length === 1 ? "Eintrag" : "Einträge"} · {receipt.employee_name}</p>
         <p className="wh-muted">Mit Unterschrift gespeichert · Beleg #{receipt.id}</p>
         <button type="button" className="wh-button wh-primary" onClick={reset}>Fertig – zurück zum Start <ArrowRight size={22} /></button>
@@ -172,8 +173,9 @@ function ToolSelection({ direction, person, selected, onToggle, onBack, onNext }
   </>;
 }
 
-function BookingReview({ direction, person, items, onBack, onLock, onSaved }: {
+function BookingReview({ direction, person, items, returnReasons, onReasonChange, onBack, onLock, onSaved }: {
   direction: WarehouseDirection; person: WarehousePerson; items: WarehouseTool[];
+  returnReasons: Record<number, WarehouseReturnReason>; onReasonChange: (id: number, reason: WarehouseReturnReason) => void;
   onBack: () => void; onLock: (locked: boolean) => void; onSaved: (receipt: WarehouseReceipt) => void;
 }) {
   const [strokes, setStrokes] = useState<CustomerSignatureStroke[]>([]);
@@ -190,6 +192,7 @@ function BookingReview({ direction, person, items, onBack, onLock, onSaved }: {
     const payload = pending.current ?? {
       request_id: crypto.randomUUID(), direction, employee_id: person.id, tool_ids: items.map((item) => item.id),
       signature_strokes: strokes.filter((stroke) => stroke.length >= 2),
+      ...(direction === "return" ? { return_reasons: warehouseReturnReasonPayload(items, returnReasons) } : {}),
     };
     pending.current = payload;
     try { onSaved(await api.bookWarehouseMovement(payload)); }
@@ -204,9 +207,16 @@ function BookingReview({ direction, person, items, onBack, onLock, onSaved }: {
     <div className="wh-context"><button type="button" className="wh-button wh-quiet" disabled={frozen} onClick={onBack}><ArrowLeft size={20} />Auswahl ändern</button><strong><UserRound size={20} />{person.display_name}</strong></div>
     <div className="wh-review-grid">
       <section className="wh-panel"><div className="wh-section-heading"><h2>{direction === "issue" ? "Das nimmst du mit" : "Das gibst du zurück"}</h2><p>{items.length} {items.length === 1 ? "Werkzeug" : "Werkzeuge"} · Bitte Auswahl prüfen.</p></div>
-        <ul className="wh-review-items">{items.map((item) => <li key={item.id}><ToolMaterialCategoryIcon category={item.category} size={24} /><ToolLabel item={item} showIdentity /></li>)}</ul>
+        <ul className={`wh-review-items ${direction === "return" ? "has-return-reasons" : ""}`}>{items.map((item) => <li key={item.id}>
+          <ToolMaterialCategoryIcon category={item.category} size={24} /><ToolLabel item={item} showIdentity />
+          {direction === "return" && <label className="wh-return-reason"><span>Rückgabegrund</span>
+            <select aria-label={`Rückgabegrund für ${item.beg_number || "ohne BEG-Nr."} · ${item.designation} (Eintrag ${item.id})`} value={returnReasons[item.id] ?? "warehouse"} disabled={frozen}
+              onChange={(event) => { onReasonChange(item.id, event.target.value as WarehouseReturnReason); setStrokes([]); pending.current = null; setError(""); }}>
+              {warehouseReturnReasons.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select></label>}
+        </li>)}</ul>
       </section>
-      <section className="wh-panel wh-signature-panel"><div className="wh-section-heading"><h2>Deine Unterschrift</h2><p>Ich bestätige {direction === "issue" ? "den Empfang" : "die Rückgabe"} der aufgeführten Werkzeuge.</p></div>
+      <section className="wh-panel wh-signature-panel"><div className="wh-section-heading"><h2>Deine Unterschrift</h2><p>Ich bestätige {direction === "issue" ? "den Empfang" : "die angegebenen Rückgabegründe"} der aufgeführten Werkzeuge.</p></div>
         <strong className="wh-signer">{person.display_name}</strong>
         <SignaturePad strokes={strokes} onChange={setStrokes} disabled={frozen} />
         <button className="wh-button wh-quiet wh-clear-signature" type="button" disabled={frozen || !strokes.length} onClick={() => setStrokes([])}><Trash2 size={18} />Unterschrift leeren</button>

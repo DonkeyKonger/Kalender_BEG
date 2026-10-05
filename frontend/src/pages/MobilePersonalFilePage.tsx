@@ -710,7 +710,7 @@ function formatMobileAbsenceDateRange(startDate: string, endDate: string): strin
 
 
 function formatToolIssueReason(reason: MobileToolIssueReason): string {
-  return reason === "DEFECTIVE" ? "Maschine defekt" : "Maschine entwendet";
+  return reason === "DEFECTIVE" ? "Maschine defekt" : reason === "LOST" ? "Gerät verloren" : "Maschine entwendet";
 }
 
 

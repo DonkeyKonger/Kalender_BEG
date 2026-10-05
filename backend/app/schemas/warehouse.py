@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 Direction = Literal["issue", "return"]
 ReviewStatus = Literal["reviewed", "unreviewed"]
+ReturnReason = Literal["defective", "lost", "warehouse"]
 
 
 class WarehousePersonRead(BaseModel):
@@ -46,6 +47,7 @@ class WarehouseMovementCreate(BaseModel):
     signature_strokes: list[Annotated[list[SignaturePoint], Field(min_length=2, max_length=4000)]] = Field(
         min_length=1, max_length=100,
     )
+    return_reasons: dict[int, ReturnReason] = Field(default_factory=dict)
 
     @field_validator("tool_ids")
     @classmethod
@@ -63,13 +65,27 @@ class WarehouseMovementCreate(BaseModel):
             raise ValueError("Bitte eine Unterschrift zeichnen.")
         return strokes
 
+    @model_validator(mode="after")
+    def valid_return_reasons(self):
+        if self.direction != "return":
+            if self.return_reasons:
+                raise ValueError("Rückgabegründe sind nur bei Rückgaben zulässig.")
+            return self
+        if self.return_reasons and set(self.return_reasons) != set(self.tool_ids):
+            raise ValueError("Für jedes ausgewählte Werkzeug muss genau ein Rückgabegrund angegeben werden.")
+        return self
+
+
+class WarehouseReceiptItemRead(WarehouseToolRead):
+    return_reason: ReturnReason | None = None
+
 
 class WarehouseReceiptRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     direction: Direction
     employee_name: str
-    items: list[WarehouseToolRead]
+    items: list[WarehouseReceiptItemRead]
     created_at: datetime
 
 

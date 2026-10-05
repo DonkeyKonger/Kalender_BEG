@@ -1,4 +1,5 @@
 import hashlib
+import json
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -8,9 +9,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Person, Site, ToolIssueReport, ToolMaterialItem, User
-from app.models.enums import PersonEmploymentStatus, PersonType, ToolMaterialStatus, UserRole
+from app.models.enums import (
+    PersonEmploymentStatus,
+    PersonType,
+    ToolIssueReason,
+    ToolIssueStatus,
+    ToolMaterialStatus,
+    UserRole,
+)
 from app.models.warehouse_movement import WarehouseMovement
 from app.schemas.warehouse import Direction, WarehouseMovementCreate, WarehouseToolRead
+from app.services.tool_issue_report_service import NO_RESPONSIBLE_USER_MESSAGE
+from app.services.tool_material_responsibility_service import get_tool_responsible_user
 
 
 def eligible_issue_person():
@@ -65,7 +75,8 @@ class WarehouseService:
 
     def book(self, payload: WarehouseMovementCreate, actor: User) -> WarehouseMovement:
         request_id = str(payload.request_id)
-        fingerprint = hashlib.sha256(f"{actor.id}:{payload.model_dump_json()}".encode()).hexdigest()
+        fingerprint_payload = self._fingerprint_payload(payload)
+        fingerprint = hashlib.sha256(f"{actor.id}:{fingerprint_payload}".encode()).hexdigest()
         existing = self._existing(request_id, fingerprint)
         if existing:
             return existing
@@ -93,7 +104,17 @@ class WarehouseService:
             ).order_by(ToolMaterialItem.id).with_for_update()).all()
             if len(items) != len(payload.tool_ids):
                 raise HTTPException(409, "Ein Werkzeug wurde entfernt. Bitte die Auswahl erneut prüfen.")
-            movement.items = [WarehouseToolRead.model_validate(item).model_dump() for item in items]
+            report_recipient = None
+            if any(reason != "warehouse" for reason in payload.return_reasons.values()):
+                report_recipient = get_tool_responsible_user(self.db)
+                if report_recipient is None:
+                    raise HTTPException(409, NO_RESPONSIBLE_USER_MESSAGE)
+            movement.items = []
+            for item in items:
+                snapshot = WarehouseToolRead.model_validate(item).model_dump()
+                if payload.direction == "return":
+                    snapshot["return_reason"] = payload.return_reasons.get(item.id, "warehouse")
+                movement.items.append(snapshot)
             for item in items:
                 result = self.db.execute(update(ToolMaterialItem).where(
                     ToolMaterialItem.id == item.id, *eligible_tools(payload.direction, person.id),
@@ -105,12 +126,43 @@ class WarehouseService:
                 if result.rowcount != 1:
                     raise HTTPException(409, f"BEG-Nr. {item.beg_number or '–'} ist nicht mehr verfügbar. "
                                         "Es wurde nichts gebucht. Bitte die Auswahl erneut prüfen.")
+                return_reason = payload.return_reasons.get(item.id)
+                if return_reason in {"defective", "lost"}:
+                    self.db.add(ToolIssueReport(
+                        tool_id=item.id,
+                        tool_id_snapshot=item.id,
+                        tool_beg_number_snapshot=item.beg_number,
+                        tool_manufacturer_snapshot=item.manufacturer,
+                        tool_designation_snapshot=item.designation,
+                        reason=(ToolIssueReason.DEFECTIVE if return_reason == "defective"
+                                else ToolIssueReason.LOST),
+                        status=ToolIssueStatus.OPEN,
+                        reporter_user_id=actor.id,
+                        reporter_employee_id=person.id,
+                        reporter_last_name_snapshot=person.last_name,
+                        recipient_user_id=report_recipient.id,
+                        request_id=f"{request_id}:{item.id}",
+                    ))
             self.db.commit()
         except Exception:
             self.db.rollback()
             raise
         self.db.refresh(movement)
         return movement
+
+    @staticmethod
+    def _fingerprint_payload(payload: WarehouseMovementCreate) -> str:
+        # Keep the exact legacy JSON for old clients and normalize an explicitly
+        # selected default so both requests replay the same immutable receipt.
+        serialized = payload.model_dump_json(exclude={"return_reasons"})
+        if not payload.return_reasons or all(
+            reason == "warehouse" for reason in payload.return_reasons.values()
+        ):
+            return serialized
+        reasons = json.dumps(
+            dict(sorted(payload.return_reasons.items())), separators=(",", ":"),
+        )
+        return f'{serialized[:-1]},"return_reasons":{reasons}}}'
 
     def _existing(self, request_id: str, fingerprint: str):
         existing = self.db.scalar(select(WarehouseMovement).where(WarehouseMovement.request_id == request_id))

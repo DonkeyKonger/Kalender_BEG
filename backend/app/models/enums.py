@@ -65,6 +65,7 @@ class ToolMaterialCategory(StrEnum):
 
 class ToolIssueReason(StrEnum):
     DEFECTIVE = "DEFECTIVE"
+    LOST = "LOST"
     STOLEN = "STOLEN"
 
 

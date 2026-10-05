@@ -1,6 +1,7 @@
 import type { CustomerSignatureStroke } from "./site";
 
 export type WarehouseDirection = "issue" | "return";
+export type WarehouseReturnReason = "defective" | "lost" | "warehouse";
 export type WarehousePerson = { id: number; display_name: string; short_code: string };
 export type WarehouseTool = {
   id: number;
@@ -18,13 +19,14 @@ export type WarehouseBooking = {
   direction: WarehouseDirection;
   employee_id: number;
   tool_ids: number[];
+  return_reasons?: Record<number, WarehouseReturnReason>;
   signature_strokes: CustomerSignatureStroke[];
 };
 export type WarehouseReceipt = {
   id: number;
   direction: WarehouseDirection;
   employee_name: string;
-  items: WarehouseTool[];
+  items: (WarehouseTool & { return_reason?: WarehouseReturnReason | null })[];
   created_at: string;
 };
 

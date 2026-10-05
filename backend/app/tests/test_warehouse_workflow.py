@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -9,9 +10,20 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import get_db
 from app.main import create_app
-from app.models import Base, Person, Site, ToolIssueReport, ToolMaterialItem, User, WarehouseMovement
+from app.models import (
+    Base,
+    Person,
+    Site,
+    ToolIssueReport,
+    ToolMaterialItem,
+    ToolMaterialSettings,
+    User,
+    WarehouseMovement,
+)
 from app.models.enums import PersonType, ToolIssueReason, ToolMaterialStatus, UserRole
+from app.schemas.warehouse import WarehouseMovementCreate
 from app.services.auth_service import AuthService
+from app.services.dashboard_message_service import DashboardMessageService
 
 
 @pytest.fixture
@@ -27,8 +39,12 @@ def warehouse_env():
             users[role] = user
         people = [Person(first_name=name, last_name="Test", display_name=f"{name} Test", short_code=name)
                   for name in ("Anna", "Bert", "Claus")]
-        db.add_all(people)
+        responsible = Person(first_name="Rita", last_name="Lager", display_name="Rita Lager", short_code="RL")
+        db.add_all([*people, responsible])
         db.flush()
+        users[UserRole.OFFICE].person_id = responsible.id
+        users[UserRole.OFFICE].office_page_permissions = ["miscellaneous"]
+        db.add(ToolMaterialSettings(id=1, tool_responsible_user_id=users[UserRole.OFFICE].id))
         people[2].is_active = False
         tools = [ToolMaterialItem(beg_number="100", designation=f"Bohrer {index}", serial_number=f"S{index}",
                                   supplier="private supplier", invoice_number="private invoice") for index in range(3)]
@@ -63,6 +79,7 @@ def test_issue_and_return_update_existing_inventory_and_keep_signed_snapshots(wa
     assert response.status_code == 201, response.text
     receipt = response.json()
     assert len(receipt["items"]) == 2
+    assert [item["return_reason"] for item in receipt["items"]] == [None, None]
     assert "signature_strokes" not in receipt
     assert "supplier" not in receipt["items"][0]
     db.expire_all()
@@ -77,7 +94,9 @@ def test_issue_and_return_update_existing_inventory_and_keep_signed_snapshots(wa
     db.commit()
     assert saved.employee_name == original_name
     assert saved.items[0]["designation"] == "Bohrer 0"
-    assert post(warehouse_env, payload(people[0], tools[:2], "return")).status_code == 201
+    returned = post(warehouse_env, payload(people[0], tools[:2], "return"))
+    assert returned.status_code == 201
+    assert [item["return_reason"] for item in returned.json()["items"]] == ["warehouse", "warehouse"]
     db.expire_all()
     assert all(item.status == ToolMaterialStatus.WAREHOUSE and item.employee_id is None for item in tools[:2])
     assert len(db.scalars(select(WarehouseMovement)).all()) == 2
@@ -96,6 +115,135 @@ def test_replay_is_idempotent_even_after_later_return(warehouse_env):
     assert len(db.scalars(select(WarehouseMovement)).all()) == 2
     body["employee_id"] = people[1].id
     assert post(warehouse_env, body).status_code == 409
+
+
+def test_legacy_return_fingerprint_matches_implicit_and_explicit_warehouse_default(warehouse_env):
+    db, _, _, people, tools = warehouse_env
+    assert post(warehouse_env, payload(people[0], tools[:1])).status_code == 201
+    body = payload(people[0], tools[:1], "return")
+    actor = db.scalar(select(User).where(User.role == UserRole.WAREHOUSE))
+    legacy_json = WarehouseMovementCreate.model_validate(body).model_dump_json(
+        exclude={"return_reasons"},
+    )
+    expected_hash = hashlib.sha256(f"{actor.id}:{legacy_json}".encode()).hexdigest()
+
+    first = post(warehouse_env, body)
+    assert first.status_code == 201, first.text
+    receipt = db.get(WarehouseMovement, first.json()["id"])
+    assert receipt.request_hash == expected_hash
+    assert receipt.items[0]["return_reason"] == "warehouse"
+
+    explicit_default = {**body, "return_reasons": {tools[0].id: "warehouse"}}
+    assert post(warehouse_env, explicit_default).json() == first.json()
+    assert not db.scalars(select(ToolIssueReport)).all()
+
+
+def test_per_item_reasons_are_signed_idempotent_and_block_reissue_until_resolved(warehouse_env):
+    db, _, _, people, tools = warehouse_env
+    assert post(warehouse_env, payload(people[0], tools[:2])).status_code == 201
+    body = payload(people[0], tools[:2], "return", return_reasons={
+        tools[1].id: "lost",
+        tools[0].id: "defective",
+    })
+    first = post(warehouse_env, body)
+    assert first.status_code == 201, first.text
+    reasons = {item["id"]: item["return_reason"] for item in first.json()["items"]}
+    assert reasons == {tools[0].id: "defective", tools[1].id: "lost"}
+    receipt = db.get(WarehouseMovement, first.json()["id"])
+    assert {item["id"]: item["return_reason"] for item in receipt.items} == reasons
+    assert receipt.signature_strokes == body["signature_strokes"]
+
+    reports = db.scalars(select(ToolIssueReport).order_by(ToolIssueReport.tool_id)).all()
+    office = db.scalar(select(User).where(User.role == UserRole.OFFICE))
+    warehouse_user = db.scalar(select(User).where(User.role == UserRole.WAREHOUSE))
+    assert [report.reason for report in reports] == [ToolIssueReason.DEFECTIVE, ToolIssueReason.LOST]
+    assert all(report.reporter_user_id == warehouse_user.id for report in reports)
+    assert all(report.reporter_employee_id == people[0].id for report in reports)
+    assert all(report.reporter_last_name_snapshot == people[0].last_name for report in reports)
+    assert all(report.recipient_user_id == office.id for report in reports)
+    assert [report.request_id for report in reports] == [
+        f'{body["request_id"]}:{tools[0].id}',
+        f'{body["request_id"]}:{tools[1].id}',
+    ]
+    assert all(len(report.request_id) <= 64 for report in reports)
+
+    reordered = {**body, "return_reasons": {
+        tools[0].id: "defective",
+        tools[1].id: "lost",
+    }}
+    assert post(warehouse_env, reordered).json() == first.json()
+    changed = {**body, "return_reasons": {
+        tools[0].id: "lost",
+        tools[1].id: "lost",
+    }}
+    assert post(warehouse_env, changed).status_code == 409
+    assert len(db.scalars(select(ToolIssueReport)).all()) == 2
+
+    assert post(warehouse_env, payload(people[0], tools[1:2])).status_code == 409
+    messages = DashboardMessageService(db).get_summary(limit=None, current_user=office).latest_messages
+    lost_message = next(message for message in messages if message.tool_issue_reason == "LOST")
+    assert lost_message.title == "Werkzeugmeldung: Maschine verloren"
+    assert "als verloren" in lost_message.message_text
+    DashboardMessageService(db).dismiss_message(
+        message_key=lost_message.message_key,
+        current_user=office,
+    )
+    assert post(warehouse_env, payload(people[0], tools[1:2])).status_code == 201
+
+
+def test_defect_return_without_responsible_rolls_back_inventory_receipt_and_report(warehouse_env):
+    db, _, _, people, tools = warehouse_env
+    assert post(warehouse_env, payload(people[0], tools[:1])).status_code == 201
+    office = db.scalar(select(User).where(User.role == UserRole.OFFICE))
+    office.office_page_permissions = []
+    db.commit()
+
+    response = post(warehouse_env, payload(
+        people[0], tools[:1], "return", return_reasons={tools[0].id: "defective"},
+    ))
+    assert response.status_code == 409
+    assert "kein Werkzeug-Beauftragter" in response.json()["detail"]
+    db.expire_all()
+    assert tools[0].status == ToolMaterialStatus.ISSUED
+    assert tools[0].employee_id == people[0].id
+    assert len(db.scalars(select(WarehouseMovement)).all()) == 1
+    assert not db.scalars(select(ToolIssueReport)).all()
+
+
+def test_invalid_return_reason_maps_never_mutate_inventory(warehouse_env):
+    db, _, _, people, tools = warehouse_env
+    invalid_bodies = [
+        payload(people[0], tools[:1], return_reasons={tools[0].id: "defective"}),
+        payload(people[0], tools[:2], "return", return_reasons={tools[0].id: "defective"}),
+        payload(people[0], tools[:1], "return", return_reasons={
+            tools[0].id: "defective", 99999: "warehouse",
+        }),
+        payload(people[0], tools[:1], "return", return_reasons={tools[0].id: "broken"}),
+    ]
+    for body in invalid_bodies:
+        assert post(warehouse_env, body).status_code == 422
+    assert not db.scalars(select(WarehouseMovement)).all()
+    assert not db.scalars(select(ToolIssueReport)).all()
+    assert all(tool.status == ToolMaterialStatus.WAREHOUSE for tool in tools[:2])
+
+
+def test_stale_mixed_reason_return_rolls_back_first_update_and_report(warehouse_env):
+    db, _, _, people, tools = warehouse_env
+    assert post(warehouse_env, payload(people[0], tools[:1])).status_code == 201
+    response = post(warehouse_env, payload(
+        people[0], [tools[0], tools[3]], "return", return_reasons={
+            tools[0].id: "defective",
+            tools[3].id: "warehouse",
+        },
+    ))
+    assert response.status_code == 409
+    db.expire_all()
+    assert tools[0].status == ToolMaterialStatus.ISSUED
+    assert tools[0].employee_id == people[0].id
+    assert tools[3].status == ToolMaterialStatus.ISSUED
+    assert tools[3].employee_id == people[1].id
+    assert len(db.scalars(select(WarehouseMovement)).all()) == 1
+    assert not db.scalars(select(ToolIssueReport)).all()
 
 
 @pytest.mark.parametrize("invalid_index", [3, 4])
@@ -140,6 +288,7 @@ def test_minimal_lists_search_pagination_and_same_beg_number_items(warehouse_env
     assert client.get(url + "&search=%25", headers=auth).json()["total"] == 0
     result = client.get(f"/api/warehouse/tools?direction=return&employee_id={people[1].id}", headers=auth).json()
     assert [item["id"] for item in result["items"]] == [tools[3].id]
+    assert "return_reason" not in result["items"][0]
 
 
 def test_inactive_employee_can_return_but_not_receive_tools(warehouse_env):

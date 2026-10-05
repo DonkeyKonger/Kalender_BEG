@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { filterWarehousePeople, hasWarehouseSignature, toggleWarehouseTool, warehouseToolIdentity } from "../src/lib/warehouseWorkflow.ts";
+import { filterWarehousePeople, hasWarehouseSignature, toggleWarehouseTool, warehouseReturnReasonLabel, warehouseReturnReasonPayload, warehouseReturnReasons, warehouseToolIdentity } from "../src/lib/warehouseWorkflow.ts";
 
 test("warehouse home starts with the question without an extra tools heading", async () => {
   const page = await readFile(new URL("../src/pages/WarehousePage.tsx", import.meta.url), "utf8");
@@ -69,7 +69,30 @@ test("warehouse tiles show only BEG number, designation, manufacturer and type; 
   const tiles = page.slice(page.indexOf('<div className="wh-tools-grid">'), page.indexOf('{!page.items.length'));
   assert.match(tiles, /<ToolLabel item=\{item\} \/>/);
   assert.doesNotMatch(tiles, /showIdentity|device_number|serial_number|warehouseToolIdentity/);
-  assert.match(page, /className="wh-review-items"[^\n]*<ToolLabel item=\{item\} showIdentity \/>/);
+  const review = page.slice(page.indexOf("function BookingReview("), page.indexOf("function SignaturePad("));
+  assert.match(review, /<ToolLabel item=\{item\} showIdentity \/>/);
+});
+
+test("return reasons use exact labels, default to warehouse and only include selected tools", () => {
+  assert.deepEqual(warehouseReturnReasons.map((option) => option.label), ["Gerät defekt", "Gerät verloren", "Rückgabe Lager"]);
+  assert.equal(warehouseReturnReasonLabel("lost"), "Gerät verloren");
+  assert.equal(warehouseReturnReasonLabel(null), "Nicht erfasst");
+  assert.equal(warehouseReturnReasonLabel(undefined), "Nicht erfasst");
+  const reasons = { 1: "defective", 2: "lost", 99: "lost" };
+  assert.deepEqual(warehouseReturnReasonPayload([{ id: 1 }, { id: 2 }, { id: 3 }], reasons), { 1: "defective", 2: "lost", 3: "warehouse" });
+  assert.deepEqual(reasons, { 1: "defective", 2: "lost", 99: "lost" });
+});
+
+test("return reasons are signed, frozen on uncertain saves and shown in receipt details", async () => {
+  const page = await readFile(new URL("../src/pages/WarehousePage.tsx", import.meta.url), "utf8");
+  assert.match(page, /direction === "return" \? \{ return_reasons: warehouseReturnReasonPayload\(items, returnReasons\) \} : \{\}/);
+  assert.match(page, /direction === "return" && <label className="wh-return-reason"/);
+  assert.match(page, /value=\{returnReasons\[item.id\] \?\? "warehouse"\} disabled=\{frozen\}/);
+  assert.match(page, /onReasonChange\(item.id,[^\n]*setStrokes\(\[\]\); pending.current = null/);
+  assert.match(page, /returnReasons=\{returnReasons\}/);
+  assert.match(page, /const payload = pending.current \?\?/);
+  const history = await readFile(new URL("../src/components/WarehouseHistoryPanel.tsx", import.meta.url), "utf8");
+  assert.match(history, /Rückgabegrund: \{warehouseReturnReasonLabel\(item.return_reason\)\}/);
 });
 
 test("warehouse tool grid has three columns with a single-column phone fallback", async () => {

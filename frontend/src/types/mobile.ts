@@ -93,7 +93,7 @@ export type MobilePersonalFileTool = {
   open_issue_reports: MobileToolIssueSummary[];
 };
 
-export type MobileToolIssueReason = "DEFECTIVE" | "STOLEN";
+export type MobileToolIssueReason = "DEFECTIVE" | "STOLEN" | "LOST";
 
 export type MobileToolIssueSummary = {
   id: number;

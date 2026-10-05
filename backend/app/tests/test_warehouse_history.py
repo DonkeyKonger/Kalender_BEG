@@ -38,12 +38,18 @@ def history_env():
     engine.dispose()
 
 
-def add_receipt(db, *, employee="Max Müller", direction="issue", created_at=None, number="BEG-42", designation="Prüfgerät"):
+def add_receipt(db, *, employee="Max Müller", direction="issue", created_at=None, number="BEG-42",
+                designation="Prüfgerät", return_reason=None):
+    item = {
+        "id": 7, "beg_number": number, "designation": designation, "manufacturer": "Bosch",
+        "item_type": "Testgerät", "device_number": "Gerät-7", "serial_number": "Serial-8",
+        "category": "testing_equipment",
+    }
+    if return_reason is not None:
+        item["return_reason"] = return_reason
     receipt = WarehouseMovement(request_id=str(uuid4()), request_hash="private-hash", direction=direction,
-        employee_id_snapshot=42, employee_name=employee, actor_name="Lager Tablet", items=[{
-            "id": 7, "beg_number": number, "designation": designation, "manufacturer": "Bosch", "item_type": "Testgerät",
-            "device_number": "Gerät-7", "serial_number": "Serial-8", "category": "testing_equipment",
-        }], signature_strokes=[[{"x": .1, "y": .1}, {"x": .7, "y": .8}]],
+        employee_id_snapshot=42, employee_name=employee, actor_name="Lager Tablet", items=[item],
+        signature_strokes=[[{"x": .1, "y": .1}, {"x": .7, "y": .8}]],
         created_at=created_at or datetime(2026, 9, 30, 10, 0, tzinfo=timezone.utc))
     db.add(receipt)
     db.commit()
@@ -63,11 +69,23 @@ def test_list_is_paginated_newest_first_and_omits_signature_and_request_data(his
                                         "review_status", "reviewed_at", "reviewed_by_name", "review_version"}
     assert result["items"][0]["review_status"] == "unreviewed"
     assert result["items"][0]["review_version"] == 0
+    assert result["items"][0]["items"][0]["return_reason"] is None
     assert client.get(BASE_URL + "?page_size=2&page=2").json()["items"][0]["id"] == ids[0]
     assert client.get(BASE_URL + "?page_size=2&page=3").json()["items"] == []
     db.expunge_all()
     rows, _ = WarehouseHistoryService(db).list_page(WarehouseHistoryQuery())
     assert all("signature_strokes" in inspect(row).unloaded for row in rows)
+
+
+def test_history_exposes_saved_reason_and_maps_legacy_snapshots_to_null(history_env):
+    db, client, _ = history_env
+    legacy = add_receipt(db, direction="return")
+    saved = add_receipt(db, direction="return", return_reason="lost")
+
+    rows = client.get(BASE_URL).json()["items"]
+    reasons = {row["id"]: row["items"][0]["return_reason"] for row in rows}
+    assert reasons == {legacy.id: None, saved.id: "lost"}
+    assert client.get(f"{BASE_URL}/{saved.id}").json()["items"][0]["return_reason"] == "lost"
 
 
 @pytest.mark.parametrize("search", ["Müller", "Lager", "BEG-42", "Prüfgerät", "Bosch", "Testgerät", "Gerät-7", "Serial-8"])
@@ -111,19 +129,19 @@ def test_real_tablet_bookings_appear_with_original_signature_after_master_data_c
     db.add_all([actor, person, item])
     db.commit()
     signatures = [[{"x": .1, "y": .2}, {"x": .5, "y": .7}]]
-    ids = []
+    ids = {}
     for direction in ("issue", "return"):
         result = WarehouseService(db).book(WarehouseMovementCreate(
             request_id=uuid4(), direction=direction, employee_id=person.id,
             tool_ids=[item.id], signature_strokes=signatures,
         ), actor)
-        ids.append(result.id)
+        ids[result.id] = direction
     person.display_name = "Changed person"
     actor.display_name = "Changed actor"
     item.designation = "Changed tool"
     db.commit()
     assert client.get(BASE_URL).json()["total"] == 2
-    for receipt_id in ids:
+    for receipt_id, direction in ids.items():
         response = client.get(f"{BASE_URL}/{receipt_id}")
         assert response.status_code == 200
         record = response.json()
@@ -131,6 +149,9 @@ def test_real_tablet_bookings_appear_with_original_signature_after_master_data_c
         assert record["employee_name"] == "Original Monteur"
         assert record["actor_name"] == "Altes Lager"
         assert record["items"][0]["designation"] == "Original Werkzeug"
+        assert record["items"][0]["return_reason"] == (
+            "warehouse" if direction == "return" else None
+        )
         assert "request_hash" not in record and "request_id" not in record
         assert response.headers["Cache-Control"] == "no-store"
     # Reading the log must never create, edit or remove inventory/bookings.

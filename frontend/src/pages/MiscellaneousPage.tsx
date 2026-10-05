@@ -209,13 +209,13 @@ function MiscellaneousPlaceholderPanel({ activeTab }: { activeTab: Miscellaneous
 }
 
 function formatToolIssueReason(reason: ToolMaterialItem["open_issue_reports"][number]["reason"]): string {
-  return reason === "DEFECTIVE" ? "Maschine defekt" : "Maschine entwendet";
+  return reason === "DEFECTIVE" ? "Maschine defekt" : reason === "LOST" ? "Gerät verloren" : "Maschine entwendet";
 }
 
 function formatToolIssueDescription(reason: ToolMaterialItem["open_issue_reports"][number]["reason"]): string {
   return reason === "DEFECTIVE"
     ? "Das Werkzeug wurde als defekt gemeldet."
-    : "Das Werkzeug wurde als entwendet gemeldet.";
+    : reason === "LOST" ? "Das Werkzeug wurde als verloren gemeldet." : "Das Werkzeug wurde als entwendet gemeldet.";
 }
 
 function formatToolIssueDate(createdAt: string): string {

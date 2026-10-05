@@ -188,12 +188,11 @@ class DashboardMessageService:
 
     @staticmethod
     def _build_tool_issue_message(report: ToolIssueReport) -> DashboardMessageRead:
-        reason_label = (
-            "Maschine defekt"
-            if report.reason == ToolIssueReason.DEFECTIVE
-            else "Maschine entwendet"
-        )
-        action_label = "als defekt" if report.reason == ToolIssueReason.DEFECTIVE else "als entwendet"
+        reason_label, action_label = {
+            ToolIssueReason.DEFECTIVE: ("Maschine defekt", "als defekt"),
+            ToolIssueReason.LOST: ("Maschine verloren", "als verloren"),
+            ToolIssueReason.STOLEN: ("Maschine entwendet", "als entwendet"),
+        }[report.reason]
         tool_label = " ".join(
             value for value in (report.tool_manufacturer_snapshot, report.tool_designation_snapshot) if value
         )

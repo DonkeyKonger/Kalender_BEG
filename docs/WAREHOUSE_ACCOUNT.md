@@ -46,13 +46,23 @@ Testkonten, darunter Tablets in 1024×768 und 768×1024.
 3. Werkzeuge über **BEG-Nr.**, Bezeichnung, Hersteller, Geräte- oder Seriennummer
    suchen und einzeln auswählen. Gleiche BEG-Nummern werden nicht zusammengefasst,
    weil sie in Altbeständen verschiedene Geräte eines Sets bezeichnen können.
-4. Auswahl prüfen, unterschreiben und **Ausgabe/Rückgabe bestätigen** antippen.
+4. Auswahl prüfen. Bei Rückgaben rechts neben jedem Werkzeug einen Rückgabegrund
+   wählen: **Gerät defekt**, **Gerät verloren** oder **Rückgabe Lager** (Vorgabe).
+   Unterschreiben und **Ausgabe/Rückgabe bestätigen** antippen. Eine nachträgliche
+   Änderung eines Grundes leert die Unterschrift; während einer laufenden oder
+   unklaren Bestätigung bleiben Gründe und Unterschrift gesperrt.
 5. Die Erfolgsseite zeigt die Belegnummer. **Fertig** leert den Vorgang für die
    nächste Person; das gemeinsame Lagerkonto bleibt angemeldet.
 
 Ausgaben bieten ausschließlich Lagerbestand ohne offene Defekt-/Verlustmeldung
 an. Rückgaben zeigen ausschließlich dem ausgewählten Mitarbeiter zugeordnete
 Einträge. Eine Rückgabe hebt eine bestehende Defekt-/Verlustmeldung nicht auf.
+Defekte oder verlorene Geräte erzeugen bei Bestätigung eine offene Werkzeugmeldung
+an den hinterlegten Werkzeug-Beauftragten und sind damit für eine erneute Ausgabe
+gesperrt. Eine solche Rückgabe benötigt einen gültigen Beauftragten. Die Sperre
+wird über das bestehende Erledigen der Werkzeugmeldung aufgehoben, nicht über den
+Prüfhaken am Lagerbeleg. Es erfolgt keine automatische Abschreibung. „Verloren“
+wird ausdrücklich von „entwendet“ unterschieden.
 Gebucht wird jeweils der vollständige Inventareintrag; eine Mengenaufteilung von
 Verbrauchsmaterial oder Sets ist kein Bestandteil dieses ersten Ablaufs.
 
@@ -94,6 +104,14 @@ Lagerkonto- und Werkzeugdaten einschließlich Geräte-/Seriennummern und
 Unterschrift. Die Unterschrift wird erst beim Öffnen geladen. Die signierten
 Beleginhalte bleiben unveränderlich: Umbenennungen oder Bestandsänderungen schreiben
 alte Belege nicht um. Abgebrochene, noch nicht bestätigte Tablet-Vorgänge erzeugen keinen Beleg.
+Bei Rückgaben zeigt der Beleg den gespeicherten Grund pro Artikel. Ältere Belege
+ohne diese Angabe zeigen **Nicht erfasst**; ihnen wird kein Grund nachträglich
+unterstellt. Gründe und gegebenenfalls Werkzeugmeldungen werden atomar mit
+Unterschrift und Bestandsänderung gespeichert. Die API akzeptiert `return_reasons`
+als Zuordnung von Werkzeug-ID zu `defective`, `lost` oder `warehouse`; bei Angabe
+muss die Zuordnung exakt alle ausgewählten Werkzeuge umfassen. Ausgaben dürfen
+keine Rückgabegründe enthalten. Alte Clients ohne Zuordnung buchen unverändert
+eine normale Lagerrückgabe. Wiederholungen einer Buchung ändern keinen Grund.
 
 Neue und bisherige Belege beginnen **Ungeprüft**. Rechts setzt der aus der
 Lohnprüfung bekannte Prüfhaken den Status auf **Geprüft**; ein weiterer Klick
@@ -118,3 +136,8 @@ Belegabfrage. Upgrade und Downgrade verändern keine gespeicherten Belege.
 Migration `20261005_0128` ergänzt die Prüffelder. Bestehende Belege und Signaturen
 bleiben erhalten. Ein Downgrade entfernt nur die neuen Prüffelder; deren aktueller
 Status geht dabei verloren, das Audit-Protokoll bleibt erhalten.
+
+Migration `20261005_0129` ergänzt `LOST` in den erlaubten Werkzeugmeldegründen.
+Bestehende Meldungen bleiben unverändert. Ein Downgrade wird verweigert, solange
+Meldungen mit `LOST` vorhanden sind; sie werden weder gelöscht noch in eine
+Diebstahlmeldung umgewandelt.

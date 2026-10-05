@@ -1,5 +1,19 @@
-import type { WarehousePerson, WarehouseTool } from "../types/warehouse";
+import type { WarehousePerson, WarehouseReturnReason, WarehouseTool } from "../types/warehouse";
 import type { CustomerSignatureStroke } from "../types/site";
+
+export const warehouseReturnReasons: { value: WarehouseReturnReason; label: string }[] = [
+  { value: "defective", label: "Gerät defekt" },
+  { value: "lost", label: "Gerät verloren" },
+  { value: "warehouse", label: "Rückgabe Lager" },
+];
+
+export function warehouseReturnReasonLabel(reason?: WarehouseReturnReason | null): string {
+  return warehouseReturnReasons.find((option) => option.value === reason)?.label ?? "Nicht erfasst";
+}
+
+export function warehouseReturnReasonPayload(items: WarehouseTool[], reasons: Record<number, WarehouseReturnReason>): Record<number, WarehouseReturnReason> {
+  return Object.fromEntries(items.map((item) => [item.id, reasons[item.id] ?? "warehouse"]));
+}
 
 export function filterWarehousePeople(people: WarehousePerson[], search: string): WarehousePerson[] {
   const needle = search.trim().toLocaleLowerCase("de");

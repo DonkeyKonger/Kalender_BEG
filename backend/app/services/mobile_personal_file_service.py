@@ -194,11 +194,11 @@ class MobilePersonalFileService:
                         id=report.id,
                         reason=report.reason,
                         status=report.status.value,
-                        description=(
-                            "Das Werkzeug wurde als defekt gemeldet."
-                            if report.reason == ToolIssueReason.DEFECTIVE
-                            else "Das Werkzeug wurde als entwendet gemeldet."
-                        ),
+                        description={
+                            ToolIssueReason.DEFECTIVE: "Das Werkzeug wurde als defekt gemeldet.",
+                            ToolIssueReason.LOST: "Das Werkzeug wurde als verloren gemeldet.",
+                            ToolIssueReason.STOLEN: "Das Werkzeug wurde als entwendet gemeldet.",
+                        }[report.reason],
                         created_at=report.created_at,
                     )
                 )

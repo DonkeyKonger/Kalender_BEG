@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { SIGNATURE_SVG_HEIGHT, SIGNATURE_SVG_WIDTH, signatureStrokeToSvgPoints, validSignatureStrokes } from "../lib/signatureCanvas";
 import { warehouseHistoryDate, warehouseHistoryPageSize, warehouseHistorySearch } from "../lib/warehouseHistory";
-import { warehouseToolIdentity } from "../lib/warehouseWorkflow";
+import { warehouseReturnReasonLabel, warehouseToolIdentity } from "../lib/warehouseWorkflow";
 import type { WarehouseDirection, WarehouseHistoryDetail, WarehouseHistoryEntry, WarehouseHistoryPage, WarehouseReviewStatus } from "../types/warehouse";
 import { EntityDetailDrawer } from "./EntityDetailDrawer";
 import "./WarehouseHistoryPanel.css";
@@ -172,8 +172,9 @@ function WarehouseReceiptDrawer({ entry, onClose }: { entry: WarehouseHistoryEnt
       </dl>
       <section><h3>Werkzeuge / Material <span>({detail.items.length})</span></h3><ul className="warehouse-receipt-items">{detail.items.map((item) => <li key={item.id}>
         <span>BEG-Nr. {item.beg_number || "–"}</span><strong>{item.designation}</strong><p>{[item.manufacturer, item.item_type].filter(Boolean).join(" · ")}</p><p>{warehouseToolIdentity(item)}</p>
+        {detail.direction === "return" && <p>Rückgabegrund: {warehouseReturnReasonLabel(item.return_reason)}</p>}
       </li>)}</ul></section>
-      <section className="warehouse-receipt-signature"><h3>Unterschrift des Monteurs</h3><p>Bestätigung {detail.direction === "issue" ? "des Empfangs" : "der Rückgabe"} der aufgeführten Werkzeuge.</p>
+      <section className="warehouse-receipt-signature"><h3>Unterschrift des Monteurs</h3><p>Bestätigung {detail.direction === "issue" ? "des Empfangs" : detail.items.some((item) => item.return_reason) ? "der angegebenen Rückgabegründe" : "der Rückgabe"} der aufgeführten Werkzeuge.</p>
         {strokes.length ? <svg role="img" aria-label={`Gespeicherte Unterschrift von ${detail.employee_name}`} viewBox={`0 0 ${SIGNATURE_SVG_WIDTH} ${SIGNATURE_SVG_HEIGHT}`}>
           {strokes.map((stroke, index) => <polyline key={index} points={signatureStrokeToSvgPoints(stroke)} fill="none" stroke="#173658" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />)}
         </svg> : <p>Keine darstellbare Unterschrift vorhanden.</p>}
