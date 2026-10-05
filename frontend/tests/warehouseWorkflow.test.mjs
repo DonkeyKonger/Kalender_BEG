@@ -50,12 +50,19 @@ test("warehouse tiles show only BEG number, designation, manufacturer and type; 
   assert.match(label, /showIdentity = false/);
   assert.match(label, /item\.beg_number/);
   assert.match(label, /item\.designation/);
-  assert.match(label, /\[item\.manufacturer, item\.item_type\]/);
+  assert.match(label, /\[item\.manufacturer, item\.beg_number \|\| "Ohne BEG-Nr\.", item\.item_type\]/);
+  assert.doesNotMatch(label, /className="wh-beg"/);
   assert.match(label, /\{showIdentity && <small>\{warehouseToolIdentity\(item\)\}<\/small>\}/);
   const tiles = page.slice(page.indexOf('<div className="wh-tools-grid">'), page.indexOf('{!page.items.length'));
   assert.match(tiles, /<ToolLabel item=\{item\} \/>/);
   assert.doesNotMatch(tiles, /showIdentity|device_number|serial_number|warehouseToolIdentity/);
   assert.match(page, /className="wh-review-items"[^\n]*<ToolLabel item=\{item\} showIdentity \/>/);
+});
+
+test("warehouse tool grid has three columns with a single-column phone fallback", async () => {
+  const css = await readFile(new URL("../src/pages/WarehousePage.css", import.meta.url), "utf8");
+  assert.match(css, /\.wh-tools-grid \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 650px\)[\s\S]*\.wh-start-grid, \.wh-tools-grid, \.wh-people-grid \{ grid-template-columns: minmax\(0, 1fr\)/);
 });
 
 test("a tap or repeated identical coordinates is not a signature", () => {

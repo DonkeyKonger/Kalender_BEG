@@ -254,8 +254,8 @@ function SignaturePad({ strokes, onChange, disabled }: { strokes: CustomerSignat
 }
 
 function ToolLabel({ item, showIdentity = false }: { item: WarehouseTool; showIdentity?: boolean }) {
-  return <span className="wh-tool-label"><span className="wh-beg">BEG-Nr. {item.beg_number || "–"}</span><strong>{item.designation}</strong>
-    {(item.manufacturer || item.item_type) && <small>{[item.manufacturer, item.item_type].filter(Boolean).join(" · ")}</small>}
+  return <span className="wh-tool-label"><strong>{item.designation}</strong>
+    <small>{[item.manufacturer, item.beg_number || "Ohne BEG-Nr.", item.item_type].filter(Boolean).join(" · ")}</small>
     {showIdentity && <small>{warehouseToolIdentity(item)}</small>}</span>;
 }
 function SearchField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {

@@ -64,14 +64,13 @@
 .wh-person-avatar { width: 40px; height: 40px; display: grid; place-items: center; background: #eaf2f9; border-radius: 50%; flex-shrink: 0; }
 .wh-context { margin: -6px 0 16px; flex-wrap: wrap; }
 .wh-context strong { display: flex; align-items: center; gap: 8px; }
-.wh-tools-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wh-tools-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .wh-tool { border: 1px solid var(--wh-line); background: #fcfdff; border-radius: 13px; display: flex; gap: 15px; align-items: flex-start; padding: 18px; text-align: left; color: var(--wh-ink); }
 .wh-tool.is-selected { background: #edf5fc; border-color: #6b95ba; box-shadow: inset 0 0 0 1px #6b95ba; }
 .wh-tool-icon { color: var(--wh-blue); margin-top: 6px; }
 .wh-tool-label { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .wh-tool-label strong { font-size: 18px; line-height: 1.3; }
 .wh-tool-label small { font-size: 13px; color: var(--wh-muted); line-height: 1.4; }
-.wh-beg { font-size: 13px; font-weight: 750; color: #456d92; }
 .wh-check { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #b8ccdf; border-radius: 7px; margin-top: 4px; }
 .is-selected .wh-check { background: var(--wh-blue); border-color: var(--wh-blue); color: white; }
 .wh-selection { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 0 0 20px; }
@@ -101,6 +100,10 @@
   .wh-primary:hover { background: #254c6d; }
 }
 @media (max-width: 1000px) {
+  .wh-tool { padding: 14px; gap: 10px; display: grid; grid-template-columns: minmax(0, 1fr) 24px; }
+  .wh-tool .wh-tool-icon { margin-top: 0; }
+  .wh-tool .wh-tool-label { grid-column: 1 / -1; grid-row: 2; }
+  .wh-tool .wh-check { grid-column: 2; grid-row: 1; margin-top: 0; }
   .wh-people-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .wh-review-grid { grid-template-columns: minmax(0, 1fr); }
   .wh-review-items { max-height: 240px; }
@@ -120,6 +123,6 @@
   .wh-flow-heading { align-items: flex-start; }
   .wh-action-bar { flex-direction: column; gap: 10px; padding: 12px; }
   .wh-action-bar .wh-button { width: 100%; }
-  .wh-tool { padding: 15px 12px; gap: 12px; }
+  .wh-tool { padding: 15px 12px; gap: 12px; display: flex; }
   .wh-pagination { gap: 8px; }
 }
