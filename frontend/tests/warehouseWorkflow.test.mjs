@@ -29,6 +29,20 @@ test("physical device labels preserve both identifiers or fall back to inventory
   assert.equal(warehouseToolIdentity({ id: 2 }), "Eintrag #2");
 });
 
+test("warehouse tiles show only BEG number, designation, manufacturer and type; review keeps device identity", async () => {
+  const page = await readFile(new URL("../src/pages/WarehousePage.tsx", import.meta.url), "utf8");
+  const label = page.slice(page.indexOf("function ToolLabel("), page.indexOf("function SearchField("));
+  assert.match(label, /showIdentity = false/);
+  assert.match(label, /item\.beg_number/);
+  assert.match(label, /item\.designation/);
+  assert.match(label, /\[item\.manufacturer, item\.item_type\]/);
+  assert.match(label, /\{showIdentity && <small>\{warehouseToolIdentity\(item\)\}<\/small>\}/);
+  const tiles = page.slice(page.indexOf('<div className="wh-tools-grid">'), page.indexOf('{!page.items.length'));
+  assert.match(tiles, /<ToolLabel item=\{item\} \/>/);
+  assert.doesNotMatch(tiles, /showIdentity|device_number|serial_number|warehouseToolIdentity/);
+  assert.match(page, /className="wh-review-items"[^\n]*<ToolLabel item=\{item\} showIdentity \/>/);
+});
+
 test("a tap or repeated identical coordinates is not a signature", () => {
   assert.equal(hasWarehouseSignature([]), false);
   assert.equal(hasWarehouseSignature([[{ x: .1, y: .1 }]]), false);

@@ -204,7 +204,7 @@ function BookingReview({ direction, person, items, onBack, onLock, onSaved }: {
     <div className="wh-context"><button type="button" className="wh-button wh-quiet" disabled={frozen} onClick={onBack}><ArrowLeft size={20} />Auswahl ändern</button><strong><UserRound size={20} />{person.display_name}</strong></div>
     <div className="wh-review-grid">
       <section className="wh-panel"><div className="wh-section-heading"><h2>{direction === "issue" ? "Das nimmst du mit" : "Das gibst du zurück"}</h2><p>{items.length} {items.length === 1 ? "Werkzeug" : "Werkzeuge"} · Bitte Auswahl prüfen.</p></div>
-        <ul className="wh-review-items">{items.map((item) => <li key={item.id}><ToolMaterialCategoryIcon category={item.category} size={24} /><ToolLabel item={item} /></li>)}</ul>
+        <ul className="wh-review-items">{items.map((item) => <li key={item.id}><ToolMaterialCategoryIcon category={item.category} size={24} /><ToolLabel item={item} showIdentity /></li>)}</ul>
       </section>
       <section className="wh-panel wh-signature-panel"><div className="wh-section-heading"><h2>Deine Unterschrift</h2><p>Ich bestätige {direction === "issue" ? "den Empfang" : "die Rückgabe"} der aufgeführten Werkzeuge.</p></div>
         <strong className="wh-signer">{person.display_name}</strong>
@@ -253,10 +253,10 @@ function SignaturePad({ strokes, onChange, disabled }: { strokes: CustomerSignat
   </div>;
 }
 
-function ToolLabel({ item }: { item: WarehouseTool }) {
+function ToolLabel({ item, showIdentity = false }: { item: WarehouseTool; showIdentity?: boolean }) {
   return <span className="wh-tool-label"><span className="wh-beg">BEG-Nr. {item.beg_number || "–"}</span><strong>{item.designation}</strong>
     {(item.manufacturer || item.item_type) && <small>{[item.manufacturer, item.item_type].filter(Boolean).join(" · ")}</small>}
-    <small>{warehouseToolIdentity(item)}</small></span>;
+    {showIdentity && <small>{warehouseToolIdentity(item)}</small>}</span>;
 }
 function SearchField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
   return <label className="wh-search"><Search size={23} aria-hidden="true" /><input type="search" aria-label={label} value={value} maxLength={160} autoComplete="off" placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label>;
