@@ -65,6 +65,9 @@
 .wh-context { margin: -6px 0 16px; flex-wrap: wrap; }
 .wh-context strong { display: flex; align-items: center; gap: 8px; }
 .wh-tools-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wh-tool-results { position: relative; }
+.wh-tool-refresh { position: absolute; right: 0; top: -20px; margin: 0; font-size: 12px; color: var(--wh-muted); }
+.wh-tool-results[aria-busy="true"] .wh-tool:disabled { opacity: 1; cursor: progress; }
 .wh-tool { border: 1px solid var(--wh-line); background: #fcfdff; border-radius: 13px; display: flex; gap: 15px; align-items: flex-start; padding: 18px; text-align: left; color: var(--wh-ink); }
 .wh-tool.is-selected { background: #edf5fc; border-color: #6b95ba; box-shadow: inset 0 0 0 1px #6b95ba; }
 .wh-tool-icon { color: var(--wh-blue); margin-top: 6px; }

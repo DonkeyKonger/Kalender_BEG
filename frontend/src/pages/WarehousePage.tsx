@@ -3,11 +3,12 @@ import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpFromLine, Check, CheckCi
 
 import { useAuth } from "../auth/AuthContext";
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
+import { useWarehouseToolList } from "../hooks/useWarehouseToolList";
 import { api, ApiError } from "../lib/api";
 import { drawSignatureCanvas, getNormalizedSignaturePoint } from "../lib/signatureCanvas";
 import { filterWarehousePeople, hasWarehouseSignature, toggleWarehouseTool, warehouseReturnReasonPayload, warehouseReturnReasons, warehouseToolIdentity } from "../lib/warehouseWorkflow";
 import type { CustomerSignatureStroke } from "../types/site";
-import type { WarehouseBooking, WarehouseDirection, WarehousePerson, WarehouseReceipt, WarehouseReturnReason, WarehouseTool, WarehouseToolPage } from "../types/warehouse";
+import type { WarehouseBooking, WarehouseDirection, WarehousePerson, WarehouseReceipt, WarehouseReturnReason, WarehouseTool } from "../types/warehouse";
 import "./WarehousePage.css";
 
 const directionTitle = { issue: "Werkzeugausgabe", return: "Werkzeugrückgabe" };
@@ -22,6 +23,7 @@ export function WarehousePage() {
   const [review, setReview] = useState(false);
   const [receipt, setReceipt] = useState<WarehouseReceipt | null>(null);
   const [locked, setLocked] = useState(false);
+  const toolList = useWarehouseToolList(direction, person?.id ?? null, !!person && !review);
   const step = !person ? 1 : review ? 3 : 2;
   const dirty = selected.length > 0 || locked;
 
@@ -76,7 +78,7 @@ export function WarehousePage() {
           </li>)}
         </ol>
         {!person && <PersonSelection direction={direction} onSelect={setPerson} />}
-        {person && !review && <ToolSelection direction={direction} person={person} selected={selected} onToggle={(item) => setSelected((items) => toggleWarehouseTool(items, item))}
+        {person && !review && <ToolSelection direction={direction} person={person} selected={selected} tools={toolList} onToggle={(item) => setSelected((items) => toggleWarehouseTool(items, item))}
           onBack={() => { if (!selected.length || window.confirm("Monteur wechseln und Werkzeugauswahl leeren?")) { setPerson(null); setSelected([]); setReturnReasons({}); } }} onNext={() => setReview(true)} />}
         {person && review && <BookingReview direction={direction} person={person} items={selected} returnReasons={returnReasons} onReasonChange={(id, reason) => setReturnReasons((current) => ({ ...current, [id]: reason }))} onBack={() => setReview(false)} onLock={setLocked} onSaved={(saved) => {
           setSelected([]); setPerson(null); setReview(false); setReturnReasons({}); setLocked(false); setReceipt(saved);
@@ -120,53 +122,43 @@ function PersonSelection({ direction, onSelect }: { direction: WarehouseDirectio
   </section>;
 }
 
-function ToolSelection({ direction, person, selected, onToggle, onBack, onNext }: {
+function ToolSelection({ direction, person, selected, tools, onToggle, onBack, onNext }: {
   direction: WarehouseDirection; person: WarehousePerson; selected: WarehouseTool[];
+  tools: ReturnType<typeof useWarehouseToolList>;
   onToggle: (item: WarehouseTool) => void; onBack: () => void; onNext: () => void;
 }) {
-  const [search, setSearch] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [page, setPage] = useState<WarehouseToolPage>({ items: [], total: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true); setError("");
-    const timer = window.setTimeout(() => {
-      void api.warehouseTools(direction, person.id, search, offset, controller.signal).then(setPage).catch((err: unknown) => {
-        if (!controller.signal.aborted) setError(errorText(err));
-      }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    }, 180);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [direction, person.id, search, offset, retry]);
+  const { search, pageOffset: offset, pageSearch, page, loading, error, list } = tools;
+  const unavailable = loading || !!error;
   return <>
     <div className="wh-context"><button className="wh-button wh-quiet" type="button" onClick={onBack}><ArrowLeft size={20} />Monteur ändern</button><strong><UserRound size={20} />{person.display_name}</strong></div>
     <section className="wh-panel">
       <div className="wh-section-heading"><h2>Werkzeuge auswählen</h2><p>{direction === "issue" ? "Verfügbare Werkzeuge im Lager. Werkzeuge mit offenen Meldungen sind ausgeschlossen." : "Diese Werkzeuge sind dir zugeordnet. Wähle aus, was du zurückgibst."}</p></div>
-      <SearchField label="Werkzeug suchen" value={search} onChange={(value) => { setLoading(true); setSearch(value); setOffset(0); }} placeholder="BEG-Nr. oder Werkzeug suchen …" />
+      <SearchField label="Werkzeug suchen" value={search} onChange={list.search} placeholder="BEG-Nr. oder Werkzeug suchen …" />
       {selected.length > 0 && <div className="wh-selection" aria-label="Ausgewählte Werkzeuge">
         <span>{selected.length} ausgewählt</span>{selected.map((item) => <button type="button" key={item.id} onClick={() => onToggle(item)} aria-label={`${item.beg_number || "Ohne BEG-Nr."} · ${item.item_type || "Ohne Typ"} aus Auswahl entfernen`}>
           {item.beg_number || "Ohne BEG-Nr."} · {item.item_type || "Ohne Typ"}<X size={16} />
         </button>)}
       </div>}
       {selected.length === 100 && <p role="status">Maximal 100 Einträge pro Vorgang.</p>}
-      {error ? <LoadError message={error} onRetry={() => setRetry((value) => value + 1)} /> : loading ? <p role="status">Werkzeuge werden geladen …</p> : <>
+      {!!error && <LoadError message={errorText(error)} onRetry={list.retry} />}
+      {!page && loading && <p role="status">Werkzeuge werden geladen …</p>}
+      {page && <div className="wh-tool-results" aria-busy={loading}>
+        {loading && <p className="wh-tool-refresh" role="status">Werkzeuge werden aktualisiert …</p>}
         <div className="wh-tools-grid">{page.items.map((item) => {
           const checked = selected.some((entry) => entry.id === item.id);
           return <button key={item.id} type="button" className={`wh-tool ${checked ? "is-selected" : ""}`} aria-pressed={checked}
-            disabled={!checked && selected.length === 100} onClick={() => onToggle(item)}>
+            disabled={unavailable || (!checked && selected.length === 100)} onClick={() => onToggle(item)}>
             <span className="wh-tool-icon"><ToolMaterialCategoryIcon category={item.category} size={26} /></span><ToolLabel item={item} />
             <span className="wh-check" aria-hidden="true">{checked && <Check size={18} />}</span>
           </button>;
         })}</div>
-        {!page.items.length && <p className="wh-empty">{search ? "Kein passendes Werkzeug gefunden. Bitte BEG-Nr. prüfen." : "Keine Werkzeuge für diesen Vorgang verfügbar."}</p>}
+        {!page.items.length && <p className="wh-empty">{pageSearch ? "Kein passendes Werkzeug gefunden. Bitte BEG-Nr. prüfen." : "Keine Werkzeuge für diesen Vorgang verfügbar."}</p>}
         {page.total > 40 && <nav className="wh-pagination" aria-label="Werkzeugseiten">
-          <button className="wh-button" type="button" disabled={offset === 0} onClick={() => { setLoading(true); setOffset((value) => value - 40); }}>Zurück</button>
+          <button className="wh-button" type="button" disabled={unavailable || offset === 0} onClick={() => list.goTo(offset - 40)}>Zurück</button>
           <span>{offset + 1}–{Math.min(offset + 40, page.total)} von {page.total}</span>
-          <button className="wh-button" type="button" disabled={offset + 40 >= page.total} onClick={() => { setLoading(true); setOffset((value) => value + 40); }}>Weitere</button>
+          <button className="wh-button" type="button" disabled={unavailable || offset + 40 >= page.total} onClick={() => list.goTo(offset + 40)}>Weitere</button>
         </nav>}
-      </>}
+      </div>}
     </section>
     <div className="wh-action-bar"><span><strong>{selected.length}</strong> {selected.length === 1 ? "Werkzeug ausgewählt" : "Werkzeuge ausgewählt"}</span>
       <button type="button" className="wh-button wh-primary" disabled={!selected.length} onClick={onNext}>Weiter zur Unterschrift <ArrowRight size={21} /></button></div>

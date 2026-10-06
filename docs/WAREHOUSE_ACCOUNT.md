@@ -46,6 +46,12 @@ Testkonten, darunter Tablets in 1024×768 und 768×1024.
 3. Werkzeuge über **BEG-Nr.**, Bezeichnung, Hersteller, Geräte- oder Seriennummer
    suchen und einzeln auswählen. Gleiche BEG-Nummern werden nicht zusammengefasst,
    weil sie in Altbeständen verschiedene Geräte eines Sets bezeichnen können.
+   Öffnen, Blättern und erneutes Laden starten sofort; nur die Texteingabe der
+   Suche wird kurz gebündelt. Bereits geladene Kacheln bleiben beim Nachladen
+   sichtbar und sind bis zur erfolgreichen Aktualisierung nicht auswählbar.
+   **Auswahl ändern** aus der Unterschrift erhält Suche und Seite und prüft die
+   angezeigten Daten erneut im Hintergrund. Der Listenstand bleibt ausschließlich
+   im Arbeitsspeicher dieses Vorgangs; Personenwechsel und Abschluss verwerfen ihn.
 4. Auswahl prüfen. Bei Rückgaben rechts neben jedem Werkzeug einen Rückgabegrund
    wählen: **Gerät defekt**, **Gerät verloren** oder **Rückgabe Lager** (Vorgabe).
    Unterschreiben und **Ausgabe/Rückgabe bestätigen** antippen. Eine nachträgliche
