@@ -6143,7 +6143,7 @@ function MeasurementBatchDetail({
       {!isItemsLoading && !error && items.length > 0 ? (
         <>
           {positionGroups.length > 0 ? (
-            <div className="mobile-measurement-position-groups" aria-label="Positionsbereich auswählen">
+            <div className="mobile-measurement-position-groups" role="group" aria-label="Positionsbereich auswählen">
               {positionGroups.map((group) => (
                 <div className="mobile-measurement-position-group" key={group.key}>
                   <button
@@ -6152,6 +6152,8 @@ function MeasurementBatchDetail({
                       `is-${group.kind}`,
                     ].filter(Boolean).join(" ")}
                     type="button"
+                    aria-pressed={group.key === effectivePositionGroupKey}
+                    title={group.label}
                     onClick={() => setActivePositionGroupKey(group.key)}
                   >
                     <span className="mobile-measurement-position-group-label">{group.label}</span>

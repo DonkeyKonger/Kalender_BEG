@@ -64,3 +64,24 @@ test('tablet freezes all four header rows in a viewport-bounded scroller',()=>{
  assert.match(table,/observer\.disconnect\(\)/);
  assert.match(table,/window\.removeEventListener\("resize", updateViewport\)/);
 });
+
+test('tablet matrix fills the workspace independently of viewport breakpoints',()=>{
+ const css=readFileSync(new URL('../src/pages/MobileMeasurementTablet.css',import.meta.url),'utf8');
+ assert.doesNotMatch(css,/@media/);
+ assert.match(css,/\.mobile-detail-page:has\(\.is-table-view\) \{[^}]*width: 100%;[^}]*max-width: none;[^}]*margin: 0;[^}]*padding: 0;/);
+ assert.match(css,/\.mobile-detail-panel\.mobile-measurement-positions-page\.is-table-view \{[^}]*width: 100%;[^}]*max-width: 100%;[^}]*margin: 0;[^}]*padding: 0;/);
+ assert.match(css,/:has\(\.mobile-measurement-positions-page\.is-table-view\) \.app-main \{[^}]*margin-left: 0;/);
+ assert.match(css,/\n\s+height: calc\(100dvh - var\(--measurement-table-top, 180px\) - 24px\);/);
+ assert.match(css,/\.mobile-measurement-table-wrap \{[^}]*min-width: 100%;/);
+});
+
+test('tablet position groups stay in one touch-scrollable row with an accessible selection',()=>{
+ const css=readFileSync(new URL('../src/pages/MobileMeasurementTablet.css',import.meta.url),'utf8');
+ const page=readFileSync(new URL('../src/pages/MobileAssignmentDetailPage.tsx',import.meta.url),'utf8');
+ assert.match(css,/\.is-table-view \.mobile-measurement-position-groups \{[^}]*display: flex;[^}]*flex-wrap: nowrap;[^}]*max-height: none;[^}]*overflow-x: auto;[^}]*overflow-y: hidden;/);
+ assert.match(css,/\.is-table-view \.mobile-measurement-position-groups button \{[^}]*min-height: 44px;/);
+ assert.match(css,/\.is-table-view \.mobile-measurement-position-groups button:focus-visible/);
+ assert.match(page,/className="mobile-measurement-position-groups" role="group" aria-label="Positionsbereich auswählen"/);
+ assert.match(page,/aria-pressed=\{group.key === effectivePositionGroupKey\}/);
+ assert.match(page,/onClick=\{\(\) => setActivePositionGroupKey\(group.key\)\}/);
+});

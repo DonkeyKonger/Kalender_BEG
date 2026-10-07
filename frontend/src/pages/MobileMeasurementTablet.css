@@ -1,7 +1,134 @@
 /* Keep the tablet controls in the same blue/white family as phone capture. */
 /* The component is selected by device size, including small tablets and split view. */
-  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view {
-    padding-bottom: 0;
+  /* Follow the selected view, not viewport breakpoints: tablets can also use
+     wide landscape screens or narrow split-screen windows. */
+  .app-shell.is-mobile-workspace:has(.mobile-measurement-positions-page.is-table-view) .sidebar,
+  .app-shell.is-mobile-workspace:has(.mobile-measurement-positions-page.is-table-view) .topbar,
+  .app-shell.is-mobile-workspace:has(.mobile-measurement-positions-page.is-table-view) .mobile-appshell-actions {
+    display: none;
+  }
+  .app-shell.is-mobile-workspace:has(.mobile-measurement-positions-page.is-table-view) .app-main {
+    min-width: 0;
+    margin-left: 0;
+  }
+  .app-shell.is-mobile-workspace:has(.mobile-measurement-positions-page.is-table-view) .content-area {
+    min-width: 0;
+    padding: 12px max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left));
+  }
+  .app-shell.is-mobile-workspace .mobile-detail-page:has(.is-table-view) {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+  }
+  .app-shell.is-mobile-workspace .mobile-detail-panel.mobile-measurement-positions-page.is-table-view {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-measurement-detail-topbar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-back-button {
+    flex: 0 0 auto;
+    min-height: 44px;
+    border-radius: 10px;
+  }
+  .app-shell.is-mobile-workspace .mobile-measurement-positions-page.is-table-view .mobile-measurement-search {
+    flex: 0 1 420px;
+    min-width: 0;
+    min-height: 44px;
+    border: 1px solid #dce7f2;
+    border-radius: 10px;
+    padding: 8px 12px;
+    background: #fff;
+  }
+  .app-shell.is-mobile-workspace .is-table-view .mobile-measurement-position-groups {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-width: 0;
+    max-height: none;
+    padding: 4px;
+    border: 1px solid #dce7f2;
+    border-radius: 12px;
+    background: #fff;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-padding: 4px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    scrollbar-color: #bdccdd #f4f8fc;
+  }
+  .app-shell.is-mobile-workspace .is-table-view .mobile-measurement-position-group {
+    flex: 0 0 auto;
+    height: auto;
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
+  }
+  .app-shell.is-mobile-workspace .is-table-view .mobile-measurement-position-groups button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: auto;
+    height: auto;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: #fff;
+    color: #315575;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .app-shell.is-mobile-workspace .is-table-view .mobile-measurement-position-group-label {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .app-shell.is-mobile-workspace .is-table-view .mobile-measurement-position-group-count {
+    padding: 4px 7px;
+    border-radius: 6px;
+    background: #edf4fa;
+    color: #526b88;
+    font-size: 12px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .app-shell.is-mobile-workspace .is-table-view .mobile-measurement-position-groups button.is-active {
+    background: #315575;
+    color: #fff;
+  }
+  .app-shell.is-mobile-workspace .is-table-view .mobile-measurement-position-groups button.is-active .mobile-measurement-position-group-count {
+    background: #ffffff24;
+    color: #fff;
+  }
+  .app-shell.is-mobile-workspace .is-table-view .mobile-measurement-position-groups button:focus-visible {
+    outline: 2px solid #315575;
+    outline-offset: -2px;
+  }
+  .app-shell.is-mobile-workspace .is-table-view .mobile-measurement-position-groups + .mobile-measurement-table-shell {
+    margin-top: 0;
   }
   .app-shell.is-mobile-workspace .mobile-measurement-table-shell.is-touch-table {
     position: relative;
@@ -14,6 +141,7 @@
     box-shadow: none;
     scroll-padding-left: 156px;
     scrollbar-color: #bdccdd #f4f8fc;
+    height: calc(100dvh - var(--measurement-table-top, 180px) - 24px);
     max-height: calc(100dvh - var(--measurement-table-top, 180px) - 24px);
     overflow: auto;
     overscroll-behavior: contain;
@@ -28,7 +156,7 @@
   }
   .app-shell.is-mobile-workspace .mobile-measurement-table.is-touch-table {
     width: max-content;
-    min-width: max-content;
+    min-width: 100%;
     border: 0;
     color: #27486e;
     font-size: 14px;
@@ -145,7 +273,7 @@
 .app-shell.is-mobile-workspace .mobile-measurement-table-shell.is-touch-table .mobile-measurement-table-wrap {
   display: block;
   width: max-content;
-  min-width: max-content;
+  min-width: 100%;
   max-width: none;
   overflow: visible;
   border: 0;
