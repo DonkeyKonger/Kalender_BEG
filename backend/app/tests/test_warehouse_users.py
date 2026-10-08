@@ -1,7 +1,6 @@
 import re
 
 import pytest
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
@@ -130,13 +129,16 @@ def test_warehouse_cannot_access_any_existing_business_or_mobile_api(account_env
     user_id = create_warehouse(client, headers).json()["id"]
     warehouse_headers = {"Authorization": f"Bearer {AuthService(db).create_user_token(db.get(User, user_id))}"}
     checked = 0
-    for route in client.app.routes:
-        if not isinstance(route, APIRoute) or not route.path.startswith("/api/"):
+    # Included routers are lazy/nested in newer FastAPI releases. Discover the
+    # public operations through OpenAPI rather than assuming a flat routes list.
+    http_methods = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+    for route_path, operations in client.app.openapi()["paths"].items():
+        if not route_path.startswith("/api/"):
             continue
-        if route.path.startswith(("/api/auth/", "/api/health", "/api/warehouse/")):
+        if route_path.startswith(("/api/auth/", "/api/health", "/api/warehouse/")):
             continue
-        path = re.sub(r"\{[^}]+\}", "1", route.path)
-        for method in route.methods:
+        path = re.sub(r"\{[^}]+\}", "1", route_path)
+        for method in http_methods.intersection(operations):
             response = client.request(method, path, headers=warehouse_headers, json={})
             assert response.status_code == 403, (method, path, response.status_code, response.text)
             checked += 1
