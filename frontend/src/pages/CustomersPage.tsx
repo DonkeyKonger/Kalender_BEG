@@ -69,7 +69,6 @@ export function CustomersPage() {
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [letterFilter, setLetterFilter] = useState("all");
-  const [sortDescending, setSortDescending] = useState(false);
   const [previewCustomerId, setPreviewCustomerId] = useState<number | null>(null);
   const [previewTab, setPreviewTab] = useState<"master" | "contacts" | "projects">("master");
   const [isLoading, setIsLoading] = useState(true);
@@ -106,12 +105,9 @@ export function CustomersPage() {
     return customers.filter((customer) =>
       (!needle || customerSearchText(customer).includes(needle))
       && (letterFilter === "all" || customerInitial(customer.company_name) === letterFilter),
-    ).sort((left, right) => compareCustomers(left, right) * (sortDescending ? -1 : 1));
-  }, [customers, searchTerm, letterFilter, sortDescending]);
-  const customerGroups = useMemo(() => {
-    const groups = groupCustomersAlphabetically(filteredCustomers);
-    return sortDescending ? groups.reverse() : groups;
-  }, [filteredCustomers, sortDescending]);
+    ).sort(compareCustomers);
+  }, [customers, searchTerm, letterFilter]);
+  const customerGroups = useMemo(() => groupCustomersAlphabetically(filteredCustomers), [filteredCustomers]);
   const previewCustomer = filteredCustomers.find((customer) => customer.id === previewCustomerId)
     ?? filteredCustomers[0] ?? null;
 
@@ -326,11 +322,6 @@ export function CustomersPage() {
                       onClick={() => setLetterFilter(letter)}>{letter === "all" ? "Alle" : letter}</button>
                   ))}
                 </div>
-                <select aria-label="Kunden sortieren" value={sortDescending ? "desc" : "asc"}
-                  disabled={savingCustomerId !== null}
-                  onChange={(event) => setSortDescending(event.target.value === "desc")}>
-                  <option value="asc">Name A–Z</option><option value="desc">Name Z–A</option>
-                </select>
               </div>
             </div>
             <div className="customer-directory-results" aria-label="Kundenliste">

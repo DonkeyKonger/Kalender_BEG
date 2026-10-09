@@ -11226,13 +11226,6 @@ body.mobile-modal-scroll-locked {
 }
 .customer-alphabet button:first-child { padding-inline: 9.9px; }
 .customer-alphabet button[aria-pressed="true"] { background: #1d5c99; color: #fff; }
-.customer-directory-filters select {
-  width: 105.6px;
-  min-height: 30.8px;
-  padding: 4.4px;
-  font-size: 11px;
-  flex-shrink: 0;
-}
 .customer-directory-results { overflow: auto; min-height: 0; flex: 1; }
 .customer-letter-group h2 {
   margin: 0;

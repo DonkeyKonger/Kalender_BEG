@@ -39,7 +39,9 @@ test("alphabet filter includes umlauts and a group for other initials", () => {
   assert.equal(groups[0].label, "Sonstige");
   assert.equal(customers[0].company_name, "Zeta");
   assert.match(pageSource, /letterFilter === "all" \|\| customerInitial\(customer.company_name\) === letterFilter/);
-  assert.match(pageSource, /return sortDescending \? groups.reverse\(\) : groups/);
+  assert.doesNotMatch(pageSource, /sortDescending|Kunden sortieren|Name Z–A/);
+  assert.match(pageSource, /\)\.sort\(compareCustomers\);/);
+  assert.match(pageSource, /useMemo\(\(\) => groupCustomersAlphabetically\(filteredCustomers\), \[filteredCustomers\]\)/);
 });
 
 test("customer details retain contacts, permissions, full records and empty results", () => {
