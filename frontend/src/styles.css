@@ -4883,7 +4883,12 @@ button.person-chip:focus-visible {
   color: #1d4f7a;
 }
 
-.absence-planning-chip.absence-block-free,
+.absence-planning-chip.absence-block-free {
+  border-color: #ddd0f6;
+  background: #f2ecff;
+  color: #5b21b6;
+}
+
 .absence-planning-chip.absence-block-other {
   border-color: #dbe3ec;
   background: #f4f6f8;
@@ -4993,7 +4998,16 @@ button.person-chip:focus-visible {
   border-left-color: #3b82f6;
 }
 
-.absence-overflow-item.absence-overflow-free,
+.absence-overflow-item.absence-overflow-free {
+  border-left-color: #7c3aed;
+  background: #f2ecff;
+  color: #5b21b6;
+}
+
+.absence-overflow-item.absence-overflow-free em {
+  color: #5b21b6;
+}
+
 .absence-overflow-item.absence-overflow-other {
   border-left-color: #94a3b8;
 }
