@@ -140,7 +140,7 @@ export function PersonsPage() {
   const [isEditingPerson, setIsEditingPerson] = useState(false);
   const [activePersonAction, setActivePersonAction] = useState<PersonDetailActionKey | null>(null);
   const [personScope, setPersonScope] = useState<PersonScope>("internal");
-  const [collapsedPersonGroupKeys, setCollapsedPersonGroupKeys] = useState<Set<string>>(() => new Set(["internal-departed"]));
+  const [collapsedPersonGroupKeys, setCollapsedPersonGroupKeys] = useState<Set<string>>(() => new Set(["internal-departed", "inactive-external"]));
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingPersonId, setSavingPersonId] = useState<number | null>(null);
@@ -2739,6 +2739,7 @@ function groupPeopleForOverview(people: Person[], scope: PersonScope): PeopleOve
       {
         key: "inactive-external",
         label: "Inaktive Externe",
+        collapsible: true,
         people: sortPeopleForOverview(people.filter((person) => !person.is_active)),
       },
     ].filter((group) => group.people.length > 0);

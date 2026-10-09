@@ -24,7 +24,7 @@ test('departed staff from every role appear only in their own last collapsible g
   ]);
   assert.equal(result.at(-1).label, 'Ausgeschiedene');
   assert.equal(result.at(-1).collapsible, true);
-  assert.match(source, /collapsedPersonGroupKeys[^\n]*new Set\(\["internal-departed"\]\)/);
+  assert.match(source, /collapsedPersonGroupKeys[^\n]*new Set\(\["internal-departed", "inactive-external"\]\)/);
   assert.match(source, /aria-expanded=\{!isCollapsed\}/);
 });
 
@@ -49,4 +49,16 @@ test('external overview and source records stay unchanged', () => {
   const before = JSON.stringify(people);
   assert.deepEqual(groups(people, 'external').map(g=>[g.key,g.people.map(p=>p.id)]), [['external',[1]],['external-temp',[2]],['inactive-external',[3]]]);
   assert.equal(JSON.stringify(people), before);
+});
+
+test('inactive external staff start collapsed while active external groups stay open', () => {
+  const result = groups([
+    person(1, [], 'active', {person_type:'external'}),
+    person(2, [], 'active', {person_type:'external_temp'}),
+    person(3, [], 'departed', {person_type:'external'}),
+    person(4, [], 'paused', {person_type:'external_temp'}),
+  ], 'external');
+  const initialKeys = new Set(JSON.parse(source.match(/collapsedPersonGroupKeys[^\n]*new Set\((\[[^\]]*\])\)/)[1]));
+  assert.deepEqual(result.map(group => Boolean(group.collapsible && initialKeys.has(group.key))), [false, false, true]);
+  assert.deepEqual(result.at(-1).people.map(person => person.id).sort(), [3,4]);
 });
