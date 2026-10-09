@@ -11278,8 +11278,8 @@ body.mobile-modal-scroll-locked {
 .customer-preview-heading > div { min-width: 0; }
 .customer-preview-heading .eyebrow { margin: 0 0 4px; font-size: 11px; color: #91a0b6; }
 .customer-preview-heading h2 { margin: 0; font-size: 26px; line-height: 1.2; color: #122239; overflow-wrap: anywhere; }
-.customer-preview-tabs { display: flex; border-bottom: 1px solid #e1e8f1; gap: 12px; }
-.customer-preview-tabs button { padding: 12px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #8698b0; font-size: 13px; font-weight: 700; }
+.customer-preview-tabs { display: flex; flex-shrink: 0; overflow-x: auto; border-bottom: 1px solid #e1e8f1; gap: 12px; }
+.customer-preview-tabs button { flex-shrink: 0; padding: 12px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #8698b0; font-size: 13px; font-weight: 700; }
 .customer-preview-tabs button[aria-selected="true"] { color: #1d5c99; border-bottom-color: #2166b2; }
 .customer-preview-body { padding: 8px 14px; }
 .customer-preview-body > section { padding: 22px 0 28px; }
@@ -11288,7 +11288,12 @@ body.mobile-modal-scroll-locked {
 .customer-preview-body p { margin: 2px 0; font-size: 14px; color: #33455e; }
 .customer-preview-phone-label { display: block; margin-left: 26px; font-size: 11px; color: #677b96; }
 .customer-preview-body .customer-detail-phone-link { font-size: 14px; font-weight: 400; }
-.customer-preview-footer { margin-top: auto; padding: 24px 8px 8px; }
+.customer-record-edit { min-width: 0; }
+.customer-record-edit .customer-form-grid { grid-template-columns: minmax(0, 1fr); }
+.customer-record-edit-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 14px; border-top: 1px solid #e1e8f1; }
+.customer-record-edit-actions .danger-action { margin-right: auto; }
+.customer-preview-body .customer-notes-section { border-inline: 0; border-bottom: 0; background: transparent; }
+.customer-preview-body .customer-notes-textarea { width: 100%; min-height: 100px; }
 .customer-preview .customer-contact-editor { padding-top: 16px; }
 .customer-preview .customer-contact-editor-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .customer-preview .customer-contact-editor-row input { min-width: 0; }

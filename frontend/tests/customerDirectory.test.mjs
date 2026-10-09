@@ -16,7 +16,7 @@ test("customer directory uses compact fixed-height rows and an independent detai
   assert.match(styles, /\.customer-directory-row-copy strong, \.customer-directory-row-copy > span \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap/s);
   assert.match(pageSource, /onClick=\{\(\) => setPreviewCustomerId\(customer.id\)\}/);
   assert.match(pageSource, /filteredCustomers.find\(\(customer\) => customer.id === previewCustomerId\)\s*\?\? filteredCustomers\[0\] \?\? null/);
-  assert.match(pageSource, /Kundenakte öffnen/);
+  assert.doesNotMatch(pageSource, /Kundenakte öffnen|openCustomerDrawer/);
 });
 
 test("alphabet filter includes umlauts and a group for other initials", () => {
@@ -34,12 +34,27 @@ test("alphabet filter includes umlauts and a group for other initials", () => {
 });
 
 test("customer details retain contacts, permissions, full records and empty results", () => {
-  assert.match(pageSource, /canEdit && <button className="icon-button secondary"/);
+  assert.match(pageSource, /canEdit && !isEditingCustomer && <button className="icon-button secondary"/);
   assert.match(pageSource, /CustomerContactEditor key=\{previewCustomer.id\} canEdit=\{canEdit\}/);
   assert.match(pageSource, /saveCustomerContacts\(previewCustomer.id, contacts\)/);
   assert.match(pageSource, /Keine Treffer gefunden/);
   assert.match(pageSource, /Noch keine Kunden vorhanden/);
-  assert.match(pageSource, /setPreviewTab\("master"\);\s*\}, \[previewCustomer\?\.id\]\)/);
+  assert.match(pageSource, /setPreviewTab\("master"\);\s*setIsEditingCustomer\(false\);\s*\}, \[previewCustomer\?\.id\]\)/);
+});
+
+test("the full customer record and edit form live inside the right detail panel", () => {
+  const panel = pageSource.slice(pageSource.indexOf('<section className="customer-preview"'), pageSource.indexOf('<EntityDetailDrawer'));
+  for (const content of ['CustomerNotesSection', 'CustomerProjectsList', 'CustomerContactEditor', 'CustomerFields', 'customer-projects-tab', 'customer-record-edit-actions']) {
+    assert.ok(panel.includes(content), content);
+  }
+  assert.match(panel, /saveCustomerNotes\(previewCustomer.id, notes\)/);
+  assert.match(panel, /saveCustomer\(previewCustomer.id\)/);
+  assert.match(panel, /removeCustomer\(previewCustomer.id\)/);
+  assert.match(panel, /onClick=\{cancelCustomerEdit\}/);
+  assert.equal((pageSource.match(/<EntityDetailDrawer/g) ?? []).length, 1);
+  assert.match(pageSource, /isOpen=\{drawer\?\.mode === "new"\}/);
+  assert.doesNotMatch(pageSource, /drawer\?\.mode === "edit"/);
+  assert.match(pageSource, /disabled=\{isEditingCustomer \|\| savingCustomerId !== null\}/);
 });
 
 test("customer directory stacks on mobile and independently scrolls the desktop list", () => {

@@ -1,11 +1,6 @@
 import {
-  ArrowLeft,
-  ArrowRight,
-  Briefcase,
   Building2,
-  CheckCircle2,
   ChevronRight,
-  MapPin,
   Pencil,
   Phone,
   Plus,
@@ -13,11 +8,9 @@ import {
   Search,
   StickyNote,
   Trash2,
-  Users,
   UserPlus,
-  type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -31,8 +24,7 @@ import type { Customer, CustomerContactInput, CustomerCreate } from "../types/cu
 import type { SiteSummary } from "../types/site";
 
 type EditableCustomer = CustomerCreate & { id: number };
-type DrawerState = { mode: "new" } | { mode: "edit"; customerId: number } | null;
-type CustomerDetailSubviewKey = "contacts" | "projects";
+type DrawerState = { mode: "new" } | null;
 type CustomerContactRow = CustomerContactInput & { key: string };
 
 const customerContactTypeLabels: Record<string, string> = {
@@ -77,7 +69,7 @@ export function CustomersPage() {
   const [letterFilter, setLetterFilter] = useState("all");
   const [sortDescending, setSortDescending] = useState(false);
   const [previewCustomerId, setPreviewCustomerId] = useState<number | null>(null);
-  const [previewTab, setPreviewTab] = useState<"master" | "contacts">("master");
+  const [previewTab, setPreviewTab] = useState<"master" | "contacts" | "projects">("master");
   const [isLoading, setIsLoading] = useState(true);
   const [savingCustomerId, setSavingCustomerId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -121,12 +113,11 @@ export function CustomersPage() {
 
   useEffect(() => {
     setPreviewTab("master");
+    setIsEditingCustomer(false);
   }, [previewCustomer?.id]);
 
-  const selectedCustomer = drawer?.mode === "edit"
-    ? customers.find((customer) => customer.id === drawer.customerId) ?? null
-    : null;
-  const selectedDraft = drawer?.mode === "edit" && selectedCustomer
+  const selectedCustomer = previewCustomer;
+  const selectedDraft = selectedCustomer
     ? drafts[selectedCustomer.id] ?? toEditableCustomer(selectedCustomer)
     : null;
   const selectedCustomerProjects = useMemo(
@@ -266,9 +257,10 @@ export function CustomersPage() {
     setDrawer({ mode: "new" });
   }
 
-  function openCustomerDrawer(customerId: number) {
-    setIsEditingCustomer(false);
-    setDrawer({ mode: "edit", customerId });
+  function startCustomerEdit() {
+    if (!selectedCustomer) return;
+    setDrafts((current) => ({ ...current, [selectedCustomer.id]: toEditableCustomer(selectedCustomer) }));
+    setIsEditingCustomer(true);
   }
 
   function cancelCustomerEdit() {
@@ -280,9 +272,6 @@ export function CustomersPage() {
   }
 
   function closeDrawer() {
-    if (drawer?.mode === "edit" && selectedCustomer) {
-      setDrafts((current) => ({ ...current, [selectedCustomer.id]: toEditableCustomer(selectedCustomer) }));
-    }
     if (drawer?.mode === "new") {
       setCreateForm(emptyCustomer);
     }
@@ -298,7 +287,7 @@ export function CustomersPage() {
           <h1>Kunden</h1>
         </div>
         {canEdit && (
-          <button className="icon-button overview-create" type="button" onClick={openNewCustomerDrawer}>
+          <button className="icon-button overview-create" type="button" disabled={isEditingCustomer || savingCustomerId !== null} onClick={openNewCustomerDrawer}>
             <UserPlus aria-hidden="true" size={17} />
             <span>Neuer Kunde</span>
           </button>
@@ -317,16 +306,19 @@ export function CustomersPage() {
               <label className="overview-search">
                 <Search aria-hidden="true" size={16} />
                 <input aria-label="Kunden suchen" placeholder="Kunden suchen …" value={searchTerm}
+                  disabled={isEditingCustomer || savingCustomerId !== null}
                   onChange={(event) => setSearchTerm(event.target.value)} />
               </label>
               <div className="customer-directory-filters">
                 <div className="customer-alphabet" role="group" aria-label="Anfangsbuchstabe">
                   {["all", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "#"].map((letter) => (
                     <button key={letter} type="button" aria-pressed={letterFilter === letter}
+                      disabled={isEditingCustomer || savingCustomerId !== null}
                       onClick={() => setLetterFilter(letter)}>{letter === "all" ? "Alle" : letter}</button>
                   ))}
                 </div>
                 <select aria-label="Kunden sortieren" value={sortDescending ? "desc" : "asc"}
+                  disabled={isEditingCustomer || savingCustomerId !== null}
                   onChange={(event) => setSortDescending(event.target.value === "desc")}>
                   <option value="asc">Name A–Z</option><option value="desc">Name Z–A</option>
                 </select>
@@ -339,6 +331,7 @@ export function CustomersPage() {
                   <h2>{group.label}</h2>
                     {group.customers.map((customer) => (
                       <button key={customer.id} type="button"
+                        disabled={isEditingCustomer || savingCustomerId !== null}
                         className={`customer-directory-row${!customer.is_active ? " is-inactive" : ""}`}
                         aria-pressed={previewCustomer?.id === customer.id}
                         onClick={() => setPreviewCustomerId(customer.id)}>
@@ -359,23 +352,42 @@ export function CustomersPage() {
           <section className="customer-preview" aria-label="Kundendetails">
             {previewCustomer ? <>
               <div className="customer-preview-actions">
-                {canEdit && <button className="icon-button secondary" type="button" onClick={() => {
-                  openCustomerDrawer(previewCustomer.id);
-                  setIsEditingCustomer(true);
-                }}><Pencil aria-hidden="true" size={15} /><span>Bearbeiten</span></button>}
+                {canEdit && !isEditingCustomer && <button className="icon-button secondary" type="button"
+                  disabled={savingCustomerId !== null} onClick={startCustomerEdit}>
+                  <Pencil aria-hidden="true" size={15} /><span>Bearbeiten</span>
+                </button>}
               </div>
               <header className="customer-preview-heading">
                 <Building2 aria-hidden="true" size={34} />
                 <div><p className="eyebrow">Kunde{!previewCustomer.is_active ? " · Inaktiv" : ""}</p><h2>{previewCustomer.company_name}</h2></div>
               </header>
+              {isEditingCustomer && canEdit && selectedDraft ? <>
+                <div className="customer-record-edit">
+                  <CustomerFields draft={selectedDraft} onChange={(values) => updateDraft(previewCustomer.id, values)} />
+                </div>
+                <div className="customer-record-edit-actions">
+                  {canRemove && <button className="icon-button danger danger-action" type="button"
+                    disabled={savingCustomerId !== null} onClick={() => void removeCustomer(previewCustomer.id)}>
+                    <Trash2 aria-hidden="true" size={16} /><span>Kunden löschen</span>
+                  </button>}
+                  <button className="icon-button secondary" type="button" disabled={savingCustomerId !== null}
+                    onClick={cancelCustomerEdit}>Abbrechen</button>
+                  <button className="icon-button secondary" type="button" disabled={savingCustomerId !== null}
+                    onClick={() => void saveCustomer(previewCustomer.id).then((saved) => {
+                      if (saved) setIsEditingCustomer(false);
+                    })}><Save aria-hidden="true" size={16} /><span>Speichern</span></button>
+                </div>
+              </> : <>
               <div className="customer-preview-tabs" role="tablist" aria-label="Kundendetails">
                 <button id="customer-master-tab" type="button" role="tab" aria-selected={previewTab === "master"}
                   aria-controls="customer-preview-panel" onClick={() => setPreviewTab("master")}>Stammdaten</button>
                 <button id="customer-contacts-tab" type="button" role="tab" aria-selected={previewTab === "contacts"}
                   aria-controls="customer-preview-panel" onClick={() => setPreviewTab("contacts")}>Ansprechpartner</button>
+                <button id="customer-projects-tab" type="button" role="tab" aria-selected={previewTab === "projects"}
+                  aria-controls="customer-preview-panel" onClick={() => setPreviewTab("projects")}>Projekte</button>
               </div>
               <div className="customer-preview-body" id="customer-preview-panel" role="tabpanel"
-                aria-labelledby={previewTab === "master" ? "customer-master-tab" : "customer-contacts-tab"}>
+                aria-labelledby={`customer-${previewTab}-tab`}>
                 {previewTab === "master" ? <>
                   <section><h3>Anschrift</h3>
                     {customerAddressLines(previewCustomer).length
@@ -385,12 +397,14 @@ export function CustomersPage() {
                   <section><h3>Kontakt</h3><span className="customer-preview-phone-label">Telefon</span>
                     <CustomerPhoneLink phone={previewCustomer.company_phone} />
                   </section>
-                </> : <CustomerContactEditor key={previewCustomer.id} canEdit={canEdit}
+                  <CustomerNotesSection key={previewCustomer.id} canEdit={canEdit}
+                    isSaving={savingCustomerId === previewCustomer.id} notes={previewCustomer.notes}
+                    onSaveNotes={(notes) => saveCustomerNotes(previewCustomer.id, notes)} />
+                </> : previewTab === "projects" ? <CustomerProjectsList projects={selectedCustomerProjects} /> : <CustomerContactEditor key={previewCustomer.id} canEdit={canEdit}
                   contactRows={customerContactRows(previewCustomer)} isSaving={savingCustomerId === previewCustomer.id}
                   onSaveContacts={(contacts) => saveCustomerContacts(previewCustomer.id, contacts)} />}
               </div>
-              <div className="customer-preview-footer"><button className="icon-button secondary" type="button"
-                onClick={() => openCustomerDrawer(previewCustomer.id)}>Kundenakte öffnen<ArrowRight aria-hidden="true" size={16} /></button></div>
+              </>}
             </> : <p className="customer-directory-empty">Wählen Sie einen Kunden aus der Liste.</p>}
           </section>
         </div>
@@ -414,196 +428,10 @@ export function CustomersPage() {
         />
       </EntityDetailDrawer>
 
-      <EntityDetailDrawer
-        isOpen={drawer?.mode === "edit" && Boolean(selectedCustomer && selectedDraft)}
-        ariaLabel={selectedCustomer && !isEditingCustomer ? `Kunde ${selectedCustomer.company_name}` : undefined}
-        title={selectedCustomer ? isEditingCustomer ? "Kunde bearbeiten" : undefined : "Kunde"}
-        subtitle={selectedCustomer && isEditingCustomer ? selectedCustomer.company_name : undefined}
-        onClose={closeDrawer}
-        actions={selectedCustomer && canEdit && !isEditingCustomer ? (
-          <button
-            className="icon-button secondary"
-            type="button"
-            onClick={() => {
-              setIsEditingCustomer(true);
-            }}
-          >
-            <Pencil aria-hidden="true" size={16} />
-            <span>Bearbeiten</span>
-          </button>
-        ) : undefined}
-        footer={selectedCustomer && isEditingCustomer && canEdit ? (
-          <>
-            {canRemove && (
-              <button
-                className="icon-button danger danger-action"
-                disabled={savingCustomerId === selectedCustomer.id}
-                type="button"
-                onClick={() => void removeCustomer(selectedCustomer.id)}
-              >
-                <Trash2 aria-hidden="true" size={16} />
-                <span>Kunden löschen</span>
-              </button>
-            )}
-            <button className="icon-button secondary" disabled={savingCustomerId === selectedCustomer.id} type="button" onClick={cancelCustomerEdit}>
-              <span>Abbrechen</span>
-            </button>
-            <button
-              className="icon-button secondary"
-              disabled={savingCustomerId === selectedCustomer.id}
-              type="button"
-              onClick={() => {
-                void saveCustomer(selectedCustomer.id).then((saved) => {
-                  if (saved) {
-                    setIsEditingCustomer(false);
-                  }
-                });
-              }}
-            >
-              <Save aria-hidden="true" size={16} />
-              <span>Speichern</span>
-            </button>
-          </>
-        ) : undefined}
-      >
-        {selectedCustomer && selectedDraft && (
-          isEditingCustomer ? (
-            <div className="detail-read-view customer-detail-subview">
-              <button className="icon-button secondary customer-detail-back-button" type="button" onClick={cancelCustomerEdit}>
-                <ArrowLeft aria-hidden="true" size={16} />
-                <span>Zurück</span>
-              </button>
-              <CustomerFields
-                draft={selectedDraft}
-                onChange={(values) => updateDraft(selectedCustomer.id, values)}
-              />
-            </div>
-          ) : (
-            <CustomerReadView
-              canEdit={canEdit}
-              customer={selectedCustomer}
-              isSaving={savingCustomerId === selectedCustomer.id}
-              projects={selectedCustomerProjects}
-              onSaveContacts={(contacts) => saveCustomerContacts(selectedCustomer.id, contacts)}
-              onSaveNotes={(notes) => saveCustomerNotes(selectedCustomer.id, notes)}
-            />
-          )
-        )}
-      </EntityDetailDrawer>
     </section>
   );
 }
 
-function CustomerReadView({
-  canEdit,
-  customer,
-  isSaving,
-  projects,
-  onSaveContacts,
-  onSaveNotes,
-}: {
-  canEdit: boolean;
-  customer: Customer;
-  isSaving: boolean;
-  projects: SiteSummary[];
-  onSaveContacts: (contacts: CustomerContactInput[]) => Promise<boolean>;
-  onSaveNotes: (notes: string | null) => Promise<boolean>;
-}) {
-  const contactRows = customerContactRows(customer);
-  const addressLines = customerAddressLines(customer);
-  const hasAddress = addressLines.length > 0;
-  const [activeSubview, setActiveSubview] = useState<CustomerDetailSubviewKey | null>(null);
-
-  useEffect(() => {
-    setActiveSubview(null);
-  }, [customer.id]);
-
-  const subviewTitle = activeSubview === "contacts"
-    ? "Ansprechpartner / Kontakte"
-    : activeSubview === "projects"
-      ? "Projekte"
-      : "";
-
-  return (
-    <div className="detail-read-view customer-detail-view">
-      <div className="customer-detail-main" aria-hidden={activeSubview ? true : undefined}>
-        <section className="detail-read-section customer-detail-master-section">
-          <div className="customer-detail-master-grid">
-            <CustomerDetailField label="Firmenname">
-              <strong>{customer.company_name}</strong>
-            </CustomerDetailField>
-            <CustomerDetailField label="Firmentelefon">
-              <CustomerPhoneLink phone={customer.company_phone} />
-            </CustomerDetailField>
-          </div>
-        </section>
-
-        <section className="detail-read-section customer-detail-address-section">
-          <div className="customer-detail-section-heading">
-            <h3>Firmenadresse</h3>
-          </div>
-          <div className={`customer-address-panel ${hasAddress ? "has-address" : "is-empty"}`}>
-            <div className="customer-address-status">
-              <CheckCircle2 aria-hidden="true" size={16} />
-              <span>{hasAddress ? "Adresse hinterlegt" : "Keine Adresse hinterlegt"}</span>
-            </div>
-            {hasAddress ? (
-              <div className="customer-address-lines">
-                <MapPin aria-hidden="true" size={18} />
-                <div>
-                  {addressLines.map((line) => <strong key={line}>{line}</strong>)}
-                </div>
-              </div>
-            ) : (
-              <p className="detail-empty">Noch keine Firmenadresse hinterlegt.</p>
-            )}
-          </div>
-        </section>
-
-        <CustomerNotesSection
-          canEdit={canEdit}
-          isSaving={isSaving}
-          notes={customer.notes}
-          onSaveNotes={onSaveNotes}
-        />
-
-        <section className="detail-read-section customer-detail-nav-section">
-          <CustomerDetailNavItem
-            icon={Users}
-            onOpen={() => setActiveSubview("contacts")}
-            title="Ansprechpartner / Kontakte"
-            preview={contactRows.length
-              ? `${contactRows.length} Kontakt${contactRows.length === 1 ? "" : "e"} hinterlegt`
-              : "Keine Kontakte hinterlegt"}
-          />
-          <CustomerDetailNavItem
-            icon={Briefcase}
-            onOpen={() => setActiveSubview("projects")}
-            title="Projekte"
-            preview={projects.length
-              ? `${projects.length} Projekt${projects.length === 1 ? "" : "e"} zugeordnet`
-              : "Keine Projekte zugeordnet"}
-          />
-        </section>
-      </div>
-
-      {activeSubview && (
-        <CustomerDetailSubpage title={subviewTitle} onBack={() => setActiveSubview(null)}>
-          {activeSubview === "projects" ? (
-            <CustomerProjectsList projects={projects} />
-          ) : (
-            <CustomerContactEditor
-              canEdit={canEdit}
-              contactRows={contactRows}
-              isSaving={isSaving}
-              onSaveContacts={onSaveContacts}
-            />
-          )}
-        </CustomerDetailSubpage>
-      )}
-    </div>
-  );
-}
 
 function CustomerNotesSection({
   canEdit,
@@ -642,6 +470,7 @@ function CustomerNotesSection({
       </div>
       <textarea
         className="customer-notes-textarea"
+        aria-label="Interne Hinweise zum Kunden"
         disabled={!canEdit || isSaving}
         placeholder="Interne Hinweise zum Kunden..."
         rows={3}
@@ -702,55 +531,6 @@ function CustomerProjectsList({ projects }: { projects: SiteSummary[] }) {
   );
 }
 
-function CustomerDetailNavItem({
-  icon: Icon,
-  title,
-  preview,
-  onOpen,
-}: {
-  icon: LucideIcon;
-  title: string;
-  preview: string;
-  onOpen: () => void;
-}) {
-  return (
-    <button className="customer-detail-nav-button" type="button" onClick={onOpen}>
-      <span className="customer-detail-nav-icon">
-        <Icon aria-hidden="true" size={18} />
-      </span>
-      <span className="customer-detail-nav-copy">
-        <span className="customer-detail-nav-title">{title}</span>
-        <span className="customer-detail-nav-preview">{preview}</span>
-      </span>
-      <ChevronRight aria-hidden="true" size={17} />
-    </button>
-  );
-}
-
-function CustomerDetailSubpage({
-  title,
-  onBack,
-  children,
-}: {
-  title: string;
-  onBack: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <section className="customer-detail-subpage" aria-label={title}>
-      <header className="customer-detail-subpage-header">
-        <button className="icon-button secondary customer-detail-back-button" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" size={16} />
-          <span>Zurück</span>
-        </button>
-        <h3>{title}</h3>
-      </header>
-      <div className="customer-detail-subpage-body">
-        {children}
-      </div>
-    </section>
-  );
-}
 
 function CustomerContactEditor({
   canEdit,
@@ -894,14 +674,6 @@ function handleCustomerContactEditorKey(event: KeyboardEvent<HTMLInputElement>, 
   }
 }
 
-function CustomerDetailField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="customer-detail-field">
-      <span>{label}</span>
-      {children}
-    </div>
-  );
-}
 
 function CustomerPhoneLink({ phone }: { phone: string | null | undefined }) {
   if (!phone) {
