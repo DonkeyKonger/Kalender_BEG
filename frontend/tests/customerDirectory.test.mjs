@@ -52,6 +52,7 @@ test("customer details retain contacts, permissions, full records and empty resu
 });
 
 test("the full customer record and edit form live inside the right detail panel", () => {
+  assert.match(styles, /\.customer-preview-actions \.icon-button \{ border-radius: 0; \}/);
   assert.match(styles, /\.customer-record-edit-actions \.icon-button \{ border-radius: 0; \}/);
   const panel = pageSource.slice(pageSource.indexOf('<section className="customer-preview"'), pageSource.indexOf('<EntityDetailDrawer'));
   for (const content of ['CustomerNotesSection', 'CustomerProjectsList', 'CustomerContactEditor', 'CustomerFields', 'customer-projects-tab', 'customer-record-edit-actions']) {

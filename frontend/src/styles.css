@@ -11275,6 +11275,7 @@ body.mobile-modal-scroll-locked {
 .customer-directory-empty { padding: 20px; color: #677b96; font-size: 13px; }
 .customer-preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: auto; padding: 18px 24px 30px; }
 .customer-preview-actions { display: flex; justify-content: flex-end; min-height: 32px; }
+.customer-preview-actions .icon-button { border-radius: 0; }
 .customer-preview-draft-hint { align-self: center; margin-right: auto; padding-right: 12px; font-size: 12px; color: #647b98; }
 .customer-preview .icon-button { min-height: 32px; padding: 6px 12px; font-size: 11px; white-space: nowrap; }
 .customer-preview-heading { display: flex; gap: 16px; align-items: center; margin: 20px 8px 28px; color: #29496c; }
