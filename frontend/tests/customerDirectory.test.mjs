@@ -48,7 +48,19 @@ test("customer details retain contacts, permissions, full records and empty resu
   assert.match(pageSource, /saveCustomerContacts\(previewCustomer.id, contacts\)/);
   assert.match(pageSource, /Keine Treffer gefunden/);
   assert.match(pageSource, /Noch keine Kunden vorhanden/);
-  assert.match(pageSource, /setPreviewTab\("master"\);\s*setIsEditingCustomer\(false\);\s*\}, \[previewCustomer\?\.id\]\)/);
+  assert.match(pageSource, /useEffect\(\(\) => \{\s*setIsEditingCustomer\(false\);\s*\}, \[previewCustomer\?\.id\]\)/);
+});
+
+test("switching customers keeps the selected detail tab and only ends record editing", () => {
+  const effect = pageSource.match(/useEffect\(\(\) => \{([^{}]*)\}, \[previewCustomer\?\.id\]\)/)[1];
+  for (const initialTab of ["master", "contacts", "projects"]) {
+    let tab = initialTab;
+    let editing = true;
+    new Function("setPreviewTab", "setIsEditingCustomer", effect)(value => { tab = value; }, value => { editing = value; });
+    assert.equal(tab, initialTab);
+    assert.equal(editing, false);
+  }
+  assert.match(pageSource, /useState<"master" \| "contacts" \| "projects">\("master"\)/);
 });
 
 test("the full customer record and edit form live inside the right detail panel", () => {

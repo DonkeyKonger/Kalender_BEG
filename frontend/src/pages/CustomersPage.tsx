@@ -116,7 +116,6 @@ export function CustomersPage() {
     ?? filteredCustomers[0] ?? null;
 
   useEffect(() => {
-    setPreviewTab("master");
     setIsEditingCustomer(false);
   }, [previewCustomer?.id]);
 
