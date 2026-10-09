@@ -12,11 +12,20 @@ const compiled = ts.transpileModule(helpers, { compilerOptions: { module: ts.Mod
 const { customerInitial, groupCustomersAlphabetically, compareCustomers } = new Function(`${compiled}; return {customerInitial, groupCustomersAlphabetically, compareCustomers};`)();
 
 test("customer directory uses compact fixed-height rows and an independent detail selection", () => {
-  assert.match(styles, /\.customer-directory-row \{[^}]*height: 44px/s);
+  assert.match(styles, /\.customer-directory-row \{[^}]*height: 48\.4px/s);
   assert.match(styles, /\.customer-directory-row-copy strong, \.customer-directory-row-copy > span \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap/s);
   assert.match(pageSource, /onClick=\{\(\) => setPreviewCustomerId\(customer.id\)\}/);
   assert.match(pageSource, /filteredCustomers.find\(\(customer\) => customer.id === previewCustomerId\)\s*\?\? filteredCustomers\[0\] \?\? null/);
   assert.doesNotMatch(pageSource, /Kundenakte öffnen|openCustomerDrawer/);
+});
+
+test("customer list scales typography, controls and icons by ten percent without widening the column", () => {
+  assert.match(styles, /\.customer-directory \{[^}]*grid-template-columns: minmax\(0, 1\.2fr\) minmax\(0, 1fr\)/s);
+  assert.match(styles, /\.customer-directory-row-copy strong \{[^}]*font-size: 13\.2px/);
+  assert.match(styles, /\.customer-directory-row-copy > span \{[^}]*font-size: 12\.1px/);
+  assert.match(styles, /\.customer-directory-row > svg:first-child \{ width: 20\.9px; height: 20\.9px;/);
+  assert.match(styles, /\.customer-directory-tools \.overview-search input \{ min-height: 35\.2px; font-size: 13\.2px;/);
+  assert.match(styles, /\.customer-alphabet button \{[^}]*font-size: 11px/s);
 });
 
 test("alphabet filter includes umlauts and a group for other initials", () => {
