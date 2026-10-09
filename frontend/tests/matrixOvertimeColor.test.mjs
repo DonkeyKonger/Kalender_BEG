@@ -9,15 +9,15 @@ const helpers = source.slice(source.indexOf("function absencePlanningBlockClassN
 const compiled = ts.transpileModule(helpers, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 const { chip, overflow } = new Function(`${compiled}; return { chip: absencePlanningBlockClassName, overflow: absenceOverflowItemClassName };`)();
 
-test("overtime uses dedicated purple styles in matrix chips and overflow, including cancelled entries", () => {
+test("overtime uses muted purple styles in matrix chips and overflow, including cancelled entries", () => {
   for (const status of ["approved", "cancelled"]) {
     const item = { kind: "classic", absence: { absence_type: "free", status } };
     assert.equal(chip(item), `absence-planning-chip absence-block-free${status === "cancelled" ? " is-cancelled" : ""}`);
     assert.equal(overflow(item), `absence-overflow-item absence-overflow-free${status === "cancelled" ? " is-cancelled" : ""}`);
   }
-  assert.match(styles, /\.absence-planning-chip\.absence-block-free\s*\{[^}]*border-color: #ddd0f6;[^}]*background: #f2ecff;[^}]*color: #5b21b6;/);
-  assert.match(styles, /\.absence-overflow-item\.absence-overflow-free\s*\{[^}]*border-left-color: #7c3aed;[^}]*background: #f2ecff;/);
-  assert.match(styles, /\.absence-overflow-item\.absence-overflow-free em\s*\{\s*color: #5b21b6;/);
+  assert.match(styles, /\.absence-planning-chip\.absence-block-free\s*\{[^}]*border-color: #dcd5e5;[^}]*background: #f1eef5;[^}]*color: #655675;/);
+  assert.match(styles, /\.absence-overflow-item\.absence-overflow-free\s*\{[^}]*border-left-color: #9b89b1;[^}]*background: #f1eef5;/);
+  assert.match(styles, /\.absence-overflow-item\.absence-overflow-free em\s*\{\s*color: #655675;/);
 });
 
 test("other absences stay grey and operational absences keep their separate styling", () => {

@@ -4885,9 +4885,9 @@ button.person-chip:focus-visible {
 }
 
 .absence-planning-chip.absence-block-free {
-  border-color: #ddd0f6;
-  background: #f2ecff;
-  color: #5b21b6;
+  border-color: #dcd5e5;
+  background: #f1eef5;
+  color: #655675;
 }
 
 .absence-planning-chip.absence-block-other {
@@ -5000,13 +5000,13 @@ button.person-chip:focus-visible {
 }
 
 .absence-overflow-item.absence-overflow-free {
-  border-left-color: #7c3aed;
-  background: #f2ecff;
-  color: #5b21b6;
+  border-left-color: #9b89b1;
+  background: #f1eef5;
+  color: #655675;
 }
 
 .absence-overflow-item.absence-overflow-free em {
-  color: #5b21b6;
+  color: #655675;
 }
 
 .absence-overflow-item.absence-overflow-other {
