@@ -11301,6 +11301,8 @@ body.mobile-modal-scroll-locked {
 .customer-preview-body .customer-notes-section { border-inline: 0; border-bottom: 0; background: transparent; }
 .customer-preview-body .customer-notes-textarea { width: 100%; min-height: 100px; }
 .customer-preview .customer-contact-editor { padding-top: 16px; }
+.customer-contact-search { width: 100%; max-width: none; min-width: 0; }
+.customer-contact-search input { min-width: 0; font-size: 13px; }
 .customer-contact-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr)); gap: 12px; align-items: start; }
 .customer-contact-card { min-width: 0; border: 1px solid #d8e2ed; background: #fff; }
 .customer-contact-card-heading { display: flex; align-items: center; gap: 12px; padding: 16px; border-bottom: 1px solid #e6edf5; background: #f8fafc; }

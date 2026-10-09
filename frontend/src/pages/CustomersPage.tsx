@@ -554,8 +554,10 @@ function CustomerContactEditor({
   onSaveContacts: (contacts: CustomerContactInput[]) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState<CustomerContactRow | null>(null);
+  const [contactSearch, setContactSearch] = useState("");
   const isNew = draft?.key === "new";
   const rows = isNew ? [...contactRows, draft] : contactRows;
+  const visibleRows = rows.filter((item) => item.key === draft?.key || matchesCustomerContactSearch(item, contactSearch));
 
   function updateContact(values: Partial<CustomerContactInput>) {
     setDraft((current) => current ? { ...current, ...values } : current);
@@ -572,14 +574,19 @@ function CustomerContactEditor({
 
   return (
     <div className="customer-contact-editor">
-      {rows.length ? (
+      <label className="overview-search customer-contact-search">
+        <Search aria-hidden="true" size={17} />
+        <input type="search" aria-label="Ansprechpartner suchen" placeholder="Name, Rolle, E-Mail oder Telefon suchen …"
+          value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} />
+      </label>
+      {visibleRows.length ? (
         <div className="customer-contact-cards">
-          {rows.map((item) => (
+          {visibleRows.map((item) => (
             <article className="customer-contact-card" aria-label={item.name?.trim() || "Ansprechpartner ohne Namen"} key={item.key}>
               <header className="customer-contact-card-heading">
                 <span className="customer-contact-avatar" aria-hidden="true"><UserRound size={22} /></span>
                 <div className="customer-contact-identity">
-                  <h3>{item.name?.trim() || (item.key === "new" ? "Neuer Ansprechpartner" : "Name nicht hinterlegt")}</h3>
+                  <h3>{item.name?.trim() || (item.key === "new" ? "Neuer Ansprechpartner" : "-")}</h3>
                   <p>{displayCustomerContactRole(item.contact_type) || "Ansprechpartner"}</p>
                 </div>
                 {canEdit && draft?.key !== item.key && <button className="icon-button secondary customer-contact-edit-button"
@@ -621,17 +628,23 @@ function CustomerContactEditor({
           ))}
         </div>
       ) : (
-        <p className="detail-empty">Keine Kontakte hinterlegt.</p>
+        <p className="detail-empty">{contactRows.length ? "Keine passenden Ansprechpartner gefunden." : "Keine Kontakte hinterlegt."}</p>
       )}
       {canEdit && (
         <button className="icon-button secondary customer-contact-add-button" disabled={isSaving || draft !== null} type="button"
-          onClick={() => setDraft({ key: "new", contact_type: null, name: null, phone: null, email: null })}>
+          onClick={() => { setContactSearch(""); setDraft({ key: "new", contact_type: null, name: null, phone: null, email: null }); }}>
           <Plus aria-hidden="true" size={15} />
           <span>Kontakt hinzufügen</span>
         </button>
       )}
     </div>
   );
+}
+
+function matchesCustomerContactSearch(contact: CustomerContactInput, search: string): boolean {
+  const needle = search.trim().toLocaleLowerCase("de");
+  return !needle || [contact.name, displayCustomerContactRole(contact.contact_type), contact.email, contact.phone]
+    .some((value) => value?.toLocaleLowerCase("de").includes(needle));
 }
 
 function CustomerPhoneLink({ phone }: { phone: string | null | undefined }) {

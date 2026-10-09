@@ -6,17 +6,20 @@ import test from "node:test";
 import { build } from "esbuild";
 
 const source = await readFile(new URL("../src/pages/CustomersPage.tsx", import.meta.url), "utf8");
-const component = source.slice(source.indexOf("function CustomerContactEditor("), source.indexOf("function CustomerPhoneLink("));
+const component = source.slice(source.indexOf("function CustomerContactEditor("), source.indexOf("function matchesCustomerContactSearch("));
 const helpers = ["normalizeCustomerContactsPayload", "customerContactsKey", "normalizeCustomerContactEmailKey", "mergeCustomerContactRows", "displayCustomerContactRole", "CustomerPhoneLink"]
   .map(name => source.match(new RegExp(`^function ${name}\\([^]*?^}\\n`, "m"))[0]).join("\n");
 const compiled = await build({
   stdin: { contents: `import {renderToStaticMarkup} from 'react-dom/server';
-    import {Mail,Phone,Pencil,Plus,Save,Trash2,UserRound} from 'lucide-react';
+    import {Mail,Phone,Pencil,Plus,Save,Search,Trash2,UserRound} from 'lucide-react';
     const customerContactTypeLabels={monteur:'Ansprechpartner',bauleiter:'Bauleiter Kunde'};
     ${helpers}
+    ${source.match(/^function matchesCustomerContactSearch\([^]*?^}\n/m)[0]}
+    export const matchesSearch=matchesCustomerContactSearch;
     export const render=tree=>renderToStaticMarkup(tree);
     export function harness(state, props) {
-      const useState=()=>[state.draft,value=>state.draft=typeof value==='function'?value(state.draft):value];
+      let stateIndex=0;
+      const useState=()=>{const key=stateIndex++===0?'draft':'search';return [state[key]??(key==='draft'?null:''),value=>state[key]=typeof value==='function'?value(state[key]):value];};
       ${component.replace('  return (\n', '  const tree = (\n').replace(/\n}\s*$/, '\nreturn {tree, saveContact};\n}')}
       return CustomerContactEditor(props);
     }`, resolveDir: fileURLToPath(new URL("..", import.meta.url)), loader: "tsx" },
@@ -39,12 +42,30 @@ test("contact cards show identities and links instead of permanent inputs, inclu
   assert.match(html,/Bauleiter Kunde/);
   assert.match(html,/href="mailto:alex@example.test"/);
   assert.match(html,/href="tel:0123456"/);
-  assert.doesNotMatch(html,/<input/);
+  assert.equal((html.match(/<input/g)||[]).length,1);
+  assert.match(html,/aria-label="Ansprechpartner suchen"/);
   const readonly=module.exports.render(module.exports.harness({draft:null},{...props,canEdit:false,contactRows:[{key:"empty"}]}).tree);
-  assert.match(readonly,/Name nicht hinterlegt/);
+  assert.match(readonly,/<h3>-<\/h3>/);
   assert.match(readonly,/Keine E-Mail hinterlegt/);
-  assert.doesNotMatch(readonly,/<button|<input/);
+  assert.doesNotMatch(readonly,/<button/);
   assert.match(module.exports.render(module.exports.harness({draft:null},{...props,contactRows:[]}).tree),/Keine Kontakte hinterlegt/);
+});
+
+test("contact search matches all visible fields, ignores case and preserves open edits", () => {
+  for (const search of [' alex ', 'BAULEITER', '@example', '0123', '']) {
+    assert.equal(module.exports.matchesSearch(contact,search),true,search);
+  }
+  assert.equal(module.exports.matchesSearch(contact,'unbekannt'),false);
+  assert.equal(module.exports.matchesSearch({},'alex'),false);
+  const empty=module.exports.render(module.exports.harness({draft:null,search:'unbekannt'},props).tree);
+  assert.match(empty,/Keine passenden Ansprechpartner gefunden/);
+  assert.doesNotMatch(empty,/<article/);
+  const editing=module.exports.render(module.exports.harness({draft:contact,search:'unbekannt'},props).tree);
+  assert.match(editing,/<form/);
+  const state={draft:null,search:'unbekannt'};
+  nodes(module.exports.harness(state,props).tree).find(n=>n.props?.className?.includes('customer-contact-add-button')).props.onClick();
+  assert.equal(state.search,'');
+  assert.equal(state.draft.key,'new');
 });
 
 test("contact edits save explicitly, preserve other contacts and keep drafts after errors", async () => {

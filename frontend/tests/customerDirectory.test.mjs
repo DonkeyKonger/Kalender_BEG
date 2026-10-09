@@ -96,7 +96,9 @@ test("contacts use responsive cards with explicit editing and clickable communic
   assert.match(editor, /Kontakt bearbeiten:/);
   assert.match(editor, /href=\{`mailto:\$\{item.email.trim\(\)\}`\}/);
   assert.match(editor, /<CustomerPhoneLink phone=\{item.phone\}/);
-  assert.match(editor, /Name nicht hinterlegt/);
+  assert.match(editor, /"Neuer Ansprechpartner" : "-"/);
+  assert.doesNotMatch(editor, /Name nicht hinterlegt/);
+  assert.match(editor, /aria-label="Ansprechpartner suchen"/);
   assert.match(editor, /Keine Telefonnummer hinterlegt/);
   assert.doesNotMatch(editor, /onBlur=/);
   assert.match(editor, /await onSaveContacts\(payload\)\) \{\s*setDraft\(null\)/);
