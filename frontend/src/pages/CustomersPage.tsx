@@ -187,12 +187,12 @@ export function CustomersPage() {
     }
   }
 
-  async function saveCustomerContacts(customerId: number, contacts: CustomerContactInput[]): Promise<boolean> {
+  async function saveCustomerContacts(customerId: number, contacts: CustomerContactInput[], removedEmails: string[] = []): Promise<boolean> {
     setSavingCustomerId(customerId);
     setError(null);
     setMessage(null);
     try {
-      const updated = await api.updateCustomer(customerId, { contacts });
+      const updated = await api.updateCustomer(customerId, { contacts, removed_contact_emails: removedEmails });
       setCustomers((current) =>
         current.map((customer) => customer.id === updated.id ? updated : customer).sort(compareCustomers),
       );
@@ -412,7 +412,7 @@ export function CustomersPage() {
                     onSaveNotes={(notes) => saveCustomerNotes(previewCustomer.id, notes)} />
                 </> : previewTab === "projects" ? <CustomerProjectsList projects={selectedCustomerProjects} /> : <CustomerContactEditor key={previewCustomer.id} canEdit={canEdit}
                   contactRows={customerContactRows(previewCustomer)} isSaving={savingCustomerId === previewCustomer.id}
-                  onSaveContacts={(contacts) => saveCustomerContacts(previewCustomer.id, contacts)} />}
+                  onSaveContacts={(contacts, removedEmails) => saveCustomerContacts(previewCustomer.id, contacts, removedEmails)} />}
               </div>
               </>}
             </> : <p className="customer-directory-empty">Wählen Sie einen Kunden aus der Liste.</p>}
@@ -551,7 +551,7 @@ function CustomerContactEditor({
   canEdit: boolean;
   contactRows: CustomerContactRow[];
   isSaving: boolean;
-  onSaveContacts: (contacts: CustomerContactInput[]) => Promise<boolean>;
+  onSaveContacts: (contacts: CustomerContactInput[], removedEmails?: string[]) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState<CustomerContactRow | null>(null);
   const [contactSearch, setContactSearch] = useState("");
@@ -610,7 +610,7 @@ function CustomerContactEditor({
                   </div>
                   <div className="customer-contact-card-actions">
                     {!isNew && <button aria-label="Kontakt entfernen" className="icon-button danger customer-contact-delete-button" type="button"
-                      disabled={isSaving} onClick={() => { void onSaveContacts(normalizeCustomerContactsPayload(contactRows.filter((row) => row.key !== item.key)))
+                      disabled={isSaving} onClick={() => { void onSaveContacts(normalizeCustomerContactsPayload(contactRows.filter((row) => row.key !== item.key)), item.email?.trim() ? [item.email.trim()] : [])
                         .then((saved) => { if (saved) setDraft(null); }); }}><Trash2 aria-hidden="true" size={15} /></button>}
                     <button className="icon-button secondary" type="button" disabled={isSaving} onClick={() => setDraft(null)}>Abbrechen</button>
                     <button className="icon-button secondary" type="submit" disabled={isSaving || ![draft.name, draft.email, draft.phone].some((value) => value?.trim())}>

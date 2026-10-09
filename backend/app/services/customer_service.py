@@ -83,6 +83,12 @@ class CustomerService:
 
         values = clean_customer_values(payload.model_dump(exclude_unset=True), partial=True)
         contact_values = values.pop("contacts", None)
+        removed_emails = {
+            normalize_email_key(email) for email in values.pop("removed_contact_emails", [])
+            if email.strip()
+        }
+        for email in removed_emails:
+            validate_email(email, "Kontakt-Mail")
         old_value = customer_snapshot(customer)
         address_changed = any(
             field in values and getattr(customer, field) != values[field]
@@ -99,6 +105,20 @@ class CustomerService:
             customer.address_location_status = SiteLocationStatus.UNCHECKED
         if contact_values is not None:
             customer.contacts = [CustomerContact(**contact) for contact in contact_values]
+        if removed_emails:
+            customer.contacts = [
+                contact for contact in customer.contacts
+                if normalize_email_key(contact.email or "") not in removed_emails
+            ]
+        if contact_values is not None or removed_emails:
+            # Keep project recipients intact, but do not resurrect deleted customer cards.
+            # Explicitly adding a contact again removes its previous exclusion.
+            retained_emails = {
+                normalize_email_key(contact.email) for contact in customer.contacts if contact.email
+            }
+            customer.excluded_contact_emails = sorted(
+                (set(customer.excluded_contact_emails or []) | removed_emails) - retained_emails
+            )
 
         self.audit.record(
             user_id=user_id,
@@ -198,6 +218,7 @@ def merge_customer_contact(target: dict, source: dict) -> None:
 
 def customer_email_addresses(customer: Customer, db: Session) -> list[CustomerEmailAddressRead]:
     items: dict[str, CustomerEmailAddressRead] = {}
+    excluded_emails = set(customer.excluded_contact_emails or [])
 
     def add_email(
         email: str | None,
@@ -209,7 +230,7 @@ def customer_email_addresses(customer: Customer, db: Session) -> list[CustomerEm
         if not cleaned_email:
             return
         normalized_email = normalize_email_key(cleaned_email)
-        if "@" not in normalized_email:
+        if "@" not in normalized_email or normalized_email in excluded_emails:
             return
         items.setdefault(
             normalized_email,
@@ -273,6 +294,7 @@ def customer_snapshot(customer: Customer) -> dict:
         "project_lead_phone": customer.project_lead_phone,
         "project_lead_email": customer.project_lead_email,
         "notes": getattr(customer, "notes", None),
+        "excluded_contact_emails": getattr(customer, "excluded_contact_emails", None) or [],
         "is_active": customer.is_active,
         "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "deleted_by": getattr(customer, "deleted_by", None),

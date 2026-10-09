@@ -97,3 +97,24 @@ test("new cards can be saved or cancelled, and busy or read-only states do not s
   assert.equal(state.draft,null);
   assert.equal(calls,1);
 });
+
+test("deleting a contact excludes its original email and retains the card on failure", async () => {
+  const state={draft:{...contact,email:'unsaved-change@example.test'}};
+  const other={...contact,key:'contact:2',email:'other@example.test'};
+  let saved, removed, succeeds=false;
+  const input={...props,contactRows:[contact,other],onSaveContacts:async (rows,emails)=>{
+    saved=rows;removed=emails;return succeeds;
+  }};
+  const remove=()=>nodes(module.exports.harness(state,input).tree)
+    .find(node=>node.props?.['aria-label']==='Kontakt entfernen').props.onClick();
+  remove();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(saved.length,1);
+  assert.equal(saved[0].email,other.email);
+  assert.deepEqual(removed,[contact.email]);
+  assert.ok(state.draft);
+  succeeds=true;
+  remove();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(state.draft,null);
+});

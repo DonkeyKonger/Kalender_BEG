@@ -65,7 +65,7 @@ export type CustomerCreate = {
   contacts: CustomerContactInput[];
 };
 
-export type CustomerUpdate = Partial<CustomerCreate>;
+export type CustomerUpdate = Partial<CustomerCreate> & { removed_contact_emails?: string[] };
 
 export type CustomerRemoveResponse = {
   action: "deleted";

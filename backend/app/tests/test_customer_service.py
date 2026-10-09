@@ -146,6 +146,66 @@ def test_clean_customer_contacts_allows_email_without_name_and_deduplicates_by_e
     ]
 
 
+@pytest.mark.parametrize("source", ["project_lead", "site_recipient", "both"])
+def test_removed_customer_contact_does_not_reappear_from_project_emails(source):
+    db = db_session()
+    customer = Customer(company_name="Kunde", project_lead_email=(
+        "Remove@example.test" if source != "site_recipient" else None
+    ))
+    customer.contacts = [CustomerContact(email="remove@example.test")]
+    other = Customer(company_name="Anderer Kunde", project_lead_email="remove@example.test")
+    site = Site(site_number="1234", name="Test", customer="Kunde")
+    db.add_all([customer, other, site])
+    db.flush()
+    recipient = SiteEmailRecipient(site_id=site.id, email="REMOVE@example.test", source="manual")
+    if source != "project_lead":
+        db.add(recipient)
+    db.commit()
+    customer_id, other_id = customer.id, other.id
+    service = CustomerService(db)
+    assert len(service.read_customer(customer).email_addresses) == 1
+
+    service.update_customer(customer_id, CustomerUpdate(
+        contacts=[], removed_contact_emails=[" REMOVE@example.test "]
+    ), user_id=7)
+    # A fresh session must preserve the deletion, not just optimistic UI state.
+    with Session(db.get_bind()) as fresh:
+        service = CustomerService(fresh)
+        saved = service.customers.get(customer_id)
+        assert saved.contacts == []
+        assert service.read_customer(saved).email_addresses == []
+        assert saved.excluded_contact_emails == ["remove@example.test"]
+        assert len(service.read_customer(service.customers.get(other_id)).email_addresses) == 1
+        if source != "site_recipient":
+            assert saved.project_lead_email == "Remove@example.test"
+        if source != "project_lead":
+            assert fresh.get(SiteEmailRecipient, recipient.id).email == "REMOVE@example.test"
+        saved = service.update_customer(customer_id, CustomerUpdate(notes="Notiz"), user_id=7)
+        assert service.read_customer(saved).email_addresses == []
+        saved = service.update_customer(customer_id, CustomerUpdate(
+            contacts=[{"email": "remove@example.test", "name": "Wieder hinzugefügt"}]
+        ), user_id=7)
+        assert saved.excluded_contact_emails == []
+        assert len(service.read_customer(saved).email_addresses) == 1
+
+
+def test_remove_imported_email_without_persisted_contact_and_keep_other_contacts():
+    db = db_session()
+    customer = Customer(company_name="Kunde", project_lead_email="import@example.test")
+    customer.contacts = [CustomerContact(name="Telefonkontakt", phone="123")]
+    db.add(customer)
+    db.commit()
+    service = CustomerService(db)
+    saved = service.update_customer(customer.id, CustomerUpdate(
+        removed_contact_emails=["import@example.test"]
+    ), user_id=7)
+    assert service.read_customer(saved).email_addresses == []
+    assert saved.contacts[0].name == "Telefonkontakt"
+    saved = service.update_customer(customer.id, CustomerUpdate(contacts=[]), user_id=7)
+    assert saved.contacts == []
+    assert saved.excluded_contact_emails == ["import@example.test"]
+
+
 def test_update_customer_persists_email_only_contact():
     db = db_session()
     service = CustomerService(db)

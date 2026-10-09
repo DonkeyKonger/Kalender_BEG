@@ -45,7 +45,7 @@ test("alphabet filter includes umlauts and a group for other initials", () => {
 test("customer details retain contacts, permissions, full records and empty results", () => {
   assert.match(pageSource, /canEdit && !isEditingCustomer && <button className="icon-button secondary"/);
   assert.match(pageSource, /CustomerContactEditor key=\{previewCustomer.id\} canEdit=\{canEdit\}/);
-  assert.match(pageSource, /saveCustomerContacts\(previewCustomer.id, contacts\)/);
+  assert.match(pageSource, /saveCustomerContacts\(previewCustomer.id, contacts, removedEmails\)/);
   assert.match(pageSource, /Keine Treffer gefunden/);
   assert.match(pageSource, /Noch keine Kunden vorhanden/);
   assert.match(pageSource, /useEffect\(\(\) => \{\s*setIsEditingCustomer\(false\);\s*\}, \[previewCustomer\?\.id\]\)/);

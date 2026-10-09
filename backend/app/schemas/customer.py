@@ -59,6 +59,7 @@ class CustomerCreate(CustomerBase):
 
 
 class CustomerUpdate(BaseModel):
+    removed_contact_emails: list[str] = Field(default_factory=list)
     company_name: str | None = Field(default=None, min_length=1, max_length=200)
     address_street: str | None = Field(default=None, max_length=200)
     address_house_number: str | None = Field(default=None, max_length=40)
