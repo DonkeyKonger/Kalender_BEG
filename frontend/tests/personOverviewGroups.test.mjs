@@ -24,7 +24,8 @@ test('departed staff from every role appear only in their own last collapsible g
   ]);
   assert.equal(result.at(-1).label, 'Ausgeschiedene');
   assert.equal(result.at(-1).collapsible, true);
-  assert.match(source, /collapsedPersonGroupKeys[^\n]*new Set\(\["internal-departed", "inactive-external"\]\)/);
+  const initialKeys = new Set(JSON.parse(source.match(/collapsedPersonGroupKeys[^\n]*new Set\((\[[^\]]*\])\)/)[1]));
+  assert.deepEqual(result.map(group => Boolean(group.collapsible && initialKeys.has(group.key))), [true, true, false, true]);
   assert.match(source, /aria-expanded=\{!isCollapsed\}/);
 });
 

@@ -140,7 +140,7 @@ export function PersonsPage() {
   const [isEditingPerson, setIsEditingPerson] = useState(false);
   const [activePersonAction, setActivePersonAction] = useState<PersonDetailActionKey | null>(null);
   const [personScope, setPersonScope] = useState<PersonScope>("internal");
-  const [collapsedPersonGroupKeys, setCollapsedPersonGroupKeys] = useState<Set<string>>(() => new Set(["internal-departed", "inactive-external"]));
+  const [collapsedPersonGroupKeys, setCollapsedPersonGroupKeys] = useState<Set<string>>(() => new Set(["internal-project-managers", "internal-office", "internal-departed", "inactive-external"]));
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [savingPersonId, setSavingPersonId] = useState<number | null>(null);
