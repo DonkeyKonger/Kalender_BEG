@@ -587,7 +587,7 @@ function CustomerContactEditor({
                 <span className="customer-contact-avatar" aria-hidden="true"><UserRound size={22} /></span>
                 <div className="customer-contact-identity">
                   <h3>{item.name?.trim() || (item.key === "new" ? "Neuer Ansprechpartner" : "-")}</h3>
-                  <p>{displayCustomerContactRole(item.contact_type) || "Ansprechpartner"}</p>
+                  {displayCustomerContactRole(item.contact_type) && <p>{displayCustomerContactRole(item.contact_type)}</p>}
                 </div>
                 {canEdit && draft?.key !== item.key && <button className="icon-button secondary customer-contact-edit-button"
                   type="button" aria-label={`Kontakt bearbeiten: ${item.name?.trim() || item.email || "Ansprechpartner"}`}

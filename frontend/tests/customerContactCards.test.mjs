@@ -46,6 +46,8 @@ test("contact cards show identities and links instead of permanent inputs, inclu
   assert.match(html,/aria-label="Ansprechpartner suchen"/);
   const readonly=module.exports.render(module.exports.harness({draft:null},{...props,canEdit:false,contactRows:[{key:"empty"}]}).tree);
   assert.match(readonly,/<h3>-<\/h3>/);
+  assert.doesNotMatch(readonly,/<p>Ansprechpartner<\/p>/);
+  assert.match(readonly,/<div class="customer-contact-identity"><h3>-<\/h3><\/div>/);
   assert.match(readonly,/Keine E-Mail hinterlegt/);
   assert.doesNotMatch(readonly,/<button/);
   assert.match(module.exports.render(module.exports.harness({draft:null},{...props,contactRows:[]}).tree),/Keine Kontakte hinterlegt/);
