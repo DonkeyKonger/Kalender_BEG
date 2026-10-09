@@ -11299,8 +11299,29 @@ body.mobile-modal-scroll-locked {
 .customer-preview-body .customer-notes-section { border-inline: 0; border-bottom: 0; background: transparent; }
 .customer-preview-body .customer-notes-textarea { width: 100%; min-height: 100px; }
 .customer-preview .customer-contact-editor { padding-top: 16px; }
-.customer-preview .customer-contact-editor-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.customer-preview .customer-contact-editor-row input { min-width: 0; }
+.customer-contact-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr)); gap: 12px; align-items: start; }
+.customer-contact-card { min-width: 0; border: 1px solid #d8e2ed; background: #fff; }
+.customer-contact-card-heading { display: flex; align-items: center; gap: 12px; padding: 16px; border-bottom: 1px solid #e6edf5; background: #f8fafc; }
+.customer-contact-avatar { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; background: #eaf2fb; color: #315b83; }
+.customer-contact-identity { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.customer-preview-body .customer-contact-identity h3 { margin: 0; color: #172b45; font-size: 15px; line-height: 1.4; letter-spacing: 0; text-transform: none; }
+.customer-preview-body .customer-contact-identity p { margin: 3px 0 0; color: #647b98; font-size: 12px; }
+.customer-contact-card .icon-button { border-radius: 0; }
+.customer-contact-card .customer-contact-edit-button { padding: 7px; flex-shrink: 0; }
+.customer-contact-channels { display: grid; gap: 12px; padding: 16px; }
+.customer-contact-channels a, .customer-contact-missing { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.customer-contact-channels a { color: #265f96; text-decoration: none; }
+.customer-contact-channels a:hover { text-decoration: underline; }
+.customer-contact-channels svg { flex-shrink: 0; color: #6f88a5; }
+.customer-contact-channels .customer-detail-phone-link { font-size: 13px; }
+.customer-contact-missing { color: #8898ab; }
+.customer-contact-card-form { padding: 16px; }
+.customer-contact-card-fields { display: grid; gap: 12px; }
+.customer-contact-card-fields label { display: grid; gap: 5px; color: #526782; font-size: 12px; font-weight: 600; }
+.customer-contact-card-fields input { width: 100%; min-width: 0; min-height: 34px; border: 1px solid #d5dfec; border-radius: 0; padding: 7px 9px; font: inherit; font-weight: 400; background: #fff; color: #172b45; }
+.customer-contact-card-fields input:focus { outline: 2px solid #a9c7e6; outline-offset: 1px; }
+.customer-contact-card-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding-top: 16px; }
+.customer-contact-card-actions .customer-contact-delete-button { margin-right: auto; }
 
 @media (max-width: 1100px) {
   .customer-directory-filters { flex-wrap: wrap; }

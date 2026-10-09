@@ -1,6 +1,7 @@
 import {
   Building2,
   ChevronRight,
+  Mail,
   Pencil,
   Phone,
   Plus,
@@ -8,9 +9,10 @@ import {
   Search,
   StickyNote,
   Trash2,
+  UserRound,
   UserPlus,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -543,117 +545,79 @@ function CustomerContactEditor({
   isSaving: boolean;
   onSaveContacts: (contacts: CustomerContactInput[]) => Promise<boolean>;
 }) {
-  const sourceKey = customerContactsKey(contactRows);
-  const [rows, setRows] = useState<CustomerContactRow[]>(() => contactRows.map((item) => ({ ...item })));
+  const [draft, setDraft] = useState<CustomerContactRow | null>(null);
+  const isNew = draft?.key === "new";
+  const rows = isNew ? [...contactRows, draft] : contactRows;
 
-  useEffect(() => {
-    setRows(contactRows.map((item) => ({ ...item })));
-  }, [sourceKey]);
-
-  function updateContact(index: number, values: Partial<CustomerContactInput>) {
-    setRows((current) => current.map((row, currentIndex) => (
-      currentIndex === index ? { ...row, ...values } : row
-    )));
+  function updateContact(values: Partial<CustomerContactInput>) {
+    setDraft((current) => current ? { ...current, ...values } : current);
   }
 
-  function addContact() {
-    setRows((current) => [
-      ...current,
-      { key: `new:${Date.now()}`, contact_type: null, name: null, phone: null, email: null },
-    ]);
-  }
-
-  function removeContact(index: number) {
-    const nextRows = rows.filter((_, currentIndex) => currentIndex !== index);
-    setRows(nextRows);
-    void persistRows(nextRows);
-  }
-
-  function resetRows() {
-    setRows(contactRows.map((item) => ({ ...item })));
-  }
-
-  async function persistRows(nextRows: CustomerContactRow[] = rows) {
-    if (!canEdit) {
-      return;
-    }
+  async function saveContact() {
+    if (!canEdit || isSaving || !draft) return;
+    const nextRows = isNew ? [...contactRows, draft] : contactRows.map((row) => row.key === draft.key ? draft : row);
     const payload = normalizeCustomerContactsPayload(nextRows);
-    if (customerContactsKey(payload) === customerContactsKey(contactRows)) {
-      return;
+    if (customerContactsKey(payload) === customerContactsKey(contactRows) || await onSaveContacts(payload)) {
+      setDraft(null);
     }
-    await onSaveContacts(payload);
   }
 
   return (
     <div className="customer-contact-editor">
       {rows.length ? (
-        <div className="customer-contact-editor-table">
-          {rows.map((item, index) => (
-            <div className="customer-contact-editor-row" key={item.key}>
-              {canEdit ? (
-                <>
-                  <input
-                    aria-label="Name"
-                    disabled={isSaving}
-                    placeholder="Name"
-                    value={item.name ?? ""}
-                    onBlur={() => void persistRows()}
-                    onChange={(event) => updateContact(index, { name: event.target.value })}
-                    onKeyDown={(event) => handleCustomerContactEditorKey(event, resetRows)}
-                  />
-                  <input
-                    aria-label="E-Mail"
-                    disabled={isSaving}
-                    placeholder="E-Mail"
-                    value={item.email ?? ""}
-                    onBlur={() => void persistRows()}
-                    onChange={(event) => updateContact(index, { email: event.target.value })}
-                    onKeyDown={(event) => handleCustomerContactEditorKey(event, resetRows)}
-                  />
-                  <input
-                    aria-label="Telefon"
-                    disabled={isSaving}
-                    placeholder="Telefon"
-                    value={item.phone ?? ""}
-                    onBlur={() => void persistRows()}
-                    onChange={(event) => updateContact(index, { phone: event.target.value })}
-                    onKeyDown={(event) => handleCustomerContactEditorKey(event, resetRows)}
-                  />
-                  <input
-                    aria-label="Rolle"
-                    disabled={isSaving}
-                    placeholder="Rolle"
-                    value={displayCustomerContactRole(item.contact_type)}
-                    onBlur={() => void persistRows()}
-                    onChange={(event) => updateContact(index, { contact_type: event.target.value })}
-                    onKeyDown={(event) => handleCustomerContactEditorKey(event, resetRows)}
-                  />
-                  <button
-                    aria-label="Kontakt entfernen"
-                    className="customer-contact-remove-button"
-                    disabled={isSaving}
-                    type="button"
-                    onClick={() => removeContact(index)}
-                  >
-                    <Trash2 aria-hidden="true" size={14} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span>{item.name ?? ""}</span>
-                  <strong>{item.email ?? ""}</strong>
-                  <span>{item.phone ?? ""}</span>
-                  <span>{displayCustomerContactRole(item.contact_type)}</span>
-                </>
-              )}
-            </div>
+        <div className="customer-contact-cards">
+          {rows.map((item) => (
+            <article className="customer-contact-card" aria-label={item.name?.trim() || "Ansprechpartner ohne Namen"} key={item.key}>
+              <header className="customer-contact-card-heading">
+                <span className="customer-contact-avatar" aria-hidden="true"><UserRound size={22} /></span>
+                <div className="customer-contact-identity">
+                  <h3>{item.name?.trim() || (item.key === "new" ? "Neuer Ansprechpartner" : "Name nicht hinterlegt")}</h3>
+                  <p>{displayCustomerContactRole(item.contact_type) || "Ansprechpartner"}</p>
+                </div>
+                {canEdit && draft?.key !== item.key && <button className="icon-button secondary customer-contact-edit-button"
+                  type="button" aria-label={`Kontakt bearbeiten: ${item.name?.trim() || item.email || "Ansprechpartner"}`}
+                  disabled={isSaving || draft !== null} onClick={() => setDraft({ ...item })}>
+                  <Pencil aria-hidden="true" size={15} />
+                </button>}
+              </header>
+              {canEdit && draft?.key === item.key ? (
+                <form className="customer-contact-card-form" onSubmit={(event) => { event.preventDefault(); void saveContact(); }}
+                  onKeyDown={(event) => { if (event.key === "Escape" && !isSaving) { event.preventDefault(); setDraft(null); } }}>
+                  <div className="customer-contact-card-fields">
+                    <label>Name<input autoFocus disabled={isSaving} placeholder="Vor- und Nachname" value={draft.name ?? ""}
+                      onChange={(event) => updateContact({ name: event.target.value })} /></label>
+                    <label>Rolle<input disabled={isSaving} placeholder="z. B. Projektleiter" value={displayCustomerContactRole(draft.contact_type)}
+                      onChange={(event) => updateContact({ contact_type: event.target.value })} /></label>
+                    <label>E-Mail<input disabled={isSaving} type="email" placeholder="name@firma.de" value={draft.email ?? ""}
+                      onChange={(event) => updateContact({ email: event.target.value })} /></label>
+                    <label>Telefon<input disabled={isSaving} type="tel" placeholder="Telefonnummer" value={draft.phone ?? ""}
+                      onChange={(event) => updateContact({ phone: event.target.value })} /></label>
+                  </div>
+                  <div className="customer-contact-card-actions">
+                    {!isNew && <button aria-label="Kontakt entfernen" className="icon-button danger customer-contact-delete-button" type="button"
+                      disabled={isSaving} onClick={() => { void onSaveContacts(normalizeCustomerContactsPayload(contactRows.filter((row) => row.key !== item.key)))
+                        .then((saved) => { if (saved) setDraft(null); }); }}><Trash2 aria-hidden="true" size={15} /></button>}
+                    <button className="icon-button secondary" type="button" disabled={isSaving} onClick={() => setDraft(null)}>Abbrechen</button>
+                    <button className="icon-button secondary" type="submit" disabled={isSaving || ![draft.name, draft.email, draft.phone].some((value) => value?.trim())}>
+                      <Save aria-hidden="true" size={15} /><span>Speichern</span>
+                    </button>
+                  </div>
+                </form>
+              ) : <div className="customer-contact-channels">
+                {item.email?.trim() ? <a href={`mailto:${item.email.trim()}`}><Mail aria-hidden="true" size={16} /><span>{item.email}</span></a>
+                  : <span className="customer-contact-missing"><Mail aria-hidden="true" size={16} />Keine E-Mail hinterlegt</span>}
+                {item.phone?.trim() ? <CustomerPhoneLink phone={item.phone} />
+                  : <span className="customer-contact-missing"><Phone aria-hidden="true" size={16} />Keine Telefonnummer hinterlegt</span>}
+              </div>}
+            </article>
           ))}
         </div>
       ) : (
         <p className="detail-empty">Keine Kontakte hinterlegt.</p>
       )}
       {canEdit && (
-        <button className="icon-button secondary customer-contact-add-button" disabled={isSaving} type="button" onClick={addContact}>
+        <button className="icon-button secondary customer-contact-add-button" disabled={isSaving || draft !== null} type="button"
+          onClick={() => setDraft({ key: "new", contact_type: null, name: null, phone: null, email: null })}>
           <Plus aria-hidden="true" size={15} />
           <span>Kontakt hinzufügen</span>
         </button>
@@ -661,19 +625,6 @@ function CustomerContactEditor({
     </div>
   );
 }
-
-function handleCustomerContactEditorKey(event: KeyboardEvent<HTMLInputElement>, onCancel: () => void) {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    event.currentTarget.blur();
-  }
-  if (event.key === "Escape") {
-    event.preventDefault();
-    onCancel();
-    event.currentTarget.blur();
-  }
-}
-
 
 function CustomerPhoneLink({ phone }: { phone: string | null | undefined }) {
   if (!phone) {

@@ -72,3 +72,20 @@ test("customer directory stacks on mobile and independently scrolls the desktop 
   assert.match(styles, /@media \(max-width: 760px\) \{\s*\.customer-directory \{ grid-template-columns: minmax\(0, 1fr\); height: auto/);
   assert.match(styles, /\.customer-directory-results \{ max-height: 330px; flex: auto; \}/);
 });
+
+test("contacts use responsive cards with explicit editing and clickable communication channels", () => {
+  const editor = pageSource.slice(pageSource.indexOf("function CustomerContactEditor("), pageSource.indexOf("function CustomerPhoneLink("));
+  assert.match(editor, /<article className="customer-contact-card"/);
+  assert.match(editor, /canEdit && draft\?\.key === item.key/);
+  assert.match(editor, /Kontakt bearbeiten:/);
+  assert.match(editor, /href=\{`mailto:\$\{item.email.trim\(\)\}`\}/);
+  assert.match(editor, /<CustomerPhoneLink phone=\{item.phone\}/);
+  assert.match(editor, /Name nicht hinterlegt/);
+  assert.match(editor, /Keine Telefonnummer hinterlegt/);
+  assert.doesNotMatch(editor, /onBlur=/);
+  assert.match(editor, /await onSaveContacts\(payload\)\) \{\s*setDraft\(null\)/);
+  assert.match(editor, /if \(saved\) setDraft\(null\)/);
+  assert.match(editor, /type="button" disabled=\{isSaving\} onClick=\{\(\) => setDraft\(null\)\}>Abbrechen/);
+  assert.match(styles, /\.customer-contact-cards \{[^}]*repeat\(auto-fit, minmax\(min\(100%, 310px\), 1fr\)\)/);
+  assert.match(styles, /\.customer-contact-card \.icon-button \{ border-radius: 0;/);
+});
