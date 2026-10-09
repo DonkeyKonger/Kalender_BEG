@@ -2646,7 +2646,8 @@ button.entity-card:focus-visible,
 
 .person-detail-info-textarea {
   width: 100%;
-  min-height: 62px;
+  height: 186px;
+  min-height: 186px;
   border: 1px solid #dbe4ef;
   border-radius: 0;
   background: #ffffff;

@@ -719,7 +719,9 @@ function PersonReadView({
   onSignaturePermissionChange: (canSignImmediately: boolean) => Promise<boolean>;
 }) {
   const addressText = formatPersonAddress(person);
-  const action = activeAction ? personDetailActions.find((entry) => entry.key === activeAction) ?? null : null;
+  const isInternal = person.person_type === "internal";
+  const visibleActions = personDetailActions.filter((entry) => isInternal || entry.key !== "timeAccount");
+  const action = activeAction ? visibleActions.find((entry) => entry.key === activeAction) ?? null : null;
   const [isEditingAddress, setIsEditingAddress] = useState(false);
 
   useEffect(() => {
@@ -771,7 +773,7 @@ function PersonReadView({
                 onChange={onStatusChange}
               />
             </PersonDetailField>
-            <PersonDetailField label="Jahresurlaub">
+            {isInternal && <PersonDetailField label="Jahresurlaub">
               <PersonInlineEditableField
                 ariaLabel="Jahresurlaub bearbeiten"
                 canEdit={canEdit}
@@ -786,7 +788,8 @@ function PersonReadView({
                 onSave={(value) => onInformationSave({ annual_vacation_days: parseOptionalInteger(value) })}
               />
             </PersonDetailField>
-            <PersonDetailField label="Wochenstunden">
+            }
+            {isInternal && <PersonDetailField label="Wochenstunden">
               <PersonInlineEditableField
                 ariaLabel="Wochenstunden bearbeiten"
                 canEdit={canEdit}
@@ -800,6 +803,7 @@ function PersonReadView({
                 onSave={(value) => onInformationSave({ weekly_hours: parseOptionalDecimal(value) })}
               />
             </PersonDetailField>
+            }
             <PersonDetailField className="person-detail-signature-field" label="Kundenunterschrift">
               <PersonSignaturePermissionSelect
                 canEdit={canEdit}
@@ -888,7 +892,7 @@ function PersonReadView({
         </section>
 
         <section className="detail-read-section customer-detail-nav-section person-detail-nav-section">
-          {personDetailActions.map((detailAction) => (
+          {visibleActions.map((detailAction) => (
             <PersonDetailNavItem
               action={detailAction}
               key={detailAction.key}
