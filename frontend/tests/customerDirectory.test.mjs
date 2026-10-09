@@ -64,7 +64,10 @@ test("the full customer record and edit form live inside the right detail panel"
   assert.equal((pageSource.match(/<EntityDetailDrawer/g) ?? []).length, 1);
   assert.match(pageSource, /isOpen=\{drawer\?\.mode === "new"\}/);
   assert.doesNotMatch(pageSource, /drawer\?\.mode === "edit"/);
-  assert.match(pageSource, /disabled=\{isEditingCustomer \|\| savingCustomerId !== null\}/);
+  assert.doesNotMatch(pageSource, /disabled=\{isEditingCustomer \|\| savingCustomerId !== null\}/);
+  assert.match(pageSource, /disabled=\{savingCustomerId !== null\}/);
+  assert.match(pageSource, /\[selectedCustomer.id\]: current\[selectedCustomer.id\] \?\? toEditableCustomer\(selectedCustomer\)/);
+  assert.match(pageSource, /Ungespeicherter Entwurf · über Bearbeiten fortsetzen/);
 });
 
 test("customer directory stacks on mobile and independently scrolls the desktop list", () => {
@@ -88,4 +91,26 @@ test("contacts use responsive cards with explicit editing and clickable communic
   assert.match(editor, /type="button" disabled=\{isSaving\} onClick=\{\(\) => setDraft\(null\)\}>Abbrechen/);
   assert.match(styles, /\.customer-contact-cards \{[^}]*repeat\(auto-fit, minmax\(min\(100%, 310px\), 1fr\)\)/);
   assert.match(styles, /\.customer-contact-card \.icon-button \{ border-radius: 0;/);
+});
+
+test("reopening a customer preserves its draft and cancel only resets that customer's draft", () => {
+  const editActions = pageSource.slice(pageSource.indexOf("  function startCustomerEdit()"), pageSource.indexOf("  function closeDrawer()"));
+  const compiledActions = ts.transpileModule(editActions, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+  const run = new Function("selectedCustomer", "drafts", `
+    let editing = false;
+    const toEditableCustomer = customer => ({...customer});
+    const setDrafts = update => {drafts = update(drafts);};
+    const setIsEditingCustomer = value => {editing = value;};
+    const setError = () => {};
+    ${compiledActions}
+    return {startCustomerEdit, cancelCustomerEdit, state:()=>({drafts,editing})};
+  `);
+  const actions = run({id:1,company_name:"Saved name"}, {1:{id:1,company_name:"Pending name"},2:{id:2,company_name:"Other draft"}});
+  actions.startCustomerEdit();
+  assert.equal(actions.state().editing,true);
+  assert.equal(actions.state().drafts[1].company_name,"Pending name");
+  actions.cancelCustomerEdit();
+  assert.equal(actions.state().editing,false);
+  assert.equal(actions.state().drafts[1].company_name,"Saved name");
+  assert.equal(actions.state().drafts[2].company_name,"Other draft");
 });

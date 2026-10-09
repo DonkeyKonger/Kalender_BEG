@@ -91,7 +91,9 @@ export function CustomersPage() {
       ]);
       setCustomers(customerData);
       setSiteSummaries(siteData);
-      setDrafts(toEditableCustomers(customerData));
+      setDrafts((current) => Object.fromEntries(customerData.map((customer) => [
+        customer.id, current[customer.id] ?? toEditableCustomer(customer),
+      ])));
     } catch (requestError) {
       setError(readApiError(requestError, "Kunden konnten nicht geladen werden."));
     } finally {
@@ -122,6 +124,8 @@ export function CustomersPage() {
   const selectedDraft = selectedCustomer
     ? drafts[selectedCustomer.id] ?? toEditableCustomer(selectedCustomer)
     : null;
+  const hasPendingCustomerDraft = selectedCustomer && selectedDraft
+    && JSON.stringify(normalizeCustomerPayload(selectedDraft)) !== JSON.stringify(normalizeCustomerPayload(toEditableCustomer(selectedCustomer)));
   const selectedCustomerProjects = useMemo(
     () => selectedCustomer ? customerProjects(siteSummaries, selectedCustomer.id) : [],
     [selectedCustomer, siteSummaries],
@@ -193,7 +197,9 @@ export function CustomersPage() {
       setCustomers((current) =>
         current.map((customer) => customer.id === updated.id ? updated : customer).sort(compareCustomers),
       );
-      setDrafts((current) => ({ ...current, [updated.id]: toEditableCustomer(updated) }));
+      setDrafts((current) => ({ ...current, [updated.id]: {
+        ...(current[updated.id] ?? toEditableCustomer(updated)), contacts: toEditableCustomer(updated).contacts,
+      } }));
       return true;
     } catch (requestError) {
       setError(readApiError(requestError, "Kundenkontakt konnte nicht gespeichert werden."));
@@ -212,7 +218,9 @@ export function CustomersPage() {
       setCustomers((current) =>
         current.map((customer) => customer.id === updated.id ? updated : customer).sort(compareCustomers),
       );
-      setDrafts((current) => ({ ...current, [updated.id]: toEditableCustomer(updated) }));
+      setDrafts((current) => ({ ...current, [updated.id]: {
+        ...(current[updated.id] ?? toEditableCustomer(updated)), notes: updated.notes,
+      } }));
       return true;
     } catch (requestError) {
       setError(readApiError(requestError, "Hinweise konnten nicht gespeichert werden."));
@@ -261,7 +269,7 @@ export function CustomersPage() {
 
   function startCustomerEdit() {
     if (!selectedCustomer) return;
-    setDrafts((current) => ({ ...current, [selectedCustomer.id]: toEditableCustomer(selectedCustomer) }));
+    setDrafts((current) => ({ ...current, [selectedCustomer.id]: current[selectedCustomer.id] ?? toEditableCustomer(selectedCustomer) }));
     setIsEditingCustomer(true);
   }
 
@@ -289,7 +297,7 @@ export function CustomersPage() {
           <h1>Kunden</h1>
         </div>
         {canEdit && (
-          <button className="icon-button overview-create" type="button" disabled={isEditingCustomer || savingCustomerId !== null} onClick={openNewCustomerDrawer}>
+          <button className="icon-button overview-create" type="button" disabled={savingCustomerId !== null} onClick={openNewCustomerDrawer}>
             <UserPlus aria-hidden="true" size={17} />
             <span>Neuer Kunde</span>
           </button>
@@ -308,19 +316,19 @@ export function CustomersPage() {
               <label className="overview-search">
                 <Search aria-hidden="true" size={16} />
                 <input aria-label="Kunden suchen" placeholder="Kunden suchen …" value={searchTerm}
-                  disabled={isEditingCustomer || savingCustomerId !== null}
+                  disabled={savingCustomerId !== null}
                   onChange={(event) => setSearchTerm(event.target.value)} />
               </label>
               <div className="customer-directory-filters">
                 <div className="customer-alphabet" role="group" aria-label="Anfangsbuchstabe">
                   {["all", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "#"].map((letter) => (
                     <button key={letter} type="button" aria-pressed={letterFilter === letter}
-                      disabled={isEditingCustomer || savingCustomerId !== null}
+                      disabled={savingCustomerId !== null}
                       onClick={() => setLetterFilter(letter)}>{letter === "all" ? "Alle" : letter}</button>
                   ))}
                 </div>
                 <select aria-label="Kunden sortieren" value={sortDescending ? "desc" : "asc"}
-                  disabled={isEditingCustomer || savingCustomerId !== null}
+                  disabled={savingCustomerId !== null}
                   onChange={(event) => setSortDescending(event.target.value === "desc")}>
                   <option value="asc">Name A–Z</option><option value="desc">Name Z–A</option>
                 </select>
@@ -333,7 +341,7 @@ export function CustomersPage() {
                   <h2>{group.label}</h2>
                     {group.customers.map((customer) => (
                       <button key={customer.id} type="button"
-                        disabled={isEditingCustomer || savingCustomerId !== null}
+                        disabled={savingCustomerId !== null}
                         className={`customer-directory-row${!customer.is_active ? " is-inactive" : ""}`}
                         aria-pressed={previewCustomer?.id === customer.id}
                         onClick={() => setPreviewCustomerId(customer.id)}>
@@ -354,6 +362,7 @@ export function CustomersPage() {
           <section className="customer-preview" aria-label="Kundendetails">
             {previewCustomer ? <>
               <div className="customer-preview-actions">
+                {hasPendingCustomerDraft && !isEditingCustomer && <span className="customer-preview-draft-hint">Ungespeicherter Entwurf · über Bearbeiten fortsetzen</span>}
                 {canEdit && !isEditingCustomer && <button className="icon-button secondary" type="button"
                   disabled={savingCustomerId !== null} onClick={startCustomerEdit}>
                   <Pencil aria-hidden="true" size={15} /><span>Bearbeiten</span>
@@ -702,12 +711,6 @@ export function CustomerFields({
         </div>
       </section>
     </div>
-  );
-}
-
-function toEditableCustomers(customers: Customer[]): Record<string, EditableCustomer> {
-  return Object.fromEntries(
-    customers.map((customer) => [String(customer.id), toEditableCustomer(customer)]),
   );
 }
 
