@@ -31,7 +31,6 @@ class ExternalPersonService:
             short_code=name_parts["short_code"],
             person_type=PersonType.EXTERNAL_TEMP,
             is_active=True,
-            notes="Aus Matrix-Schnelleingabe erzeugt.",
         )
         return self.people.add(person)
 

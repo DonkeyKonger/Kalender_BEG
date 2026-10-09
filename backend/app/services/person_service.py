@@ -354,7 +354,7 @@ def external_person_values(display_name: str) -> dict:
         "is_active": True,
         "employment_status": PersonEmploymentStatus.ACTIVE.value,
         "weekly_hours": None,
-        "notes": "Aus Matrix-Schnelleingabe erzeugt.",
+        "notes": None,
     }
 
 

@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
@@ -74,3 +75,28 @@ def test_ambiguous_internal_identity_is_not_guessed():
 
     assert resolved.person_type == PersonType.EXTERNAL_TEMP
     assert db.scalar(select(func.count(Person.id))) == 3
+
+
+@pytest.mark.parametrize("via_matrix", [False, True])
+def test_new_external_person_has_empty_notes_and_reuse_preserves_manual_notes(via_matrix):
+    db = db_session()
+
+    def create():
+        if via_matrix:
+            return ExternalPersonService(db).resolve_external_temp("Max Extern")
+        return PersonService(db).create_external_person(
+            ExternalPersonCreate(display_name="Max Extern"), user_id=999,
+        )
+
+    person = create()
+    db.commit()
+    db.refresh(person)
+    assert person.person_type == PersonType.EXTERNAL_TEMP
+    assert person.notes is None
+
+    person.notes = "Eigene wichtige Notiz"
+    db.commit()
+    resolved = create()
+    assert resolved.id == person.id
+    assert resolved.notes == "Eigene wichtige Notiz"
+    assert db.scalar(select(func.count(Person.id))) == 1
