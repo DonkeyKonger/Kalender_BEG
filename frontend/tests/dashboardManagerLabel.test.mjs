@@ -17,24 +17,20 @@ vm.runInContext(
 
 const manager = {
   id: 42,
-  display_name: "CC",
-  short_code: "C.Eck",
+  display_name: "CE",
+  short_code: "C.CE",
   person_type: "internal",
 };
 
-test("dashboard manager label prefers the short code stored in the person record", () => {
-  const peopleById = new Map([[42, { short_code: " CE " }]]);
-
-  assert.equal(context.getManagerLabel(manager, peopleById), "CE");
-  assert.equal(context.getManagerSummary(manager, peopleById).label, "CE");
+test("dashboard manager label prefers the visible person code over the technical calendar code", () => {
+  assert.equal(context.getManagerLabel(manager), "CE");
+  assert.equal(context.getManagerSummary(manager).label, "CE");
 });
 
-test("dashboard manager label keeps matrix, display-name and unassigned fallbacks", () => {
-  assert.equal(context.getManagerLabel(manager, new Map()), "CE");
+test("dashboard manager label falls back to short code and handles an unassigned site", () => {
   assert.equal(
-    context.getManagerLabel({ ...manager, short_code: "", display_name: "CC" }, new Map()),
-    "CC",
+    context.getManagerLabel({ ...manager, display_name: "", short_code: "A.Biesewig" }),
+    "AB",
   );
-  assert.equal(context.getManagerLabel(manager, new Map([[42, { short_code: "   " }]])), "CE");
-  assert.equal(context.getManagerLabel(null, new Map()), "Ohne PL");
+  assert.equal(context.getManagerLabel(null), "Ohne PL");
 });

@@ -17,9 +17,13 @@ test('site tiles retain a bounded responsive width instead of stretching a lone 
   assert.match(rule('.dashboard-site-tile-grid'), /justify-content:\s*flex-start/);
 });
 
-test('site names wrap naturally instead of being cut off', () => {
+test('site tiles reserve the same two-line name area without a status-height variant', () => {
+  assert.match(rule('.dashboard-site-tile'), /grid-template-rows:\s*14px minmax\(0, 2\.8em\)/);
+  assert.match(rule('.dashboard-site-tile'), /height:\s*76px/);
+  assert.match(rule('.dashboard-site-tile-meta'), /white-space:\s*nowrap/);
   assert.match(rule('.dashboard-site-tile-name'), /overflow-wrap:\s*anywhere/);
-  assert.match(rule('.dashboard-site-tile-name'), /white-space:\s*normal/);
+  assert.match(rule('.dashboard-site-tile-name'), /-webkit-line-clamp:\s*2/);
+  assert.match(rule('.dashboard-site-tile-name'), /overflow:\s*hidden/);
 });
 
 test('the desktop group list remains scrollable for many occupied sites', () => {

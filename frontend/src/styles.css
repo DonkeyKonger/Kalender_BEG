@@ -24622,21 +24622,23 @@ body.mobile-modal-scroll-locked {
 .dashboard-site-tile {
   position: relative;
   display: grid;
+  grid-template-rows: 14px minmax(0, 2.8em);
   gap: 7px;
+  height: 76px;
   min-width: 0;
   border: 1px solid #d9e2ef;
   border-left: 3px solid #245b94;
   border-radius: 0;
-  background: #ffffff;
+  background: #f1f5fb;
   color: inherit;
-  padding: 9px 10px 10px;
+  padding: 9px 10px 8px;
   text-decoration: none;
 }
 
 .dashboard-site-tile:hover,
 .dashboard-site-tile:focus-visible {
   border-color: #9fb8d6;
-  background: #ffffff;
+  background: #e8f0fa;
   box-shadow: none;
   outline: none;
 }
@@ -24651,6 +24653,14 @@ body.mobile-modal-scroll-locked {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.dashboard-site-tile-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
 }
 
 .dashboard-site-tile-number {
@@ -24680,20 +24690,15 @@ body.mobile-modal-scroll-locked {
 }
 
 .dashboard-site-tile-name {
+  display: -webkit-box;
+  overflow: hidden;
   color: #111827;
   font-size: 0.8rem;
   font-weight: 850;
   line-height: 1.4;
   overflow-wrap: anywhere;
-  white-space: normal;
-}
-
-.dashboard-site-tile-status {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .dashboard-site-tile-external {

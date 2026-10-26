@@ -855,22 +855,27 @@ export function DashboardPage() {
                           <Link className="dashboard-site-tile" to={"/sites/" + siteSummary.site.id} key={siteSummary.site.id} title={siteSummary.site.name}>
                             <span className="dashboard-site-tile-topline">
                               <span className="dashboard-site-tile-number">{formatSiteTileNumber(siteSummary)}</span>
-                              <span className="dashboard-site-tile-count" aria-label={formatSiteTileMeta(siteSummary)}>
-                                <Users aria-hidden="true" size={14} />
-                                {siteSummary.internalCount + siteSummary.externalCount}
-                              </span>
-                            </span>
-                            <span className="dashboard-site-tile-name">{siteSummary.site.name}</span>
-                            {(siteSummary.externalCount > 0 || siteSummary.hasWarnings) && (
-                              <span className="dashboard-site-tile-status">
+                              <span className="dashboard-site-tile-meta">
+                                <span className="dashboard-site-tile-count" aria-label={formatSiteTileMeta(siteSummary)}>
+                                  <Users aria-hidden="true" size={14} />
+                                  {siteSummary.internalCount + siteSummary.externalCount}
+                                </span>
                                 {siteSummary.externalCount > 0 && (
-                                  <span className="dashboard-site-tile-external">
+                                  <span
+                                    aria-label={formatCount(siteSummary.externalCount, "externer Monteur", "externe Monteure")}
+                                    className="dashboard-site-tile-external"
+                                  >
                                     {formatSiteTileExternalCount(siteSummary.externalCount)}
                                   </span>
                                 )}
-                                {siteSummary.hasWarnings && <span className="dashboard-signal signal-orange">Prüfen</span>}
+                                {siteSummary.hasWarnings && (
+                                  <span aria-label="Baustelle prüfen" className="dashboard-signal signal-orange" title="Baustelle prüfen">
+                                    Prüfen
+                                  </span>
+                                )}
                               </span>
-                            )}
+                            </span>
+                            <span className="dashboard-site-tile-name">{siteSummary.site.name}</span>
                           </Link>
                         ))}
                       </div>
@@ -1947,12 +1952,12 @@ function buildDashboardData(
     !todayAssignedPersonIds.has(person.id) && !todayAbsentPersonIds.has(person.id)
   ));
 
-  const lastManagerByPersonId = buildLastManagerByPersonId(matrix.rows, range.today, peopleById);
+  const lastManagerByPersonId = buildLastManagerByPersonId(matrix.rows, range.today);
   const freeWorkerGroups = groupFreeWorkersByLastManager(freeWorkers, lastManagerByPersonId);
-  const workerSummaryGroups = overview?.workerSummaryGroups ?? buildWorkerSummaryGroupsForDay(matrix.rows, range.today, activeWorkers, freeWorkers, peopleById);
+  const workerSummaryGroups = overview?.workerSummaryGroups ?? buildWorkerSummaryGroupsForDay(matrix.rows, range.today, activeWorkers, freeWorkers);
   const todayAssignedSites = overview?.todayAssignedSites ?? getAssignedSitesForDay(matrix.rows, range.today, peopleById);
-  const todayAssignedSiteGroups = overview?.todayAssignedSiteGroups ?? groupAssignedSitesByManager(todayAssignedSites, peopleById);
-  const openStaffingNeeds = overview?.openStaffingNeeds ?? getOpenStaffingNeeds(matrix.rows, range.today, range.nextWeekEnd, peopleById);
+  const todayAssignedSiteGroups = overview?.todayAssignedSiteGroups ?? groupAssignedSitesByManager(todayAssignedSites);
+  const openStaffingNeeds = overview?.openStaffingNeeds ?? getOpenStaffingNeeds(matrix.rows, range.today, range.nextWeekEnd);
   const conflicts = overview?.conflicts ?? getDashboardConflicts(matrix.rows, range.today, range.nextWeekEnd);
   const tomorrowAssignedCount = overview?.tomorrowAssignedCount ?? getAssignedSitesForDay(matrix.rows, range.tomorrow, peopleById).length;
   return {
@@ -1990,7 +1995,7 @@ function getAssignedSitesForDay(
       }).length;
       return {
         site: row.site,
-        managerLabel: getManagerLabel(row.site.project_manager, peopleById),
+        managerLabel: getManagerLabel(row.site.project_manager),
         internalCount: assignments.length - externalCount,
         externalCount,
         hasWarnings: cell?.mark === "orange",
@@ -2000,13 +2005,10 @@ function getAssignedSitesForDay(
     .sort(compareAssignedSites);
 }
 
-function groupAssignedSitesByManager(
-  sites: AssignedSiteSummary[],
-  peopleById: Map<number, Person>,
-): AssignedSiteGroup[] {
+function groupAssignedSitesByManager(sites: AssignedSiteSummary[]): AssignedSiteGroup[] {
   const groups = new Map<string, AssignedSiteGroup>();
   sites.forEach((siteSummary) => {
-    const manager = getManagerSummary(siteSummary.site.project_manager, peopleById);
+    const manager = getManagerSummary(siteSummary.site.project_manager);
     const existing = groups.get(manager.key) ?? { manager, sites: [] };
     existing.sites.push(siteSummary);
     groups.set(manager.key, existing);
@@ -2094,7 +2096,6 @@ function buildWorkerSummaryGroupsForDay(
   date: string,
   activeWorkers: Person[],
   freeWorkers: Person[],
-  peopleById: Map<number, Person>,
 ): WorkerSummaryGroup[] {
   const activeWorkerById = new Map(activeWorkers.map((worker) => [worker.id, worker]));
   const assignedGroups = new Map<string, {
@@ -2110,7 +2111,7 @@ function buildWorkerSummaryGroupsForDay(
     if (cell.assignments.length === 0) {
       return;
     }
-    const manager = getManagerSummary(row.site.project_manager, peopleById);
+    const manager = getManagerSummary(row.site.project_manager);
     const group = assignedGroups.get(manager.key) ?? {
       manager,
       peopleById: new Map<number, DashboardOverviewPerson & { siteLabels: Set<string> }>(),
@@ -2190,14 +2191,10 @@ function compareWorkerSummaryGroups(first: WorkerSummaryGroup, second: WorkerSum
     || first.manager.name.localeCompare(second.manager.name, "de");
 }
 
-function buildLastManagerByPersonId(
-  rows: MatrixRow[],
-  date: string,
-  peopleById: Map<number, Person>,
-): Map<number, ManagerSummary> {
+function buildLastManagerByPersonId(rows: MatrixRow[], date: string): Map<number, ManagerSummary> {
   const latestByPersonId = new Map<number, { date: string; manager: ManagerSummary }>();
   rows.forEach((row) => {
-    const manager = getManagerSummary(row.site.project_manager, peopleById);
+    const manager = getManagerSummary(row.site.project_manager);
     row.cells.forEach((cell) => {
       if (cell.date > date) {
         return;
@@ -2213,12 +2210,7 @@ function buildLastManagerByPersonId(
   return new Map(Array.from(latestByPersonId, ([personId, entry]) => [personId, entry.manager]));
 }
 
-function getOpenStaffingNeeds(
-  rows: MatrixRow[],
-  start: string,
-  end: string,
-  peopleById: Map<number, Person>,
-): StaffingNeed[] {
+function getOpenStaffingNeeds(rows: MatrixRow[], start: string, end: string): StaffingNeed[] {
   const needs: StaffingNeed[] = [];
   rows.forEach((row) => {
     row.cells.forEach((cell) => {
@@ -2229,7 +2221,7 @@ function getOpenStaffingNeeds(
         date: cell.date,
         siteName: row.site.name,
         siteNumber: row.site.site_number,
-        managerLabel: getManagerLabel(row.site.project_manager, peopleById),
+        managerLabel: getManagerLabel(row.site.project_manager),
       });
     });
   });
@@ -2320,29 +2312,22 @@ function getAbsentPersonIdsForDate(rows: MatrixRow[], date: string): Set<number>
   return ids;
 }
 
-function getManagerSummary(
-  manager: MatrixPerson | null,
-  peopleById?: Map<number, Pick<Person, "short_code">>,
-): ManagerSummary {
+function getManagerSummary(manager: MatrixPerson | null): ManagerSummary {
   if (!manager) {
     return { key: "unassigned", label: "Ohne PL", name: "Ohne Projektleiter" };
   }
   return {
     key: String(manager.id),
-    label: getManagerLabel(manager, peopleById),
+    label: getManagerLabel(manager),
     name: manager.display_name,
   };
 }
 
-function getManagerLabel(
-  manager: MatrixPerson | null,
-  peopleById?: Map<number, Pick<Person, "short_code">>,
-): string {
+function getManagerLabel(manager: MatrixPerson | null): string {
   if (!manager) {
     return "Ohne PL";
   }
-  const recordShortCode = peopleById?.get(manager.id)?.short_code?.trim();
-  return normalizeShortCode(recordShortCode || manager.short_code || manager.display_name);
+  return normalizeShortCode(manager.display_name.trim() || manager.short_code);
 }
 
 function normalizeShortCode(value: string): string {

@@ -303,13 +303,13 @@ def test_overview_returns_only_orange_unstaffed_needs_and_all_free_people(db):
     assert days[-1]["date"] == "2026-10-07"
 
 
-def test_overview_manager_labels_use_person_record_short_code_instead_of_matrix_display_code(db):
+def test_overview_manager_labels_use_visible_person_code_instead_of_technical_calendar_code(db):
     today = date(2026, 9, 28)
     manager = Person(
         first_name="Christopher",
-        last_name="Eck",
-        display_name="CC",
-        short_code="CE",
+        last_name="CE",
+        display_name="CE",
+        short_code="C.CE",
     )
     installer = worker(db, "Installer")
     site = Site(name="Short-code site", site_number="8007", project_manager=manager)
@@ -337,23 +337,16 @@ def test_overview_manager_labels_use_person_record_short_code_instead_of_matrix_
     assert overview["staffingDays"][1]["needs"][0]["managerLabel"] == "CE"
 
 
-def test_manager_label_falls_back_when_no_person_record_is_available(db):
+def test_manager_label_falls_back_to_short_code_and_handles_missing_manager(db):
     service = DashboardService(db)
-    legacy_manager = MatrixPerson(
+    manager_without_display_name = MatrixPerson(
         id=999,
-        display_name="Alpha Bravo",
-        short_code="A.Bravo",
-        person_type=PersonType.INTERNAL,
-    )
-    display_only_manager = MatrixPerson(
-        id=1000,
-        display_name="CC",
-        short_code="",
+        display_name="",
+        short_code="A.Biesewig",
         person_type=PersonType.INTERNAL,
     )
 
-    assert service._manager_label(legacy_manager) == "AB"
-    assert service._manager_label(display_only_manager) == "CC"
+    assert service._manager_label(manager_without_display_name) == "AB"
     assert service._manager_label(None) == "Ohne PL"
 
 
