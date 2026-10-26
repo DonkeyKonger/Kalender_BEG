@@ -27,7 +27,8 @@ BEG = OvernightStatus.BEG_PAID
 SELF = OvernightStatus.SELF_PAID
 EMPTY = PayrollTravelMarkings()
 HOME_MARK = PayrollTravelMarkings(travel_14=True)
-ARRIVAL = PayrollTravelMarkings(travel_14=True, overnight_20=True)
+BEG_ARRIVAL = PayrollTravelMarkings(travel_14=True)
+SELF_ARRIVAL = PayrollTravelMarkings(travel_14=True, overnight_20=True)
 BEG_MIDDLE = PayrollTravelMarkings(travel_10=True, travel_28=True)
 SELF_MIDDLE = PayrollTravelMarkings(travel_10=True, travel_28=True, overnight_20=True)
 NS = {"m": xlsx.SPREADSHEET_NS}
@@ -44,17 +45,17 @@ def calculate(statuses, *, start=date(2026, 8, 3), year=2026, month=8):
 @pytest.mark.parametrize("statuses, expected", [
     ([HOME], [HOME_MARK]),
     ([HOME] * 3, [HOME_MARK] * 3),
-    ([BEG, HOME], [ARRIVAL, HOME_MARK]),
-    ([SELF, HOME], [ARRIVAL, HOME_MARK]),
-    ([BEG, BEG, HOME], [ARRIVAL, BEG_MIDDLE, HOME_MARK]),
-    ([SELF, SELF, HOME], [ARRIVAL, SELF_MIDDLE, HOME_MARK]),
-    ([BEG] * 4 + [HOME], [ARRIVAL] + [BEG_MIDDLE] * 3 + [HOME_MARK]),
-    ([SELF] * 4 + [HOME], [ARRIVAL] + [SELF_MIDDLE] * 3 + [HOME_MARK]),
-    ([BEG] * 10 + [HOME], [ARRIVAL] + [BEG_MIDDLE] * 9 + [HOME_MARK]),
+    ([BEG, HOME], [BEG_ARRIVAL, HOME_MARK]),
+    ([SELF, HOME], [SELF_ARRIVAL, HOME_MARK]),
+    ([BEG, BEG, HOME], [BEG_ARRIVAL, BEG_MIDDLE, HOME_MARK]),
+    ([SELF, SELF, HOME], [SELF_ARRIVAL, SELF_MIDDLE, HOME_MARK]),
+    ([BEG] * 4 + [HOME], [BEG_ARRIVAL] + [BEG_MIDDLE] * 3 + [HOME_MARK]),
+    ([SELF] * 4 + [HOME], [SELF_ARRIVAL] + [SELF_MIDDLE] * 3 + [HOME_MARK]),
+    ([BEG] * 10 + [HOME], [BEG_ARRIVAL] + [BEG_MIDDLE] * 9 + [HOME_MARK]),
     ([BEG, SELF, BEG, SELF, HOME],
-     [ARRIVAL, SELF_MIDDLE, BEG_MIDDLE, SELF_MIDDLE, HOME_MARK]),
+     [BEG_ARRIVAL, SELF_MIDDLE, BEG_MIDDLE, SELF_MIDDLE, HOME_MARK]),
     ([BEG, HOME, HOME, SELF, SELF, HOME],
-     [ARRIVAL, HOME_MARK, HOME_MARK, ARRIVAL, SELF_MIDDLE, HOME_MARK]),
+     [BEG_ARRIVAL, HOME_MARK, HOME_MARK, SELF_ARRIVAL, SELF_MIDDLE, HOME_MARK]),
 ])
 def test_expense_rules_for_home_short_long_and_separate_hotel_blocks(statuses, expected):
     plan = calculate(statuses)
@@ -74,7 +75,7 @@ def test_continuing_hotel_and_departure_belong_to_their_respective_months():
     statuses = [BEG, BEG, SELF, HOME]
     august = calculate(statuses, start=date(2026, 8, 30))
     september = calculate(statuses, start=date(2026, 8, 30), month=9)
-    assert august.markings[date(2026, 8, 30)] == ARRIVAL
+    assert august.markings[date(2026, 8, 30)] == BEG_ARRIVAL
     assert august.markings[date(2026, 8, 31)] == BEG_MIDDLE
     assert date(2026, 9, 1) not in august.markings
     assert september.markings[date(2026, 9, 1)] == SELF_MIDDLE
@@ -111,7 +112,7 @@ def test_missing_status_after_last_hotel_night_is_the_departure_day():
         date(2026, 8, 27): PayrollTravelDay(BEG, True),
         date(2026, 8, 28): PayrollTravelDay(None, True),
     })
-    assert plan.markings[date(2026, 8, 27)] == ARRIVAL
+    assert plan.markings[date(2026, 8, 27)] == BEG_ARRIVAL
     assert plan.markings[date(2026, 8, 28)] == HOME_MARK
     assert not plan.warnings
 
@@ -142,10 +143,10 @@ def test_departure_follows_hotel_but_other_empty_dates_do_not_invent_trips():
         date(2026, 8, 6): PayrollTravelDay(SELF, False),
         date(2026, 8, 7): PayrollTravelDay(HOME, False),
     })
-    assert plan.markings[date(2026, 8, 3)] == ARRIVAL
+    assert plan.markings[date(2026, 8, 3)] == BEG_ARRIVAL
     assert plan.markings[date(2026, 8, 4)] == HOME_MARK
     assert plan.markings[date(2026, 8, 5)] == EMPTY
-    assert plan.markings[date(2026, 8, 6)] == ARRIVAL
+    assert plan.markings[date(2026, 8, 6)] == SELF_ARRIVAL
     assert plan.markings[date(2026, 8, 7)] == HOME_MARK
 
 
@@ -162,7 +163,7 @@ def test_excel_columns_and_dates_match_the_template_and_are_idempotent():
     before = deepcopy(sheet)
     plan = calculate([BEG, BEG, HOME, SELF, SELF, HOME])
     xlsx.write_payroll_travel_expenses(sheet, year=2026, month=8, plan=plan)
-    expected = {12: ("", "x", "", "x"), 13: ("x", "", "x", ""),
+    expected = {12: ("", "x", "", ""), 13: ("x", "", "x", ""),
                 14: ("", "x", "", ""), 15: ("", "x", "", "x"),
                 16: ("x", "", "x", "x"), 17: ("", "x", "", "")}
     for row in range(10, 41):
@@ -282,7 +283,7 @@ def test_multi_sheet_expense_totals_only_count_each_worker_markings():
         second = ET.fromstring(archive.read("xl/worksheets/sheet2.xml"))
     refs = ("E49", "E50", "E51", "E52")
     assert tuple(first.find(f'.//m:c[@r="{ref}"]/m:v', NS).text for ref in refs) == (
-        "1", "2", "1", "1",
+        "1", "2", "1", "0",
     )
     assert tuple(second.find(f'.//m:c[@r="{ref}"]/m:v', NS).text for ref in refs) == (
         "1", "2", "1", "2",
@@ -290,10 +291,41 @@ def test_multi_sheet_expense_totals_only_count_each_worker_markings():
     amount_refs = ("G49", "G50", "G51", "G52")
     assert tuple(
         first.find(f'.//m:c[@r="{ref}"]/m:v', NS).text for ref in amount_refs
-    ) == ("10.0", "28.0", "28.0", "20.0")
+    ) == ("10.0", "28.0", "28.0", "0.0")
     assert tuple(
         second.find(f'.//m:c[@r="{ref}"]/m:v', NS).text for ref in amount_refs
     ) == ("10.0", "28.0", "28.0", "40.0")
+
+
+@pytest.mark.parametrize("payer, marker, count, amount", [
+    (BEG, "", "0", "0.0"),
+    (SELF, "x", "15", "300.0"),
+])
+def test_september_weekly_arrivals_only_pay_allowance_for_self_paid_nights(
+    payer, marker, count, amount,
+):
+    arrivals = (7, 14, 21, 28)
+    hotel_days = [day for start in arrivals for day in range(start, min(start + 4, 31))]
+    entries = []
+    for day in hotel_days + [11, 18, 25]:
+        item = entry(day, payer if day in hotel_days else HOME)
+        item.work_date = item.work_day.work_date = date(2026, 9, day)
+        entries.append(item)
+
+    result = xlsx.build_payroll_month_xlsx(
+        person=worker(), year=2026, month=9, entries=entries,
+    )
+    with ZipFile(BytesIO(result.content)) as archive:
+        sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+    for day in range(1, 31):
+        assert cell_text(sheet, f"L{day + 9}") == (marker if day in hotel_days else "")
+    for day in arrivals:
+        assert tuple(cell_text(sheet, f"{column}{day + 9}") for column in "IJK") == (
+            "", "x", "",
+        )
+    assert sheet.find('.//m:c[@r="E52"]/m:v', NS).text == count
+    assert sheet.find('.//m:c[@r="G52"]/m:v', NS).text == amount
+    assert not result.plan.travel_expenses.warnings
 
 
 @pytest.mark.parametrize("year, month, length", [(2026, 2, 28), (2028, 2, 29),
@@ -330,7 +362,7 @@ def test_multiple_time_entries_use_one_daily_selection_and_ignore_other_workers(
         assert archive.testzip() is None
         sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
         assert cell_text(sheet, "J12") == "x"
-        assert cell_text(sheet, "L12") == "x"
+        assert cell_text(sheet, "L12") == ""
         assert cell_text(sheet, "I13") == "x"
         assert cell_text(sheet, "L13") == ""
         assert cell_text(sheet, "J14") == "x"
@@ -346,7 +378,7 @@ def test_export_marks_friday_after_last_hotel_night_without_own_status():
         assert archive.testzip() is None
         sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
         assert tuple(cell_text(sheet, f"{col}36") for col in "IJKL") == (
-            "", "x", "", "x",
+            "", "x", "", "",
         )
         assert tuple(cell_text(sheet, f"{col}37") for col in "IJKL") == (
             "", "x", "", "",

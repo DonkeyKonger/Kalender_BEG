@@ -135,5 +135,8 @@ def build_payroll_travel_plan(
                 overnight_20=day.overnight_status == OvernightStatus.SELF_PAID,
             )
         else:
-            markings[work_date] = PayrollTravelMarkings(travel_14=True, overnight_20=True)
+            markings[work_date] = PayrollTravelMarkings(
+                travel_14=True,
+                overnight_20=day.overnight_status == OvernightStatus.SELF_PAID,
+            )
     return PayrollTravelPlan(markings=markings, warnings=tuple(warnings))
