@@ -858,17 +858,24 @@ export function DashboardPage() {
                                 {formatSiteTileNumber(siteSummary)}
                               </span>
                               <span className="dashboard-site-tile-meta">
-                                <span className="dashboard-site-tile-count" aria-label={formatSiteTileMeta(siteSummary)}>
-                                  <Users aria-hidden="true" size={14} />
-                                  {siteSummary.internalCount + siteSummary.externalCount}
-                                </span>
+                                {siteSummary.internalCount > 0 && (
+                                  <span
+                                    className="dashboard-site-tile-count"
+                                    aria-label={formatCount(siteSummary.internalCount, "interner Monteur", "interne Monteure")}
+                                    title={formatCount(siteSummary.internalCount, "interner Monteur", "interne Monteure")}
+                                  >
+                                    <Users aria-hidden="true" size={14} />
+                                    {siteSummary.internalCount}
+                                  </span>
+                                )}
                                 {siteSummary.externalCount > 0 && (
                                   <span
                                     aria-label={formatCount(siteSummary.externalCount, "externer Monteur", "externe Monteure")}
-                                    className="dashboard-site-tile-external"
+                                    className="dashboard-site-tile-count dashboard-site-tile-count--external"
                                     title={formatCount(siteSummary.externalCount, "externer Monteur", "externe Monteure")}
                                   >
-                                    E{siteSummary.externalCount}
+                                    <Users aria-hidden="true" size={14} />
+                                    {siteSummary.externalCount}
                                   </span>
                                 )}
                                 {siteSummary.hasWarnings && (
@@ -1914,11 +1921,6 @@ function parseDashboardNoteSiteFilterId(value: string | null): number | null {
   return Number.isSafeInteger(siteId) && siteId > 0 ? siteId : null;
 }
 
-function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {
-  const workerCount = siteSummary.internalCount + siteSummary.externalCount;
-  return formatCount(workerCount, "Monteur", "Monteure");
-}
-
 function formatSiteTileNumber(siteSummary: AssignedSiteSummary): string {
   return siteSummary.site.site_number || "Ohne Nr.";
 }
@@ -2047,7 +2049,7 @@ function formatDashboardManagerHeading(manager: ManagerSummary): string {
 
 function formatAssignedSiteGroupMeta(sites: AssignedSiteSummary[]): string {
   const workerCount = sites.reduce((total, site) => total + site.internalCount + site.externalCount, 0);
-  return `${formatCount(sites.length, "Baustelle", "Baustellen")}\n${formatCount(workerCount, "Monteur", "Monteure")}`;
+  return formatCount(workerCount, "Monteur", "Monteure");
 }
 
 function formatCount(count: number, singular: string, plural: string): string {

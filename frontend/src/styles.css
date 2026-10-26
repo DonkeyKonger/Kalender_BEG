@@ -24564,7 +24564,7 @@ body.mobile-modal-scroll-locked {
 
 .dashboard-site-group {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: minmax(96px, max-content) minmax(0, 1fr);
   align-content: start;
   gap: 10px;
   border-bottom: 1px solid #d8e2ee;
@@ -24607,8 +24607,8 @@ body.mobile-modal-scroll-locked {
   font-size: 0.66rem;
   font-weight: 800;
   line-height: 1.45;
-  overflow-wrap: anywhere;
-  white-space: pre-line;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .dashboard-site-tile-grid {
@@ -24629,7 +24629,7 @@ body.mobile-modal-scroll-locked {
   border: 1px solid #d9e2ef;
   border-left: 3px solid #245b94;
   border-radius: 0;
-  background: #f6f7f8;
+  background: #ffffff;
   color: inherit;
   padding: 3px 6px 4px;
   text-decoration: none;
@@ -24638,7 +24638,7 @@ body.mobile-modal-scroll-locked {
 .dashboard-site-tile:hover,
 .dashboard-site-tile:focus-visible {
   border-color: #9fb8d6;
-  background: #edf0f3;
+  background: #f8fbff;
   box-shadow: none;
   outline: none;
 }
@@ -24701,10 +24701,8 @@ body.mobile-modal-scroll-locked {
   -webkit-line-clamp: 2;
 }
 
-.dashboard-site-tile-external {
-  color: #6b778c;
-  font-size: 0.62rem;
-  font-weight: 800;
+.dashboard-site-tile-count--external {
+  color: #c06512;
 }
 
 .dashboard-site-tile .dashboard-signal {
@@ -24726,7 +24724,7 @@ body.mobile-modal-scroll-locked {
   }
 
   .dashboard-site-group {
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: minmax(80px, max-content) minmax(0, 1fr);
     gap: 8px;
   }
 
@@ -24747,7 +24745,7 @@ body.mobile-modal-scroll-locked {
   .dashboard-site-group {
     container-name: dashboard-site-group;
     container-type: inline-size;
-    grid-template-columns: 58px minmax(0, 1fr);
+    grid-template-columns: minmax(80px, max-content) minmax(0, 1fr);
     gap: 6px;
     padding-block: 8px;
   }
@@ -24786,10 +24784,6 @@ body.mobile-modal-scroll-locked {
     min-height: 24px;
   }
 
-  .dashboard-site-group-manager span {
-    white-space: normal;
-  }
-
   .dashboard-site-tile-grid {
     grid-column: 1 / -1;
   }
@@ -24814,10 +24808,6 @@ body.mobile-modal-scroll-locked {
   .dashboard-site-tile-count svg {
     width: 10px;
     height: 10px;
-  }
-
-  .dashboard-site-tile-external {
-    font-size: 0.56rem;
   }
 
   .dashboard-site-tile .dashboard-signal {
