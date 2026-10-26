@@ -16,7 +16,7 @@ test("overtime uses muted purple styles in matrix chips and overflow, including 
     assert.equal(overflow(item), `absence-overflow-item absence-overflow-free${status === "cancelled" ? " is-cancelled" : ""}`);
   }
   assert.match(styles, /\.absence-planning-chip\.absence-block-free\s*\{[^}]*border-color: #dcd5e5;[^}]*background: #f1eef5;[^}]*color: #655675;/);
-  assert.match(styles, /\.absence-overflow-item\.absence-overflow-free\s*\{[^}]*border-left-color: #9b89b1;[^}]*background: #f1eef5;/);
+  assert.match(styles, /\.absence-overflow-item\.absence-overflow-free\s*\{[^}]*border-left-color: #9b89b1;[^}]*color: #655675;/);
   assert.match(styles, /\.absence-overflow-item\.absence-overflow-free em\s*\{\s*color: #655675;/);
 });
 
