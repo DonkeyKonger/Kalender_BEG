@@ -24629,7 +24629,7 @@ body.mobile-modal-scroll-locked {
   border: 1px solid #d9e2ef;
   border-left: 3px solid #245b94;
   border-radius: 0;
-  background: #f1f5fb;
+  background: #f6f7f8;
   color: inherit;
   padding: 3px 6px 4px;
   text-decoration: none;
@@ -24638,7 +24638,7 @@ body.mobile-modal-scroll-locked {
 .dashboard-site-tile:hover,
 .dashboard-site-tile:focus-visible {
   border-color: #9fb8d6;
-  background: #e8f0fa;
+  background: #edf0f3;
   box-shadow: none;
   outline: none;
 }
