@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Check, ClipboardList, CloudSun, Pencil, Plus, Trash2, X } from "lucide-react";
+import { BriefcaseBusiness, Check, ClipboardList, CloudSun, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -841,17 +841,36 @@ export function DashboardPage() {
               {dashboard.todayAssignedSites.length > 0 ? (
                 <div className="dashboard-site-group-list">
                   {dashboard.todayAssignedSiteGroups.map((group) => (
-                    <section className="dashboard-site-group" key={group.manager.key}>
-                      <div className="dashboard-site-group-header">
-                        <strong>{formatDashboardManagerHeading(group.manager)}</strong>
+                    <section
+                      aria-label={formatDashboardManagerHeading(group.manager)}
+                      className="dashboard-site-group"
+                      key={group.manager.key}
+                    >
+                      <div className="dashboard-site-group-manager">
+                        <strong>{group.manager.label}</strong>
                         <span>{formatAssignedSiteGroupMeta(group.sites)}</span>
                       </div>
                       <div className="dashboard-site-tile-grid">
                         {group.sites.map((siteSummary) => (
                           <Link className="dashboard-site-tile" to={"/sites/" + siteSummary.site.id} key={siteSummary.site.id} title={siteSummary.site.name}>
+                            <span className="dashboard-site-tile-topline">
+                              <span className="dashboard-site-tile-number">{formatSiteTileNumber(siteSummary)}</span>
+                              <span className="dashboard-site-tile-count" aria-label={formatSiteTileMeta(siteSummary)}>
+                                <Users aria-hidden="true" size={14} />
+                                {siteSummary.internalCount + siteSummary.externalCount}
+                              </span>
+                            </span>
                             <span className="dashboard-site-tile-name">{siteSummary.site.name}</span>
-                            <span className="dashboard-site-tile-count">{formatSiteTileMeta(siteSummary)}</span>
-                            {siteSummary.hasWarnings && <span className="dashboard-signal signal-orange">Prüfen</span>}
+                            {(siteSummary.externalCount > 0 || siteSummary.hasWarnings) && (
+                              <span className="dashboard-site-tile-status">
+                                {siteSummary.externalCount > 0 && (
+                                  <span className="dashboard-site-tile-external">
+                                    {formatSiteTileExternalCount(siteSummary.externalCount)}
+                                  </span>
+                                )}
+                                {siteSummary.hasWarnings && <span className="dashboard-signal signal-orange">Prüfen</span>}
+                              </span>
+                            )}
                           </Link>
                         ))}
                       </div>
@@ -1889,8 +1908,15 @@ function parseDashboardNoteSiteFilterId(value: string | null): number | null {
 
 function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {
   const workerCount = siteSummary.internalCount + siteSummary.externalCount;
-  const workerLabel = formatCount(workerCount, "Monteur", "Monteure");
-  return siteSummary.site.site_number ? `${workerLabel} · ${siteSummary.site.site_number}` : workerLabel;
+  return formatCount(workerCount, "Monteur", "Monteure");
+}
+
+function formatSiteTileNumber(siteSummary: AssignedSiteSummary): string {
+  return siteSummary.site.site_number || "Ohne Nr.";
+}
+
+function formatSiteTileExternalCount(count: number): string {
+  return `${count} extern`;
 }
 
 function formatDashboardDateTime(value: string): string {
@@ -1921,12 +1947,12 @@ function buildDashboardData(
     !todayAssignedPersonIds.has(person.id) && !todayAbsentPersonIds.has(person.id)
   ));
 
-  const lastManagerByPersonId = buildLastManagerByPersonId(matrix.rows, range.today);
+  const lastManagerByPersonId = buildLastManagerByPersonId(matrix.rows, range.today, peopleById);
   const freeWorkerGroups = groupFreeWorkersByLastManager(freeWorkers, lastManagerByPersonId);
-  const workerSummaryGroups = overview?.workerSummaryGroups ?? buildWorkerSummaryGroupsForDay(matrix.rows, range.today, activeWorkers, freeWorkers);
+  const workerSummaryGroups = overview?.workerSummaryGroups ?? buildWorkerSummaryGroupsForDay(matrix.rows, range.today, activeWorkers, freeWorkers, peopleById);
   const todayAssignedSites = overview?.todayAssignedSites ?? getAssignedSitesForDay(matrix.rows, range.today, peopleById);
-  const todayAssignedSiteGroups = overview?.todayAssignedSiteGroups ?? groupAssignedSitesByManager(todayAssignedSites);
-  const openStaffingNeeds = overview?.openStaffingNeeds ?? getOpenStaffingNeeds(matrix.rows, range.today, range.nextWeekEnd);
+  const todayAssignedSiteGroups = overview?.todayAssignedSiteGroups ?? groupAssignedSitesByManager(todayAssignedSites, peopleById);
+  const openStaffingNeeds = overview?.openStaffingNeeds ?? getOpenStaffingNeeds(matrix.rows, range.today, range.nextWeekEnd, peopleById);
   const conflicts = overview?.conflicts ?? getDashboardConflicts(matrix.rows, range.today, range.nextWeekEnd);
   const tomorrowAssignedCount = overview?.tomorrowAssignedCount ?? getAssignedSitesForDay(matrix.rows, range.tomorrow, peopleById).length;
   return {
@@ -1964,7 +1990,7 @@ function getAssignedSitesForDay(
       }).length;
       return {
         site: row.site,
-        managerLabel: getManagerLabel(row.site.project_manager),
+        managerLabel: getManagerLabel(row.site.project_manager, peopleById),
         internalCount: assignments.length - externalCount,
         externalCount,
         hasWarnings: cell?.mark === "orange",
@@ -1974,10 +2000,13 @@ function getAssignedSitesForDay(
     .sort(compareAssignedSites);
 }
 
-function groupAssignedSitesByManager(sites: AssignedSiteSummary[]): AssignedSiteGroup[] {
+function groupAssignedSitesByManager(
+  sites: AssignedSiteSummary[],
+  peopleById: Map<number, Person>,
+): AssignedSiteGroup[] {
   const groups = new Map<string, AssignedSiteGroup>();
   sites.forEach((siteSummary) => {
-    const manager = getManagerSummary(siteSummary.site.project_manager);
+    const manager = getManagerSummary(siteSummary.site.project_manager, peopleById);
     const existing = groups.get(manager.key) ?? { manager, sites: [] };
     existing.sites.push(siteSummary);
     groups.set(manager.key, existing);
@@ -2017,7 +2046,7 @@ function formatDashboardManagerHeading(manager: ManagerSummary): string {
 
 function formatAssignedSiteGroupMeta(sites: AssignedSiteSummary[]): string {
   const workerCount = sites.reduce((total, site) => total + site.internalCount + site.externalCount, 0);
-  return `${formatCount(sites.length, "Baustelle", "Baustellen")} · ${formatCount(workerCount, "Monteur", "Monteure")}`;
+  return `${formatCount(sites.length, "Baustelle", "Baustellen")}\n${formatCount(workerCount, "Monteur", "Monteure")}`;
 }
 
 function formatCount(count: number, singular: string, plural: string): string {
@@ -2065,6 +2094,7 @@ function buildWorkerSummaryGroupsForDay(
   date: string,
   activeWorkers: Person[],
   freeWorkers: Person[],
+  peopleById: Map<number, Person>,
 ): WorkerSummaryGroup[] {
   const activeWorkerById = new Map(activeWorkers.map((worker) => [worker.id, worker]));
   const assignedGroups = new Map<string, {
@@ -2080,7 +2110,7 @@ function buildWorkerSummaryGroupsForDay(
     if (cell.assignments.length === 0) {
       return;
     }
-    const manager = getManagerSummary(row.site.project_manager);
+    const manager = getManagerSummary(row.site.project_manager, peopleById);
     const group = assignedGroups.get(manager.key) ?? {
       manager,
       peopleById: new Map<number, DashboardOverviewPerson & { siteLabels: Set<string> }>(),
@@ -2160,10 +2190,14 @@ function compareWorkerSummaryGroups(first: WorkerSummaryGroup, second: WorkerSum
     || first.manager.name.localeCompare(second.manager.name, "de");
 }
 
-function buildLastManagerByPersonId(rows: MatrixRow[], date: string): Map<number, ManagerSummary> {
+function buildLastManagerByPersonId(
+  rows: MatrixRow[],
+  date: string,
+  peopleById: Map<number, Person>,
+): Map<number, ManagerSummary> {
   const latestByPersonId = new Map<number, { date: string; manager: ManagerSummary }>();
   rows.forEach((row) => {
-    const manager = getManagerSummary(row.site.project_manager);
+    const manager = getManagerSummary(row.site.project_manager, peopleById);
     row.cells.forEach((cell) => {
       if (cell.date > date) {
         return;
@@ -2179,7 +2213,12 @@ function buildLastManagerByPersonId(rows: MatrixRow[], date: string): Map<number
   return new Map(Array.from(latestByPersonId, ([personId, entry]) => [personId, entry.manager]));
 }
 
-function getOpenStaffingNeeds(rows: MatrixRow[], start: string, end: string): StaffingNeed[] {
+function getOpenStaffingNeeds(
+  rows: MatrixRow[],
+  start: string,
+  end: string,
+  peopleById: Map<number, Person>,
+): StaffingNeed[] {
   const needs: StaffingNeed[] = [];
   rows.forEach((row) => {
     row.cells.forEach((cell) => {
@@ -2190,7 +2229,7 @@ function getOpenStaffingNeeds(rows: MatrixRow[], start: string, end: string): St
         date: cell.date,
         siteName: row.site.name,
         siteNumber: row.site.site_number,
-        managerLabel: getManagerLabel(row.site.project_manager),
+        managerLabel: getManagerLabel(row.site.project_manager, peopleById),
       });
     });
   });
@@ -2281,22 +2320,29 @@ function getAbsentPersonIdsForDate(rows: MatrixRow[], date: string): Set<number>
   return ids;
 }
 
-function getManagerSummary(manager: MatrixPerson | null): ManagerSummary {
+function getManagerSummary(
+  manager: MatrixPerson | null,
+  peopleById?: Map<number, Pick<Person, "short_code">>,
+): ManagerSummary {
   if (!manager) {
     return { key: "unassigned", label: "Ohne PL", name: "Ohne Projektleiter" };
   }
   return {
     key: String(manager.id),
-    label: getManagerLabel(manager),
+    label: getManagerLabel(manager, peopleById),
     name: manager.display_name,
   };
 }
 
-function getManagerLabel(manager: MatrixPerson | null): string {
+function getManagerLabel(
+  manager: MatrixPerson | null,
+  peopleById?: Map<number, Pick<Person, "short_code">>,
+): string {
   if (!manager) {
     return "Ohne PL";
   }
-  return normalizeShortCode(calendarPersonCode(manager) || manager.display_name);
+  const recordShortCode = peopleById?.get(manager.id)?.short_code?.trim();
+  return normalizeShortCode(recordShortCode || manager.short_code || manager.display_name);
 }
 
 function normalizeShortCode(value: string): string {

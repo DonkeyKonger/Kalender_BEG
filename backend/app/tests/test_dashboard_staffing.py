@@ -13,6 +13,7 @@ from app.models.planning_cell_mark import PlanningCellMark
 from app.models.site import Site
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
+from app.schemas.matrix import MatrixPerson
 from app.services.dashboard_service import DashboardService, staffing_dates
 
 
@@ -300,6 +301,60 @@ def test_overview_returns_only_orange_unstaffed_needs_and_all_free_people(db):
     assert len(days[0]["freeWorkers"]) == 12  # Presentation, not the API, limits the preview.
     assert len(days[3]["freeWorkers"]) == 11
     assert days[-1]["date"] == "2026-10-07"
+
+
+def test_overview_manager_labels_use_person_record_short_code_instead_of_matrix_display_code(db):
+    today = date(2026, 9, 28)
+    manager = Person(
+        first_name="Christopher",
+        last_name="Eck",
+        display_name="CC",
+        short_code="CE",
+    )
+    installer = worker(db, "Installer")
+    site = Site(name="Short-code site", site_number="8007", project_manager=manager)
+    db.add_all([manager, site])
+    db.flush()
+    db.add_all([
+        Assignment(person_id=installer.id, site_id=site.id, start_date=today, end_date=today),
+        PlanningCellMark(site_id=site.id, mark_date=today + timedelta(days=1), mark=MatrixCellMark.ORANGE),
+    ])
+    db.flush()
+
+    overview = DashboardService(db).get_overview(
+        history_start=today - timedelta(days=35),
+        today=today,
+        tomorrow=today + timedelta(days=1),
+        week_end=date(2026, 10, 4),
+        next_week_start=date(2026, 10, 5),
+        next_week_end=date(2026, 10, 11),
+    )
+
+    assert overview["todayAssignedSites"][0]["managerLabel"] == "CE"
+    assert overview["todayAssignedSiteGroups"][0]["manager"]["label"] == "CE"
+    assert overview["workerSummaryGroups"][0]["manager"]["label"] == "CE"
+    assert overview["workerLookup"][0]["managerLabel"] == "CE"
+    assert overview["staffingDays"][1]["needs"][0]["managerLabel"] == "CE"
+
+
+def test_manager_label_falls_back_when_no_person_record_is_available(db):
+    service = DashboardService(db)
+    legacy_manager = MatrixPerson(
+        id=999,
+        display_name="Alpha Bravo",
+        short_code="A.Bravo",
+        person_type=PersonType.INTERNAL,
+    )
+    display_only_manager = MatrixPerson(
+        id=1000,
+        display_name="CC",
+        short_code="",
+        person_type=PersonType.INTERNAL,
+    )
+
+    assert service._manager_label(legacy_manager) == "AB"
+    assert service._manager_label(display_only_manager) == "CC"
+    assert service._manager_label(None) == "Ohne PL"
 
 
 @pytest.mark.parametrize("offset", range(7))

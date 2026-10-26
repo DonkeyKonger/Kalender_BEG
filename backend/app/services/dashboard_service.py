@@ -15,7 +15,7 @@ from app.models.work_time_entry import WorkTimeEntry
 from app.schemas.matrix import MatrixPerson, MatrixResponse, MatrixRow
 from app.services.conflict_service import BLOCKED_SITE_STATUSES, HARD_ABSENCE_TYPES
 from app.services.matrix_service import MatrixService
-from app.services.person_display import calendar_short_code, calendar_short_code_from_values
+from app.services.person_display import calendar_short_code
 from app.services.payroll_daily_ledger_service import lower_saxony_public_holidays
 from app.services.person_hours_account_service import effective_weekly_work_minutes
 
@@ -34,6 +34,7 @@ def staffing_dates(today: date) -> list[date]:
 class DashboardService:
     def __init__(self, db: Session) -> None:
         self.db = db
+        self._manager_record_short_codes: dict[int, str | None] = {}
 
     def get_overview(
         self,
@@ -51,6 +52,7 @@ class DashboardService:
             end=overview_end,
             include_weekends=True,
         )
+        self._preload_manager_record_short_codes(matrix.rows)
         today_assigned_sites = self._assigned_sites_for_day(matrix, today)
         tomorrow_assigned_sites = self._assigned_sites_for_day(matrix, tomorrow)
         open_staffing_needs = self._open_staffing_needs(matrix.rows, today, overview_end)
@@ -595,7 +597,9 @@ class DashboardService:
         return {
             "key": str(manager["id"]),
             "label": self._manager_label_from_values(
-                calendar_short_code_from_values(display_name=manager["display_name"], short_code=manager.get("short_code"))
+                self._manager_record_short_code(manager["id"])
+                or manager.get("short_code")
+                or manager["display_name"]
             ),
             "name": manager["display_name"],
         }
@@ -604,8 +608,39 @@ class DashboardService:
         if manager is None:
             return "Ohne PL"
         return self._manager_label_from_values(
-            calendar_short_code_from_values(display_name=manager.display_name, short_code=manager.short_code)
+            self._manager_record_short_code(manager.id)
+            or manager.short_code
+            or manager.display_name
         )
+
+    def _preload_manager_record_short_codes(self, rows: list[MatrixRow]) -> None:
+        person_ids = {
+            row.site.project_manager_person_id
+            for row in rows
+            if row.site.project_manager_person_id is not None
+        }
+        missing_ids = person_ids.difference(self._manager_record_short_codes)
+        if not missing_ids:
+            return
+        record_short_codes = {
+            person_id: short_code
+            for person_id, short_code in self.db.execute(
+                select(Person.id, Person.short_code).where(Person.id.in_(missing_ids))
+            ).all()
+        }
+        self._manager_record_short_codes.update({
+            person_id: record_short_codes.get(person_id)
+            for person_id in missing_ids
+        })
+
+    def _manager_record_short_code(self, person_id: int) -> str | None:
+        if person_id not in self._manager_record_short_codes:
+            person = self.db.get(Person, person_id)
+            self._manager_record_short_codes[person_id] = person.short_code if person is not None else None
+        value = self._manager_record_short_codes[person_id]
+        if value is None:
+            return None
+        return value.strip() or None
 
     def _manager_label_from_values(self, value: str) -> str:
         cleaned = value.strip()

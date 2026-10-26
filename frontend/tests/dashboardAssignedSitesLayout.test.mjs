@@ -11,9 +11,15 @@ test('assigned-site groups keep content-sized rows at the top of the available c
   assert.match(rule('.dashboard-site-group'), /align-content:\s*start/);
 });
 
-test('site tiles do not stretch and retain responsive wrapping', () => {
+test('site tiles retain a bounded responsive width instead of stretching a lone tile', () => {
   assert.match(rule('.dashboard-site-tile-grid'), /align-items:\s*start/);
-  assert.match(rule('.dashboard-site-tile-grid'), /repeat\(auto-fill, minmax\(132px, 190px\)\)/);
+  assert.match(rule('.dashboard-site-tile-grid'), /repeat\(auto-fill, minmax\(200px, 224px\)\)/);
+  assert.match(rule('.dashboard-site-tile-grid'), /justify-content:\s*flex-start/);
+});
+
+test('site names wrap naturally instead of being cut off', () => {
+  assert.match(rule('.dashboard-site-tile-name'), /overflow-wrap:\s*anywhere/);
+  assert.match(rule('.dashboard-site-tile-name'), /white-space:\s*normal/);
 });
 
 test('the desktop group list remains scrollable for many occupied sites', () => {
