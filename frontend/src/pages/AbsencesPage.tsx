@@ -1,9 +1,9 @@
-import { CalendarDays, CalendarX, ChevronLeft, ChevronRight, PlusCircle, Save, Trash2 } from "lucide-react";
+import { CalendarDays, CalendarX, ChevronLeft, ChevronRight, PlusCircle } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 
 import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
-import { AbsenceTypeBadge, StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
+import { AbsenceTypeBadge, absenceTypeLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
 import { useAbsencePayrollLocks } from "../hooks/useAbsencePayrollLocks";
@@ -27,8 +27,6 @@ const absenceStatusLabels: Record<AbsenceStatus, string> = {
   cancelled: "Storniert",
 };
 
-type EditableAbsence = AbsenceCreate & { id: number };
-type DrawerState = { mode: "new" } | { mode: "edit"; absenceId: number } | null;
 type AbsenceViewMode = "planning" | "year";
 type AbsenceSelectionRange = {
   personId: number;
@@ -91,10 +89,9 @@ export function AbsencesPage() {
   const { user } = useAuth();
   const canEdit = canEditMainPage(user, "absences");
   const [absences, setAbsences] = useState<Absence[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, EditableAbsence>>({});
   const [people, setPeople] = useState<Person[]>([]);
   const [createForm, setCreateForm] = useState<AbsenceCreate>(emptyAbsence);
-  const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<AbsenceViewMode>("planning");
   const [year, setYear] = useState(new Date().getFullYear());
   const [searchTerm, setSearchTerm] = useState("");
@@ -122,7 +119,6 @@ export function AbsencesPage() {
         api.persons({ isActive: null }),
       ]);
       setAbsences(absenceData);
-      setDrafts(toEditableAbsences(absenceData));
       setPeople(personData.sort(comparePeople));
     } catch (requestError) {
       setError(readApiError(requestError, "Abwesenheiten konnten nicht geladen werden."));
@@ -130,8 +126,6 @@ export function AbsencesPage() {
       setIsLoading(false);
     }
   }
-
-  const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
 
   const visibleDays = useMemo(() => {
     if (viewMode === "year") {
@@ -164,20 +158,11 @@ export function AbsencesPage() {
     [absences, filteredPeople, visibleDays],
   );
 
-  const selectedAbsence = drawer?.mode === "edit"
-    ? absences.find((absence) => absence.id === drawer.absenceId) ?? null
-    : null;
-  const selectedDraft = drawer?.mode === "edit" && selectedAbsence
-    ? drafts[selectedAbsence.id] ?? toEditableAbsence(selectedAbsence)
-    : null;
-
   const payrollLocks = useAbsencePayrollLocks([
     { person_id: 0, start_date: visibleDays[0], end_date: visibleDays[visibleDays.length - 1] },
-    ...(selectedAbsence ? [selectedAbsence] : []),
-    ...(selectedDraft ? [selectedDraft] : []),
-    ...(drawer?.mode === "new" ? [createForm] : []),
+    ...absences.filter((absence) => absenceOverlapsDays(absence, visibleDays)),
+    ...(isCreateDrawerOpen ? [createForm] : []),
   ]);
-  const selectedAbsenceLock = selectedAbsence ? absenceRangeLock(payrollLocks.statuses, selectedAbsence) : null;
   const createFormLock = createForm.person_id ? absenceRangeLock(payrollLocks.statuses, createForm) : null;
 
   function readMutationError(requestError: unknown, fallback: string): string {
@@ -244,9 +229,8 @@ export function AbsencesPage() {
     try {
       const created = await api.createAbsence(normalizeAbsencePayload(createForm));
       setAbsences((current) => [...current, created].sort(compareAbsences));
-      setDrafts((current) => ({ ...current, [created.id]: toEditableAbsence(created) }));
       setCreateForm(emptyAbsence());
-      setDrawer(null);
+      setIsCreateDrawerOpen(false);
       setMessage("Abwesenheit angelegt.");
     } catch (requestError) {
       setError(readMutationError(requestError, "Abwesenheit konnte nicht angelegt werden."));
@@ -285,10 +269,6 @@ export function AbsencesPage() {
         })),
       );
       setAbsences((current) => [...current, ...createdAbsences].sort(compareAbsences));
-      setDrafts((current) => ({
-        ...current,
-        ...toEditableAbsences(createdAbsences),
-      }));
       setActiveSelection(null);
       setSelectionPopup(null);
       setMessage(skippedCount > 0
@@ -298,56 +278,6 @@ export function AbsencesPage() {
       setError(readMutationError(requestError, "Abwesenheiten konnten nicht angelegt werden."));
     } finally {
       setIsSavingSelection(false);
-    }
-  }
-
-  async function saveAbsence(absenceId: number) {
-    const draft = drafts[absenceId];
-    if (!draft) {
-      return;
-    }
-    const validationError = validateAbsencePayload(draft);
-    if (validationError) {
-      setError(validationError);
-      setMessage(null);
-      return;
-    }
-    const original = absences.find((absence) => absence.id === absenceId);
-    if (!original || blockLockedRange(original, draft)) return;
-    setSavingAbsenceId(absenceId);
-    setError(null);
-    setMessage(null);
-    try {
-      const updated = await api.updateAbsence(absenceId, normalizeAbsencePayload(draft));
-      replaceAbsence(updated);
-      setMessage("Abwesenheit gespeichert.");
-    } catch (requestError) {
-      setError(readMutationError(requestError, "Abwesenheit konnte nicht gespeichert werden."));
-    } finally {
-      setSavingAbsenceId(null);
-    }
-  }
-
-  async function deleteAbsence(absenceId: number) {
-    const original = absences.find((absence) => absence.id === absenceId);
-    if (!original || blockLockedRange(original)) return;
-    setSavingAbsenceId(absenceId);
-    setError(null);
-    setMessage(null);
-    try {
-      await api.deleteAbsence(absenceId);
-      setAbsences((current) => current.filter((absence) => absence.id !== absenceId));
-      setDrafts((current) => {
-        const next = { ...current };
-        delete next[absenceId];
-        return next;
-      });
-      setDrawer(null);
-      setMessage("Abwesenheit geloescht.");
-    } catch (requestError) {
-      setError(readMutationError(requestError, "Abwesenheit konnte nicht geloescht werden."));
-    } finally {
-      setSavingAbsenceId(null);
     }
   }
 
@@ -364,14 +294,6 @@ export function AbsencesPage() {
       setAbsences((current) => {
         const withoutOriginal = current.filter((item) => item.id !== absence.id);
         return [...withoutOriginal, ...updated, ...created].sort(compareAbsences);
-      });
-      setDrafts((current) => {
-        const next = { ...current };
-        delete next[absence.id];
-        for (const item of [...updated, ...created]) {
-          next[item.id] = toEditableAbsence(item);
-        }
-        return next;
       });
       setMessage("Abwesenheit geloescht.");
     } catch (requestError) {
@@ -408,31 +330,17 @@ export function AbsencesPage() {
     return { updated: [updated], created: [created] };
   }
 
-  function replaceAbsence(updated: Absence) {
-    setAbsences((current) =>
-      current.map((absence) => absence.id === updated.id ? updated : absence).sort(compareAbsences),
-    );
-    setDrafts((current) => ({ ...current, [updated.id]: toEditableAbsence(updated) }));
-  }
-
-  function updateDraft(absenceId: number, values: Partial<EditableAbsence>) {
-    setDrafts((current) => ({
-      ...current,
-      [absenceId]: { ...current[absenceId], ...values },
-    }));
-  }
-
   function openCreateDrawer(personId = 0, date = today) {
     setError(null);
     setMessage(null);
     setActiveSelection(null);
     setSelectionPopup(null);
     setCreateForm(emptyAbsence(personId, date));
-    setDrawer({ mode: "new" });
+    setIsCreateDrawerOpen(true);
   }
 
   function closeDrawer() {
-    setDrawer(null);
+    setIsCreateDrawerOpen(false);
   }
 
   function startSelection(personId: number, date: string, event: ReactMouseEvent<HTMLTableCellElement>) {
@@ -447,7 +355,7 @@ export function AbsencesPage() {
       setSelectionPopup(null);
       return;
     }
-    setDrawer(null);
+    setIsCreateDrawerOpen(false);
     setError(null);
     setMessage(null);
     setSelectionPopup(null);
@@ -557,10 +465,10 @@ export function AbsencesPage() {
           today={today}
           onDeleteAbsenceDay={(absence, date) => void deleteAbsenceDay(absence, date)}
           onExtendSelection={extendSelection}
-          onOpenAbsence={(absenceId) => {
+          onAbsenceClick={(absence) => {
             setError(null);
             setMessage(null);
-            setDrawer({ mode: "edit", absenceId });
+            blockLockedRange(absence);
           }}
           onStartSelection={startSelection}
         />
@@ -601,7 +509,7 @@ export function AbsencesPage() {
       ) : null}
 
       <EntityDetailDrawer
-        isOpen={drawer?.mode === "new"}
+        isOpen={isCreateDrawerOpen}
         title="Neue Abwesenheit"
         subtitle="Krankheit, Urlaub, Schule, Überstunden oder Sonstiges eintragen"
         onClose={closeDrawer}
@@ -621,59 +529,6 @@ export function AbsencesPage() {
         />
       </EntityDetailDrawer>
 
-      <EntityDetailDrawer
-        isOpen={drawer?.mode === "edit" && Boolean(selectedAbsence && selectedDraft)}
-        title={selectedAbsence ? peopleById.get(selectedAbsence.person_id)?.display_name ?? "Abwesenheit bearbeiten" : "Abwesenheit"}
-        subtitle={selectedAbsence ? `${absenceTypeLabels[selectedAbsence.absence_type]} · ${formatDateRange(selectedAbsence)}` : undefined}
-        onClose={closeDrawer}
-        footer={selectedAbsence && canEdit ? (
-          <>
-            <button
-              className="icon-button secondary"
-              disabled={savingAbsenceId === selectedAbsence.id}
-              type="button"
-              onClick={() => void deleteAbsence(selectedAbsence.id)}
-            >
-              <Trash2 aria-hidden="true" size={16} />
-              <span>Loeschen</span>
-            </button>
-            <button
-              className="icon-button"
-              disabled={savingAbsenceId === selectedAbsence.id}
-              type="button"
-              onClick={() => void saveAbsence(selectedAbsence.id)}
-            >
-              <Save aria-hidden="true" size={16} />
-              <span>Speichern</span>
-            </button>
-          </>
-        ) : undefined}
-      >
-        {selectedAbsence && selectedDraft && (
-          <>
-            <div className="absence-drawer-summary">
-              <AbsenceTypeBadge type={selectedAbsence.absence_type} />
-              <StatusBadge tone={selectedAbsence.status === "active" ? "active" : "inactive"}>
-                {absenceStatusLabels[selectedAbsence.status]}
-              </StatusBadge>
-            </div>
-            {selectedAbsenceLock && <p className="form-error" role="alert">
-              {selectedAbsenceLock === "locked" ? ABSENCE_PAYROLL_LOCK_MESSAGE : ABSENCE_PAYROLL_CHECK_MESSAGE}
-            </p>}
-            {error && error !== ABSENCE_PAYROLL_LOCK_MESSAGE && <p className="form-error" role="alert">{error}</p>}
-            <div className={selectedAbsenceLock ? "absence-fields-locked" : undefined} onClick={() => {
-              if (selectedAbsenceLock) blockLockedRange(selectedAbsence);
-            }}>
-            <AbsenceFields
-              draft={selectedDraft}
-              people={people}
-              disabled={!canEdit || selectedAbsenceLock !== null}
-              onChange={(values) => updateDraft(selectedAbsence.id, values)}
-            />
-            </div>
-          </>
-        )}
-      </EntityDetailDrawer>
     </section>
   );
 }
@@ -689,7 +544,7 @@ function AbsenceMatrix({
   today,
   onDeleteAbsenceDay,
   onExtendSelection,
-  onOpenAbsence,
+  onAbsenceClick,
   onStartSelection,
 }: {
   activeSelection: AbsenceSelectionRange | null;
@@ -702,7 +557,7 @@ function AbsenceMatrix({
   today: string;
   onDeleteAbsenceDay: (absence: Absence, date: string) => void;
   onExtendSelection: (personId: number, date: string) => void;
-  onOpenAbsence: (absenceId: number) => void;
+  onAbsenceClick: (absence: Absence) => void;
   onStartSelection: (personId: number, date: string, event: ReactMouseEvent<HTMLTableCellElement>) => void;
 }) {
   const monthGroups = useMemo(() => buildAbsenceMonthGroups(days), [days]);
@@ -849,7 +704,7 @@ function AbsenceMatrix({
                               }}
                               onClick={(event) => {
                                 event.stopPropagation();
-                                onOpenAbsence(absence.id);
+                                onAbsenceClick(absence);
                               }}
                             >
                               {mode === "year" ? absenceTypeShortLabel(absence.absence_type) : absenceTypeLabels[absence.absence_type]}
@@ -1083,24 +938,6 @@ function absenceOverlapsDays(absence: Absence, days: string[]): boolean {
 function parseLocalDate(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
-}
-
-function toEditableAbsences(absences: Absence[]): Record<string, EditableAbsence> {
-  return Object.fromEntries(
-    absences.map((absence) => [String(absence.id), toEditableAbsence(absence)]),
-  );
-}
-
-function toEditableAbsence(absence: Absence): EditableAbsence {
-  return {
-    id: absence.id,
-    person_id: absence.person_id,
-    absence_type: absence.absence_type,
-    start_date: absence.start_date,
-    end_date: absence.end_date,
-    status: absence.status,
-    note: absence.note,
-  };
 }
 
 function validateAbsencePayload(absence: AbsenceCreate): string | null {
