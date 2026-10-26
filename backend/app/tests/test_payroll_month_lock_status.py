@@ -129,10 +129,11 @@ def test_invalid_month_is_rejected_before_database_access(harness, year, month):
 
 @pytest.mark.parametrize("role,permissions,expected", [
     (UserRole.ADMIN, [], 200), (UserRole.PROJECT_MANAGER, [], 200),
-    (UserRole.OFFICE, ["payroll"], 200), (UserRole.OFFICE, [], 403),
+    (UserRole.OFFICE, ["payroll"], 200), (UserRole.OFFICE, ["absences"], 200),
+    (UserRole.OFFICE, [], 403),
     (UserRole.MONTEUR, [], 403),
 ])
-def test_same_payroll_permissions_as_full_status(harness, role, permissions, expected):
+def test_lock_status_allows_absence_access_without_payroll_access(harness, role, permissions, expected):
     harness.user.role = role
     harness.user.office_page_permissions = permissions
     response = harness.client.get("/api/payroll-months/2026/8/lock-status")
@@ -153,3 +154,10 @@ def test_database_failure_is_not_reported_as_an_open_month(harness, monkeypatch)
     monkeypatch.setattr(harness.db, "scalar", fail)
     with TestClient(harness.app, raise_server_exceptions=False) as client:
         assert client.get("/api/payroll-months/2026/8/lock-status").status_code == 500
+
+
+def test_absence_access_does_not_grant_full_payroll_access(harness):
+    harness.user.role = UserRole.OFFICE
+    harness.user.office_page_permissions = ["absences"]
+    assert harness.client.get("/api/payroll-months/2026/8/lock-status").status_code == 200
+    assert harness.client.get("/api/payroll-months/2026/8").status_code == 403

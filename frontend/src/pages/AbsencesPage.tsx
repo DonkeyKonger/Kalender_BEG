@@ -6,6 +6,9 @@ import { EntityDetailDrawer } from "../components/EntityDetailDrawer";
 import { AbsenceTypeBadge, StatusBadge, absenceTypeLabels } from "../components/StatusBadge";
 import { useAuth } from "../auth/AuthContext";
 import { canEditMainPage } from "../auth/permissions";
+import { useAbsencePayrollLocks } from "../hooks/useAbsencePayrollLocks";
+import { ABSENCE_PAYROLL_CHECK_MESSAGE, ABSENCE_PAYROLL_LOCK_MESSAGE, absenceRangeLock, isAbsencePayrollLockError } from "../lib/absencePayrollLock";
+import type { AbsencePayrollRange } from "../lib/absencePayrollLock";
 import { ApiError, api } from "../lib/api";
 import type { Absence, AbsenceCreate, AbsenceStatus } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
@@ -168,6 +171,30 @@ export function AbsencesPage() {
     ? drafts[selectedAbsence.id] ?? toEditableAbsence(selectedAbsence)
     : null;
 
+  const payrollLocks = useAbsencePayrollLocks([
+    { person_id: 0, start_date: visibleDays[0], end_date: visibleDays[visibleDays.length - 1] },
+    ...(selectedAbsence ? [selectedAbsence] : []),
+    ...(selectedDraft ? [selectedDraft] : []),
+    ...(drawer?.mode === "new" ? [createForm] : []),
+  ]);
+  const selectedAbsenceLock = selectedAbsence ? absenceRangeLock(payrollLocks.statuses, selectedAbsence) : null;
+  const createFormLock = createForm.person_id ? absenceRangeLock(payrollLocks.statuses, createForm) : null;
+
+  function readMutationError(requestError: unknown, fallback: string): string {
+    if (requestError instanceof ApiError && isAbsencePayrollLockError(requestError.detail)) payrollLocks.refresh();
+    return readApiError(requestError, fallback);
+  }
+
+  function blockLockedRange(...ranges: AbsencePayrollRange[]): boolean {
+    const locks = ranges.map((range) => absenceRangeLock(payrollLocks.statuses, range));
+    if (locks.every((lock) => lock === null)) return false;
+    setError(locks.includes("locked") ? ABSENCE_PAYROLL_LOCK_MESSAGE : ABSENCE_PAYROLL_CHECK_MESSAGE);
+    setMessage(null);
+    setActiveSelection(null);
+    setSelectionPopup(null);
+    return true;
+  }
+
   useEffect(() => {
     if (!matrixScrollRef.current || viewMode !== "planning") {
       return;
@@ -210,6 +237,7 @@ export function AbsencesPage() {
       setMessage(null);
       return;
     }
+    if (blockLockedRange(createForm)) return;
     setSavingAbsenceId(0);
     setError(null);
     setMessage(null);
@@ -221,7 +249,7 @@ export function AbsencesPage() {
       setDrawer(null);
       setMessage("Abwesenheit angelegt.");
     } catch (requestError) {
-      setError(readApiError(requestError, "Abwesenheit konnte nicht angelegt werden."));
+      setError(readMutationError(requestError, "Abwesenheit konnte nicht angelegt werden."));
     } finally {
       setSavingAbsenceId(null);
     }
@@ -232,6 +260,7 @@ export function AbsencesPage() {
       return;
     }
     const { startDate, endDate } = normalizedDateRange(selectionPopup.startDate, selectionPopup.endDate);
+    if (blockLockedRange({ person_id: selectionPopup.personId, start_date: startDate, end_date: endDate })) return;
     const selectedDays = daysBetween(startDate, endDate);
     const openDays = selectedDays.filter((date) => !hasAbsenceForPersonDate(absences, selectionPopup.personId, date));
     const skippedCount = selectedDays.length - openDays.length;
@@ -266,7 +295,7 @@ export function AbsencesPage() {
         ? `Abwesenheiten angelegt. ${skippedCount} bereits belegte Tage wurden uebersprungen.`
         : "Abwesenheiten angelegt.");
     } catch (requestError) {
-      setError(readApiError(requestError, "Abwesenheiten konnten nicht angelegt werden."));
+      setError(readMutationError(requestError, "Abwesenheiten konnten nicht angelegt werden."));
     } finally {
       setIsSavingSelection(false);
     }
@@ -283,6 +312,8 @@ export function AbsencesPage() {
       setMessage(null);
       return;
     }
+    const original = absences.find((absence) => absence.id === absenceId);
+    if (!original || blockLockedRange(original, draft)) return;
     setSavingAbsenceId(absenceId);
     setError(null);
     setMessage(null);
@@ -291,13 +322,15 @@ export function AbsencesPage() {
       replaceAbsence(updated);
       setMessage("Abwesenheit gespeichert.");
     } catch (requestError) {
-      setError(readApiError(requestError, "Abwesenheit konnte nicht gespeichert werden."));
+      setError(readMutationError(requestError, "Abwesenheit konnte nicht gespeichert werden."));
     } finally {
       setSavingAbsenceId(null);
     }
   }
 
   async function deleteAbsence(absenceId: number) {
+    const original = absences.find((absence) => absence.id === absenceId);
+    if (!original || blockLockedRange(original)) return;
     setSavingAbsenceId(absenceId);
     setError(null);
     setMessage(null);
@@ -312,13 +345,14 @@ export function AbsencesPage() {
       setDrawer(null);
       setMessage("Abwesenheit geloescht.");
     } catch (requestError) {
-      setError(readApiError(requestError, "Abwesenheit konnte nicht geloescht werden."));
+      setError(readMutationError(requestError, "Abwesenheit konnte nicht geloescht werden."));
     } finally {
       setSavingAbsenceId(null);
     }
   }
 
   async function deleteAbsenceDay(absence: Absence, date: string) {
+    if (blockLockedRange(absence)) return;
     if (!window.confirm(`${absenceTypeLabels[absence.absence_type]} am ${formatDate(date)} loeschen?`)) {
       return;
     }
@@ -341,7 +375,7 @@ export function AbsencesPage() {
       });
       setMessage("Abwesenheit geloescht.");
     } catch (requestError) {
-      setError(readApiError(requestError, "Abwesenheit konnte nicht geloescht werden."));
+      setError(readMutationError(requestError, "Abwesenheit konnte nicht geloescht werden."));
     } finally {
       setSavingAbsenceId(null);
     }
@@ -389,6 +423,8 @@ export function AbsencesPage() {
   }
 
   function openCreateDrawer(personId = 0, date = today) {
+    setError(null);
+    setMessage(null);
     setActiveSelection(null);
     setSelectionPopup(null);
     setCreateForm(emptyAbsence(personId, date));
@@ -404,6 +440,7 @@ export function AbsencesPage() {
       return;
     }
     event.preventDefault();
+    if (blockLockedRange({ person_id: personId, start_date: date, end_date: date })) return;
     const anchorKey = buildAbsenceCellKey(personId, date);
     if (selectionPopup?.anchorKey === anchorKey) {
       setActiveSelection(null);
@@ -425,6 +462,10 @@ export function AbsencesPage() {
   }
 
   function extendSelection(personId: number, date: string) {
+    if (activeSelection?.isSelecting && activeSelection.personId === personId) {
+      const range = normalizedDateRange(activeSelection.startDate, date);
+      if (blockLockedRange({ person_id: personId, start_date: range.startDate, end_date: range.endDate })) return;
+    }
     setActiveSelection((current) => {
       if (!current?.isSelecting || current.personId !== personId) {
         return current;
@@ -453,7 +494,7 @@ export function AbsencesPage() {
         )}
       </div>
 
-      {error && <p className="form-error">{error}</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
       {message && <p className="form-info">{message}</p>}
 
       <div className="absence-matrix-toolbar">
@@ -498,12 +539,17 @@ export function AbsencesPage() {
         ))}
       </div>
 
+      {payrollLocks.error && <p className="form-error" role="alert">
+        Abschlussstatus konnte nicht geladen werden. Bearbeitung vorübergehend gesperrt.{" "}
+        <button type="button" onClick={payrollLocks.refresh}>Erneut laden</button>
+      </p>}
       {isLoading && <div className="matrix-state">Abwesenheiten werden geladen...</div>}
 
       {!isLoading && (
         <AbsenceMatrix
           activeSelection={visibleSelection}
           canEdit={canEdit}
+          dayLock={(personId, date) => absenceRangeLock(payrollLocks.statuses, { person_id: personId, start_date: date, end_date: date })}
           days={visibleDays}
           mode={viewMode}
           personGroups={personGroups}
@@ -511,7 +557,11 @@ export function AbsencesPage() {
           today={today}
           onDeleteAbsenceDay={(absence, date) => void deleteAbsenceDay(absence, date)}
           onExtendSelection={extendSelection}
-          onOpenAbsence={(absenceId) => setDrawer({ mode: "edit", absenceId })}
+          onOpenAbsence={(absenceId) => {
+            setError(null);
+            setMessage(null);
+            setDrawer({ mode: "edit", absenceId });
+          }}
           onStartSelection={startSelection}
         />
       )}
@@ -562,6 +612,8 @@ export function AbsencesPage() {
           </button>
         ) : undefined}
       >
+        {createFormLock === "locked" && <p className="form-error" role="alert">{ABSENCE_PAYROLL_LOCK_MESSAGE}</p>}
+        {error && !(createFormLock === "locked" && error === ABSENCE_PAYROLL_LOCK_MESSAGE) && <p className="form-error" role="alert">{error}</p>}
         <AbsenceFields
           draft={createForm}
           people={people}
@@ -605,12 +657,20 @@ export function AbsencesPage() {
                 {absenceStatusLabels[selectedAbsence.status]}
               </StatusBadge>
             </div>
+            {selectedAbsenceLock && <p className="form-error" role="alert">
+              {selectedAbsenceLock === "locked" ? ABSENCE_PAYROLL_LOCK_MESSAGE : ABSENCE_PAYROLL_CHECK_MESSAGE}
+            </p>}
+            {error && error !== ABSENCE_PAYROLL_LOCK_MESSAGE && <p className="form-error" role="alert">{error}</p>}
+            <div className={selectedAbsenceLock ? "absence-fields-locked" : undefined} onClick={() => {
+              if (selectedAbsenceLock) blockLockedRange(selectedAbsence);
+            }}>
             <AbsenceFields
               draft={selectedDraft}
               people={people}
-              disabled={!canEdit}
+              disabled={!canEdit || selectedAbsenceLock !== null}
               onChange={(values) => updateDraft(selectedAbsence.id, values)}
             />
+            </div>
           </>
         )}
       </EntityDetailDrawer>
@@ -622,6 +682,7 @@ function AbsenceMatrix({
   activeSelection,
   canEdit,
   days,
+  dayLock,
   mode,
   personGroups,
   scrollRef,
@@ -634,6 +695,7 @@ function AbsenceMatrix({
   activeSelection: AbsenceSelectionRange | null;
   canEdit: boolean;
   days: string[];
+  dayLock: (personId: number, date: string) => "locked" | "unknown" | null;
   mode: AbsenceViewMode;
   personGroups: PersonAbsenceGroup[];
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -748,7 +810,9 @@ function AbsenceMatrix({
                     </th>
                     {row.cells.map((cell) => (
                       <td
-                        className={absenceCellClassName(
+                        aria-disabled={dayLock(row.person.id, cell.date) !== null}
+                        title={dayLock(row.person.id, cell.date) === "locked" ? ABSENCE_PAYROLL_LOCK_MESSAGE : undefined}
+                        className={`${absenceCellClassName(
                           cell.date,
                           today,
                           Boolean(
@@ -756,7 +820,7 @@ function AbsenceMatrix({
                             && activeSelection.personId === row.person.id
                             && isDateWithinAbsenceSelection(cell.date, activeSelection),
                           ),
-                        )}
+                        )}${dayLock(row.person.id, cell.date) === "locked" ? " is-payroll-locked" : ""}`}
                         key={`${row.person.id}-${cell.date}`}
                         onMouseDown={(event) => {
                           if (canEdit && !cell.absences.length) {
@@ -893,7 +957,6 @@ function AbsenceFields({
 }
 
 const ABSENCE_DAY_WIDTH = 42;
-const DAY_MS = 24 * 60 * 60 * 1000;
 const absencePersonGroupOrder: { key: AbsencePersonGroupKey; label: string }[] = [
   { key: "project-managers", label: "Projektleiter" },
   { key: "office", label: "Büro" },
@@ -966,7 +1029,7 @@ function daysBetween(start: string, end: string): string[] {
   const last = parseLocalDate(end);
   while (current <= last) {
     days.push(toDateInputValue(current));
-    current.setTime(current.getTime() + DAY_MS);
+    current.setDate(current.getDate() + 1);
   }
   return days;
 }
@@ -1193,6 +1256,7 @@ function readApiError(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) {
     return fallback;
   }
+  if (isAbsencePayrollLockError(error.detail)) return ABSENCE_PAYROLL_LOCK_MESSAGE;
   if (typeof error.detail === "string") {
     return error.detail;
   }

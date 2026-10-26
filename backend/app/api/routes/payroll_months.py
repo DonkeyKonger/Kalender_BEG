@@ -21,6 +21,7 @@ from app.services.payroll_month_close_service import PayrollMonthCloseService
 router = APIRouter(prefix="/payroll-months", tags=["payroll-months"])
 CAN_READ = require_business_page("payroll")
 CAN_MANAGE = require_business_page("payroll")
+CAN_READ_LOCKS = require_business_page("payroll", "absences")
 
 
 @router.get("/{year}/{month}/people/{person_id}/remarks", response_model=PayrollMonthRemarksRead)
@@ -50,7 +51,7 @@ def get_payroll_month_lock_status(
     year: int,
     month: int,
     response: Response,
-    _current_user: User = Depends(CAN_READ),
+    _current_user: User = Depends(CAN_READ_LOCKS),
     db: Session = Depends(get_db),
 ) -> PayrollMonthLockStatusRead:
     response.headers["Cache-Control"] = "no-store"

@@ -34974,3 +34974,19 @@ button.site-project-note-create:disabled { cursor: default; opacity: 0.6; }
   outline: 2px solid #315f91;
   outline-offset: 2px;
 }
+
+/* Closed payroll months stay visible while their absence data is read-only. */
+.absence-matrix .absence-day-cell.is-payroll-locked {
+  background: #e5e7eb;
+  cursor: not-allowed;
+}
+.absence-day-cell.is-payroll-locked .absence-block {
+  cursor: not-allowed;
+  filter: saturate(0.65);
+}
+.absence-fields-locked .absence-form-grid input:disabled,
+.absence-fields-locked .absence-form-grid select:disabled,
+.absence-fields-locked .absence-form-grid textarea:disabled {
+  background: #e5e7eb;
+  color: #475569;
+}

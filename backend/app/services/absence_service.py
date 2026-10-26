@@ -21,6 +21,12 @@ from app.services.payroll_review_invalidation_service import (
 )
 
 
+ABSENCE_PAYROLL_LOCK_MESSAGE = (
+    "Abrechnungsmonat bereits abgeschlossen, bitte Rücksprache mit der Buchhaltung, "
+    "damit Fehlzeiten der Vergangenheit angepasst werden können"
+)
+
+
 class AbsenceService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -125,7 +131,7 @@ class AbsenceService:
 
     def create_absence(self, payload: AbsenceCreate, user_id: int) -> Absence:
         values = clean_absence_values(payload.model_dump())
-        PayrollPeriodGuard(self.db).assert_range_mutable(
+        self._assert_range_mutable(
             values["start_date"],
             values["end_date"],
             person_id=values["person_id"],
@@ -174,9 +180,8 @@ class AbsenceService:
         end_date = values.get("end_date", absence.end_date)
         if end_date < start_date:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enddatum liegt vor Startdatum.")
-        guard = PayrollPeriodGuard(self.db)
-        guard.assert_range_mutable(absence.start_date, absence.end_date, person_id=absence.person_id)
-        guard.assert_range_mutable(start_date, end_date, person_id=person_id)
+        self._assert_range_mutable(absence.start_date, absence.end_date, person_id=absence.person_id)
+        self._assert_range_mutable(start_date, end_date, person_id=person_id)
 
         for field, value in values.items():
             setattr(absence, field, value)
@@ -206,7 +211,7 @@ class AbsenceService:
         absence = self.absences.get(absence_id)
         if absence is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Abwesenheit nicht gefunden.")
-        PayrollPeriodGuard(self.db).assert_range_mutable(
+        self._assert_range_mutable(
             absence.start_date,
             absence.end_date,
             person_id=absence.person_id,
@@ -229,6 +234,16 @@ class AbsenceService:
             )
         )
         self.db.commit()
+
+    def _assert_range_mutable(self, start_date: date, end_date: date, *, person_id: int) -> None:
+        try:
+            PayrollPeriodGuard(self.db).assert_range_mutable(start_date, end_date, person_id=person_id)
+        except HTTPException as error:
+            if isinstance(error.detail, dict) and error.detail.get("code") in {
+                "payroll_month_locked", "payroll_person_month_locked",
+            }:
+                error.detail = {**error.detail, "message": ABSENCE_PAYROLL_LOCK_MESSAGE}
+            raise
 
     def _invalidate_payroll_reviews(self, *affected_ranges: PayrollReviewRange) -> None:
         PayrollReviewInvalidationService(self.db).invalidate(
