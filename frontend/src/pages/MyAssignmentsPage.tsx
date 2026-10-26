@@ -3,7 +3,6 @@ import {
   ChevronRight,
   FileText,
   FolderOpen,
-  HeartPulse,
   LogOut,
   Plane,
   RefreshCcw,
@@ -615,17 +614,6 @@ export function MyAssignmentsPage() {
                   text: "Hier werden später Urlaubsanträge erfasst und an das Büro übergeben.",
                 })}
               />
-              <PlaceholderAction
-                compact
-                icon={HeartPulse}
-                tone="sickness"
-                title="Krankmeldung"
-                text="Diese Funktion ist vorbereitet und wird später aktiviert."
-                onOpen={() => setPlaceholder({
-                  title: "Krankmeldung",
-                  text: "Hier werden später Krankmeldungen erfasst und mit der persönlichen Akte verknüpft.",
-                })}
-              />
             </div>
             <div className="mobile-home-secondary-actions">
               <PlaceholderAction
@@ -910,7 +898,7 @@ function PlaceholderAction({
   disabled = false,
 }: {
   icon: typeof FileText;
-  tone: "time" | "vacation" | "sickness" | "deployments" | "profile" | "settings";
+  tone: "time" | "vacation" | "deployments" | "profile" | "settings";
   title: string;
   text: string;
   onOpen: () => void;

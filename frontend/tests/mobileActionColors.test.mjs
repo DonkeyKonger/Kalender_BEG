@@ -13,11 +13,10 @@ const expectedAssignments = [
   ["FileText", "time", "Arbeitszeit erfassen"],
   ["UserCircle", "profile", "Persönliche Akte"],
   ["Plane", "vacation", "Urlaubsantrag"],
-  ["HeartPulse", "sickness", "Krankmeldung"],
   ["Settings", "settings", "Einstellungen"],
 ];
 
-const expectedTones = ["time", "vacation", "sickness", "deployments", "profile", "settings"];
+const expectedTones = ["time", "vacation", "deployments", "profile", "settings"];
 
 
 test("mobile home actions use the semantic color variants", () => {
@@ -37,7 +36,6 @@ test("mobile quick actions keep the intended order", () => {
     "Arbeitszeit erfassen",
     "Persönliche Akte",
     "Urlaubsantrag",
-    "Krankmeldung",
     "Einstellungen",
   ];
 

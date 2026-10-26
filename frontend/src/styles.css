@@ -14,10 +14,6 @@
   --mobile-action-vacation-background: #f7f1df;
   --mobile-action-vacation-border: #d8c797;
   --mobile-action-vacation-focus: #e5d9b8;
-  --mobile-action-sickness-icon: #9b4b4b;
-  --mobile-action-sickness-background: #f8eaea;
-  --mobile-action-sickness-border: #dfb7b7;
-  --mobile-action-sickness-focus: #ebcccc;
   --mobile-action-deployments-icon: #67558f;
   --mobile-action-deployments-background: #f0ecf7;
   --mobile-action-deployments-border: #c5bad9;
@@ -6324,13 +6320,6 @@ button.person-chip:focus-visible {
   --mobile-action-background: var(--mobile-action-vacation-background);
   --mobile-action-border: var(--mobile-action-vacation-border);
   --mobile-action-focus: var(--mobile-action-vacation-focus);
-}
-
-.app-shell.is-mobile-workspace .mobile-action-card--sickness {
-  --mobile-action-icon: var(--mobile-action-sickness-icon);
-  --mobile-action-background: var(--mobile-action-sickness-background);
-  --mobile-action-border: var(--mobile-action-sickness-border);
-  --mobile-action-focus: var(--mobile-action-sickness-focus);
 }
 
 .app-shell.is-mobile-workspace .mobile-action-card--deployments {
