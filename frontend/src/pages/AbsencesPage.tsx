@@ -402,7 +402,7 @@ export function AbsencesPage() {
         )}
       </div>
 
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && error !== ABSENCE_PAYROLL_LOCK_MESSAGE && <p className="form-error" role="alert">{error}</p>}
       {message && <p className="form-info">{message}</p>}
 
       <div className="absence-matrix-toolbar">
