@@ -4,6 +4,10 @@ import test from 'node:test';
 
 const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 const rule = selector => css.slice(css.indexOf(`${selector} {`)).split('}')[0];
+const ruleAfter = (selector, marker) => {
+  const scopedCss = css.slice(css.indexOf(marker));
+  return scopedCss.slice(scopedCss.indexOf(`${selector} {`)).split('}')[0];
+};
 
 test('assigned-site groups keep content-sized rows at the top of the available card', () => {
   assert.match(rule('.dashboard-site-group-list'), /align-content:\s*start/);
@@ -11,15 +15,20 @@ test('assigned-site groups keep content-sized rows at the top of the available c
   assert.match(rule('.dashboard-site-group'), /align-content:\s*start/);
 });
 
-test('site tiles retain a bounded responsive width instead of stretching a lone tile', () => {
+test('tablet site tiles retain a bounded responsive width instead of forcing mini cards', () => {
   assert.match(rule('.dashboard-site-tile-grid'), /align-items:\s*start/);
   assert.match(rule('.dashboard-site-tile-grid'), /repeat\(auto-fill, minmax\(200px, 224px\)\)/);
   assert.match(rule('.dashboard-site-tile-grid'), /justify-content:\s*flex-start/);
 });
 
+test('desktop team lanes provide four flexible site columns', () => {
+  const desktopGrid = ruleAfter('.dashboard-site-tile-grid', '@media (min-width: 1101px)');
+  assert.match(desktopGrid, /repeat\(4, minmax\(0, 1fr\)\)/);
+});
+
 test('site tiles reserve the same two-line name area without a status-height variant', () => {
-  assert.match(rule('.dashboard-site-tile'), /grid-template-rows:\s*14px minmax\(0, 2\.8em\)/);
-  assert.match(rule('.dashboard-site-tile'), /height:\s*76px/);
+  assert.match(rule('.dashboard-site-tile'), /grid-template-rows:\s*14px minmax\(0, 36px\)/);
+  assert.match(rule('.dashboard-site-tile'), /height:\s*61px/);
   assert.match(rule('.dashboard-site-tile-meta'), /white-space:\s*nowrap/);
   assert.match(rule('.dashboard-site-tile-name'), /overflow-wrap:\s*anywhere/);
   assert.match(rule('.dashboard-site-tile-name'), /-webkit-line-clamp:\s*2/);

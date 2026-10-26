@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Check, ClipboardList, CloudSun, Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import { BriefcaseBusiness, Check, ClipboardList, CloudSun, Pencil, Plus, Trash2, TriangleAlert, Users, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -854,7 +854,9 @@ export function DashboardPage() {
                         {group.sites.map((siteSummary) => (
                           <Link className="dashboard-site-tile" to={"/sites/" + siteSummary.site.id} key={siteSummary.site.id} title={siteSummary.site.name}>
                             <span className="dashboard-site-tile-topline">
-                              <span className="dashboard-site-tile-number">{formatSiteTileNumber(siteSummary)}</span>
+                              <span className="dashboard-site-tile-number" title={formatSiteTileNumber(siteSummary)}>
+                                {formatSiteTileNumber(siteSummary)}
+                              </span>
                               <span className="dashboard-site-tile-meta">
                                 <span className="dashboard-site-tile-count" aria-label={formatSiteTileMeta(siteSummary)}>
                                   <Users aria-hidden="true" size={14} />
@@ -864,13 +866,14 @@ export function DashboardPage() {
                                   <span
                                     aria-label={formatCount(siteSummary.externalCount, "externer Monteur", "externe Monteure")}
                                     className="dashboard-site-tile-external"
+                                    title={formatCount(siteSummary.externalCount, "externer Monteur", "externe Monteure")}
                                   >
-                                    {formatSiteTileExternalCount(siteSummary.externalCount)}
+                                    E{siteSummary.externalCount}
                                   </span>
                                 )}
                                 {siteSummary.hasWarnings && (
                                   <span aria-label="Baustelle prüfen" className="dashboard-signal signal-orange" title="Baustelle prüfen">
-                                    Prüfen
+                                    <TriangleAlert aria-hidden="true" size={12} />
                                   </span>
                                 )}
                               </span>
@@ -1918,10 +1921,6 @@ function formatSiteTileMeta(siteSummary: AssignedSiteSummary): string {
 
 function formatSiteTileNumber(siteSummary: AssignedSiteSummary): string {
   return siteSummary.site.site_number || "Ohne Nr.";
-}
-
-function formatSiteTileExternalCount(count: number): string {
-  return `${count} extern`;
 }
 
 function formatDashboardDateTime(value: string): string {
