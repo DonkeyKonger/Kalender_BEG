@@ -90,6 +90,7 @@ class PayrollMonthTemplateLayout:
     total_hours_cell: str = "E41"
     normal_hours_cell: str = "D46"
     overtime_hours_cell: str = "D47"
+    vacation_days_cell: str = "I42"
     sick_days_cell: str = "D48"
     sick_hours_cell: str = "G48"
     first_day_row: int = 10
@@ -420,6 +421,10 @@ def fill_payroll_month_sheet(
     _clear_month_day_values(sheet, year=year, month=month)
     for day in plan.days:
         _write_month_day(sheet, day)
+    vacation_days = sum(day.absence_type == AbsenceType.VACATION for day in plan.days)
+    _set_cell_string(
+        sheet, PAYROLL_MONTH_TEMPLATE_LAYOUT.vacation_days_cell, f"Urlaubstage: {vacation_days}",
+    )
     write_payroll_travel_expenses(sheet, year=year, month=month, plan=plan.travel_expenses)
     write_payroll_travel_expense_totals(sheet, plan=plan.travel_expenses)
     for warning in plan.travel_expenses.warnings:

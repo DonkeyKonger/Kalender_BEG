@@ -10,10 +10,12 @@ from io import BytesIO
 from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile, is_zipfile
 
 from app.services.payroll_month_xlsx_service import (
+    PAYROLL_MONTH_TEMPLATE_LAYOUT,
     _clear_cell,
     _find_cell,
     _preserve_ignorable_namespaces,
     _qname,
+    _set_cell_string,
 )
 from app.services.payroll_print_layout import (
     configure_payroll_print_areas,
@@ -25,7 +27,8 @@ def prepare_payroll_workbook_download(content: bytes) -> bytes:
     """Keep approved values/formulas and stored bytes; only correct their presentation.
 
     Fit each monthly form on one A4 page, align the header and travel markers,
-    and shade the generated footer fields.
+    and shade the generated footer fields. Fill the vacation summary from the
+    retained daily rows without consulting current absence data.
     Remove only the complete, known generated remarks block. Unrelated/manual remarks
     and fallback exports are preserved. Applying the same styles to retained and newly
     approved sheets keeps them compatible without rebuilding payroll data.
@@ -96,6 +99,17 @@ def _prepare_download(content: bytes) -> bytes:
                 or text(sheet, "I51") not in {"Kontostand neu:", "Konstostand neu:"}
             ):
                 continue
+            layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+            vacation_summary = _find_cell(sheet, layout.vacation_days_cell)
+            if vacation_summary is not None and not list(vacation_summary):
+                # Old approved exports already contain the credited vacation days.
+                # Preserve any existing summary or manually entered field content.
+                vacation_days = sum(
+                    text(sheet, f"{layout.address_column}{row}") == "Urlaub"
+                    and all(text(sheet, f"{column}{row}") == "" for column in "BCDFG")
+                    for row in range(layout.first_day_row, layout.last_day_row + 1)
+                )
+                _set_cell_string(sheet, layout.vacation_days_cell, f"Urlaubstage: {vacation_days}")
             configure_payroll_print_sheet(sheet)
             payroll_indices.append(sheet_indices[path])
             # Standard payroll exports give K51 its own duration style. Do not
@@ -217,6 +231,7 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
                             row.insert(list(row).index(previous_edge) + 1, extension)
                     if extension is not None and previous_edge is not None:
                         extension.set("s", previous_edge.get("s", "0"))
+    format_cell(PAYROLL_MONTH_TEMPLATE_LAYOUT.vacation_days_cell, horizontal="center")
     for ref in ("C2", "C4"):
         format_cell(ref, horizontal="right")
     for row in range(10, 41):

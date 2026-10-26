@@ -183,6 +183,8 @@ def test_download_layout_preserves_calculations_and_unrelated_styles(approved_wo
     gray |= {f"{column}{row}" for row in range(49, 53) for column in "EG"}
     gray |= {f"{column}{row}" for row in range(46, 50) for column in "IJKL"}
     gray |= {f"{column}{row}" for row in (50, 51) for column in "KL"}
+    summary_alignment = style(sheet, styles, "I42").find("main:alignment", NS)
+    assert summary_alignment.get("horizontal") == summary_alignment.get("vertical") == "center"
     for ref in travel:
         alignment = style(sheet, styles, ref).find("main:alignment", NS)
         assert alignment.get("horizontal") == alignment.get("vertical") == "center"
@@ -192,7 +194,7 @@ def test_download_layout_preserves_calculations_and_unrelated_styles(approved_wo
     for old_cell in old_sheet.findall(".//main:c", NS):
         ref = old_cell.get("r")
         new_cell = sheet.find(f'.//main:c[@r="{ref}"]', NS)
-        if ref not in travel | gray | {"C2", "C4", "F2", "F3", "F4"}:
+        if ref not in travel | gray | {"C2", "C4", "F2", "F3", "F4", "I42"}:
             assert ET.tostring(style(sheet, styles, ref)) == ET.tostring(style(old_sheet, old_styles, ref))
         old_cell.attrib.pop("s", None)
         new_cell.attrib.pop("s", None)
