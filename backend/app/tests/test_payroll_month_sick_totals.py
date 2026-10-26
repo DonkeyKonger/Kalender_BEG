@@ -42,15 +42,15 @@ def test_three_sick_days_show_24_hours_and_reduce_fixed_normal_hours():
 
     assert cell_text(sheet, "D48") == "3"
     assert float(cell_text(sheet, "G48")) * 24 == pytest.approx(24)
-    assert float(cell_text(sheet, "D46")) * 1440 == pytest.approx(10400 - 1440)
+    assert float(cell_text(sheet, "D46")) * 60 == pytest.approx(10395 - 1440)
     assert float(cell_text(sheet, "E41")) * 24 == pytest.approx(16.5)
-    assert cell_text(sheet, "D47") == "-132:50"
+    assert cell_text(sheet, "D47") == "-132:45"
     # Der Abzug bleibt in der bestehenden Normalstundenformel nachvollziehbar.
     assert sheet.find('.//main:c[@r="G48"]/main:f', NS).text == "D48*8/24"
     assert sheet.find('.//main:c[@r="D46"]/main:f', NS).text == (
-        "ROUND(4.3335*40*60,0)/1440-G48"
+        "ROUND((4.3335*40-G48*24)*4,0)/4"
     )
-    assert "E41-D46" in sheet.find('.//main:c[@r="D47"]/main:f', NS).text
+    assert "E41*24-D46" in sheet.find('.//main:c[@r="D47"]/main:f', NS).text
     assert cell_number_format(sheet, styles, "G48") == "[h]:mm"
     # Krankheit bleibt in der Tages- und Gesamtsumme bei null Stunden.
     for row in (12, 13, 14):
@@ -70,10 +70,10 @@ def test_sick_summary_counts_only_weekdays_in_selected_month(start, end, count):
     sheet, _ = export_month([absence(AbsenceType.SICK, start, end)])
     assert int(cell_text(sheet, "D48")) == count
     assert float(cell_text(sheet, "G48")) * 24 == pytest.approx(count * 8)
-    assert float(cell_text(sheet, "D46")) * 1440 == pytest.approx(10400 - count * 480)
+    assert float(cell_text(sheet, "D46")) * 60 == pytest.approx(10395 - count * 480)
     assert float(cell_text(sheet, "E41")) == 0
     if count == 21:
-        assert cell_text(sheet, "D47") == "-5:20"
+        assert cell_text(sheet, "D47") == "-5:15"
 
 
 def test_public_holidays_are_not_subtracted_twice_as_sick_days():
@@ -83,7 +83,7 @@ def test_public_holidays_are_not_subtracted_twice_as_sick_days():
     )
     assert cell_text(sheet, "D48") == "2"
     assert float(cell_text(sheet, "G48")) * 24 == pytest.approx(16)
-    assert float(cell_text(sheet, "D46")) * 1440 == pytest.approx(10400 - 960)
+    assert float(cell_text(sheet, "D46")) * 60 == pytest.approx(10395 - 960)
 
 
 def test_sick_summary_deduplicates_dates_and_ignores_foreign_cancelled_and_other_absences():
@@ -97,14 +97,14 @@ def test_sick_summary_deduplicates_dates_and_ignores_foreign_cancelled_and_other
     ])
     assert cell_text(sheet, "D48") == "3"
     assert float(cell_text(sheet, "G48")) * 24 == pytest.approx(24)
-    assert float(cell_text(sheet, "D46")) * 1440 == pytest.approx(10400 - 1440)
+    assert float(cell_text(sheet, "D46")) * 60 == pytest.approx(10395 - 1440)
 
 
 def test_no_sick_days_leaves_normal_hours_unchanged():
     sheet, _ = export_month()
     assert cell_text(sheet, "D48") == "0"
     assert float(cell_text(sheet, "G48")) == 0
-    assert float(cell_text(sheet, "D46")) * 1440 == pytest.approx(10400)
+    assert float(cell_text(sheet, "D46")) * 60 == pytest.approx(10395)
 
 
 def test_missing_weekly_hours_still_shows_sick_summary_without_inventing_normal_hours():

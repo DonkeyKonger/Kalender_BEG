@@ -128,7 +128,7 @@ def test_real_48_hour_month_exports_only_surplus_and_preserves_approved_workbook
     content = bytes(artifact.content)
     sheet = workbook_sheet(content)
     assert float(cell_text(sheet,'E41')) * 1440 == pytest.approx(12585)
-    assert float(cell_text(sheet,'D46')) * 1440 == pytest.approx(12480)
+    assert float(cell_text(sheet,'D46')) * 60 == pytest.approx(12480)
     assert float(cell_text(sheet,'D47')) * 1440 == pytest.approx(payout)
     assert float(cell_text(sheet,'K50')) * 1440 == pytest.approx(opening)
     assert float(cell_text(sheet,'K51')) * 1440 == pytest.approx(closing)

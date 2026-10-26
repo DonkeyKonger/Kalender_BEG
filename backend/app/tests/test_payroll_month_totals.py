@@ -39,7 +39,7 @@ def test_reusable_month_totals_match_normal_excel_without_day_plans(weekly_hours
         assert totals.overtime_minutes is None
         assert cell_text(sheet, "D46") == cell_text(sheet, "D47") == "–"
     else:
-        assert float(cell_text(sheet, "D46")) * 1440 == pytest.approx(totals.normal_minutes)
+        assert float(cell_text(sheet, "D46")) * 60 == pytest.approx(totals.normal_minutes)
         assert totals.overtime_minutes == totals.total_minutes - totals.normal_minutes
         assert cell_text(sheet, "D47") == f"-{abs(totals.overtime_minutes) // 60}:{abs(totals.overtime_minutes) % 60:02d}"
     assert [(item.work_date, item.work_minutes) for item in entries] == original
@@ -52,8 +52,8 @@ def test_170_actual_hours_use_fixed_normal_hours_for_excel_and_month_movement():
     result = build_payroll_month_xlsx(person=person, year=2026, month=8, entries=entries)
     totals = calculate_payroll_month_totals(person=person, plan=result.plan, year=2026, month=8,
                                            non_working_dates=())
-    assert (totals.total_minutes, totals.normal_minutes, totals.overtime_minutes) == (10200, 10400, -200)
+    assert (totals.total_minutes, totals.normal_minutes, totals.overtime_minutes) == (10200, 10395, -195)
     with ZipFile(BytesIO(result.content)) as workbook:
         sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
-    assert cell_text(sheet, "D47") == "-3:20"
-    assert sheet.find('.//main:c[@r="D46"]/main:f', NS).text == "ROUND(4.3335*40*60,0)/1440-G48"
+    assert cell_text(sheet, "D47") == "-3:15"
+    assert sheet.find('.//main:c[@r="D46"]/main:f', NS).text == "ROUND((4.3335*40-G48*24)*4,0)/4"

@@ -74,10 +74,10 @@ def test_all_workers_export_uses_active_payroll_workers_and_one_master_sheet_eac
         assert 'name="Strom"' in workbook_xml
         assert "Büro" not in workbook_xml
         ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-        for index, normal_minutes in ((1, 10400), (2, 7800)):
+        for index, normal_minutes in ((1, 10395), (2, 7800)):
             sheet = ET.fromstring(workbook.read(f"xl/worksheets/sheet{index}.xml"))
             assert float(sheet.find('.//m:c[@r="D46"]/m:v', ns).text) == pytest.approx(
-                normal_minutes / 1440
+                normal_minutes / 60
             )
 
 
@@ -161,7 +161,7 @@ def test_single_worker_export_uses_fixed_basis_despite_public_holidays():
     with ZipFile(BytesIO(content)) as workbook:
         sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
     ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-    assert float(sheet.find('.//m:c[@r="D46"]/m:v', ns).text) == pytest.approx(10400 / 1440)
+    assert float(sheet.find('.//m:c[@r="D46"]/m:v', ns).text) == pytest.approx(10395 / 60)
 
 
 def test_open_person_month_worker_export_requires_approval_and_uses_stored_artifact(monkeypatch):
@@ -302,7 +302,7 @@ def test_downloads_load_calendar_absences_even_without_time_entries(all_workers)
         assert float(sheet.find('.//m:c[@r="E17"]/m:v', ns).text) == 0
         assert sheet.find('.//m:c[@r="D48"]/m:v', ns).text == "1"
         assert float(sheet.find('.//m:c[@r="G48"]/m:v', ns).text) * 24 == pytest.approx(8)
-        assert float(sheet.find('.//m:c[@r="D46"]/m:v', ns).text) * 1440 == pytest.approx(9920)
+        assert float(sheet.find('.//m:c[@r="D46"]/m:v', ns).text) * 60 == pytest.approx(9915)
         for row in (12, 13, 14, 15, 18):  # Feiertage, Wochenende, stornierter Urlaub.
             assert len(sheet.find(f'.//m:c[@r="E{row}"]', ns)) == 0
             assert len(sheet.find(f'.//m:c[@r="H{row}"]', ns)) == 0
@@ -312,7 +312,7 @@ def test_downloads_load_calendar_absences_even_without_time_entries(all_workers)
             assert second.find('.//m:c[@r="H18"]/m:is/m:t', ns).text == "Urlaub"
             assert second.find('.//m:c[@r="D48"]/m:v', ns).text == "0"
             assert float(second.find('.//m:c[@r="G48"]/m:v', ns).text) == 0
-            assert float(second.find('.//m:c[@r="D46"]/m:v', ns).text) * 1440 == pytest.approx(10400)
+            assert float(second.find('.//m:c[@r="D46"]/m:v', ns).text) * 60 == pytest.approx(10395)
         else:
             assert "xl/worksheets/sheet2.xml" not in workbook.namelist()
 

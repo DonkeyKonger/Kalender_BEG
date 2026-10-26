@@ -223,6 +223,10 @@ def build_payroll_month_xlsx(
         _apply_address_cell_styles(sheet_root, address_style_mapping)
         duration_style_mapping = _append_duration_styles(styles_root, sheet_root)
         _apply_duration_cell_styles(sheet_root, duration_style_mapping)
+        normal_hours_style = _append_normal_hours_style(styles_root, sheet_root)
+        _find_cell(sheet_root, PAYROLL_MONTH_TEMPLATE_LAYOUT.normal_hours_cell).set(
+            "s", str(normal_hours_style)
+        )
         travel_count_style_mapping = _append_travel_count_styles(styles_root, sheet_root)
         _apply_travel_count_cell_styles(sheet_root, travel_count_style_mapping)
         travel_amount_style_mapping = _append_travel_amount_styles(styles_root, sheet_root)
@@ -279,6 +283,9 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
         duration_style_mapping = _append_duration_styles(
             styles_root, ET.fromstring(template_sheet)
         )
+        normal_hours_style = _append_normal_hours_style(
+            styles_root, ET.fromstring(template_sheet)
+        )
         travel_count_style_mapping = _append_travel_count_styles(
             styles_root, ET.fromstring(template_sheet)
         )
@@ -333,6 +340,9 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
             sheet_root = ET.fromstring(template_sheet)
             _apply_address_cell_styles(sheet_root, address_style_mapping)
             _apply_duration_cell_styles(sheet_root, duration_style_mapping)
+            _find_cell(sheet_root, PAYROLL_MONTH_TEMPLATE_LAYOUT.normal_hours_cell).set(
+                "s", str(normal_hours_style)
+            )
             _apply_travel_count_cell_styles(sheet_root, travel_count_style_mapping)
             _apply_travel_amount_cell_styles(sheet_root, travel_amount_style_mapping)
             plans.append(
@@ -1008,11 +1018,12 @@ def calculate_payroll_month_totals(
     )
     normal_minutes = None
     if person.weekly_hours is not None:
-        normal_minutes = int(
-            (PAYROLL_MONTH_WEEK_FACTOR * Decimal(str(person.weekly_hours)) * 60).quantize(
-                Decimal("1"), rounding=ROUND_HALF_UP
-            )
-        ) - sick_minutes
+        # Round the exact contractual target once, after the sickness deduction.
+        # The same quarter-hour target drives Excel, overtime and the hours account.
+        normal_quarters = (
+            PAYROLL_MONTH_WEEK_FACTOR * Decimal(str(person.weekly_hours)) * 60 - sick_minutes
+        ) / 15
+        normal_minutes = int(normal_quarters.quantize(Decimal("1"), rounding=ROUND_HALF_UP)) * 15
     return PayrollMonthTotals(
         total_minutes=total_minutes,
         normal_minutes=normal_minutes,
@@ -1062,11 +1073,11 @@ def _write_month_totals(
     _set_cell_formula(
         sheet,
         layout.normal_hours_cell,
-        f"ROUND({PAYROLL_MONTH_WEEK_FACTOR}*{weekly_hours_decimal}*60,0)/1440-{layout.sick_hours_cell}",
-        totals.normal_minutes / 1440,
+        f"ROUND(({PAYROLL_MONTH_WEEK_FACTOR}*{weekly_hours_decimal}-{layout.sick_hours_cell}*24)*4,0)/4",
+        totals.normal_minutes / 60,
     )
     overtime_minutes = totals.overtime_minutes
-    delta = f"ROUND(({layout.total_hours_cell}-{layout.normal_hours_cell})*1440,0)"
+    delta = f"ROUND(({layout.total_hours_cell}*24-{layout.normal_hours_cell})*60,0)"
     # Excel im 1900-Datumssystem kann negative Zeitwerte nicht anzeigen.
     # Nur der negative Fall wird deshalb als formatierter Text ausgegeben.
     _set_cell_formula(
@@ -1124,12 +1135,29 @@ def _duration_cell_refs() -> list[str]:
             for row in range(layout.first_day_row, layout.last_day_row + 1)
         ),
         layout.total_hours_cell,
-        layout.normal_hours_cell,
         layout.overtime_hours_cell,
         layout.sick_hours_cell,
         layout.opening_balance_cell,
         layout.closing_balance_cell,
     ]
+
+
+def _append_normal_hours_style(styles: ET.Element, sheet: ET.Element) -> int:
+    """Keep the template field, but display normal hours as decimal hours (0.00)."""
+    cell = _find_cell(sheet, PAYROLL_MONTH_TEMPLATE_LAYOUT.normal_hours_cell)
+    cell_xfs = styles.find(_qname("cellXfs"))
+    if cell is None or cell_xfs is None:
+        raise ValueError("Monatsvorlage enthält kein gültiges Normalstundenfeld.")
+    style = deepcopy(cell_xfs[int(cell.get("s", "0"))])
+    style.attrib.update(numFmtId="2", applyNumberFormat="1", applyAlignment="1")
+    alignment = style.find(_qname("alignment"))
+    if alignment is None:
+        alignment = ET.SubElement(style, _qname("alignment"))
+    alignment.attrib.update(horizontal="right", shrinkToFit="1")
+    style_id = len(cell_xfs)
+    cell_xfs.append(style)
+    cell_xfs.set("count", str(len(cell_xfs)))
+    return style_id
 
 
 def _append_duration_styles(styles: ET.Element, sheet: ET.Element) -> dict[int, int]:

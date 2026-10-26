@@ -69,14 +69,15 @@ def test_real_month_approval_without_day_setup_matches_excel_and_global_does_not
     account_service = PayrollMonthAccountService(db)
     posting = db.scalar(select(Entry).where(Entry.entry_type == MONTHLY))
     assert posting.source_payload["totals"]["total_minutes"] == 170 * 60
-    assert posting.source_payload["totals"]["normal_minutes"] == 10400
-    assert posting.source_payload["movement_minutes"] == -200
-    assert posting.minutes_delta == (-200 if known else 0)
+    assert posting.source_payload["totals"]["normal_minutes"] == 10395
+    assert posting.source_payload["movement_minutes"] == -195
+    assert posting.minutes_delta == (-195 if known else 0)
     assert posting.source_payload["payout_minutes"] == (0 if known else None)
-    assert account_service.current_balance(person.id) == (5800 if known else None)
+    assert account_service.current_balance(person.id) == (5805 if known else None)
     artifact = db.scalar(select(PayrollMonthPersonApprovalArtifact))
     original_bytes = bytes(artifact.content)
     sheet = workbook_sheet(original_bytes)
+    assert float(cell_text(sheet, "D46")) * 60 == posting.source_payload["totals"]["normal_minutes"]
     if known:
         assert float(cell_text(sheet, "D47")) == 0
     else:
@@ -92,8 +93,8 @@ def test_real_month_approval_without_day_setup_matches_excel_and_global_does_not
     assert worker_export == prepare_payroll_workbook_download(original_bytes)
     snapshot = db.scalar(select(PayrollMonthSnapshot))
     row = db.scalar(select(PayrollMonthPersonSnapshot))
-    assert row.movement_minutes == -200
-    assert row.closing_balance_minutes == (5800 if known else None)
+    assert row.movement_minutes == -195
+    assert row.closing_balance_minutes == (5805 if known else None)
     assert snapshot.payload_json["schema_version"] == 2
     assert snapshot.payload_json["approved_person_sources"][0]["source_snapshot_sha256"]
     service.reopen_month(year=2026, month=8, reason="Correction", current_user=user)
@@ -102,7 +103,7 @@ def test_real_month_approval_without_day_setup_matches_excel_and_global_does_not
     approve(service, person, user)
     result = service.lock_month(year=2026, month=8, confirmed=True, current_user=user)
     assert result.snapshot_version == 2
-    assert account_service.current_balance(person.id) == (5800 if known else None)
+    assert account_service.current_balance(person.id) == (5805 if known else None)
 
 
 def test_manual_after_approval_never_updates_locked_history_or_retained_workbook():
@@ -118,7 +119,7 @@ def test_manual_after_approval_never_updates_locked_history_or_retained_workbook
       BEGIN SELECT RAISE(ABORT, 'payroll_person_month_locked'); END"""))
     account = PersonHoursAccountService(db).create_manual_adjustment(
         person_id=person.id, hours_delta=2, effective_date=date(2026, 9, 5), note="Independent", current_user=user)
-    assert account.current_balance_minutes == 5920
+    assert account.current_balance_minutes == 5925
     assert [(db.get(Entry, identifier).id, db.get(Entry, identifier).minutes_delta,
              db.get(Entry, identifier).balance_after_minutes) for identifier, _, _ in original_rows] == original_rows
     assert bytes(artifact.content) == retained
@@ -196,7 +197,7 @@ def test_historical_daily_person_approval_global_close_and_reopen_do_not_infer_n
     assert not old_daily.is_active
     assert PayrollMonthAccountService(db).current_balance(person.id) == 6060
     approve(service, person, user)
-    assert PayrollMonthAccountService(db).current_balance(person.id) == 5860
+    assert PayrollMonthAccountService(db).current_balance(person.id) == 5865
     assert artifact.content == content
 
 
