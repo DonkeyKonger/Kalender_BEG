@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import posixpath
 import re
 import xml.etree.ElementTree as ET
 from copy import deepcopy
@@ -14,12 +15,17 @@ from app.services.payroll_month_xlsx_service import (
     _preserve_ignorable_namespaces,
     _qname,
 )
+from app.services.payroll_print_layout import (
+    configure_payroll_print_areas,
+    configure_payroll_print_sheet,
+)
 
 
 def prepare_payroll_workbook_download(content: bytes) -> bytes:
     """Keep approved values/formulas and stored bytes; only correct their presentation.
 
-    Align the header and travel markers and shade the generated footer fields.
+    Fit each monthly form on one A4 page, align the header and travel markers,
+    and shade the generated footer fields.
     Remove only the complete, known generated remarks block. Unrelated/manual remarks
     and fallback exports are preserved. Applying the same styles to retained and newly
     approved sheets keeps them compatible without rebuilding payroll data.
@@ -60,6 +66,20 @@ def _prepare_download(content: bytes) -> bytes:
                 "".join(cell.find(_qname("is")).itertext()) if cell.get("t") == "inlineStr" else ""
             )
 
+        workbook_xml = source.read("xl/workbook.xml")
+        workbook = ET.fromstring(workbook_xml)
+        relationships = ET.fromstring(source.read("xl/_rels/workbook.xml.rels"))
+        targets = {
+            item.get("Id"): posixpath.normpath(posixpath.join("xl", item.get("Target", ""))).lstrip("/")
+            for item in relationships
+        }
+        sheet_indices = {
+            targets[item.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")]: index
+            for index, item in enumerate(
+                workbook.findall(f"{_qname('sheets')}/{_qname('sheet')}")
+            )
+        }
+        payroll_indices: list[int] = []
         replacements: dict[str, bytes] = {}
         styles_changed = False
         for path in source.namelist():
@@ -76,6 +96,8 @@ def _prepare_download(content: bytes) -> bytes:
                 or text(sheet, "I51") not in {"Kontostand neu:", "Konstostand neu:"}
             ):
                 continue
+            configure_payroll_print_sheet(sheet)
+            payroll_indices.append(sheet_indices[path])
             # Standard payroll exports give K51 its own duration style. Do not
             # change a shared style that could affect unrelated cells.
             closing_style_id = closing.get("s", "0")
@@ -104,6 +126,9 @@ def _prepare_download(content: bytes) -> bytes:
                 styles_changed = True
             if ET.tostring(sheet) != original_sheet:
                 replacements[path] = _xml(sheet)
+        printed_workbook = configure_payroll_print_areas(workbook_xml, payroll_indices)
+        if printed_workbook != workbook_xml:
+            replacements["xl/workbook.xml"] = printed_workbook
         if styles_changed:
             replacements["xl/styles.xml"] = _xml(styles)
         if not replacements:

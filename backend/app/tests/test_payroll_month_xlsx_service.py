@@ -343,7 +343,7 @@ def test_building_the_month_does_not_mutate_source_time_entries():
     assert [entry_snapshot(entry) for entry in entries] == before
 
 
-def test_generated_workbook_opens_and_only_changes_the_template_worksheet_and_styles():
+def test_generated_workbook_opens_and_preserves_unrelated_template_parts():
     site = make_site(
         1,
         "4711",
@@ -377,6 +377,7 @@ def test_generated_workbook_opens_and_only_changes_the_template_worksheet_and_st
             if name not in {
                 PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path,
                 PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path,
+                "xl/workbook.xml",
             }:
                 assert generated.read(name) == master.read(name)
         sheet_xml = generated.read(PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path)

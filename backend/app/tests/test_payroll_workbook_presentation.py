@@ -86,7 +86,7 @@ def test_retained_and_new_approvals_download_together_without_changing_stored_da
         assert_corrected_footer(combined, sheet_path=f"xl/worksheets/sheet{index}.xml")
     with ZipFile(BytesIO(single)) as changed, ZipFile(BytesIO(old)) as retained:
         for path in retained.namelist():
-            if path not in {"xl/worksheets/sheet1.xml", "xl/styles.xml"}:
+            if path not in {"xl/worksheets/sheet1.xml", "xl/styles.xml", "xl/workbook.xml"}:
                 assert changed.read(path) == retained.read(path)
         before = ET.fromstring(retained.read("xl/worksheets/sheet1.xml"))
         after = ET.fromstring(changed.read("xl/worksheets/sheet1.xml"))

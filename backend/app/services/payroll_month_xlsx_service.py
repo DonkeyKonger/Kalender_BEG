@@ -26,6 +26,10 @@ from app.services.person_hours_account_service import (
     effective_corrected_work_minutes,
     effective_weekly_work_minutes,
 )
+from app.services.payroll_print_layout import (
+    configure_payroll_print_areas,
+    configure_payroll_print_sheet,
+)
 from app.services.payroll_xlsx_template import load_payroll_monthly_template
 from app.services.payroll_remarks import validate_remarks, wrap_remarks
 from app.services.payroll_travel_expense_service import (
@@ -245,6 +249,7 @@ def build_payroll_month_xlsx(
             account_settlement=account_settlement,
             remarks=remarks,
         )
+        configure_payroll_print_sheet(sheet_root)
         filled_sheet = ET.tostring(
             sheet_root,
             encoding="UTF-8",
@@ -257,6 +262,8 @@ def build_payroll_month_xlsx(
         for item in source.infolist():
             if item.filename == PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path:
                 content = filled_sheet
+            elif item.filename == "xl/workbook.xml":
+                content = configure_payroll_print_areas(source.read(item.filename))
             elif item.filename == PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path:
                 content = filled_styles
             else:
@@ -338,6 +345,7 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
 
         for index, sheet in enumerate(sheets, start=1):
             sheet_root = ET.fromstring(template_sheet)
+            configure_payroll_print_sheet(sheet_root)
             _apply_address_cell_styles(sheet_root, address_style_mapping)
             _apply_duration_cell_styles(sheet_root, duration_style_mapping)
             _find_cell(sheet_root, PAYROLL_MONTH_TEMPLATE_LAYOUT.normal_hours_cell).set(
@@ -1626,9 +1634,8 @@ def _payroll_month_workbook_xml(workbook_xml: bytes, sheet_names: Sequence[str])
         f"r:id=\"rIdSheet{index}\"/>"
         for index, sheet_name in enumerate(sheet_names, start=1)
     ) + "</sheets>"
-    return re.sub(r"<sheets>.*?</sheets>", sheets_xml, text, count=1, flags=re.DOTALL).encode(
-        "utf-8"
-    )
+    renamed = re.sub(r"<sheets>.*?</sheets>", sheets_xml, text, count=1, flags=re.DOTALL)
+    return configure_payroll_print_areas(renamed.encode("utf-8"))
 
 
 def _payroll_month_workbook_relationships(
