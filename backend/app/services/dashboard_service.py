@@ -74,6 +74,7 @@ class DashboardService:
         return {
             "staffingDays": self._staffing_days(matrix.rows, today),
             "todayAssignedSites": today_assigned_sites,
+            "todayAssignedWorkerCounts": self._assigned_worker_counts_for_day(matrix.rows, today),
             "todayAssignedSiteGroups": self._group_assigned_sites_by_manager(today_assigned_sites),
             "workerSummaryGroups": worker_summary_groups,
             "totalWorkerSummaryPeople": sum(len(group["people"]) for group in worker_summary_groups),
@@ -230,6 +231,22 @@ class DashboardService:
         return {
             person_id for person_id, weeks in planned_weeks.items()
             if len(weeks) == 3 and person_id not in friday_planned_ids
+        }
+
+    def _assigned_worker_counts_for_day(self, rows: list[MatrixRow], target_date: date) -> dict:
+        people_by_id = {
+            assignment.person.id: assignment.person
+            for row in rows
+            for cell in row.cells
+            if cell.date == target_date
+            for assignment in cell.assignments
+        }
+        internal_count = sum(
+            person.person_type == PersonType.INTERNAL for person in people_by_id.values()
+        )
+        return {
+            "internalCount": internal_count,
+            "externalCount": len(people_by_id) - internal_count,
         }
 
     def _assigned_sites_for_day(self, matrix: MatrixResponse, target_date: date) -> list[dict]:

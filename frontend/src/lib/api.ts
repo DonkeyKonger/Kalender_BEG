@@ -272,6 +272,7 @@ export type DashboardStaffingDay = {
 };
 
 export type DashboardOverview = {
+  todayAssignedWorkerCounts?: { internalCount: number; externalCount: number };
   staffingDays: DashboardStaffingDay[];
   todayAssignedSites: DashboardOverviewAssignedSite[];
   todayAssignedSiteGroups: Array<{

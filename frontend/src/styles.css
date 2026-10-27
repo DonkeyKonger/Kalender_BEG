@@ -23882,7 +23882,7 @@ body.mobile-modal-scroll-locked {
 
 .dashboard-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(230px, 0.45fr) minmax(340px, 0.68fr);
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 332px);
   gap: 18px;
   align-items: center;
   border: 1px solid #dce3ee;
@@ -24436,6 +24436,37 @@ body.mobile-modal-scroll-locked {
   font-weight: 760;
   letter-spacing: 0;
   text-transform: none;
+}
+
+.dashboard-assigned-totals {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.dashboard-assigned-totals-label {
+  color: #6b778c;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.dashboard-assigned-totals .dashboard-site-tile-count {
+  gap: 4px;
+  font-size: 0.86rem;
+}
+
+.dashboard-assigned-totals .dashboard-site-tile-count svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 520px) {
+  .dashboard-assigned-totals {
+    grid-column: 2 / -1;
+    gap: 10px;
+  }
 }
 
 .dashboard-card-badge {

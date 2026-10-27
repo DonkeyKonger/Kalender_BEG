@@ -131,7 +131,6 @@ type DashboardNoteDraft = {
 };
 
 const MAX_PREVIEW_ITEMS = 6;
-const FREE_WORKER_ALL_KEY = "__all__";
 const DASHBOARD_NOTE_SITE_FILTER_PARAM = "noteSiteId";
 const EMPTY_DASHBOARD_NOTE_DRAFT: DashboardNoteDraft = {
   text: "",
@@ -190,8 +189,6 @@ export function DashboardPage() {
   const [operationalAbsenceError, setOperationalAbsenceError] = useState<string | null>(null);
   const [dismissingMessageKey, setDismissingMessageKey] = useState<string | null>(null);
   const [openedDashboardMessageNote, setOpenedDashboardMessageNote] = useState<DashboardNote | null>(null);
-  const [openFreeWorkerKey, setOpenFreeWorkerKey] = useState<string | null>(null);
-  const freeSummaryRef = useRef<HTMLDivElement | null>(null);
   const dashboardMessageListCountRef = useRef<number | null>(null);
 
   const [todayKey, setTodayKey] = useState(() => toDateKey(new Date()));
@@ -441,32 +438,6 @@ export function DashboardPage() {
   }, [dashboardNoteSiteFilterId, dashboardOverview, loading]);
 
   useEffect(() => {
-    if (!openFreeWorkerKey) {
-      return undefined;
-    }
-
-    function handlePointerDown(event: PointerEvent): void {
-      if (!freeSummaryRef.current?.contains(event.target as Node)) {
-        setOpenFreeWorkerKey(null);
-      }
-    }
-
-    function handleKeyDown(event: globalThis.KeyboardEvent): void {
-      if (event.key === "Escape") {
-        setOpenFreeWorkerKey(null);
-      }
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [openFreeWorkerKey]);
-
-  useEffect(() => {
     let active = true;
 
     if (user?.role === "monteur") {
@@ -499,8 +470,6 @@ export function DashboardPage() {
   }, [user?.role]);
 
   const dashboard = dashboardOverview;
-  const workerSummaryGroups = dashboard?.workerSummaryGroups ?? [];
-  const workerSummaryCount = dashboard?.totalWorkerSummaryPeople ?? 0;
   const siteFilteredDashboardNotes = useMemo(
     () => dashboardNoteSiteFilterId === null
       ? dashboardNotes
@@ -522,17 +491,6 @@ export function DashboardPage() {
       ?? dashboardNotes.find((note) => note.site_id === dashboardNoteSiteFilterId)?.site?.name
       ?? `Baustelle ${dashboardNoteSiteFilterId}`;
   const dashboardGreeting = formatDashboardGreeting(user?.display_name || user?.username || "");
-  const allSummaryWorkers = workerSummaryGroups.flatMap((group) => (
-    group.people.map((person) => ({
-      ...person,
-      detail: formatWorkerSummaryGroupDetail(person, group),
-    }))
-  ));
-
-  function toggleFreeWorkerPopover(key: string): void {
-    setOpenFreeWorkerKey((current) => current === key ? null : key);
-  }
-
   async function dismissDashboardMessage(message: DashboardMessage): Promise<void> {
     if (dismissingMessageKey) {
       return;
@@ -777,53 +735,6 @@ export function DashboardPage() {
           </div>
           <p>{formatDashboardWeatherMeta(weather)}</p>
         </div>
-        <div className="dashboard-free-summary" ref={freeSummaryRef}>
-          <div className="dashboard-free-total">
-            <button
-              aria-expanded={openFreeWorkerKey === FREE_WORKER_ALL_KEY}
-              className={`dashboard-free-total-button${openFreeWorkerKey === FREE_WORKER_ALL_KEY ? " is-active" : ""}`}
-              disabled={!dashboard}
-              type="button"
-              onClick={() => toggleFreeWorkerPopover(FREE_WORKER_ALL_KEY)}
-            >
-              <span className="dashboard-free-summary-label">Einsatz heute</span>
-              <strong>{dashboard ? workerSummaryCount : loading ? "..." : "-"}</strong>
-              <small>Monteure</small>
-            </button>
-            {dashboard && openFreeWorkerKey === FREE_WORKER_ALL_KEY ? (
-              <FreeWorkerPopover
-                title="Monteure heute - Alle"
-                people={allSummaryWorkers}
-              />
-            ) : null}
-          </div>
-          {dashboard ? (
-            <>
-              <div className="dashboard-pill-row">
-                {workerSummaryGroups.length > 0 ? workerSummaryGroups.map((group) => (
-                  <span className="dashboard-pill-shell" key={group.manager.key}>
-                    <button
-                      aria-expanded={openFreeWorkerKey === group.manager.key}
-                      className={`dashboard-pill${openFreeWorkerKey === group.manager.key ? " is-active" : ""}`}
-                      title={group.people.map((person) => person.display_name).join(", ")}
-                      type="button"
-                      onClick={() => toggleFreeWorkerPopover(group.manager.key)}
-                    >
-                      <span>{formatWorkerSummaryBadgeLabel(group)}</span>
-                      <strong>{group.people.length}</strong>
-                    </button>
-                    {openFreeWorkerKey === group.manager.key ? (
-                      <FreeWorkerPopover
-                        title={formatWorkerSummaryPopoverTitle(group)}
-                        people={group.people}
-                      />
-                    ) : null}
-                  </span>
-                )) : <span className="dashboard-muted">Keine Monteure erkannt</span>}
-              </div>
-            </>
-          ) : null}
-        </div>
       </header>
 
       {error && <div className="form-error">{error}</div>}
@@ -835,7 +746,20 @@ export function DashboardPage() {
             <DashboardCard
               title="Heute besetzte Baustellen"
               icon={<BriefcaseBusiness aria-hidden="true" size={20} />}
-              meta={formatTodayAssignedMeta(dashboard.todayAssignedSites)}
+              meta={formatCount(dashboard.todayAssignedSites.length, "Baustelle", "Baustellen")}
+              headerSummary={
+                <div className="dashboard-assigned-totals" role="group" aria-label="Heute eingesetzte Monteure">
+                  <span className="dashboard-assigned-totals-label">Eingesetzt</span>
+                  <span className="dashboard-site-tile-count" title="Interne Monteure" aria-label={`${dashboard.todayAssignedWorkerCounts?.internalCount ?? "…"} interne Monteure`}>
+                    <Users aria-hidden="true" size={16} />
+                    {dashboard.todayAssignedWorkerCounts?.internalCount ?? "…"}
+                  </span>
+                  <span className="dashboard-site-tile-count dashboard-site-tile-count--external" title="Externe Monteure" aria-label={`${dashboard.todayAssignedWorkerCounts?.externalCount ?? "…"} externe Monteure`}>
+                    <Users aria-hidden="true" size={16} />
+                    {dashboard.todayAssignedWorkerCounts?.externalCount ?? "…"}
+                  </span>
+                </div>
+              }
               className="dashboard-card-large dashboard-section--sites"
             >
               {dashboard.todayAssignedSites.length > 0 ? (
@@ -1027,34 +951,6 @@ export function DashboardPage() {
   );
 }
 
-function FreeWorkerPopover({
-  title,
-  people,
-}: {
-  title: string;
-  people: DashboardOverviewPerson[];
-}) {
-  return (
-    <div className="dashboard-free-popover" role="dialog" aria-label={title}>
-      <div className="dashboard-free-popover-header">
-        <strong>{title}</strong>
-        <span>{people.length}</span>
-      </div>
-      {people.length > 0 ? (
-        <div className="dashboard-free-person-list">
-          {people.map((person, index) => (
-            <div className="dashboard-free-person-row" key={`${person.id}:${person.detail ?? ""}:${index}`}>
-              <strong>{person.display_name}</strong>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="dashboard-free-empty">Keine Personen</p>
-      )}
-    </div>
-  );
-}
-
 function DashboardCard({
   title,
   icon,
@@ -1062,6 +958,7 @@ function DashboardCard({
   className,
   meta,
   badge,
+  headerSummary,
 }: {
   title: string;
   icon: ReactNode;
@@ -1069,6 +966,7 @@ function DashboardCard({
   className?: string;
   meta?: ReactNode;
   badge?: ReactNode;
+  headerSummary?: ReactNode;
 }) {
   return (
     <article className={["dashboard-card", className ?? ""].filter(Boolean).join(" ")}>
@@ -1078,6 +976,7 @@ function DashboardCard({
           <h2>{title}</h2>
           {meta ? <p>{meta}</p> : null}
         </div>
+        {headerSummary}
         {badge ? <strong className="dashboard-card-badge">{badge}</strong> : null}
       </div>
       {children}
@@ -1784,15 +1683,6 @@ function formatDashboardWeatherMeta(weather: WeatherSummary | null): string {
   return label;
 }
 
-function formatWorkerSummaryBadgeLabel(group: WorkerSummaryGroup): string {
-  return group.kind === "free" ? "O.Z." : group.manager.label;
-}
-
-function formatTodayAssignedMeta(sites: AssignedSiteSummary[]): string {
-  const workerCount = sites.reduce((total, site) => total + site.internalCount + site.externalCount, 0);
-  return `${formatCount(sites.length, "Baustelle", "Baustellen")} · ${formatCount(workerCount, "Monteur", "Monteure")}`;
-}
-
 function dashboardNotePayloadFromDraft(
   draft: DashboardNoteDraft,
   includeShareUser: boolean,
@@ -2054,20 +1944,6 @@ function formatAssignedSiteGroupMeta(sites: AssignedSiteSummary[]): string {
 
 function formatCount(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function formatWorkerSummaryPopoverTitle(group: WorkerSummaryGroup): string {
-  if (group.kind === "free") {
-    return "Ohne Zuordnung / nicht eingesetzt";
-  }
-  return `Eingesetzt - ${group.manager.label}`;
-}
-
-function formatWorkerSummaryGroupDetail(person: DashboardOverviewPerson, group: WorkerSummaryGroup): string {
-  if (group.kind === "free") {
-    return person.detail || "kein Einsatz heute";
-  }
-  return person.detail ? `${group.manager.label} · ${person.detail}` : group.manager.label;
 }
 
 function groupFreeWorkersByLastManager(workers: Person[], lastManagerByPersonId: Map<number, ManagerSummary>): FreeWorkerGroup[] {

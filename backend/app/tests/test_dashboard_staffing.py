@@ -452,3 +452,31 @@ def test_internal_workers_precede_all_external_types_in_preview_and_full_list(db
         actual = [person["id"] for person in day["freeWorkers"]]
         assert actual == expected  # Same order supplies the popup and the first four bubbles.
         assert actual[:4] == expected[:4]
+
+
+@pytest.mark.parametrize("has_assignments", [False, True])
+def test_assigned_worker_totals_count_unique_people_by_type_only_on_requested_day(db, has_assignments):
+    today = date(2026, 10, 27)
+    internal = worker(db, "Internal", person_type=PersonType.INTERNAL)
+    external = worker(db, "External", person_type=PersonType.EXTERNAL)
+    temporary = worker(db, "Temporary", person_type=PersonType.EXTERNAL_TEMP)
+    free = worker(db, "Free", person_type=PersonType.INTERNAL)
+    first, second = Site(name="First", site_number="1001"), Site(name="Second", site_number="1002")
+    db.add_all([first, second])
+    db.flush()
+    if has_assignments:
+        for person in [internal, external, temporary]:
+            for site in [first, second]:
+                db.add(Assignment(person_id=person.id, site_id=site.id, start_date=today, end_date=today))
+    db.add(Assignment(person_id=free.id, site_id=first.id,
+                      start_date=today + timedelta(days=1), end_date=today + timedelta(days=1)))
+    db.flush()
+    overview = DashboardService(db).get_overview(
+        history_start=today - timedelta(days=35), today=today,
+        tomorrow=today + timedelta(days=1), week_end=date(2026, 11, 1),
+        next_week_start=date(2026, 11, 2), next_week_end=date(2026, 11, 8),
+    )
+    assert overview["todayAssignedWorkerCounts"] == {
+        "internalCount": 1 if has_assignments else 0,
+        "externalCount": 2 if has_assignments else 0,
+    }
