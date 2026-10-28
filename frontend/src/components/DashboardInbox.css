@@ -20,7 +20,7 @@
   background: transparent;
   color: #53677e;
   font: inherit;
-  font-size: 10px;
+  font-size: 0.72rem;
   font-weight: 600;
   line-height: 15px;
   cursor: pointer;
@@ -44,7 +44,7 @@
   padding: 0 4px;
   border: 0;
   background: #2c5f9e;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   line-height: 13.5px;
   font-variant-numeric: tabular-nums;

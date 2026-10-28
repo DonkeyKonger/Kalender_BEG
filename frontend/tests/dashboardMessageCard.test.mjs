@@ -77,9 +77,9 @@ test("card controls forward the correct message and honor pending actions", () =
   }
 });
 
-test("message card keeps the Figma heading, body and prominent responsive read action", () => {
-  assert.match(styles, /\.dashboard-message-card-heading \{[^}]*font-size:\s*10px/s);
+test("message card keeps the Figma heading, body and compact responsive read action", () => {
+  assert.match(styles, /\.dashboard-message-card-heading \{[^}]*font-size:\s*0\.72rem/s);
   assert.match(styles, /\.dashboard-message-card-body > strong \{[^}]*font-size:\s*12px/s);
-  assert.match(styles, /\.dashboard-message-card-read \{[^}]*font-size:\s*16px[^}]*line-height:\s*24px/s);
+  assert.match(styles, /\.dashboard-message-card-read \{[^}]*font-size:\s*0\.78rem[^}]*line-height:\s*15px/s);
   assert.match(styles, /\.dashboard-message-card-footer \{[^}]*flex-wrap:\s*wrap/s);
 });

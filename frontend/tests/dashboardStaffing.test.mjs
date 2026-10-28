@@ -85,7 +85,7 @@ test('Figma dashboard geometry keeps a 348px upper row and a horizontally scroll
   assert.doesNotMatch(page, /title="Einsatzplanung"|<CalendarDays/);
   assert.doesNotMatch(page,/title="Prüfen \/ Konflikte"/);
   assert.match(styles,/min-width:\s*1080px/);
-  assert.match(styles,/grid-template-rows:\s*32px 150px 140px/);
+  assert.match(styles,/grid-template-rows:\s*32px 204px 150px/);
   assert.match(styles,/height:\s*348px/);
 });
 test('worker popup reuses blue bubbles with full names and prefers opening upwards',()=>{
