@@ -39,7 +39,6 @@
   line-height: 31.25px;
 }
 
-.dashboard-page .dashboard-hero-main > p:last-child,
 .dashboard-page .dashboard-hero-simple > div > p:last-child {
   margin: 6px 0 0;
   color: #bdcadb;
@@ -337,7 +336,8 @@
 }
 
 .dashboard-page .dashboard-card-notes .dashboard-note-action-row {
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
   justify-content: stretch;
   gap: 6px;
@@ -348,8 +348,11 @@
 
 .dashboard-page .dashboard-card-notes .dashboard-note-add-button {
   min-height: 32px;
-  flex: 1 1 0;
+  width: 100%;
   min-width: 0;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   gap: 4px;
   border-color: var(--dashboard-figma-border);
   background: #fff;
@@ -366,8 +369,9 @@
   height: 12px;
 }
 
-.dashboard-page .dashboard-card-notes .dashboard-note-add-button:first-child {
-  flex-grow: 1.2;
+.dashboard-page .dashboard-card-notes .dashboard-note-add-button > span {
+  min-width: 0;
+  text-align: center;
 }
 
 .dashboard-page .dashboard-card-notes > .dashboard-notes {
@@ -376,17 +380,25 @@
 }
 
 .dashboard-page .dashboard-note-tabs {
-  height: 29px;
-  min-height: 29px;
-  border-color: var(--dashboard-figma-border);
-  background: #f6f8fb;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  height: 32px;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
 }
 
 .dashboard-page .dashboard-card-notes .dashboard-note-tabs button {
-  height: 27px;
-  min-height: 27px;
+  height: 32px;
+  min-height: 32px;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   gap: 4px;
-  border-color: var(--dashboard-figma-border);
+  border: 1px solid var(--dashboard-figma-border);
+  background: #f6f8fb;
   color: var(--dashboard-figma-muted);
   font-size: 0.78rem;
   font-weight: 600;
@@ -394,7 +406,7 @@
   padding: 4px 0;
 }
 
-.dashboard-page .dashboard-note-tabs button.is-active {
+.dashboard-page .dashboard-card-notes .dashboard-note-tabs button.is-active {
   background: #fff;
   color: var(--dashboard-figma-ink);
 }

@@ -704,6 +704,8 @@ export function DashboardPage() {
     }
   }
 
+  const weatherMeta = formatDashboardWeatherMeta(weather);
+
   if (user?.role === "monteur") {
     return (
       <section className="dashboard-page page-stack">
@@ -725,7 +727,6 @@ export function DashboardPage() {
         <div className="dashboard-hero-main">
           <p className="eyebrow dashboard-greeting">{dashboardGreeting}</p>
           <h1>{formatFullDate(range.today)}</h1>
-          <p>Heute, morgen und die nächsten beiden Wochen auf einen Blick.</p>
         </div>
         <div className="dashboard-weather" aria-label="Wetter Firmenzentrale">
           <span className="dashboard-panel-label">Wetter Firmenzentrale</span>
@@ -734,7 +735,7 @@ export function DashboardPage() {
             <strong>{formatDashboardWeatherTemperature(weather, weatherLoading)}</strong>
             <span>{formatDashboardWeatherCondition(weather, weatherLoading)}</span>
           </div>
-          <p>{formatDashboardWeatherMeta(weather)}</p>
+          {weatherMeta && <p>{weatherMeta}</p>}
         </div>
       </header>
 
@@ -856,7 +857,7 @@ export function DashboardPage() {
                   onClick={openOperationalAbsenceCreateForm}
                 >
                   <Plus aria-hidden="true" size={15} />
-                  Abwesenheit hinzufügen
+                  <span>Abwesenheit hinzufügen</span>
                 </button>
                 <button
                   aria-controls="dashboard-note-editor"
@@ -866,7 +867,7 @@ export function DashboardPage() {
                   onClick={openDashboardNoteCreateForm}
                 >
                   <Plus aria-hidden="true" size={15} />
-                  Notiz hinzufügen
+                  <span>Notiz hinzufügen</span>
                 </button>
               </div>
               <DashboardNotesPanel
@@ -1677,11 +1678,10 @@ function formatDashboardWeatherCondition(weather: WeatherSummary | null, isLoadi
 }
 
 function formatDashboardWeatherMeta(weather: WeatherSummary | null): string {
-  const label = weather?.label ?? "Firmenzentrale";
   if (weather?.available && weather.wind_speed !== null) {
-    return `Wind ${Math.round(weather.wind_speed)} km/h · ${label}`;
+    return `Wind ${Math.round(weather.wind_speed)} km/h`;
   }
-  return label;
+  return "";
 }
 
 function dashboardNotePayloadFromDraft(
