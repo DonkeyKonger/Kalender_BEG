@@ -46,7 +46,7 @@ test("billing tab counts sites rather than documents and shares the smaller mess
   assert.match(failed, /nicht verfügbar/);
   assert.doesNotMatch(failed, />2<\/strong>/);
   const styles = readFileSync(new URL("../src/components/DashboardInbox.css", import.meta.url), "utf8");
-  assert.match(styles, /\.dashboard-card\.dashboard-inbox \.dashboard-card-badge\s*\{[^}]*height: 16px/s);
+  assert.match(styles, /\.dashboard-card\.dashboard-inbox \.dashboard-card-badge\s*\{[^}]*height: 14px/s);
 });
 
 test("billing renders collapsible site groups with both types, status/date and read-only navigation", () => {

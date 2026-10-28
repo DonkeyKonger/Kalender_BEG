@@ -37,6 +37,7 @@ import type { MatrixPerson, MatrixResponse, MatrixRow, MatrixSite } from "../typ
 import { calendarPersonCode, type Person } from "../types/person";
 import type { SiteSummary } from "../types/site";
 import type { WeatherSummary } from "../types/weather";
+import "./DashboardPage.css";
 
 type DateRange = {
   historyStart: string;

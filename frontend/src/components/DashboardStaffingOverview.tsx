@@ -12,7 +12,7 @@ export function DashboardStaffingOverview({ days, today }: { days: DashboardStaf
   return (
     <div className="dashboard-staffing-grid" aria-label="Personalbedarf und freie Monteure für acht Wochentage">
       {days.map((day, index) => (
-        <section className={`dashboard-staffing-day${day.isWorkday ? "" : " is-non-workday"}${index > 0 && new Date(`${day.date}T12:00:00`).getDay() === 1 ? " has-weekend-gap" : ""}`} key={day.date}>
+        <section className={`dashboard-staffing-day${day.date === today ? " is-today" : ""}${day.isWorkday ? "" : " is-non-workday"}${index > 0 && new Date(`${day.date}T12:00:00`).getDay() === 1 ? " has-weekend-gap" : ""}`} key={day.date}>
           <h3><time dateTime={day.date}>{dayFormatter.format(new Date(`${day.date}T12:00:00`))}</time>{day.date === today && <span>Heute</span>}</h3>
           <div className="dashboard-staffing-needs">
             <h4>Baustellenbedarf <span>{day.needs.length}</span></h4>

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { build } from "esbuild";
@@ -17,6 +18,7 @@ const compiled = await build({
 const module = { exports: {} };
 new Function("require", "module", "exports", compiled.outputFiles[0].text)(createRequire(import.meta.url), module, module.exports);
 const { render, tree } = module.exports;
+const styles = readFileSync(new URL("../src/components/DashboardMessageCard.css", import.meta.url), "utf8");
 const base = {message_key:"measurement_submitted:4",message_type:"measurement_submitted",title:"Aufmaß 4",status:"submitted",
   site_id:7,site_name:"Schüchtermann Klinik",site_number:"8007",submitted_by_name:"Marcin Cholewka",event_at:"2026-08-19T17:31:00",submitted_at:null};
 const props = message => ({message:{...base,...message},busy:false,onOpenNote:()=>{},onOpenToolIssue:()=>{},onDismiss:()=>{}});
@@ -73,4 +75,11 @@ test("card controls forward the correct message and honor pending actions", () =
     open.props.onClick(); read.props.onClick();
     assert.deepEqual(called, [[type === "dashboard_note_shared" ? "note" : "tool", p.message], ["dismiss", p.message]]);
   }
+});
+
+test("message card keeps the Figma heading, body and prominent responsive read action", () => {
+  assert.match(styles, /\.dashboard-message-card-heading \{[^}]*font-size:\s*10px/s);
+  assert.match(styles, /\.dashboard-message-card-body > strong \{[^}]*font-size:\s*12px/s);
+  assert.match(styles, /\.dashboard-message-card-read \{[^}]*font-size:\s*16px[^}]*line-height:\s*24px/s);
+  assert.match(styles, /\.dashboard-message-card-footer \{[^}]*flex-wrap:\s*wrap/s);
 });

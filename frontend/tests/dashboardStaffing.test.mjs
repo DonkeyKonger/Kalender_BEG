@@ -78,15 +78,15 @@ test('popup can open through hover, focus and click and closes with Escape or ou
   assert.match(source,/document.addEventListener\("pointerdown", pointer\)/);
   assert.match(source,/day.freeWorkers.map\(person/);
 });
-test('Einsatzplanung gets about twenty percent more height, entirely for sites and taken from the upper desktop row',()=>{
+test('Figma dashboard geometry keeps a 348px upper row and a horizontally scrollable eight-day forecast',()=>{
   const page=readFileSync(new URL('../src/pages/DashboardPage.tsx',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/pages/DashboardPage.css',import.meta.url),'utf8');
   assert.match(page, /<section className="dashboard-card dashboard-section--conflicts" aria-label="Baustellenbedarf und freie Monteure">\s*<DashboardStaffingOverview/);
   assert.doesNotMatch(page, /title="Einsatzplanung"|<CalendarDays/);
   assert.doesNotMatch(page,/title="Prüfen \/ Konflikte"/);
-  assert.match(styles,/--dashboard-staffing-extra-height: 68px/);
-  assert.match(styles,/grid-template-rows: auto calc\(112px \+ var\(--dashboard-staffing-extra-height, 68px\)\) minmax\(150px, auto\)/);
-  assert.match(styles,/height: calc\(clamp\(440px, 50vh, 540px\) - var\(--dashboard-staffing-extra-height\)\)/);
+  assert.match(styles,/min-width:\s*1080px/);
+  assert.match(styles,/grid-template-rows:\s*32px 150px 140px/);
+  assert.match(styles,/height:\s*348px/);
 });
 test('worker popup reuses blue bubbles with full names and prefers opening upwards',()=>{
   const source=readFileSync(new URL('../src/components/DashboardStaffingOverview.tsx',import.meta.url),'utf8');

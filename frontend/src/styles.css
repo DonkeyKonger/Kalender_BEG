@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "BEG Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+}
+
 * {
   box-sizing: border-box;
 }
@@ -222,14 +230,15 @@ button:disabled {
 
 .app-shell {
   min-height: 100vh;
-  background: #f4f7fb;
+  background: #f0f3f7;
 }
 
 .sidebar {
+  font-family: "BEG Inter", Inter, sans-serif;
   position: relative;
   z-index: 60;
   border-bottom: 1px solid rgb(148 163 184 / 20%);
-  background: linear-gradient(180deg, #06294d 0%, #041d38 100%);
+  background: #0d2038;
   padding: 14px;
 }
 
@@ -319,8 +328,8 @@ button:disabled {
   align-items: center;
   gap: 8px;
   min-height: 38px;
-  border-radius: 3px;
-  color: #dce8f7;
+  border-radius: 0;
+  color: #b9c8da;
   padding: 8px 10px;
   text-decoration: none;
 }
@@ -332,21 +341,21 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 17px;
-  height: 17px;
-  border: 2px solid #12385f;
-  border-radius: 999px;
-  background: #dc2626;
+  min-width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 0;
+  background: #2c5f9e;
   color: #ffffff;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
   pointer-events: none;
 }
 
 .nav-list a.active,
 .nav-list a:hover {
-  background: rgb(42 116 191 / 42%);
+  background: #203e62;
   color: #ffffff;
 }
 
@@ -506,12 +515,12 @@ button:disabled {
     bottom: 0;
     left: 0;
     z-index: 60;
-    width: 72px;
+    width: 60px;
     height: 100vh;
     overflow: visible;
     border-right: 0;
     border-bottom: 0;
-    padding: 18px 10px;
+    padding: 20px 10px;
     background: transparent;
     contain: layout style;
   }
@@ -523,17 +532,17 @@ button:disabled {
     left: 0;
     z-index: -1;
     width: 260px;
-    border-right: 1px solid rgb(148 163 184 / 20%);
-    background: linear-gradient(180deg, #06294d 0%, #041d38 100%);
-    box-shadow: 14px 0 28px rgb(4 29 56 / 22%);
+    border-right: 1px solid #213b58;
+    background: #0d2038;
+    box-shadow: none;
     content: "";
-    transform: translate3d(-188px, 0, 0);
+    transform: translate3d(-200px, 0, 0);
     transition: transform 160ms ease;
     will-change: transform;
   }
 
   .app-main {
-    margin-left: 72px;
+    margin-left: 60px;
     min-width: 0;
   }
 
@@ -593,7 +602,7 @@ button:disabled {
   .nav-list {
     display: grid;
     width: 224px;
-    margin-top: 22px;
+    margin-top: 18px;
     margin-bottom: 16px;
     min-height: 0;
     overflow-y: auto;
@@ -604,14 +613,20 @@ button:disabled {
 
   .nav-list a {
     width: 224px;
-    min-height: 42px;
+    height: 40px;
+    min-height: 40px;
     justify-content: flex-start;
     gap: 10px;
-    clip-path: inset(0 172px 0 0);
+    clip-path: inset(0 184px 0 0);
     contain: layout paint;
     overflow: hidden;
     pointer-events: auto;
-    padding: 8px 10px;
+    padding: 8px;
+    border-left: 2px solid transparent;
+  }
+
+  .nav-list a.active {
+    border-left-color: #75a5e0;
   }
 
   .sidebar-logout-button {
@@ -622,7 +637,7 @@ button:disabled {
     justify-content: flex-start;
     width: 224px;
     min-height: 36px;
-    clip-path: inset(0 172px 0 0);
+    clip-path: inset(0 184px 0 0);
     contain: layout paint;
     overflow: hidden;
     pointer-events: none;
@@ -631,9 +646,10 @@ button:disabled {
 
   .nav-list a svg,
   .sidebar-logout-button svg {
-    flex: 0 0 20px;
-    width: 20px;
-    height: 20px;
+    flex: 0 0 19px;
+    width: 19px;
+    height: 19px;
+    stroke-width: 1.7;
   }
 
   .sidebar.is-pointer-expanded .nav-list a,
@@ -656,6 +672,10 @@ button:disabled {
 
   .content-area {
     padding: 24px;
+  }
+
+  .content-area:has(> .dashboard-page) {
+    padding: 20px;
   }
 
   .status-grid {

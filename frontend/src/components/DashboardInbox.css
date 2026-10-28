@@ -2,57 +2,74 @@
   display: flex;
   flex: 0 0 auto;
   border-bottom: 1px solid var(--dashboard-section-border);
+  height: 34px;
 }
 
 .dashboard-inbox-tabs > button {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  /* Together with the tab bar's 1px border, match the 36px notes header. */
-  min-height: 35px;
+  min-height: 33px;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  padding: 7px 8px;
+  padding: 0 8px;
   background: transparent;
   color: #53677e;
   font: inherit;
-  font-size: .75rem;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
   cursor: pointer;
 }
 
 .dashboard-inbox-tabs > button[aria-selected="true"] {
-  background: #edf4ff;
-  border-bottom-color: #2563eb;
-  color: #1e4f91;
+  background: #edf3fa;
+  border-bottom-color: #2c5f9e;
+  color: #2c5f9e;
 }
 
-.dashboard-inbox-tabs svg { flex-shrink: 0; }
+.dashboard-inbox-tabs svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
 .dashboard-card.dashboard-inbox .dashboard-card-badge {
   flex-shrink: 0;
-  min-width: 18px;
-  height: 16px;
+  min-width: 12px;
+  height: 14px;
   padding: 0 4px;
-  font-size: .625rem;
-  line-height: 1;
+  border: 0;
+  background: #2c5f9e;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 13.5px;
   font-variant-numeric: tabular-nums;
+}
+.dashboard-inbox-tabs > button:not([aria-selected="true"]) .dashboard-card-badge {
+  background: #e4eaf1;
+  color: #596b80;
 }
 .dashboard-inbox :is(button, summary, a):focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
 .dashboard-inbox-panel {
   flex: 1 1 auto;
   min-height: 0;
-  height: 420px;
+  height: auto;
   overflow: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
 .dashboard-inbox-panel[hidden] { display: none; }
-.dashboard-inbox .dashboard-inbox-panel > .dashboard-alert-list { max-height: none; overflow: visible; }
+.dashboard-inbox .dashboard-inbox-panel > .dashboard-alert-list {
+  max-height: none;
+  gap: 8px;
+  overflow: visible;
+  padding: 8px;
+}
 .dashboard-inbox-panel > .dashboard-message-box { margin: 12px; }
 .dashboard-billing-summary, .dashboard-billing-feedback { margin: 0; padding: 12px; font-size: .78rem; color: #53677e; }
 .dashboard-billing-summary { display: grid; gap: 4px; }
@@ -77,8 +94,3 @@
 .dashboard-billing-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 9px; color: #62748b; font-size: .7rem; }
 .dashboard-billing-item-meta > span { background: #f0f4f8; padding: 2px 5px; }
 .dashboard-billing-item-meta > svg { margin-left: auto; flex-shrink: 0; }
-
-@media (max-width: 1350px) and (min-width: 1101px) {
-  .dashboard-inbox-tabs > button { padding-inline: 5px; gap: 4px; }
-  .dashboard-inbox-tabs > button > svg { display: none; }
-}
