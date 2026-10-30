@@ -6,6 +6,7 @@ import posixpath
 import re
 import xml.etree.ElementTree as ET
 from copy import deepcopy
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile, is_zipfile
 
@@ -35,11 +36,11 @@ def prepare_payroll_workbook_download(content: bytes) -> bytes:
     approved sheets keeps them compatible without rebuilding payroll data.
     Convert the known legacy total-hours formula and its cached value from Excel
     days to decimal hours, adjusting the dependent overtime formula in the copy.
-    Display retained opening/closing account balances as numeric decimal hours too.
+    Display retained opening/closing balances as decimal hours rounded to quarters.
     """
     try:
         return _prepare_download(content)
-    except (BadZipFile, ET.ParseError, IndexError, KeyError, ValueError):
+    except (BadZipFile, ET.ParseError, IndexError, KeyError, ValueError, InvalidOperation):
         # Unsupported packages retain the existing download/merge validation path.
         return content
 
@@ -289,7 +290,7 @@ def _decimal_total_hours(sheet: ET.Element) -> bool:
 
 
 def _decimal_account_balance(sheet: ET.Element, styles: ET.Element, ref: str) -> bool:
-    """Convert generated duration balances once, including negative text durations."""
+    """Round download balances to quarter hours, without changing stored postings."""
     cell = _find_cell(sheet, ref)
     if cell is None or cell.find(_qname("f")) is not None:
         return False
@@ -297,23 +298,27 @@ def _decimal_account_balance(sheet: ET.Element, styles: ET.Element, ref: str) ->
     format_id = style.get("numFmtId")
     number_format = styles.find(f"{_qname('numFmts')}/{_qname('numFmt')}[@numFmtId='{format_id}']")
     code = number_format.get("formatCode") if number_format is not None else None
-    if code == "0.00" or format_id == "2":
-        return True
-    if code != "[h]:mm":
+    is_decimal = code == "0.00" or format_id == "2"
+    if not is_decimal and code != "[h]:mm":
         return False
-    if cell.get("t") == "inlineStr":
+    hours = None
+    if cell.get("t") == "inlineStr" and not is_decimal:
         text = cell.findtext(f"{_qname('is')}/{_qname('t')}", "")
         negative = re.fullmatch(r"-(\d+):([0-5]\d)", text)
         if negative is None:
             return False
         minutes = -(int(negative[1]) * 60 + int(negative[2]))
-        _set_cell_number(sheet, ref, minutes / 60)
+        hours = Decimal(minutes) / 60
     elif cell.get("t") in {None, "n"}:
         value = cell.find(_qname("v"))
         if value is not None and value.text:
-            _set_cell_number(sheet, ref, round(float(value.text) * 1440) / 60)
+            hours = (Decimal(value.text) if is_decimal
+                     else Decimal(round(float(value.text) * 1440)) / 60)
     else:
         return False
+    if hours is not None:
+        rounded = (hours * 4).quantize(Decimal("1"), rounding=ROUND_HALF_UP) / 4
+        _set_cell_number(sheet, ref, float(rounded) if rounded else 0)
     return True
 
 

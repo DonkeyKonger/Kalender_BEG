@@ -19,7 +19,7 @@ from app.tests.test_payroll_month_xlsx_service import NS, cell_number_format, ce
 
 
 def assert_payroll_cell_preserved(before, after):
-    """Compare content exactly except for the total's explicit unit conversion."""
+    """Preserve content except decimal totals and quarter-rounded account displays."""
     expected = deepcopy(before)
     formula = expected.find("main:f", NS)
     if expected.get("r") == "E41" and formula is not None:
@@ -41,7 +41,9 @@ def assert_payroll_cell_preserved(before, after):
             hours = -(int(whole) + int(minutes) / 60)
         assert after.get("t") in {None, "n"}
         assert after.find("main:f", NS) is None
-        assert float(after.find("main:v", NS).text) == pytest.approx(hours)
+        quarters = int(abs(hours) * 4 + .5)
+        displayed_hours = quarters / 4 * (-1 if hours < 0 else 1)
+        assert float(after.find("main:v", NS).text) == displayed_hours
         return
     assert ET.tostring(expected) == ET.tostring(after)
 
