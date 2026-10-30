@@ -15,6 +15,7 @@ from app.services.payroll_month_xlsx_service import (
     _find_cell,
     _preserve_ignorable_namespaces,
     _qname,
+    _set_cell_number,
     _set_cell_string,
 )
 from app.services.payroll_print_layout import (
@@ -34,6 +35,7 @@ def prepare_payroll_workbook_download(content: bytes) -> bytes:
     approved sheets keeps them compatible without rebuilding payroll data.
     Convert the known legacy total-hours formula and its cached value from Excel
     days to decimal hours, adjusting the dependent overtime formula in the copy.
+    Display retained opening/closing account balances as numeric decimal hours too.
     """
     try:
         return _prepare_download(content)
@@ -249,6 +251,10 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
     if _decimal_total_hours(sheet):
         format_cell(PAYROLL_MONTH_TEMPLATE_LAYOUT.total_hours_cell,
                     horizontal="right", number_format="0.00")
+    for ref in (PAYROLL_MONTH_TEMPLATE_LAYOUT.opening_balance_cell,
+                PAYROLL_MONTH_TEMPLATE_LAYOUT.closing_balance_cell):
+        if _decimal_account_balance(sheet, styles, ref):
+            format_cell(ref, horizontal="right", number_format="0.00")
     format_cell("G48", horizontal="right", number_format='[h]:mm" h"')
     return ET.tostring(styles) != original_styles
 
@@ -278,6 +284,35 @@ def _decimal_total_hours(sheet: ET.Element) -> bool:
                 f"{layout.total_hours_cell}*24-{layout.normal_hours_cell}",
                 f"{layout.total_hours_cell}-{layout.normal_hours_cell}",
             )
+    return True
+
+
+def _decimal_account_balance(sheet: ET.Element, styles: ET.Element, ref: str) -> bool:
+    """Convert generated duration balances once, including negative text durations."""
+    cell = _find_cell(sheet, ref)
+    if cell is None or cell.find(_qname("f")) is not None:
+        return False
+    style = styles.find(_qname("cellXfs"))[int(cell.get("s", "0"))]
+    format_id = style.get("numFmtId")
+    number_format = styles.find(f"{_qname('numFmts')}/{_qname('numFmt')}[@numFmtId='{format_id}']")
+    code = number_format.get("formatCode") if number_format is not None else None
+    if code == "0.00" or format_id == "2":
+        return True
+    if code != "[h]:mm":
+        return False
+    if cell.get("t") == "inlineStr":
+        text = cell.findtext(f"{_qname('is')}/{_qname('t')}", "")
+        negative = re.fullmatch(r"-(\d+):([0-5]\d)", text)
+        if negative is None:
+            return False
+        minutes = -(int(negative[1]) * 60 + int(negative[2]))
+        _set_cell_number(sheet, ref, minutes / 60)
+    elif cell.get("t") in {None, "n"}:
+        value = cell.find(_qname("v"))
+        if value is not None and value.text:
+            _set_cell_number(sheet, ref, round(float(value.text) * 1440) / 60)
+    else:
+        return False
     return True
 
 

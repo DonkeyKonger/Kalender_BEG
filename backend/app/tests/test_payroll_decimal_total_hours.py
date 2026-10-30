@@ -31,6 +31,18 @@ def assert_payroll_cell_preserved(before, after):
         value.text = changed_value.text
     elif expected.get("r") == "D47" and formula is not None:
         formula.text = formula.text.replace("E41*24-D46", "E41-D46")
+    elif expected.get("r") in {"K50", "K51"} and list(expected):
+        value = expected.find("main:v", NS)
+        if value is not None:
+            hours = float(value.text) * 24
+        else:
+            text = expected.find("main:is/main:t", NS).text
+            whole, minutes = text.removeprefix("-").split(":")
+            hours = -(int(whole) + int(minutes) / 60)
+        assert after.get("t") in {None, "n"}
+        assert after.find("main:f", NS) is None
+        assert float(after.find("main:v", NS).text) == pytest.approx(hours)
+        return
     assert ET.tostring(expected) == ET.tostring(after)
 
 
