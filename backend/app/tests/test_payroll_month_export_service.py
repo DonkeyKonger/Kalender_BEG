@@ -295,7 +295,7 @@ def test_downloads_load_calendar_absences_even_without_time_entries(all_workers)
     ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     with ZipFile(BytesIO(content)) as workbook:
         sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
-        assert float(sheet.find('.//m:c[@r="E41"]/m:v', ns).text) * 24 == pytest.approx(16)
+        assert float(sheet.find('.//m:c[@r="E41"]/m:v', ns).text) == pytest.approx(16)
         assert sheet.find('.//m:c[@r="H11"]/m:is/m:t', ns).text == "Urlaub"
         assert sheet.find('.//m:c[@r="H16"]/m:is/m:t', ns).text == "Urlaub"
         assert sheet.find('.//m:c[@r="H17"]/m:is/m:t', ns).text == "Krankheit"
@@ -308,7 +308,7 @@ def test_downloads_load_calendar_absences_even_without_time_entries(all_workers)
             assert len(sheet.find(f'.//m:c[@r="H{row}"]', ns)) == 0
         if all_workers:
             second = ET.fromstring(workbook.read("xl/worksheets/sheet2.xml"))
-            assert float(second.find('.//m:c[@r="E41"]/m:v', ns).text) * 24 == pytest.approx(8)
+            assert float(second.find('.//m:c[@r="E41"]/m:v', ns).text) == pytest.approx(8)
             assert second.find('.//m:c[@r="H18"]/m:is/m:t', ns).text == "Urlaub"
             assert second.find('.//m:c[@r="D48"]/m:v', ns).text == "0"
             assert float(second.find('.//m:c[@r="G48"]/m:v', ns).text) == 0

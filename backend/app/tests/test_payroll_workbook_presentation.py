@@ -4,6 +4,8 @@ from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
+
+from app.tests.test_payroll_decimal_total_hours import assert_payroll_cell_preserved
 from fastapi import HTTPException
 
 from app.services.payroll_month_xlsx_service import (
@@ -95,7 +97,7 @@ def test_retained_and_new_approvals_download_together_without_changing_stored_da
                 corrected = after.find(f'.//main:c[@r="{cell.get("r")}"]', NS)
                 cell.attrib.pop("s", None)
                 corrected.attrib.pop("s", None)
-                assert ET.tostring(cell) == ET.tostring(corrected)
+                assert_payroll_cell_preserved(cell, corrected)
     assert prepare_payroll_workbook_download(single) == single
     current = prepare_payroll_workbook_download(case.workbooks[1])
     assert prepare_payroll_workbook_download(current) == current
@@ -118,7 +120,7 @@ def test_manual_remarks_are_preserved(approved_workers, remark):
             changed = new_sheet.find(f'.//main:c[@r="{cell.get("r")}"]', NS)
             cell.attrib.pop("s", None)
             changed.attrib.pop("s", None)
-            assert ET.tostring(cell) == ET.tostring(changed)
+            assert_payroll_cell_preserved(cell, changed)
         assert cell_text(new_sheet, "I46") == remark
 
 
@@ -198,5 +200,5 @@ def test_download_layout_preserves_calculations_and_unrelated_styles(approved_wo
             assert ET.tostring(style(sheet, styles, ref)) == ET.tostring(style(old_sheet, old_styles, ref))
         old_cell.attrib.pop("s", None)
         new_cell.attrib.pop("s", None)
-        assert ET.tostring(old_cell) == ET.tostring(new_cell)
+        assert_payroll_cell_preserved(old_cell, new_cell)
     assert prepare_payroll_workbook_download(corrected) == corrected

@@ -62,14 +62,14 @@ class PayrollMonthExportService:
             )
             return prepare_payroll_workbook_download(artifact.content)
         if _is_legacy_month(year, month):
-            return self.build_worker_export_from_live_data(
+            return prepare_payroll_workbook_download(self.build_worker_export_from_live_data(
                 person_id=person_id,
                 year=year,
                 month=month,
                 current_user=current_user,
                 opening_balance_minutes=None,
                 closing_balance_minutes=None,
-            )
+            ))
         period = self.db.scalar(
             select(PayrollMonthPeriod).where(
                 PayrollMonthPeriod.year == year,
@@ -285,10 +285,10 @@ class PayrollMonthExportService:
                 month=month,
                 current_user=current_user,
             )
-            return self.build_all_workers_export_from_source(
+            return prepare_payroll_workbook_download(self.build_all_workers_export_from_source(
                 source=source,
                 balances_by_person={person.id: (None, None) for person in source.people},
-            )
+            ))
         month_status = self.db.scalar(select(PayrollMonthPeriod.status).where(
             PayrollMonthPeriod.year == year, PayrollMonthPeriod.month == month,
         ))

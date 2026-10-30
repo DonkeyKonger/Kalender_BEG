@@ -24,7 +24,7 @@ from app.services.payroll_print_layout import (
 
 
 def prepare_payroll_workbook_download(content: bytes) -> bytes:
-    """Keep approved values/formulas and stored bytes; only correct their presentation.
+    """Keep approved hours and stored bytes; only correct the download presentation.
 
     Fit each monthly form on one A4 page, align the header and travel markers,
     and shade the generated footer fields. Fill the vacation summary from the
@@ -32,6 +32,8 @@ def prepare_payroll_workbook_download(content: bytes) -> bytes:
     Remove only the complete, known generated remarks block. Unrelated/manual remarks
     and fallback exports are preserved. Applying the same styles to retained and newly
     approved sheets keeps them compatible without rebuilding payroll data.
+    Convert the known legacy total-hours formula and its cached value from Excel
+    days to decimal hours, adjusting the dependent overtime formula in the copy.
     """
     try:
         return _prepare_download(content)
@@ -155,7 +157,7 @@ def _prepare_download(content: bytes) -> bytes:
 
 
 def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
-    """Style only export fields; keep retained payroll values and formulas intact."""
+    """Style export fields, preserving approved hours when converting their units."""
     cell_xfs = styles.find(_qname("cellXfs"))
     fills = styles.find(_qname("fills"))
     if cell_xfs is None or fills is None:
@@ -244,8 +246,39 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
     gray_fields += [f"{column}{row}" for row in (50, 51) for column in "KL"]
     for ref in gray_fields:
         format_cell(ref, gray=True)
+    if _decimal_total_hours(sheet):
+        format_cell(PAYROLL_MONTH_TEMPLATE_LAYOUT.total_hours_cell,
+                    horizontal="right", number_format="0.00")
     format_cell("G48", horizontal="right", number_format='[h]:mm" h"')
     return ET.tostring(styles) != original_styles
+
+
+def _decimal_total_hours(sheet: ET.Element) -> bool:
+    """Normalize only the generated total; leave custom formulas and payouts alone."""
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    cell = _find_cell(sheet, layout.total_hours_cell)
+    if cell is None:
+        return False
+    formula = cell.find(_qname("f"))
+    legacy = (f"SUM({layout.net_work_column}{layout.first_day_row}:"
+              f"{layout.net_work_column}{layout.last_day_row})")
+    if formula is None or formula.text not in {legacy, f"{legacy}*24"}:
+        return False
+    if formula.text == legacy:
+        value = cell.find(_qname("v"))
+        if value is not None and value.text:
+            # Stored payroll totals have minute precision. Remove only the
+            # floating-point noise introduced by Excel's day representation.
+            value.text = str(round(float(value.text) * 1440) / 60)
+        formula.text = f"{legacy}*24"
+        overtime = _find_cell(sheet, layout.overtime_hours_cell)
+        dependent = overtime.find(_qname("f")) if overtime is not None else None
+        if dependent is not None and dependent.text:
+            dependent.text = dependent.text.replace(
+                f"{layout.total_hours_cell}*24-{layout.normal_hours_cell}",
+                f"{layout.total_hours_cell}-{layout.normal_hours_cell}",
+            )
+    return True
 
 
 def _xml(root: ET.Element) -> bytes:

@@ -6,6 +6,8 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 
+from app.tests.test_payroll_decimal_total_hours import assert_payroll_cell_preserved
+
 from app.models.enums import AbsenceStatus, AbsenceType
 from app.models.person import Person
 from app.services.payroll_month_xlsx_service import (
@@ -100,7 +102,7 @@ def test_retained_approved_downloads_fill_summary_from_stored_days(approved_work
         changed = after.find(f'.//main:c[@r="{cell.get("r")}"]', NS)
         cell.attrib.pop("s", None)
         changed.attrib.pop("s", None)
-        assert ET.tostring(cell) == ET.tostring(changed)
+        assert_payroll_cell_preserved(cell, changed)
     assert artifact.content == old
     assert artifact.content_sha256 == hashlib.sha256(old).hexdigest()
     assert prepare_payroll_workbook_download(downloaded) == downloaded

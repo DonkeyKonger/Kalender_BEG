@@ -5,6 +5,8 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 
+from app.tests.test_payroll_decimal_total_hours import assert_payroll_cell_preserved
+
 from app.services.payroll_approved_workbook_merge import merge_approved_payroll_workbooks
 from app.services.payroll_month_xlsx_service import (
     PayrollMonthSheet, _preserve_ignorable_namespaces,
@@ -100,7 +102,7 @@ def test_retained_print_layout_changes_without_changing_payroll_or_other_parts()
             new_cell = new_sheet.find(f'.//main:c[@r="{cell.get("r")}"]', NS)
             cell.attrib.pop("s", None)
             new_cell.attrib.pop("s", None)
-            assert ET.tostring(new_cell) == ET.tostring(cell)
+            assert_payroll_cell_preserved(cell, new_cell)
         assert ET.tostring(old_sheet.find("main:pageMargins", NS)) == ET.tostring(
             new_sheet.find("main:pageMargins", NS)
         )
