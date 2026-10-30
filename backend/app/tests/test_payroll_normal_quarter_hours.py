@@ -14,7 +14,7 @@ from app.tests.test_payroll_month_xlsx_service import NS, cell_text
 
 
 @pytest.mark.parametrize("weekly_hours, normal_hours", [
-    (40, 173.25), (37.5, 162.5), (38.75, 168), (50, 216.75), (0, 0),
+    (40, 174), (37.5, 163.25), (38.75, 168.5), (50, 217.5), (0, 0),
 ])
 def test_normal_hours_are_numeric_decimal_quarters_and_match_account_totals(
     weekly_hours, normal_hours,
@@ -78,7 +78,7 @@ def test_combined_export_keeps_decimal_normal_hours_and_duration_cells_separate(
     ])
     with ZipFile(BytesIO(result.content)) as package:
         styles = ET.fromstring(package.read("xl/styles.xml"))
-        for index, expected in ((1, 173.25), (2, 168.0)):
+        for index, expected in ((1, 174.0), (2, 168.5)):
             sheet = ET.fromstring(package.read(f"xl/worksheets/sheet{index}.xml"))
             assert float(cell_text(sheet, "D46")) == expected
             cell = sheet.find('.//main:c[@r="D46"]', NS)
