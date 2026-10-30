@@ -6916,6 +6916,8 @@ function MeasurementReviewTable({
   const areaLabelDraftsRef = useRef<Record<string, string>>({});
   const savingCellKeysRef = useRef<Set<string>>(new Set());
   const pendingCreatedCellFocusRef = useRef<{ cellKey: string; source: HTMLInputElement } | null>(null);
+  const pendingNewAreaFocusRef = useRef(false);
+  const [minimumAreaRowCount, setMinimumAreaRowCount] = useState(MEASUREMENT_TABLE_MIN_AREA_ROWS);
   const [viewportColumnCount, setViewportColumnCount] = useState(MEASUREMENT_TABLE_MIN_COLUMNS);
   const [manualColumnDrafts, setManualColumnDrafts] = useState<Record<string, MeasurementManualColumnDraft>>({});
   const [manualColumnTotals, setManualColumnTotals] = useState<Record<string, number>>({});
@@ -6999,7 +7001,7 @@ function MeasurementReviewTable({
     ];
   }, [items, fillerColumnCount, freeInputColumnCount, freePositionOnly]);
   const displayAreaRows: Array<MeasurementMatrixAreaRow & { isPlaceholder?: boolean }> = useMemo(() => {
-    const placeholderCount = Math.max(0, MEASUREMENT_TABLE_MIN_AREA_ROWS - areaRows.length);
+    const placeholderCount = Math.max(0, minimumAreaRowCount - areaRows.length);
     const placeholderAreaRows = Array.from({ length: placeholderCount }, (_, index) => ({
       key: `placeholder-area-${index + 1}`,
       label: "",
@@ -7011,7 +7013,21 @@ function MeasurementReviewTable({
       ...areaRows.map((area) => ({ ...area, isPlaceholder: false })),
       ...placeholderAreaRows,
     ];
-  }, [areaRows]);
+  }, [areaRows, minimumAreaRowCount]);
+  useLayoutEffect(() => {
+    if (!pendingNewAreaFocusRef.current) return;
+    pendingNewAreaFocusRef.current = false;
+    const inputs = tableWrapRef.current?.querySelectorAll<HTMLInputElement>(".measurement-area-input");
+    const input = inputs?.[inputs.length - 1];
+    input?.focus({ preventScroll: true });
+    input?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [displayAreaRows]);
+
+  function addAreaRow(): void {
+    if (!canEditRows || reviewActionLoading) return;
+    pendingNewAreaFocusRef.current = true;
+    setMinimumAreaRowCount((current) => Math.max(current, areaRows.length) + 1);
+  }
   const entryGroups = useMemo(() => {
     const groups = new Map<string, MobileMeasurementItem["entries"]>();
     for (const item of items) {
@@ -7881,6 +7897,22 @@ function MeasurementReviewTable({
             </tr>
             );
           })}
+          {canEditRows ? (
+            <tr className="measurement-matrix-add-row">
+              <th className="measurement-matrix-axis" scope="row">
+                <button
+                  className="measurement-add-area-button"
+                  type="button"
+                  disabled={reviewActionLoading}
+                  onClick={addAreaRow}
+                >
+                  <Plus aria-hidden="true" size={14} />
+                  Zeile hinzufügen
+                </button>
+              </th>
+              {displayColumns.map((column) => <td key={column.key} />)}
+            </tr>
+          ) : null}
         </tbody>
         <tfoot>
           <tr className="measurement-matrix-total-row" data-review-row="total">

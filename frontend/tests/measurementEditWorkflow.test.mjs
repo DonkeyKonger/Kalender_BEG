@@ -188,6 +188,28 @@ test("persisted empty locations are editable without duplicating locations with 
   assert.equal((html.match(/value="EG BTB"/g) ?? []).length, 1);
 });
 
+test("a full measurement keeps an add-row control below all locations and above totals", () => {
+  for (const count of [12, 13, 30]) {
+    for (const freePositionOnly of [true, false]) {
+      const entries = Array.from({ length: count }, (_, index) => ({
+        ...item.entries[0], id: index + 1, area_or_comment: `Raum ${index + 1}`,
+      }));
+      const html = render({ items: [{ ...item, entries }], freePositionOnly });
+      assert.equal((html.match(/aria-label="Bauteil oder Ort"/g) ?? []).length, count);
+      const addIndex = html.indexOf('class="measurement-matrix-add-row"');
+      assert.ok(addIndex > html.lastIndexOf('aria-label="Bauteil oder Ort"'));
+      assert.ok(addIndex < html.indexOf('data-review-row="total"'));
+      assert.match(html.slice(addIndex), /<button[^>]+class="measurement-add-area-button"[^>]*><svg[^>]+aria-hidden="true"[^>]*>[\s\S]*?Zeile hinzufügen<\/button>/);
+    }
+  }
+});
+
+test("adding rows is unavailable for read-only measurements and disabled during saving", () => {
+  assert.doesNotMatch(render({ canEditRows: false }), /measurement-add-area-button/);
+  const html = render({ reviewActionLoading: true });
+  assert.match(html, /<button[^>]+class="measurement-add-area-button"[^>]+disabled=""/);
+});
+
 test("equivalent imported units do not create corrections merely by focusing and leaving the field", () => {
   const html = render({ items: [{ ...item, unit: "M" }] });
   assert.match(html, /aria-label="Einheit für Position 1.01"[^>]*value="m"/);

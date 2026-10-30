@@ -33479,6 +33479,35 @@ body.mobile-modal-scroll-locked {
   outline: none;
 }
 
+.measurement-review-detail.is-table-view .measurement-add-area-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 26px;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #285f9d;
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.measurement-review-detail.is-table-view .measurement-add-area-button:hover:not(:disabled),
+.measurement-review-detail.is-table-view .measurement-add-area-button:focus-visible {
+  border-color: #9cb8da;
+  background: #edf4fc;
+  outline: none;
+}
+
+.measurement-review-detail.is-table-view .measurement-add-area-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .measurement-review-detail.is-table-view .measurement-matrix-empty-cell .measurement-table-input.is-quantity:not(.has-value) {
   background: transparent;
   color: var(--ct-text);
