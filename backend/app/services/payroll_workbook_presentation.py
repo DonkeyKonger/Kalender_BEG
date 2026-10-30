@@ -244,6 +244,7 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
     # Include the full merged fields, but leave labels and manual office areas white.
     gray_fields = ["E41", "D46", "E46", "D47", "E47", "D48", "E48", "G48"]
     gray_fields += [f"{column}{row}" for row in range(49, 53) for column in "EG"]
+    gray_fields += [f"{column}{row}" for row in range(42, 45) for column in "IJKL"]
     gray_fields += [f"{column}{row}" for row in range(46, 50) for column in "IJKL"]
     gray_fields += [f"{column}{row}" for row in (50, 51) for column in "KL"]
     for ref in gray_fields:

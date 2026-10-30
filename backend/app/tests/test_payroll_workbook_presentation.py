@@ -183,6 +183,7 @@ def test_download_layout_preserves_calculations_and_unrelated_styles(approved_wo
     travel = {f"{column}{row}" for row in range(10, 41) for column in "IJKL"}
     gray = {"E41", "D46", "E46", "D47", "E47", "D48", "E48", "G48"}
     gray |= {f"{column}{row}" for row in range(49, 53) for column in "EG"}
+    gray |= {f"{column}{row}" for row in range(42, 45) for column in "IJKL"}
     gray |= {f"{column}{row}" for row in range(46, 50) for column in "IJKL"}
     gray |= {f"{column}{row}" for row in (50, 51) for column in "KL"}
     summary_alignment = style(sheet, styles, "I42").find("main:alignment", NS)
