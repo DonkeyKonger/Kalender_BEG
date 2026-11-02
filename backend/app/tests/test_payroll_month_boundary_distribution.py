@@ -58,17 +58,22 @@ def test_boundary_segments_preserve_their_own_hours_and_existing_rounding(monday
 @pytest.mark.parametrize("reason", ["absence", "holiday", "short_week", "incomplete_week", "five_days", "short_segment"])
 def test_boundary_does_not_weaken_existing_eligibility_or_invent_hours(reason):
     minutes = [600] * 4
-    if reason == "short_week": minutes[-1] = 345
-    if reason == "incomplete_week": minutes[0] = None
-    if reason == "five_days": minutes.append(60)
-    if reason == "short_segment": minutes = [720, 720, 720, 30]
+    if reason == "short_week":
+        minutes[-1] = 345
+    if reason == "incomplete_week":
+        minutes[0] = None
+    if reason == "five_days":
+        minutes.append(60)
+    if reason == "short_segment":
+        minutes = [720, 720, 720, 30]
     entries = boundary_entries(date(2026, 9, 28), minutes)
     kwargs = {}
     if reason == "absence":
         kwargs["absences"] = [Absence(person_id=PERSON.id, absence_type=AbsenceType.FREE,
                                      start_date=date(2026, 10, 2), end_date=date(2026, 10, 2),
                                      status=AbsenceStatus.ACTIVE)]
-    if reason == "holiday": kwargs["non_working_dates"] = {date(2026, 10, 2)}
+    if reason == "holiday":
+        kwargs["non_working_dates"] = {date(2026, 10, 2)}
     plan = build_payroll_month_plan(person=PERSON, year=2026, month=10, entries=entries, **kwargs)
     assert not any(day.is_derived for day in plan.days)
     assert [day.net_work_minutes for day in plan.days] == [item.work_minutes for item in entries if item.work_date.month == 10]
