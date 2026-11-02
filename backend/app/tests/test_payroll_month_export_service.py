@@ -373,6 +373,48 @@ def test_month_source_range_includes_adjacent_days_when_weeks_match_month_edges(
     assert payroll_month_source_range(2026, 5)[1] == date(2026, 6, 1)
 
 
+def test_month_boundary_export_loads_the_whole_week_but_keeps_each_months_hours_and_expenses():
+    with database() as db:
+        worker = person(1, "Test", "Monteur")
+        site = Site(id=1, site_number="7282", name="Schulzentrum", city="Heide")
+        db.add_all([worker, site])
+        dates = [date(2026, 9, 28), date(2026, 9, 29), date(2026, 9, 30), date(2026, 10, 1)]
+        entries = [entry(index, worker.id, site.id, day) for index, day in enumerate(dates, 1)]
+        for item, minutes in zip(entries, [720, 660, 660, 570]):
+            item.work_minutes = minutes
+        db.add_all(entries)
+        db.add_all([PersonWorkDay(person_id=worker.id, work_date=day,
+                                  overnight_status=OvernightStatus.BEG_PAID) for day in dates])
+        db.add(PersonWorkDay(person_id=worker.id, work_date=date(2026, 10, 2),
+                             overnight_status=OvernightStatus.NONE))
+        db.commit()
+        service = PayrollMonthExportService(db)
+        admin = SimpleNamespace(role=UserRole.ADMIN, person_id=None)
+        ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        for month, expected in [(9, {28: 720, 29: 660, 30: 660}), (10, {1: 300, 2: 270})]:
+            single = service.build_worker_export_from_live_data(
+                person_id=worker.id, year=2026, month=month, current_user=admin,
+                opening_balance_minutes=None, closing_balance_minutes=None,
+            )
+            combined = service.build_all_workers_export_from_live_data(
+                year=2026, month=month, current_user=admin,
+                balances_by_person={worker.id: (None, None)},
+            )
+            for content in (single, combined):
+                with ZipFile(BytesIO(content)) as workbook:
+                    sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
+                for day, minutes in expected.items():
+                    assert float(sheet.find(f'.//m:c[@r="E{day + 9}"]/m:v', ns).text) * 1440 == pytest.approx(minutes)
+                assert float(sheet.find('.//m:c[@r="E41"]/m:v', ns).text) * 1440 == pytest.approx(sum(expected.values()))
+                if month == 10:
+                    for ref in ("I10", "K10", "J11"):
+                        assert sheet.find(f'.//m:c[@r="{ref}"]/m:is/m:t', ns).text == "x"
+                    for ref in ("J10", "I11", "K11", "L11"):
+                        assert len(sheet.find(f'.//m:c[@r="{ref}"]', ns)) == 0
+        db.expire_all()
+        assert [item.work_minutes for item in entries] == [720, 660, 660, 570]
+
+
 def database() -> Session:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)

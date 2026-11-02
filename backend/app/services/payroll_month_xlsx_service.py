@@ -496,11 +496,7 @@ def build_payroll_month_plan(
     absence_dates = _active_absence_dates(person, absences)
     blocked_dates = absence_dates.union(non_working_dates)
     for week_start in _month_week_starts(year, month):
-        weekdays = [week_start + timedelta(days=offset) for offset in range(5)]
-        # Eine Verteilung über Monatsgrenzen würde Stunden aus dem gewählten
-        # Abrechnungsmonat heraus- oder hineinverschieben.
-        if any(day.year != year or day.month != month for day in weekdays):
-            continue
+        weekdays = [week_start + timedelta(days=offset) for offset in range(DISTRIBUTED_WORK_DAYS)]
         actual_days = [
             days_by_date[work_date] for work_date in weekdays if work_date in days_by_date
         ]
@@ -514,19 +510,33 @@ def build_payroll_month_plan(
         ):
             continue
 
+        # Recognize the four-day pattern using the entire week, but distribute
+        # only this month's hours across this month's part of that week. A fully
+        # worked month segment keeps its original days and hours.
+        weekdays = [day for day in weekdays if day.year == year and day.month == month]
+        missing_date = missing_dates[0]
+        if missing_date not in weekdays:
+            continue
+        actual_days = [day for day in actual_days if day.work_date in weekdays]
+        if not actual_days:
+            # No hours may be borrowed from the neighbouring month.
+            continue
+        segment_minutes = sum(day.net_work_minutes for day in actual_days)
         actual_days.sort(key=lambda day: day.work_date)
-        # Round the five-day average up to a whole hour for Monday–Thursday.
-        # Friday carries the exact remainder, even when another weekday is derived.
-        minutes_per_week_hour = DISTRIBUTED_WORK_DAYS * 60
+        # Keep the established whole-hour rounding. The last day of the month
+        # segment carries the exact remainder (Friday for a complete week).
+        minutes_per_segment_hour = len(weekdays) * 60
         rounded_daily_minutes = (
-            (actual_week_minutes + minutes_per_week_hour - 1) // minutes_per_week_hour
+            (segment_minutes + minutes_per_segment_hour - 1) // minutes_per_segment_hour
         ) * 60
         distributed_minutes = {
             work_date: rounded_daily_minutes for work_date in weekdays[:-1]
         }
-        distributed_minutes[weekdays[-1]] = actual_week_minutes - (
-            DISTRIBUTED_WORK_DAYS - 1
-        ) * rounded_daily_minutes
+        distributed_minutes[weekdays[-1]] = segment_minutes - (len(weekdays) - 1) * rounded_daily_minutes
+        if distributed_minutes[weekdays[-1]] < 0:
+            # A very short segment cannot support the usual whole-hour rounding.
+            # Retain its recorded hours rather than inventing a negative remainder.
+            continue
         for day in actual_days:
             days_by_date[day.work_date] = _distributed_actual_day(
                 day,
@@ -534,7 +544,6 @@ def build_payroll_month_plan(
             )
 
         last_actual_day = actual_days[-1]
-        missing_date = missing_dates[0]
         derived_start = last_actual_day.start_time
         derived_net_work_minutes = distributed_minutes[missing_date]
         days_by_date[missing_date] = PayrollMonthDay(
