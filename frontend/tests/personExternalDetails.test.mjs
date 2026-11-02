@@ -35,7 +35,7 @@ test("external and temporary external details omit payroll fields and hours acco
     for (const canEdit of [false,true]) {
       const tree=nodes(module.exports.render({person:{id:1,person_type},canEdit,activeAction:null}));
       const labels=tree.map(node=>node.props?.label).filter(Boolean);
-      for (const label of ['Jahresurlaub','Wochenstunden']) assert.equal(labels.includes(label),person_type==='internal');
+      for (const label of ['Eintrittsdatum','Austrittsdatum','Jahresurlaub','Wochenstunden']) assert.equal(labels.includes(label),person_type==='internal');
       for (const label of ['Name','Telefon','E-Mail','Status','Kundenunterschrift','Fahrzeug']) assert.ok(labels.includes(label));
       const actions=tree.filter(node=>node.props?.onOpen).map(node=>node.props.action.key);
       assert.deepEqual(actions,person_type==='internal' ? ['absence','timeAccount','equipment','performance'] : ['absence','equipment','performance']);

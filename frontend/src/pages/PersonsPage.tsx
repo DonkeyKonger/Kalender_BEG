@@ -107,6 +107,8 @@ const emptyPerson: PersonCreate = {
   person_type: "internal",
   is_active: true,
   employment_status: "active",
+  employment_start_date: null,
+  employment_end_date: null,
   can_sign_measurements_immediately: false,
   annual_vacation_days: null,
   weekly_hours: null,
@@ -773,6 +775,30 @@ function PersonReadView({
                 onChange={onStatusChange}
               />
             </PersonDetailField>
+            {isInternal && <PersonDetailField label="Eintrittsdatum">
+              <PersonInlineEditableField
+                ariaLabel="Eintrittsdatum bearbeiten"
+                canEdit={canEdit}
+                displayValue={person.employment_start_date ? formatEmploymentDate(person.employment_start_date) : "Nicht hinterlegt"}
+                isSaving={isSaving}
+                type="date"
+                max={person.employment_end_date ?? undefined}
+                value={person.employment_start_date ?? ""}
+                onSave={(value) => onInformationSave({ employment_start_date: value || null })}
+              />
+            </PersonDetailField>}
+            {isInternal && <PersonDetailField label="Austrittsdatum">
+              <PersonInlineEditableField
+                ariaLabel="Austrittsdatum bearbeiten"
+                canEdit={canEdit}
+                displayValue={person.employment_end_date ? formatEmploymentDate(person.employment_end_date) : "Nicht hinterlegt"}
+                isSaving={isSaving}
+                type="date"
+                min={person.employment_start_date ?? undefined}
+                value={person.employment_end_date ?? ""}
+                onSave={(value) => onInformationSave({ employment_end_date: value || null })}
+              />
+            </PersonDetailField>}
             {isInternal && <PersonDetailField label="Jahresurlaub">
               <PersonInlineEditableField
                 ariaLabel="Jahresurlaub bearbeiten"
@@ -1782,11 +1808,11 @@ function PersonInlineEditableField({
   displayValue: string;
   inputMode?: "decimal" | "email" | "numeric" | "search" | "tel" | "text" | "url";
   isSaving: boolean;
-  max?: number;
-  min?: number;
+  max?: number | string;
+  min?: number | string;
   required?: boolean;
   step?: number | string;
-  type?: "email" | "number" | "tel" | "text";
+  type?: "date" | "email" | "number" | "tel" | "text";
   value: string;
   onSave: (value: string) => Promise<boolean>;
 }) {
@@ -1813,6 +1839,13 @@ function PersonInlineEditableField({
       setFieldError("Pflichtfeld");
       return;
     }
+    if (type === "date" && nextValue && (
+      (typeof min === "string" && nextValue < min)
+      || (typeof max === "string" && nextValue > max)
+    )) {
+      setFieldError("Das Austrittsdatum darf nicht vor dem Eintrittsdatum liegen.");
+      return;
+    }
     if (nextValue === value.trim()) {
       cancelEdit();
       return;
@@ -1831,8 +1864,8 @@ function PersonInlineEditableField({
           aria-label={ariaLabel}
           disabled={isSaving}
           inputMode={inputMode}
-          max={type === "number" ? max : undefined}
-          min={type === "number" ? min : undefined}
+          max={type === "number" || type === "date" ? max : undefined}
+          min={type === "number" || type === "date" ? min : undefined}
           step={type === "number" ? step : undefined}
           type={type}
           value={draft}
@@ -2074,6 +2107,26 @@ function PersonFields({
           onChange={(event) => onChange({ phone: event.target.value || null })}
         />
       </label>
+      {draft.person_type === "internal" && <>
+        <label>
+          <span>Eintrittsdatum</span>
+          <input
+            type="date"
+            max={draft.employment_end_date ?? undefined}
+            value={draft.employment_start_date ?? ""}
+            onChange={(event) => onChange({ employment_start_date: event.target.value || null })}
+          />
+        </label>
+        <label>
+          <span>Austrittsdatum</span>
+          <input
+            type="date"
+            min={draft.employment_start_date ?? undefined}
+            value={draft.employment_end_date ?? ""}
+            onChange={(event) => onChange({ employment_end_date: event.target.value || null })}
+          />
+        </label>
+      </>}
       <label>
         <span>Jahresurlaub</span>
         <input
@@ -2179,6 +2232,8 @@ function toEditablePerson(person: Person): EditablePerson {
     person_type: person.person_type,
     is_active: person.is_active,
     employment_status: personEmploymentStatus(person),
+    employment_start_date: person.employment_start_date ?? null,
+    employment_end_date: person.employment_end_date ?? null,
     can_sign_measurements_immediately: person.can_sign_measurements_immediately,
     annual_vacation_days: person.annual_vacation_days,
     weekly_hours: person.weekly_hours,
@@ -2218,6 +2273,9 @@ function personNameUpdateValues(person: Person, value: string): Partial<PersonCr
 function validatePersonPayload(person: PersonCreate): string | null {
   if (!person.first_name.trim() || !person.last_name.trim()) {
     return "Vorname und Nachname sind Pflicht.";
+  }
+  if (person.employment_start_date && person.employment_end_date && person.employment_end_date < person.employment_start_date) {
+    return "Das Austrittsdatum darf nicht vor dem Eintrittsdatum liegen.";
   }
   if (
     person.annual_vacation_days !== null
@@ -2667,6 +2725,12 @@ function formatPersonAbsenceDateRange(absence: Pick<Absence, "start_date" | "end
 
 function formatIsoDate(value: string): string {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short" }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatEmploymentDate(value: string): string {
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
 }
 
 function formatAbsenceDays(value: number): string {

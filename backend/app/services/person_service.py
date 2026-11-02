@@ -14,6 +14,7 @@ from app.models.site import Site
 from app.models.user import User
 from app.repositories.person_repository import PersonRepository
 from app.schemas.person import ExternalPersonCreate, PersonCreate, PersonMapItem, PersonMapProjectManager, PersonMapResponse, PersonUpdate
+from app.schemas.person import validate_employment_dates
 from app.services.audit_service import AuditService
 from app.services.geo_service import has_valid_coordinates
 from app.services.person_display import calendar_short_code, employee_short_code_from_values
@@ -138,6 +139,14 @@ class PersonService:
         if person is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Person nicht gefunden.")
         values = clean_person_values(payload.model_dump(exclude_unset=True))
+        # PATCH may contain only one date; validate against the persisted counterpart.
+        try:
+            validate_employment_dates(
+                values.get("employment_start_date", person.employment_start_date),
+                values.get("employment_end_date", person.employment_end_date),
+            )
+        except ValueError as error:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
         old_value = person_snapshot(person)
         address_changed = any(
             field in values and getattr(person, field) != values[field]
@@ -360,6 +369,8 @@ def external_person_values(display_name: str) -> dict:
 
 def person_snapshot(person: Person) -> dict:
     deleted_at = getattr(person, "deleted_at", None)
+    employment_start = getattr(person, "employment_start_date", None)
+    employment_end = getattr(person, "employment_end_date", None)
     return {
         "id": person.id,
         "first_name": person.first_name,
@@ -369,6 +380,8 @@ def person_snapshot(person: Person) -> dict:
         "person_type": person.person_type.value,
         "is_active": person.is_active,
         "employment_status": person_employment_status(person),
+        "employment_start_date": employment_start.isoformat() if employment_start else None,
+        "employment_end_date": employment_end.isoformat() if employment_end else None,
         "annual_vacation_days": getattr(person, "annual_vacation_days", None),
         "weekly_hours": getattr(person, "weekly_hours", None),
         "can_sign_measurements_immediately": getattr(person, "can_sign_measurements_immediately", False),

@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Enum, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -9,6 +9,13 @@ from app.models.enums import PersonEmploymentStatus, PersonType, SiteLocationSta
 
 class Person(TimestampMixin, Base):
     __tablename__ = "persons"
+    __table_args__ = (
+        CheckConstraint(
+            "employment_end_date IS NULL OR employment_start_date IS NULL "
+            "OR employment_end_date >= employment_start_date",
+            name="ck_persons_employment_dates",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -26,6 +33,8 @@ class Person(TimestampMixin, Base):
         nullable=False,
         default=PersonEmploymentStatus.ACTIVE.value,
     )
+    employment_start_date: Mapped[date | None] = mapped_column(Date)
+    employment_end_date: Mapped[date | None] = mapped_column(Date)
     annual_vacation_days: Mapped[int | None] = mapped_column(Integer)
     weekly_hours: Mapped[float | None] = mapped_column(Float)
     can_sign_measurements_immediately: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

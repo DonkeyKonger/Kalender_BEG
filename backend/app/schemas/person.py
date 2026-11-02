@@ -14,6 +14,8 @@ class PersonBase(BaseModel):
     person_type: PersonType = PersonType.INTERNAL
     is_active: bool = True
     employment_status: PersonEmploymentStatus = PersonEmploymentStatus.ACTIVE
+    employment_start_date: date | None = None
+    employment_end_date: date | None = None
     annual_vacation_days: int | None = Field(default=None, ge=0, le=365)
     weekly_hours: float | None = Field(default=None, ge=0, le=80)
     can_sign_measurements_immediately: bool = False
@@ -32,6 +34,7 @@ class PersonBase(BaseModel):
 
     @model_validator(mode="after")
     def sync_employment_status(self) -> "PersonBase":
+        validate_employment_dates(self.employment_start_date, self.employment_end_date)
         if "employment_status" in self.model_fields_set:
             self.is_active = self.employment_status == PersonEmploymentStatus.ACTIVE
         elif "is_active" in self.model_fields_set:
@@ -55,6 +58,8 @@ class PersonUpdate(BaseModel):
     person_type: PersonType | None = None
     is_active: bool | None = None
     employment_status: PersonEmploymentStatus | None = None
+    employment_start_date: date | None = None
+    employment_end_date: date | None = None
     annual_vacation_days: int | None = Field(default=None, ge=0, le=365)
     weekly_hours: float | None = Field(default=None, ge=0, le=80)
     can_sign_measurements_immediately: bool | None = None
@@ -73,11 +78,17 @@ class PersonUpdate(BaseModel):
 
     @model_validator(mode="after")
     def sync_employment_status(self) -> "PersonUpdate":
+        validate_employment_dates(self.employment_start_date, self.employment_end_date)
         if "employment_status" in self.model_fields_set and self.employment_status is not None:
             self.is_active = self.employment_status == PersonEmploymentStatus.ACTIVE
         elif "is_active" in self.model_fields_set and self.is_active is not None:
             self.employment_status = PersonEmploymentStatus.ACTIVE if self.is_active else PersonEmploymentStatus.DEPARTED
         return self
+
+
+def validate_employment_dates(start: date | None, end: date | None) -> None:
+    if start is not None and end is not None and end < start:
+        raise ValueError("Das Austrittsdatum darf nicht vor dem Eintrittsdatum liegen.")
 
 
 class PersonAssignedVehicleRead(BaseModel):

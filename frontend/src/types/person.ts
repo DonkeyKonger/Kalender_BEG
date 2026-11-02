@@ -15,6 +15,8 @@ export type Person = {
   person_type: PersonType;
   is_active: boolean;
   employment_status: PersonEmploymentStatus;
+  employment_start_date: string | null;
+  employment_end_date: string | null;
   can_sign_measurements_immediately: boolean;
   annual_vacation_days: number | null;
   weekly_hours: number | null;
@@ -47,6 +49,8 @@ export type PersonCreate = {
   person_type: PersonType;
   is_active: boolean;
   employment_status: PersonEmploymentStatus;
+  employment_start_date: string | null;
+  employment_end_date: string | null;
   can_sign_measurements_immediately: boolean;
   annual_vacation_days: number | null;
   weekly_hours: number | null;
