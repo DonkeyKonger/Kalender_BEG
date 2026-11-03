@@ -12,7 +12,9 @@ from app.services.payroll_month_xlsx_service import (
     _preserve_ignorable_namespaces,
     _set_cell_string,
 )
-from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
+from app.services.payroll_workbook_presentation import (
+    prepare_payroll_workbook_download, _format_payroll_fields,
+)
 from app.tests.test_payroll_individual_month_download import approved_workers as approved_workers
 from app.tests.test_payroll_month_xlsx_service import NS, cell_number_format, cell_text
 
@@ -174,12 +176,13 @@ def test_download_layout_preserves_calculations_and_unrelated_styles(approved_wo
     merges = {merge.get("ref") for merge in sheet.find("main:mergeCells", NS)}
     old_merges = {merge.get("ref") for merge in old_sheet.find("main:mergeCells", NS)}
     assert merges == old_merges - {f"C{row}:E{row}" for row in (2, 3, 4)} | {
-        f"C{row}:F{row}" for row in (2, 3, 4)
+        "C2:G2", "C3:F3", "C4:F4"
     }
     for ref in ("C2", "C4"):
         assert style(sheet, styles, ref).find("main:alignment", NS).get("horizontal") == "right"
     for row in (2, 3, 4):
         assert style(sheet, styles, f"F{row}").get("borderId") == style(old_sheet, old_styles, f"E{row}").get("borderId")
+    assert style(sheet, styles, "G2").get("borderId") == style(old_sheet, old_styles, "E2").get("borderId")
     travel = {f"{column}{row}" for row in range(10, 41) for column in "IJKL"}
     gray = {"E41", "D46", "E46", "D47", "E47", "D48", "E48", "G48"}
     gray |= {f"{column}{row}" for row in range(49, 53) for column in "EG"}
@@ -197,9 +200,33 @@ def test_download_layout_preserves_calculations_and_unrelated_styles(approved_wo
     for old_cell in old_sheet.findall(".//main:c", NS):
         ref = old_cell.get("r")
         new_cell = sheet.find(f'.//main:c[@r="{ref}"]', NS)
-        if ref not in travel | gray | {"C2", "C4", "F2", "F3", "F4", "I42"}:
+        if ref not in travel | gray | {"C2", "C4", "F2", "G2", "F3", "F4", "I42"}:
             assert ET.tostring(style(sheet, styles, ref)) == ET.tostring(style(old_sheet, old_styles, ref))
         old_cell.attrib.pop("s", None)
         new_cell.attrib.pop("s", None)
         assert_payroll_cell_preserved(old_cell, new_cell)
     assert prepare_payroll_workbook_download(corrected) == corrected
+
+
+@pytest.mark.parametrize("previous_merge", ["C2:E2", "C2:F2"])
+@pytest.mark.parametrize("occupied", [False, True])
+def test_name_field_extends_through_g_without_overwriting_content(
+    approved_workers, previous_merge, occupied,
+):
+    with ZipFile(BytesIO(approved_workers.workbooks[0])) as package:
+        sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+        styles = ET.fromstring(package.read("xl/styles.xml"))
+    name_merge = next(item for item in sheet.find("main:mergeCells", NS)
+                      if item.get("ref").startswith("C2:"))
+    name_merge.set("ref", previous_merge)
+    _set_cell_string(sheet, "C2", "Alexandru-Stefan Ardelean")
+    if occupied:
+        row = sheet.find('.//main:row[@r="2"]', NS)
+        if sheet.find('.//main:c[@r="G2"]', NS) is None:
+            ET.SubElement(row, f"{{{NS['main']}}}c", r="G2")
+        _set_cell_string(sheet, "G2", "Manuelle Notiz")
+    _format_payroll_fields(sheet, styles)
+    assert name_merge.get("ref") == (previous_merge if occupied else "C2:G2")
+    assert cell_text(sheet, "C2") == "Alexandru-Stefan Ardelean"
+    if occupied:
+        assert cell_text(sheet, "G2") == "Manuelle Notiz"

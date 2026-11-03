@@ -17,6 +17,7 @@ from app.services.payroll_month_xlsx_service import (
     _preserve_ignorable_namespaces,
     _qname,
     _set_cell_number,
+    _set_cell_formula,
     _set_cell_string,
 )
 from app.services.payroll_print_layout import (
@@ -37,6 +38,7 @@ def prepare_payroll_workbook_download(content: bytes) -> bytes:
     Convert the known legacy total-hours formula and its cached value from Excel
     days to decimal hours, adjusting the dependent overtime formula in the copy.
     Display retained opening/closing balances as decimal hours rounded to quarters.
+    Display overtime payouts and generated differences the same way, right-aligned.
     """
     try:
         return _prepare_download(content)
@@ -222,20 +224,29 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
     merges = sheet.find(_qname("mergeCells"))
     if merges is not None:
         header_merges = {f"C{row}:E{row}": row for row in (2, 3, 4)}
+        header_merges["C2:F2"] = 2
         for merge in merges:
             row_number = header_merges.get(merge.get("ref"))
             if row_number is not None:
-                extension = _find_cell(sheet, f"F{row_number}")
-                if extension is None or not list(extension):
-                    merge.set("ref", f"C{row_number}:F{row_number}")
-                    previous_edge = _find_cell(sheet, f"E{row_number}")
-                    if extension is None and previous_edge is not None:
-                        row = sheet.find(f"{_qname('sheetData')}/{_qname('row')}[@r='{row_number}']")
-                        if row is not None:
-                            extension = ET.Element(_qname("c"), r=f"F{row_number}")
-                            row.insert(list(row).index(previous_edge) + 1, extension)
-                    if extension is not None and previous_edge is not None:
-                        extension.set("s", previous_edge.get("s", "0"))
+                old_edge = merge.get("ref").split(":")[1]
+                last_column = "G" if row_number == 2 else "F"
+                columns = range(ord(old_edge[0]) + 1, ord(last_column) + 1)
+                extensions = [_find_cell(sheet, f"{chr(column)}{row_number}")
+                              for column in columns]
+                if any(cell is not None and list(cell) for cell in extensions):
+                    continue
+                merge.set("ref", f"C{row_number}:{last_column}{row_number}")
+                previous_edge = _find_cell(sheet, old_edge)
+                for column, extension in zip(columns, extensions):
+                    if previous_edge is not None:
+                        if extension is None:
+                            row = sheet.find(f"{_qname('sheetData')}/{_qname('row')}[@r='{row_number}']")
+                            if row is not None:
+                                extension = ET.Element(_qname("c"), r=f"{chr(column)}{row_number}")
+                                row.insert(list(row).index(previous_edge) + 1, extension)
+                        if extension is not None:
+                            extension.set("s", previous_edge.get("s", "0"))
+                            previous_edge = extension
     format_cell(PAYROLL_MONTH_TEMPLATE_LAYOUT.vacation_days_cell, horizontal="center")
     for ref in ("C2", "C4"):
         format_cell(ref, horizontal="right")
@@ -252,6 +263,9 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
         format_cell(ref, gray=True)
     if _decimal_total_hours(sheet):
         format_cell(PAYROLL_MONTH_TEMPLATE_LAYOUT.total_hours_cell,
+                    horizontal="right", number_format="0.00")
+    if _decimal_overtime_hours(sheet, styles):
+        format_cell(PAYROLL_MONTH_TEMPLATE_LAYOUT.overtime_hours_cell,
                     horizontal="right", number_format="0.00")
     for ref in (PAYROLL_MONTH_TEMPLATE_LAYOUT.opening_balance_cell,
                 PAYROLL_MONTH_TEMPLATE_LAYOUT.closing_balance_cell):
@@ -287,6 +301,48 @@ def _decimal_total_hours(sheet: ET.Element) -> bool:
                 f"{layout.total_hours_cell}-{layout.normal_hours_cell}",
             )
     return True
+
+
+def _decimal_overtime_hours(sheet: ET.Element, styles: ET.Element) -> bool:
+    """Convert retained payouts or known generated formulas, never custom formulas."""
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    ref = layout.overtime_hours_cell
+    cell = _find_cell(sheet, ref)
+    if cell is None:
+        return False
+    formula = cell.find(_qname("f"))
+    if formula is None:
+        if cell.get("t") == "inlineStr" and cell.findtext(
+            f"{_qname('is')}/{_qname('t')}", ""
+        ) == "–":
+            return True
+        return _decimal_account_balance(sheet, styles, ref)
+    for total in (layout.total_hours_cell, f"{layout.total_hours_cell}*24"):
+        delta = f"ROUND(({total}-{layout.normal_hours_cell})*60,0)"
+        legacy = (f'IF(ISNUMBER({layout.normal_hours_cell}),'
+                  f'IF({delta}<0,"-"&TEXT(ABS({delta})/1440,"[h]:mm"),{delta}/1440),"–")')
+        decimal = (f'IF(ISNUMBER({layout.normal_hours_cell}),'
+                   f'ROUND(({total}-{layout.normal_hours_cell})*4,0)/4,"–")')
+        if formula.text == decimal:
+            return True
+        if formula.text != legacy:
+            continue
+        value = cell.find(_qname("v"))
+        if value is not None and value.text:
+            if cell.get("t") == "str":
+                negative = re.fullmatch(r"-(\d+):([0-5]\d)", value.text)
+                if negative is None:
+                    return False
+                hours = -Decimal(int(negative[1]) * 60 + int(negative[2])) / 60
+            else:
+                hours = Decimal(round(float(value.text) * 1440)) / 60
+            rounded = (hours * 4).quantize(Decimal("1"), rounding=ROUND_HALF_UP) / 4
+            _set_cell_formula(sheet, ref, decimal, float(rounded) if rounded else 0)
+        else:
+            formula.text = decimal
+            cell.attrib.pop("t", None)
+        return True
+    return False
 
 
 def _decimal_account_balance(sheet: ET.Element, styles: ET.Element, ref: str) -> bool:

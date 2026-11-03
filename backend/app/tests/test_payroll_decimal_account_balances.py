@@ -54,7 +54,7 @@ def test_decimal_account_balances_round_to_quarters_and_preserve_blanks(
                     else:
                         assert cell.get("t") in {None, "n"}
                         assert float(cell_text(sheet, ref)) == expected
-                for ref in ("D46", "D47", "G48"):
+                for ref in ("D46", "G48"):
                     assert cell_text(sheet, ref) == cell_text(old, ref)
 
 

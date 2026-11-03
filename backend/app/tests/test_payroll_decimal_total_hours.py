@@ -29,8 +29,20 @@ def assert_payroll_cell_preserved(before, after):
         changed_value = after.find("main:v", NS)
         assert float(changed_value.text) == pytest.approx(float(value.text) * 24)
         value.text = changed_value.text
-    elif expected.get("r") == "D47" and formula is not None:
-        formula.text = formula.text.replace("E41*24-D46", "E41-D46")
+    elif expected.get("r") == "D47" and list(expected) and expected.get("t") != "inlineStr":
+        value = expected.find("main:v", NS).text
+        if expected.get("t") == "str":
+            whole, minutes = value.removeprefix("-").split(":")
+            hours = -(int(whole) + int(minutes) / 60)
+        else:
+            hours = float(value) * 24
+        assert after.get("t") in {None, "n"}
+        assert float(after.find("main:v", NS).text) == int(abs(hours) * 4 + .5) / 4 * (-1 if hours < 0 else 1)
+        if formula is not None:
+            assert after.find("main:f", NS).text == 'IF(ISNUMBER(D46),ROUND((E41-D46)*4,0)/4,"–")'
+        else:
+            assert after.find("main:f", NS) is None
+        return
     elif expected.get("r") in {"K50", "K51"} and list(expected):
         value = expected.find("main:v", NS)
         if value is not None:
@@ -82,7 +94,7 @@ def test_decimal_total_preserves_quarters_in_both_exports(minutes):
     assert "E41-D46" in sheet.find('.//main:c[@r="D47"]/main:f', NS).text
     with ZipFile(BytesIO(legacy)) as before:
         old = ET.fromstring(before.read("xl/worksheets/sheet1.xml"))
-    for ref in ("D46", "D47", "G48", "K50", "K51"):
+    for ref in ("D46", "G48", "K50", "K51"):
         assert cell_text(sheet, ref) == cell_text(old, ref)
     assert prepare_payroll_workbook_download(corrected) == corrected
 
