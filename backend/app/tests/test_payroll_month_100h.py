@@ -133,8 +133,17 @@ def test_real_48_hour_month_exports_only_surplus_and_preserves_approved_workbook
     assert float(cell_text(sheet,'K50')) * 1440 == pytest.approx(opening)
     assert float(cell_text(sheet,'K51')) * 1440 == pytest.approx(closing)
     assert all(cell_text(sheet, f'I{row}') == '' for row in range(46, 50))
-    combined = PayrollMonthExportService(db).all_workers_export(year=2026,month=8,current_user=user)
-    assert cell_text(workbook_sheet(combined),'D47') == cell_text(sheet,'D47')
+    exports = PayrollMonthExportService(db)
+    combined = exports.all_workers_export(year=2026, month=8, current_user=user)
+    individual = exports.worker_export(
+        person_id=person.id, year=2026, month=8, current_user=user,
+    )
+    # Downloads use decimal hours; retained approval artifacts still store Excel days.
+    for downloaded in (combined, individual):
+        assert float(cell_text(workbook_sheet(downloaded), 'D47')) * 60 == pytest.approx(payout)
+    assert bytes(artifact.content) == content
+    assert posting.source_payload['payout_minutes'] == payout
+    assert posting.balance_after_minutes == closing
     before_ids = list(db.scalars(select(Entry.id)))
     approve(service,person,user)
     assert list(db.scalars(select(Entry.id))) == before_ids
