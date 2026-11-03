@@ -3,7 +3,7 @@ from __future__ import annotations
 import calendar
 from collections import defaultdict
 from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
 from app.models.enums import OvernightStatus
@@ -39,6 +39,7 @@ class PayrollTravelWarning:
 class PayrollTravelPlan:
     markings: dict[date, PayrollTravelMarkings]
     warnings: tuple[PayrollTravelWarning, ...]
+    vacation_departures: frozenset[date] = frozenset()
 
 
 def aggregate_payroll_travel_days(
@@ -73,6 +74,7 @@ def build_payroll_travel_plan(
     year: int,
     month: int,
     days: Mapping[date, PayrollTravelDay],
+    vacation_dates: Collection[date] = (),
 ) -> PayrollTravelPlan:
     """Reisekosten ohne Excel-Zelladressen oder Änderungen an Arbeitsstunden.
 
@@ -83,11 +85,32 @@ def build_payroll_travel_plan(
     Tagesangabe wird nie als 'zu Hause' oder als sicherer Anfang eines neuen
     Hotelblocks gewertet.
     """
+    # Actual work retains priority over an overlapping vacation entry, as in
+    # the monthly hours calculation. Stale hotel selections on vacation do not.
+    vacation_dates = set(vacation_dates) - {
+        work_date for work_date, day in days.items() if day.has_activity
+    }
+    departures = frozenset(
+        vacation_date - timedelta(days=1)
+        for vacation_date in vacation_dates
+        if (previous := days.get(vacation_date - timedelta(days=1))) is not None
+        and previous.has_activity and not previous.has_conflict
+        and previous.overnight_status in HOTEL_STATUSES
+    )
+    days = {
+        work_date: replace(day, overnight_status=OvernightStatus.NONE)
+        if work_date in departures else day
+        for work_date, day in days.items()
+    }
+    for vacation_date in vacation_dates:
+        days[vacation_date] = PayrollTravelDay(OvernightStatus.NONE, False)
     markings: dict[date, PayrollTravelMarkings] = {}
     warnings: list[PayrollTravelWarning] = []
     for day_number in range(1, calendar.monthrange(year, month)[1] + 1):
         work_date = date(year, month, day_number)
         markings[work_date] = PayrollTravelMarkings()
+        if work_date in vacation_dates:
+            continue
         day = days.get(work_date)
         previous = days.get(work_date - timedelta(days=1))
         previous_is_hotel = (
@@ -139,4 +162,5 @@ def build_payroll_travel_plan(
                 travel_14=True,
                 overnight_20=day.overnight_status == OvernightStatus.SELF_PAID,
             )
-    return PayrollTravelPlan(markings=markings, warnings=tuple(warnings))
+    return PayrollTravelPlan(markings=markings, warnings=tuple(warnings),
+                             vacation_departures=departures)

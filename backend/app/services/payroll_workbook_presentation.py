@@ -144,6 +144,7 @@ def _prepare_download(content: bytes) -> bytes:
             ):
                 for ref in generated_remarks:
                     _clear_cell(sheet, ref)
+            _correct_vacation_travel_expenses(sheet, text)
             if _format_payroll_fields(sheet, styles):
                 styles_changed = True
             if ET.tostring(sheet) != original_sheet:
@@ -160,6 +161,66 @@ def _prepare_download(content: bytes) -> bytes:
             for item in source.infolist():
                 target.writestr(item, replacements.get(item.filename, source.read(item.filename)))
         return output.getvalue()
+
+
+def _correct_vacation_travel_expenses(sheet: ET.Element, text) -> None:
+    """Correct retained travel marks using only the approved workbook's vacation rows."""
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    rows = range(layout.first_day_row, layout.last_day_row + 1)
+    vacation_rows = {
+        row for row in rows if text(sheet, f"H{row}") == "Urlaub"
+        and all(text(sheet, f"{column}{row}") == "" for column in "BCDFG")
+    }
+    departures = {
+        row - 1 for row in vacation_rows if row > layout.first_day_row
+        and text(sheet, f"F{row - 1}") in {"BEG", "MA"}
+        and text(sheet, f"B{row - 1}") and text(sheet, f"C{row - 1}")
+    }
+    arrivals = {
+        row + 1 for row in vacation_rows if row < layout.last_day_row
+        and text(sheet, f"F{row + 1}") in {"BEG", "MA"}
+        and text(sheet, f"B{row + 1}") and text(sheet, f"C{row + 1}")
+    }
+    if not departures and not arrivals and not any(
+        text(sheet, f"{column}{row}") for row in vacation_rows for column in "IJKL"
+    ):
+        return
+    # Only the generated markers and summary formulas are safe to recalculate.
+    for row in rows:
+        for column in "IJKL":
+            cell = _find_cell(sheet, f"{column}{row}")
+            if (cell is None or cell.find(_qname("f")) is not None
+                    or cell.get("t") not in {None, "inlineStr", "s"}
+                    or text(sheet, f"{column}{row}").lower() not in {"", "x"}):
+                return
+    summaries = []
+    for row, column in zip(range(49, 53), "IJKL", strict=True):
+        count_ref, amount_ref = f"E{row}", f"G{row}"
+        count_formula = f'COUNTIF({column}{layout.first_day_row}:{column}{layout.last_day_row},"x")'
+        amount_formula = f"{count_ref}*${column}${layout.travel_rate_row}"
+        count_cell, amount_cell = _find_cell(sheet, count_ref), _find_cell(sheet, amount_ref)
+        rate = _find_cell(sheet, f"{column}{layout.travel_rate_row}")
+        if (count_cell is None or amount_cell is None or rate is None
+                or count_cell.findtext(_qname("f")) != count_formula
+                or amount_cell.findtext(_qname("f")) != amount_formula
+                or rate.findtext(_qname("v")) is None):
+            return
+        summaries.append((column, count_ref, amount_ref, count_formula, amount_formula,
+                          Decimal(rate.findtext(_qname("v")))))
+    for row in vacation_rows | departures | arrivals:
+        for column in "IJKL":
+            _clear_cell(sheet, f"{column}{row}")
+        if row in departures:
+            _set_cell_string(sheet, f"J{row}", "x")
+            _set_cell_string(sheet, f"F{row}", "–")
+        elif row in arrivals:
+            _set_cell_string(sheet, f"J{row}", "x")
+            if text(sheet, f"F{row}") == "MA":
+                _set_cell_string(sheet, f"L{row}", "x")
+    for column, count_ref, amount_ref, count_formula, amount_formula, rate in summaries:
+        count = sum(text(sheet, f"{column}{row}").lower() == "x" for row in rows)
+        _set_cell_formula(sheet, count_ref, count_formula, count)
+        _set_cell_formula(sheet, amount_ref, amount_formula, float(count * rate))
 
 
 def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:

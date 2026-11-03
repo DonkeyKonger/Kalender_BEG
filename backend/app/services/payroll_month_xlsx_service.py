@@ -595,27 +595,35 @@ def build_payroll_month_plan(
             "Die Excel-Stundensumme weicht von den erfassten Monatsstunden "
             "zuzüglich Abwesenheitsgutschriften ab."
         )
-    return PayrollMonthPlan(
-        days=month_days,
-        overtime_remainders=(),
-        travel_expenses=build_payroll_travel_plan(
+    travel_expenses = build_payroll_travel_plan(
+        person_id=person.id,
+        year=year,
+        month=month,
+        vacation_dates=_active_absence_dates(person, [
+            absence for absence in absences if absence.absence_type == AbsenceType.VACATION
+        ]),
+        days=aggregate_payroll_travel_days(
             person_id=person.id,
-            year=year,
-            month=month,
-            days=aggregate_payroll_travel_days(
-                person_id=person.id,
-                activity_dates=entries_by_date.keys(),
-                work_days=[
-                    *work_days,
-                    *(
-                        entry.work_day for entry in entries
-                        if entry.person_id == person.id
-                        and entry.source != "gps_suggestion"
-                        and entry.work_day is not None
-                    ),
-                ],
-            ),
+            activity_dates=entries_by_date.keys(),
+            work_days=[
+                *work_days,
+                *(
+                    entry.work_day for entry in entries
+                    if entry.person_id == person.id
+                    and entry.source != "gps_suggestion"
+                    and entry.work_day is not None
+                ),
+            ],
         ),
+    )
+    return PayrollMonthPlan(
+        days=tuple(
+            replace(day, overnight_status=OvernightStatus.NONE)
+            if day.work_date in travel_expenses.vacation_departures else day
+            for day in month_days
+        ),
+        overtime_remainders=(),
+        travel_expenses=travel_expenses,
     )
 
 
