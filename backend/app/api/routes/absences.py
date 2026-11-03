@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.absence import AbsenceCreate, AbsenceRead, AbsenceUpdate, VacationCarryoverRead, VacationCarryoverUpdate
 from app.services.absence_service import AbsenceService
-from app.services.user_display import user_account_display_name, user_short_code
+from app.services.user_display import user_display_name, user_short_code
 
 router = APIRouter(prefix="/absences", tags=["absences"])
 
@@ -124,7 +124,7 @@ def absence_read(absence) -> AbsenceRead:
     creator = getattr(absence, "created_by", None)
     return AbsenceRead.model_validate(absence).model_copy(
         update={
-            "created_by_name": user_account_display_name(creator),
+            "created_by_name": user_display_name(creator),
             "created_by_short_code": user_short_code(creator),
         }
     )

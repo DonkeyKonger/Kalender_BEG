@@ -686,7 +686,7 @@ function AbsenceMatrix({
                                 }}
                               >
                                 <span className="absence-block-type">{mode === "year" ? absenceTypeShortLabel(absence.absence_type) : absenceTypeLabels[absence.absence_type]}</span>
-                                <span className="absence-block-creator" aria-hidden="true">{creator.code}</span>
+                                <span className="absence-block-creator" aria-hidden="true">{creator.label}</span>
                               </button>
                             );
                           })}

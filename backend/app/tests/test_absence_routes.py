@@ -38,8 +38,8 @@ def absence_route_case():
     creator_person = Person(
         first_name="Christopher",
         last_name="Erichsen",
-        display_name="Christopher Erichsen",
-        short_code="CE",
+        display_name="CE",
+        short_code="C.CE",
         person_type=PersonType.INTERNAL,
     )
     creator = User(
@@ -113,8 +113,8 @@ def test_absence_responses_resolve_original_creator_without_list_n_plus_one(
     )
 
     assert created.status_code == 201
-    assert created.json()["created_by_name"] == "Christopher Erichsen"
-    assert created.json()["created_by_short_code"] == "CE"
+    assert created.json()["created_by_name"] == "CE"
+    assert created.json()["created_by_short_code"] == "C.CE"
     created_id = created.json()["id"]
 
     unknown_creator = Absence(
@@ -146,8 +146,8 @@ def test_absence_responses_resolve_original_creator_without_list_n_plus_one(
     assert listed.status_code == 200
     assert len(selects) == 1
     listed_by_id = {item["id"]: item for item in listed.json()}
-    assert listed_by_id[created_id]["created_by_name"] == "Christopher Erichsen"
-    assert listed_by_id[created_id]["created_by_short_code"] == "CE"
+    assert listed_by_id[created_id]["created_by_name"] == "CE"
+    assert listed_by_id[created_id]["created_by_short_code"] == "C.CE"
     assert listed_by_id[unknown_id]["created_by_name"] is None
     assert listed_by_id[unknown_id]["created_by_short_code"] is None
 
@@ -155,8 +155,8 @@ def test_absence_responses_resolve_original_creator_without_list_n_plus_one(
     updated = client.patch(f"/api/absences/{created_id}", json={"note": "Geändert"})
 
     assert updated.status_code == 200
-    assert updated.json()["created_by_name"] == "Christopher Erichsen"
-    assert updated.json()["created_by_short_code"] == "CE"
+    assert updated.json()["created_by_name"] == "CE"
+    assert updated.json()["created_by_short_code"] == "C.CE"
     persisted = db.get(Absence, created_id)
     assert persisted.created_by_user_id == ids["creator"]
     assert persisted.updated_by_user_id == ids["editor"]
@@ -192,9 +192,9 @@ def test_remove_absence_day_endpoint_splits_atomically_and_keeps_creator(
         ("2026-11-05", "2026-11-06"),
     ]
     assert {item["created_by_name"] for item in response.json()} == {
-        "Christopher Erichsen"
+        "CE"
     }
-    assert {item["created_by_short_code"] for item in response.json()} == {"CE"}
+    assert {item["created_by_short_code"] for item in response.json()} == {"C.CE"}
     assert {item["created_at"] for item in response.json()} == {created["created_at"]}
 
     fragments = list(
@@ -222,3 +222,23 @@ def test_remove_absence_day_endpoint_splits_atomically_and_keeps_creator(
     assert outside.status_code == 400
     missing = client.delete("/api/absences/999999/days/2026-11-04")
     assert missing.status_code == 404
+
+
+@pytest.mark.parametrize("employee_name", ["CE", "KE", "Carsten Hinz"])
+def test_existing_absences_follow_the_name_saved_in_employee_details(
+    absence_route_case, employee_name,
+):
+    client, db, _current, ids = absence_route_case
+    created = client.post(
+        "/api/absences",
+        json=absence_payload(ids["person"], "2026-11-02", "2026-11-03"),
+    ).json()
+    creator = db.get(User, ids["creator"])
+    creator.person.display_name = employee_name
+    creator.person.short_code = "C.CE"
+    db.commit()
+    db.expunge_all()
+
+    listed = client.get("/api/absences").json()
+
+    assert next(item for item in listed if item["id"] == created["id"])["created_by_name"] == employee_name
