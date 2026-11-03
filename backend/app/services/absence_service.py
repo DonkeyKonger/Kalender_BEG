@@ -235,6 +235,85 @@ class AbsenceService:
         )
         self.db.commit()
 
+    def remove_absence_day(
+        self,
+        absence_id: int,
+        work_date: date,
+        user_id: int,
+    ) -> list[Absence]:
+        absence = self.absences.get_for_update(absence_id)
+        if absence is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Abwesenheit nicht gefunden.")
+        if work_date < absence.start_date or work_date > absence.end_date:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Datum liegt nicht im Zeitraum der Abwesenheit.",
+            )
+
+        self._assert_range_mutable(
+            absence.start_date,
+            absence.end_date,
+            person_id=absence.person_id,
+        )
+        old_value = absence_snapshot(absence)
+        original_end_date = absence.end_date
+        remaining: list[Absence] = []
+
+        try:
+            if absence.start_date == absence.end_date:
+                self.absences.delete(absence)
+            elif work_date == absence.start_date:
+                absence.start_date = work_date + timedelta(days=1)
+                absence.updated_by_user_id = user_id
+                remaining.append(absence)
+            elif work_date == absence.end_date:
+                absence.end_date = work_date - timedelta(days=1)
+                absence.updated_by_user_id = user_id
+                remaining.append(absence)
+            else:
+                absence.end_date = work_date - timedelta(days=1)
+                absence.updated_by_user_id = user_id
+                right_fragment = Absence(
+                    person_id=absence.person_id,
+                    absence_type=absence.absence_type,
+                    start_date=work_date + timedelta(days=1),
+                    end_date=original_end_date,
+                    status=absence.status,
+                    note=absence.note,
+                    created_by_user_id=absence.created_by_user_id,
+                    updated_by_user_id=user_id,
+                    created_at=absence.created_at,
+                )
+                self.absences.add(right_fragment)
+                remaining.extend((absence, right_fragment))
+
+            self.audit.record(
+                user_id=user_id,
+                action="absence.day_removed",
+                entity_type="absence",
+                entity_id=absence_id,
+                old_value=old_value,
+                new_value={
+                    "removed_date": work_date.isoformat(),
+                    "remaining_segments": [absence_snapshot(item) for item in remaining],
+                },
+            )
+            self._invalidate_payroll_reviews(
+                PayrollReviewRange(
+                    person_id=absence.person_id,
+                    start_date=work_date,
+                    end_date=work_date,
+                )
+            )
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+
+        for item in remaining:
+            self.db.refresh(item)
+        return remaining
+
     def _assert_range_mutable(self, start_date: date, end_date: date, *, person_id: int) -> None:
         try:
             PayrollPeriodGuard(self.db).assert_range_mutable(start_date, end_date, person_id=person_id)

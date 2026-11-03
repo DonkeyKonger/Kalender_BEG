@@ -38,3 +38,5 @@ class Absence(TimestampMixin, Base):
     )
 
     person = relationship("Person", back_populates="absences")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+    updated_by = relationship("User", foreign_keys=[updated_by_user_id])

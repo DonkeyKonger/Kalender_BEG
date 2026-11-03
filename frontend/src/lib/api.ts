@@ -1890,6 +1890,10 @@ export const api = {
     return request<void>(`/absences/${absenceId}`, { method: "DELETE" });
   },
 
+  async deleteAbsenceDate(absenceId: number, date: string): Promise<Absence[]> {
+    return request<Absence[]>(`/absences/${absenceId}/days/${date}`, { method: "DELETE" });
+  },
+
   async payrollMonthlyWorkersXlsx(params: { year: number; month: number; version?: number }): Promise<Blob> {
     const search = new URLSearchParams({
       year: String(params.year),

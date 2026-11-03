@@ -10,6 +10,7 @@ import { useAbsencePayrollLocks } from "../hooks/useAbsencePayrollLocks";
 import { ABSENCE_PAYROLL_CHECK_MESSAGE, ABSENCE_PAYROLL_LOCK_MESSAGE, absenceRangeLock, isAbsencePayrollLockError } from "../lib/absencePayrollLock";
 import type { AbsencePayrollRange } from "../lib/absencePayrollLock";
 import { ApiError, api } from "../lib/api";
+import { absenceCreator } from "../lib/absenceCreator";
 import type { Absence, AbsenceCreate, AbsenceStatus } from "../types/absence";
 import type { AbsenceType } from "../types/matrix";
 import { calendarPersonCode, type Person } from "../types/person";
@@ -290,10 +291,10 @@ export function AbsencesPage() {
     setError(null);
     setMessage(null);
     try {
-      const { updated, created } = await removeAbsenceDate(absence, date);
+      const remaining = await api.deleteAbsenceDate(absence.id, date);
       setAbsences((current) => {
         const withoutOriginal = current.filter((item) => item.id !== absence.id);
-        return [...withoutOriginal, ...updated, ...created].sort(compareAbsences);
+        return [...withoutOriginal, ...remaining].sort(compareAbsences);
       });
       setMessage("Abwesenheit geloescht.");
     } catch (requestError) {
@@ -301,33 +302,6 @@ export function AbsencesPage() {
     } finally {
       setSavingAbsenceId(null);
     }
-  }
-
-  async function removeAbsenceDate(absence: Absence, date: string): Promise<{ updated: Absence[]; created: Absence[] }> {
-    if (absence.start_date === absence.end_date) {
-      await api.deleteAbsence(absence.id);
-      return { updated: [], created: [] };
-    }
-    if (date === absence.start_date) {
-      const updated = await api.updateAbsence(absence.id, { start_date: addDays(date, 1) });
-      return { updated: [updated], created: [] };
-    }
-    if (date === absence.end_date) {
-      const updated = await api.updateAbsence(absence.id, { end_date: addDays(date, -1) });
-      return { updated: [updated], created: [] };
-    }
-
-    const originalEndDate = absence.end_date;
-    const updated = await api.updateAbsence(absence.id, { end_date: addDays(date, -1) });
-    const created = await api.createAbsence({
-      person_id: absence.person_id,
-      absence_type: absence.absence_type,
-      start_date: addDays(date, 1),
-      end_date: originalEndDate,
-      status: absence.status,
-      note: absence.note,
-    });
-    return { updated: [updated], created: [created] };
   }
 
   function openCreateDrawer(personId = 0, date = today) {
@@ -689,27 +663,33 @@ function AbsenceMatrix({
                         }}
                       >
                         <div className="absence-cell-stack">
-                          {cell.absences.map((absence) => (
-                            <button
-                              className={absenceBlockClassName(absence)}
-                              key={absence.id}
-                              title={`${absenceTypeLabels[absence.absence_type]}: ${formatDateRange(absence)}${absence.note ? ` - ${absence.note}` : ""}`}
-                              type="button"
-                              onContextMenu={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                if (canEdit) {
-                                  onDeleteAbsenceDay(absence, cell.date);
-                                }
-                              }}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onAbsenceClick(absence);
-                              }}
-                            >
-                              {mode === "year" ? absenceTypeShortLabel(absence.absence_type) : absenceTypeLabels[absence.absence_type]}
-                            </button>
-                          ))}
+                          {cell.absences.map((absence) => {
+                            const creator = absenceCreator(absence);
+                            const description = `${absenceTypeLabels[absence.absence_type]}: ${formatDateRange(absence)}${absence.note ? ` - ${absence.note}` : ""} · ${creator.description}`;
+                            return (
+                              <button
+                                className={absenceBlockClassName(absence)}
+                                key={absence.id}
+                                title={description}
+                                aria-label={description}
+                                type="button"
+                                onContextMenu={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  if (canEdit) {
+                                    onDeleteAbsenceDay(absence, cell.date);
+                                  }
+                                }}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onAbsenceClick(absence);
+                                }}
+                              >
+                                <span className="absence-block-type">{mode === "year" ? absenceTypeShortLabel(absence.absence_type) : absenceTypeLabels[absence.absence_type]}</span>
+                                <span className="absence-block-creator" aria-hidden="true">{creator.code}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </td>
                     ))}
@@ -887,12 +867,6 @@ function daysBetween(start: string, end: string): string[] {
     current.setDate(current.getDate() + 1);
   }
   return days;
-}
-
-function addDays(value: string, offset: number): string {
-  const date = parseLocalDate(value);
-  date.setDate(date.getDate() + offset);
-  return toDateInputValue(date);
 }
 
 function normalizedDateRange(firstDate: string, secondDate: string): { startDate: string; endDate: string } {

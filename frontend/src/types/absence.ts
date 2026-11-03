@@ -11,6 +11,8 @@ export type Absence = {
   status: AbsenceStatus;
   note: string | null;
   created_by_user_id: number | null;
+  created_by_name?: string | null;
+  created_by_short_code?: string | null;
   updated_by_user_id: number | null;
   created_at: string;
   updated_at: string;

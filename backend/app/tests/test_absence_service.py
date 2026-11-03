@@ -1,10 +1,14 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.models import Base
+from app.models.absence import Absence
+from app.models.audit_log import AuditLog
 from app.models.enums import AbsenceStatus, AbsenceType, PersonType, UserRole
 from app.models.person import Person
 from app.models.time_entry_weekly_review import TimeEntryWeeklyReview
@@ -197,3 +201,196 @@ def test_absence_create_update_and_delete_invalidate_all_affected_payroll_review
     assert {review.status for review in new_reviews} == {"reset"}
     assert all(entry.payroll_reviewed_at is None for entry in new_entries)
     assert len(list(db.scalars(select(TimeEntryWeeklyReview)))) == 3
+
+
+def test_remove_absence_day_invalidates_removed_day_and_preserves_split_provenance():
+    db = db_session()
+    absent_person = Person(
+        first_name="Mara",
+        last_name="Test",
+        display_name="Mara Test",
+        short_code="MT",
+        person_type=PersonType.INTERNAL,
+    )
+    creator_person = Person(
+        first_name="Christopher",
+        last_name="Erichsen",
+        display_name="Christopher Erichsen",
+        short_code="CE",
+        person_type=PersonType.INTERNAL,
+    )
+    creator = User(
+        username="creator",
+        display_name="Christopher Erichsen",
+        password_hash="x",
+        role=UserRole.ADMIN,
+        person=creator_person,
+    )
+    editor = User(
+        username="editor",
+        display_name="Anna Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add_all([absent_person, creator, editor])
+    db.commit()
+    service = AbsenceService(db)
+    removed_date = date.fromisocalendar(2026, 45, 3)
+    absence = service.create_absence(
+        AbsenceCreate(
+            person_id=absent_person.id,
+            absence_type=AbsenceType.VACATION,
+            start_date=removed_date - timedelta(days=2),
+            end_date=removed_date + timedelta(days=2),
+            note="Urlaub",
+        ),
+        creator.id,
+    )
+    original_created_at = absence.created_at
+    entry = WorkTimeEntry(
+        person_id=absent_person.id,
+        work_date=removed_date,
+        work_minutes=480,
+        break_minutes=0,
+        travel_minutes=0,
+        payroll_reviewed_by_user_id=editor.id,
+        payroll_reviewed_at=datetime(2026, 11, 4, 18, 0),
+    )
+    review = TimeEntryWeeklyReview(
+        person_id=absent_person.id,
+        iso_year=2026,
+        iso_week=45,
+        status="reviewed",
+        reviewed_by_user_id=editor.id,
+        reviewed_at=datetime(2026, 11, 6, 12, 0),
+    )
+    db.add_all([entry, review])
+    db.commit()
+
+    remaining = service.remove_absence_day(absence.id, removed_date, editor.id)
+
+    assert [(item.start_date, item.end_date) for item in remaining] == [
+        (removed_date - timedelta(days=2), removed_date - timedelta(days=1)),
+        (removed_date + timedelta(days=1), removed_date + timedelta(days=2)),
+    ]
+    assert {item.created_by_user_id for item in remaining} == {creator.id}
+    assert {item.updated_by_user_id for item in remaining} == {editor.id}
+    assert {item.created_at for item in remaining} == {original_created_at}
+    assert {item.note for item in remaining} == {"Urlaub"}
+    db.refresh(entry)
+    db.refresh(review)
+    assert entry.payroll_reviewed_by_user_id is None
+    assert entry.payroll_reviewed_at is None
+    assert review.status == "reset"
+    audit = db.scalar(select(AuditLog).where(AuditLog.action == "absence.day_removed"))
+    assert audit.user_id == editor.id
+    assert audit.old_value_json["start_date"] == (removed_date - timedelta(days=2)).isoformat()
+    assert audit.new_value_json["removed_date"] == removed_date.isoformat()
+
+
+def test_remove_absence_day_handles_boundaries_single_days_and_invalid_date():
+    db = db_session()
+    person = Person(
+        first_name="Mara",
+        last_name="Test",
+        display_name="Mara Test",
+        short_code="MT",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="editor",
+        display_name="Anna Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add_all([person, user])
+    db.commit()
+    service = AbsenceService(db)
+
+    start_trimmed = service.create_absence(
+        AbsenceCreate(
+            person_id=person.id,
+            absence_type=AbsenceType.VACATION,
+            start_date=date(2026, 11, 2),
+            end_date=date(2026, 11, 4),
+        ),
+        user.id,
+    )
+    start_result = service.remove_absence_day(
+        start_trimmed.id,
+        date(2026, 11, 2),
+        user.id,
+    )
+    assert [(item.id, item.start_date, item.end_date) for item in start_result] == [
+        (start_trimmed.id, date(2026, 11, 3), date(2026, 11, 4))
+    ]
+
+    end_result = service.remove_absence_day(
+        start_trimmed.id,
+        date(2026, 11, 4),
+        user.id,
+    )
+    assert [(item.start_date, item.end_date) for item in end_result] == [
+        (date(2026, 11, 3), date(2026, 11, 3))
+    ]
+
+    with pytest.raises(HTTPException) as caught:
+        service.remove_absence_day(start_trimmed.id, date(2026, 11, 4), user.id)
+    assert caught.value.status_code == 400
+    assert db.get(Absence, start_trimmed.id).start_date == date(2026, 11, 3)
+
+    removed = service.remove_absence_day(
+        start_trimmed.id,
+        date(2026, 11, 3),
+        user.id,
+    )
+    assert removed == []
+    assert db.get(Absence, start_trimmed.id) is None
+
+
+def test_remove_absence_day_rolls_back_both_fragments_when_commit_fails(monkeypatch):
+    db = db_session()
+    person = Person(
+        first_name="Mara",
+        last_name="Test",
+        display_name="Mara Test",
+        short_code="MT",
+        person_type=PersonType.INTERNAL,
+    )
+    user = User(
+        username="editor",
+        display_name="Anna Büro",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    db.add_all([person, user])
+    db.commit()
+    service = AbsenceService(db)
+    absence = service.create_absence(
+        AbsenceCreate(
+            person_id=person.id,
+            absence_type=AbsenceType.VACATION,
+            start_date=date(2026, 11, 2),
+            end_date=date(2026, 11, 6),
+        ),
+        user.id,
+    )
+    original_id = absence.id
+    real_commit = db.commit
+
+    def fail_commit():
+        raise RuntimeError("commit failed")
+
+    monkeypatch.setattr(db, "commit", fail_commit)
+    with pytest.raises(RuntimeError, match="commit failed"):
+        service.remove_absence_day(original_id, date(2026, 11, 4), user.id)
+    monkeypatch.setattr(db, "commit", real_commit)
+    db.expire_all()
+
+    persisted = list(db.scalars(select(Absence).order_by(Absence.id)))
+    assert [(item.id, item.start_date, item.end_date) for item in persisted] == [
+        (original_id, date(2026, 11, 2), date(2026, 11, 6))
+    ]
+    assert db.scalar(
+        select(AuditLog).where(AuditLog.action == "absence.day_removed")
+    ) is None

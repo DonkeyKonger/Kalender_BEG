@@ -129,6 +129,9 @@ class FakeAbsenceService:
     def delete_absence(self, _absence_id: int, _user_id: int) -> None:
         pass
 
+    def remove_absence_day(self, _absence_id: int, _work_date, _user_id: int):
+        return []
+
     def set_vacation_carryover(
         self,
         *,
@@ -190,6 +193,7 @@ def test_office_with_opt_in_can_use_post_patch_put_and_delete(monkeypatch):
 
     assert client.post("/api/absences", json=ABSENCE_CREATE_PAYLOAD).status_code == 201
     assert client.patch("/api/absences/11", json={"note": "Geändert"}).status_code == 200
+    assert client.delete("/api/absences/11/days/2026-07-20").status_code == 200
     assert client.put(
         "/api/absences/vacation-carryover",
         json={"person_id": 3, "year": 2026, "carryover_days": 4},
@@ -202,6 +206,7 @@ def test_office_with_opt_in_can_use_post_patch_put_and_delete(monkeypatch):
     [
         ("post", "/api/absences", ABSENCE_CREATE_PAYLOAD),
         ("patch", "/api/absences/11", {"note": "Geändert"}),
+        ("delete", "/api/absences/11/days/2026-07-20", None),
         (
             "put",
             "/api/absences/vacation-carryover",

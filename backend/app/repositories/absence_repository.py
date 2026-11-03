@@ -1,11 +1,12 @@
 from datetime import date
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, contains_eager, joinedload
 
 from app.models.absence import Absence
 from app.models.enums import AbsenceStatus
 from app.models.person import Person
+from app.models.user import User
 
 
 class AbsenceRepository:
@@ -14,6 +15,13 @@ class AbsenceRepository:
 
     def get(self, absence_id: int) -> Absence | None:
         return self.db.get(Absence, absence_id)
+
+    def get_for_update(self, absence_id: int) -> Absence | None:
+        return self.db.scalar(
+            select(Absence)
+            .where(Absence.id == absence_id)
+            .with_for_update()
+        )
 
     def list(
         self,
@@ -25,7 +33,10 @@ class AbsenceRepository:
         statement = (
             select(Absence)
             .join(Absence.person)
-            .options(selectinload(Absence.person))
+            .options(
+                contains_eager(Absence.person),
+                joinedload(Absence.created_by).joinedload(User.person),
+            )
             .where(
                 Absence.status == AbsenceStatus.ACTIVE,
                 Person.deleted_at.is_(None),

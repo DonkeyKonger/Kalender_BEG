@@ -30,7 +30,10 @@ def case():
 
 
 @pytest.mark.parametrize("scope", ["person", "global"])
-@pytest.mark.parametrize("action", ["create", "update", "cancel", "delete", "move_date", "move_person"])
+@pytest.mark.parametrize(
+    "action",
+    ["create", "update", "cancel", "delete", "remove_day", "move_date", "move_person"],
+)
 def test_closed_month_rejects_every_absence_change_with_requested_notice(case, scope, action):
     db, service, people, user, absence = case
     lock = (PayrollMonthPersonApproval(year=2026, month=8, person_id=people[0].id, status="APPROVED")
@@ -44,6 +47,8 @@ def test_closed_month_rejects_every_absence_change_with_requested_notice(case, s
                 start_date=date(2026, 7, 31), end_date=date(2026, 9, 1)), user.id)
         elif action == "delete":
             service.delete_absence(absence.id, user.id)
+        elif action == "remove_day":
+            service.remove_absence_day(absence.id, date(2026, 9, 1), user.id)
         else:
             fields = {"update": {"note": "changed"}, "cancel": {"status": AbsenceStatus.CANCELLED},
                       "move_date": {"start_date": date(2026, 9, 1)}, "move_person": {"person_id": people[1].id}}[action]

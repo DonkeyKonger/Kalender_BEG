@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Iterable
 
 from app.models.enums import UserRole
@@ -37,10 +38,38 @@ def user_display_name(user: User | None) -> str | None:
     person_name = getattr(person, "display_name", None)
     if isinstance(person_name, str) and person_name.strip():
         return person_name.strip()
+    return user_account_display_name(user)
+
+
+def user_account_display_name(user: User | None) -> str | None:
+    if user is None:
+        return None
     display_name = getattr(user, "display_name", None)
     if isinstance(display_name, str) and display_name.strip():
         return display_name.strip()
     return None
+
+
+def user_short_code(user: User | None) -> str | None:
+    """Return the linked employee code or stable initials for an unlinked user."""
+    if user is None:
+        return None
+    person = getattr(user, "person", None)
+    person_short_code = getattr(person, "short_code", None)
+    if isinstance(person_short_code, str) and person_short_code.strip():
+        return person_short_code.strip()
+    return display_name_initials(user_account_display_name(user))
+
+
+def display_name_initials(display_name: str | None) -> str | None:
+    if not isinstance(display_name, str):
+        return None
+    parts = re.findall(r"[^\W_]+", display_name, flags=re.UNICODE)
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+    return "".join(part[0] for part in parts[:2]).upper()
 
 
 def user_role_document_label(role: UserRole | str | None) -> str:

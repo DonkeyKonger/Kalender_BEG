@@ -44,6 +44,8 @@ class AbsenceRead(BaseModel):
     status: AbsenceStatus
     note: str | None = None
     created_by_user_id: int | None = None
+    created_by_name: str | None = None
+    created_by_short_code: str | None = None
     updated_by_user_id: int | None = None
     created_at: datetime
     updated_at: datetime

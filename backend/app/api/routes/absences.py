@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.absence import AbsenceCreate, AbsenceRead, AbsenceUpdate, VacationCarryoverRead, VacationCarryoverUpdate
 from app.services.absence_service import AbsenceService
+from app.services.user_display import user_account_display_name, user_short_code
 
 router = APIRouter(prefix="/absences", tags=["absences"])
 
@@ -36,7 +37,7 @@ def list_absences(
         end=end,
         person_id=person_id,
     )
-    return [AbsenceRead.model_validate(item) for item in absences]
+    return [absence_read(item) for item in absences]
 
 
 @router.post("", response_model=AbsenceRead, status_code=201)
@@ -46,7 +47,7 @@ def create_absence(
     db: Session = Depends(get_db),
 ) -> AbsenceRead:
     absence = AbsenceService(db).create_absence(payload, current_user.id)
-    return AbsenceRead.model_validate(absence)
+    return absence_read(absence)
 
 
 @router.get("/vacation-carryover", response_model=VacationCarryoverRead)
@@ -91,7 +92,22 @@ def update_absence(
     db: Session = Depends(get_db),
 ) -> AbsenceRead:
     absence = AbsenceService(db).update_absence(absence_id, payload, current_user.id)
-    return AbsenceRead.model_validate(absence)
+    return absence_read(absence)
+
+
+@router.delete("/{absence_id}/days/{work_date}", response_model=list[AbsenceRead])
+def remove_absence_day(
+    absence_id: int,
+    work_date: date,
+    current_user: User = Depends(CAN_WRITE),
+    db: Session = Depends(get_db),
+) -> list[AbsenceRead]:
+    remaining = AbsenceService(db).remove_absence_day(
+        absence_id,
+        work_date,
+        current_user.id,
+    )
+    return [absence_read(item) for item in remaining]
 
 
 @router.delete("/{absence_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -102,3 +118,13 @@ def delete_absence(
 ) -> Response:
     AbsenceService(db).delete_absence(absence_id, current_user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def absence_read(absence) -> AbsenceRead:
+    creator = getattr(absence, "created_by", None)
+    return AbsenceRead.model_validate(absence).model_copy(
+        update={
+            "created_by_name": user_account_display_name(creator),
+            "created_by_short_code": user_short_code(creator),
+        }
+    )
