@@ -21,14 +21,30 @@ test("missing legacy attribution is not replaced by the absent person or editor"
   });
 });
 
-test("employee names are kept as entered and missing names do not use generated codes", () => {
+test("initials are derived from the employee name while full names remain accessible", () => {
   assert.deepEqual(absenceCreator({ created_by_short_code: "C.Hinz", created_by_name: "Carsten Hinz" }), {
-    label: "Carsten Hinz", description: "Eingetragen von Carsten Hinz",
+    label: "CH", description: "Eingetragen von Carsten Hinz",
   });
   assert.deepEqual(absenceCreator({ created_by_short_code: "C.CE" }), {
     label: "–", description: "Ersteller nicht hinterlegt",
   });
   assert.deepEqual(absenceCreator({ created_by_name: "Christopher Beispiel" }), {
-    label: "Christopher Beispiel", description: "Eingetragen von Christopher Beispiel",
+    label: "CB", description: "Eingetragen von Christopher Beispiel",
   });
+});
+
+test("one-word names longer than two letters use only their first initial", () => {
+  for (const [name, label] of [["Administrator", "A"], ["max", "M"], ["Özlem", "Ö"], ["CE", "CE"], ["KE", "KE"], ["A", "A"]]) {
+    assert.deepEqual(absenceCreator({ created_by_name: name }), {
+      label, description: `Eingetragen von ${name}`,
+    });
+  }
+});
+
+test("all name parts contribute an uppercase initial", () => {
+  for (const [name, label] of [["max Mustermann", "MM"], ["Max   Mustermann", "MM"], ["Anna Maria Muster", "AMM"], ["Karl-Heinz Müller", "KHM"]]) {
+    assert.deepEqual(absenceCreator({ created_by_name: name }), {
+      label, description: `Eingetragen von ${name}`,
+    });
+  }
 });
