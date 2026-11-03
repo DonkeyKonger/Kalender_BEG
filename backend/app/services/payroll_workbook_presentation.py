@@ -39,6 +39,7 @@ def prepare_payroll_workbook_download(content: bytes) -> bytes:
     days to decimal hours, adjusting the dependent overtime formula in the copy.
     Display retained opening/closing balances as decimal hours rounded to quarters.
     Display overtime payouts and generated differences the same way, right-aligned.
+    Convert daily work and breaks to decimal quarters and sum the displayed work hours.
     """
     try:
         return _prepare_download(content)
@@ -261,12 +262,15 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
     gray_fields += [f"{column}{row}" for row in (50, 51) for column in "KL"]
     for ref in gray_fields:
         format_cell(ref, gray=True)
-    if _decimal_total_hours(sheet):
+    if _decimal_total_hours(sheet, styles):
         format_cell(PAYROLL_MONTH_TEMPLATE_LAYOUT.total_hours_cell,
                     horizontal="right", number_format="0.00")
+        for ref in _decimal_daily_hours(sheet, styles):
+            format_cell(ref, horizontal="right", number_format="0.00")
     if _decimal_overtime_hours(sheet, styles):
         format_cell(PAYROLL_MONTH_TEMPLATE_LAYOUT.overtime_hours_cell,
                     horizontal="right", number_format="0.00")
+        _refresh_generated_overtime_cache(sheet)
     for ref in (PAYROLL_MONTH_TEMPLATE_LAYOUT.opening_balance_cell,
                 PAYROLL_MONTH_TEMPLATE_LAYOUT.closing_balance_cell):
         if _decimal_account_balance(sheet, styles, ref):
@@ -275,7 +279,7 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
     return ET.tostring(styles) != original_styles
 
 
-def _decimal_total_hours(sheet: ET.Element) -> bool:
+def _decimal_total_hours(sheet: ET.Element, styles: ET.Element) -> bool:
     """Normalize only the generated total; leave custom formulas and payouts alone."""
     layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
     cell = _find_cell(sheet, layout.total_hours_cell)
@@ -286,7 +290,7 @@ def _decimal_total_hours(sheet: ET.Element) -> bool:
               f"{layout.net_work_column}{layout.last_day_row})")
     if formula is None or formula.text not in {legacy, f"{legacy}*24"}:
         return False
-    if formula.text == legacy:
+    if formula.text == legacy and _hours_format(styles, cell) != "0.00":
         value = cell.find(_qname("v"))
         if value is not None and value.text:
             # Stored payroll totals have minute precision. Remove only the
@@ -301,6 +305,79 @@ def _decimal_total_hours(sheet: ET.Element) -> bool:
                 f"{layout.total_hours_cell}-{layout.normal_hours_cell}",
             )
     return True
+
+
+def _hours_format(styles: ET.Element, cell: ET.Element) -> str | None:
+    style = styles.find(_qname("cellXfs"))[int(cell.get("s", "0"))]
+    format_id = style.get("numFmtId")
+    if format_id == "2":
+        return "0.00"
+    custom = styles.find(f"{_qname('numFmts')}/{_qname('numFmt')}[@numFmtId='{format_id}']")
+    return custom.get("formatCode") if custom is not None else None
+
+
+def _decimal_daily_hours(sheet: ET.Element, styles: ET.Element) -> list[str]:
+    """Convert generated daily values together so the sum never mixes hours and days."""
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    values: dict[str, Decimal | None] = {}
+    for row in range(layout.first_day_row, layout.last_day_row + 1):
+        ref = f"{layout.net_work_column}{row}"
+        cell = _find_cell(sheet, ref)
+        if (cell is None or cell.find(_qname("f")) is not None
+                or cell.get("t") not in {None, "n"}
+                or _hours_format(styles, cell) not in {"0.00", "[h]:mm"}):
+            return []  # Preserve custom daily formulas or content without changing units.
+        value = cell.findtext(_qname("v"))
+        hours = None
+        if value:
+            hours = (Decimal(value) if _hours_format(styles, cell) == "0.00"
+                     else Decimal(round(float(value) * 1440)) / 60)
+            hours = (hours * 4).quantize(Decimal("1"), rounding=ROUND_HALF_UP) / 4
+        values[ref] = hours
+    total = sum((value for value in values.values() if value is not None), Decimal(0))
+    _set_cell_formula(
+        sheet, layout.total_hours_cell,
+        f"SUM({layout.net_work_column}{layout.first_day_row}:"
+        f"{layout.net_work_column}{layout.last_day_row})", float(total),
+    )
+    for ref, hours in values.items():
+        if hours is not None:
+            _set_cell_number(sheet, ref, float(hours) if hours else 0)
+    refs = list(values)
+    for row in range(layout.first_day_row, layout.last_day_row + 1):
+        ref = f"{layout.break_column}{row}"
+        cell = _find_cell(sheet, ref)
+        if cell is None or cell.find(_qname("f")) is not None:
+            continue
+        if not list(cell):
+            refs.append(ref)
+        elif cell.get("t") == "inlineStr":
+            duration = re.fullmatch(r"(\d+):([0-5]\d)", "".join(cell.itertext()))
+            if duration:
+                quarters = (Decimal(int(duration[1]) * 60 + int(duration[2])) / 15).quantize(
+                    Decimal("1"), rounding=ROUND_HALF_UP,
+                )
+                _set_cell_number(sheet, ref, float(quarters / 4) if quarters else 0)
+                refs.append(ref)
+        elif _decimal_account_balance(sheet, styles, ref):
+            refs.append(ref)
+    return refs
+
+
+def _refresh_generated_overtime_cache(sheet: ET.Element) -> None:
+    layout = PAYROLL_MONTH_TEMPLATE_LAYOUT
+    cell = _find_cell(sheet, layout.overtime_hours_cell)
+    formula = (f'IF(ISNUMBER({layout.normal_hours_cell}),'
+               f'ROUND(({layout.total_hours_cell}-{layout.normal_hours_cell})*4,0)/4,"–")')
+    if cell is None or cell.findtext(_qname("f")) != formula:
+        return  # Approved payout values must not be recalculated from displayed days.
+    normal = _find_cell(sheet, layout.normal_hours_cell).findtext(_qname("v"))
+    total = _find_cell(sheet, layout.total_hours_cell).findtext(_qname("v"))
+    if normal is not None and total is not None:
+        quarters = ((Decimal(total) - Decimal(normal)) * 4).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP,
+        )
+        _set_cell_formula(sheet, layout.overtime_hours_cell, formula, float(quarters / 4))
 
 
 def _decimal_overtime_hours(sheet: ET.Element, styles: ET.Element) -> bool:

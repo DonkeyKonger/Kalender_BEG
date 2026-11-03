@@ -4,6 +4,8 @@ from io import BytesIO
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 
+import re
+
 import pytest
 
 from app.models.person import Person
@@ -24,11 +26,20 @@ def assert_payroll_cell_preserved(before, after):
     formula = expected.find("main:f", NS)
     if expected.get("r") == "E41" and formula is not None:
         assert formula.text == "SUM(E10:E40)"
-        formula.text = "SUM(E10:E40)*24"
         value = expected.find("main:v", NS)
         changed_value = after.find("main:v", NS)
         assert float(changed_value.text) == pytest.approx(float(value.text) * 24)
         value.text = changed_value.text
+    elif re.fullmatch(r"[DE](?:1[0-9]|2[0-9]|3[0-9]|40)", expected.get("r", "")) and list(expected):
+        if expected.get("r").startswith("D"):
+            duration = expected.find("main:is/main:t", NS).text
+            whole, minutes = map(int, duration.split(":"))
+            hours = whole + minutes / 60
+        else:
+            hours = float(expected.find("main:v", NS).text) * 24
+        assert after.get("t") in {None, "n"}
+        assert float(after.find("main:v", NS).text) == int(hours * 4 + .5) / 4
+        return
     elif expected.get("r") == "D47" and list(expected) and expected.get("t") != "inlineStr":
         value = expected.find("main:v", NS).text
         if expected.get("t") == "str":
@@ -66,8 +77,8 @@ def assert_decimal_total(content, hours, sheet_index=1):
         styles = ET.fromstring(workbook.read("xl/styles.xml"))
     assert float(cell_text(sheet, "E41")) == pytest.approx(hours)
     assert cell_number_format(sheet, styles, "E41") == "0.00"
-    assert sheet.find('.//main:c[@r="E41"]/main:f', NS).text == "SUM(E10:E40)*24"
-    assert cell_number_format(sheet, styles, "E10") == "[h]:mm"
+    assert sheet.find('.//main:c[@r="E41"]/main:f', NS).text == "SUM(E10:E40)"
+    assert cell_number_format(sheet, styles, "E10") == "0.00"
     return sheet
 
 
@@ -86,7 +97,7 @@ def test_decimal_total_preserves_quarters_in_both_exports(minutes):
     for content, index in [(single.content, 1), (combined.content, 1), (combined.content, 2)]:
         sheet = assert_decimal_total(prepare_payroll_workbook_download(content), minutes / 60, index)
         daily = sum(float(cell_text(sheet, f"E{row}") or 0) for row in range(10, 41))
-        assert daily * 1440 == pytest.approx(minutes)
+        assert daily * 60 == pytest.approx(minutes)
         assert "E41-D46" in sheet.find('.//main:c[@r="D47"]/main:f', NS).text
     legacy = single.content
     corrected = prepare_payroll_workbook_download(legacy)

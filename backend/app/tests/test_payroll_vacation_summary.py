@@ -12,7 +12,7 @@ from app.models.enums import AbsenceStatus, AbsenceType
 from app.models.person import Person
 from app.services.payroll_month_xlsx_service import (
     PayrollMonthSheet, _clear_cell, _preserve_ignorable_namespaces,
-    _set_cell_number, _set_cell_string, build_payroll_month_xlsx, build_payroll_months_xlsx,
+    _set_cell_formula, _set_cell_number, _set_cell_string, build_payroll_month_xlsx, build_payroll_months_xlsx,
 )
 from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
 from app.tests.test_payroll_individual_month_download import approved_workers as approved_workers
@@ -81,6 +81,17 @@ def test_retained_approved_downloads_fill_summary_from_stored_days(approved_work
                         _clear_cell(sheet, f"{col}{row}")
                     _set_cell_string(sheet, f"H{row}", "Urlaub")
                     _set_cell_number(sheet, f"E{row}", 8 / 24)
+                # Keep the stored SUM cache consistent with the replaced daily values.
+                sheet.find('.//main:c[@r="E41"]/main:v', NS).text = str(sum(
+                    float(cell_text(sheet, f"E{row}") or 0) for row in range(10, 41)
+                ))
+                overtime = round((float(cell_text(sheet, "E41")) * 24
+                                  - float(cell_text(sheet, "D46"))) * 60)
+                _set_cell_formula(
+                    sheet, "D47", sheet.find('.//main:c[@r="D47"]/main:f', NS).text,
+                    (f"-{abs(overtime) // 60}:{abs(overtime) % 60:02d}"
+                     if overtime < 0 else overtime / 1440),
+                )
                 payload = _preserve_ignorable_namespaces(ET.tostring(sheet))
             target.writestr(item, payload)
     old = output.getvalue()

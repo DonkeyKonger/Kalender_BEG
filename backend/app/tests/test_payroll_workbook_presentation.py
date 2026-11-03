@@ -200,7 +200,7 @@ def test_download_layout_preserves_calculations_and_unrelated_styles(approved_wo
     for old_cell in old_sheet.findall(".//main:c", NS):
         ref = old_cell.get("r")
         new_cell = sheet.find(f'.//main:c[@r="{ref}"]', NS)
-        if ref not in travel | gray | {"C2", "C4", "F2", "G2", "F3", "F4", "I42"}:
+        if ref not in travel | gray | {f"{column}{row}" for row in range(10, 41) for column in "DE"} | {"C2", "C4", "F2", "G2", "F3", "F4", "I42"}:
             assert ET.tostring(style(sheet, styles, ref)) == ET.tostring(style(old_sheet, old_styles, ref))
         old_cell.attrib.pop("s", None)
         new_cell.attrib.pop("s", None)
