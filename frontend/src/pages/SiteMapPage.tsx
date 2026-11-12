@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import { divIcon } from "leaflet";
@@ -8,7 +8,7 @@ import "leaflet/dist/leaflet.css";
 import { useAuth } from "../auth/AuthContext";
 import { MapRoutePlanner } from "../components/MapRoutePlanner";
 import { MapFilterSelect } from "../components/MapFilterSelect";
-import { mapPointLabelMode, type MapPointLabelMode } from "../lib/mapPointLabels";
+import { mapPointLabelMode, mapPointLabelModeAfterMove, type MapPointLabelMode } from "../lib/mapPointLabels";
 import { buildRoutePlaces, fillNextRouteField, personRoutePlace, siteRoutePlace, type RouteFields } from "../lib/mapRouting";
 import { api, ApiError, type VehicleLatestPositionItem } from "../lib/api";
 import { formatGermanDateTimeShort } from "../lib/formatters";
@@ -44,13 +44,14 @@ const SELECTED_VEHICLE_MARKER_ICON = divIcon({
 });
 
 type VehicleLabelMode = "full" | "points";
-type VisibleMarkerState = {
+type VisibleMarkerCounts = {
   sites: number;
   persons: number;
   vehicles: number;
   zoom: number;
   hasDenseVehicles: boolean;
 };
+type VisibleMarkerState = VisibleMarkerCounts & { pointLabelMode: MapPointLabelMode };
 
 type MapProjectManagerOption = {
   id: number;
@@ -85,6 +86,7 @@ export function SiteMapPage() {
     vehicles: 15,
     zoom: DEFAULT_ZOOM,
     hasDenseVehicles: false,
+    pointLabelMode: "points",
   });
   const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
@@ -255,14 +257,22 @@ export function SiteMapPage() {
     [showVehicles, vehicles],
   );
   // React Leaflet fixes tooltip options on creation; the mode keys below rebind them.
-  const siteLabelMode = mapPointLabelMode(visibleMarkers.sites, visibleMarkers.persons);
+  const siteLabelMode = visibleMarkers.pointLabelMode;
   const personLabelMode = siteLabelMode;
   const vehicleLabelMode = vehicleLabelModeForVisibleMarkers(visibleMarkers);
   const siteLabelOffsets = useMemo(() => buildLabelOffsets(filteredSites), [filteredSites]);
   const personLabelOffsets = useMemo(() => buildLabelOffsets(filteredPeople), [filteredPeople]);
   const vehicleLabelOffsets = useMemo(() => buildVehicleLabelOffsets(visibleVehiclesForMap), [visibleVehiclesForMap]);
-  const updateVisibleMarkerState = useCallback((nextMarkers: VisibleMarkerState) => {
-    setVisibleMarkers((current) => areVisibleMarkerStatesEqual(current, nextMarkers) ? current : nextMarkers);
+  const updateVisibleMarkerState = useCallback((nextMarkers: VisibleMarkerCounts, preservePermanentLabels = true) => {
+    setVisibleMarkers((current) => {
+      const nextState = {
+        ...nextMarkers,
+        pointLabelMode: preservePermanentLabels
+          ? mapPointLabelModeAfterMove({ mode: current.pointLabelMode, zoom: current.zoom }, nextMarkers)
+          : mapPointLabelMode(nextMarkers.sites, nextMarkers.persons),
+      };
+      return areVisibleMarkerStatesEqual(current, nextState) ? current : nextState;
+    });
   }, []);
 
   return (
@@ -458,11 +468,12 @@ function VisibleMarkerTracker({
   sites: SiteMapItem[];
   people: PersonMapItem[];
   vehicles: VehicleLatestPositionItem[];
-  onVisibleMarkersChange: (markers: VisibleMarkerState) => void;
+  onVisibleMarkersChange: (markers: VisibleMarkerCounts, preservePermanentLabels?: boolean) => void;
 }) {
   const map = useMap();
+  const previousLabelSources = useRef({ sites, people });
 
-  const updateVisibleMarkers = useCallback(() => {
+  const updateVisibleMarkers = useCallback((preservePermanentLabels = true) => {
     if (!map || typeof map.getBounds !== "function") {
       return;
     }
@@ -477,13 +488,17 @@ function VisibleMarkerTracker({
       vehicles: visibleVehicles.length,
       zoom,
       hasDenseVehicles: hasDenseVehicleGroup(visibleVehicles, zoom),
-    });
+    }, preservePermanentLabels);
   }, [map, onVisibleMarkersChange, people, sites, vehicles]);
 
   useEffect(() => {
-    const events = { moveend: updateVisibleMarkers, zoomend: updateVisibleMarkers, resize: updateVisibleMarkers };
+    const onViewportChange = () => updateVisibleMarkers();
+    const events = { moveend: onViewportChange, zoomend: onViewportChange, resize: onViewportChange };
     map.on(events);
-    updateVisibleMarkers();
+    // Filters and newly loaded sites/people get a fresh count; vehicles do not reset this mode.
+    const sourcesUnchanged = previousLabelSources.current.sites === sites && previousLabelSources.current.people === people;
+    previousLabelSources.current = { sites, people };
+    updateVisibleMarkers(sourcesUnchanged);
     const observer = new ResizeObserver(() => {
       map.invalidateSize({ pan: false });
       updateVisibleMarkers();
@@ -493,7 +508,7 @@ function VisibleMarkerTracker({
       observer.disconnect();
       map.off(events);
     };
-  }, [map, updateVisibleMarkers]);
+  }, [map, people, sites, updateVisibleMarkers]);
 
   return null;
 }
@@ -677,7 +692,8 @@ function areVisibleMarkerStatesEqual(left: VisibleMarkerState, right: VisibleMar
     && left.persons === right.persons
     && left.vehicles === right.vehicles
     && left.zoom === right.zoom
-    && left.hasDenseVehicles === right.hasDenseVehicles;
+    && left.hasDenseVehicles === right.hasDenseVehicles
+    && left.pointLabelMode === right.pointLabelMode;
 }
 
 function hasDenseVehicleGroup(vehicles: VehicleLatestPositionItem[], zoom: number): boolean {
