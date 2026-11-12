@@ -275,11 +275,11 @@ export function SiteMapPage() {
         <section className="site-map-controls" aria-label="Kartenfilter">
           <MapFilterSelect
             label="Projekte anzeigen" value={projectFilter} onChange={setProjectFilter}
-            options={[{ value: ALL_FILTER, label: "Alle" }, ...projectManagers.map((manager) => ({ value: String(manager.id), label: calendarPersonCode(manager) }))]}
+            options={[{ value: ALL_FILTER, label: "Alle" }, ...projectManagers.map((manager) => ({ value: String(manager.id), label: mapProjectManagerInitials(manager) }))]}
           />
           <MapFilterSelect
             label="Personen anzeigen" value={personFilter} onChange={setPersonFilter} disabled={!showPersons}
-            options={[{ value: ALL_FILTER, label: "Alle" }, ...personProjectManagers.map((manager) => ({ value: String(manager.id), label: calendarPersonCode(manager) }))]}
+            options={[{ value: ALL_FILTER, label: "Alle" }, ...personProjectManagers.map((manager) => ({ value: String(manager.id), label: mapProjectManagerInitials(manager) }))]}
           />
           <label className="switch-control site-map-toggle" title="Personen auf Karte anzeigen">
             <input aria-label="Personen auf Karte anzeigen" checked={showPersons} type="checkbox" onChange={(event) => setShowPersons(event.target.checked)} />
@@ -500,10 +500,7 @@ function VisibleMarkerTracker({
 
 function SiteMapPopup({ site }: { site: SiteMapItem }) {
   const managerName = site.project_manager?.display_name.trim() || site.project_manager?.short_code.trim() || "";
-  const nameParts = managerName.split(/[\s.-]+/).filter(Boolean);
-  const projectManager = nameParts.length > 1
-    ? nameParts.map((part) => Array.from(part)[0]).join("").toLocaleUpperCase("de")
-    : Array.from(managerName).length <= 2 ? managerName.toLocaleUpperCase("de") : Array.from(managerName)[0]?.toLocaleUpperCase("de");
+  const projectManager = mapProjectManagerInitials(site.project_manager);
   return (
     <div className="site-map-site-overview">
       <header className="site-map-site-overview-header">
@@ -744,6 +741,15 @@ function buildVehicleLabelOffsets(items: VehicleLatestPositionItem[]): Record<nu
       longitude: Number(item.position.longitude),
     })),
   );
+}
+
+function mapProjectManagerInitials(manager: MapProjectManagerOption | null | undefined): string {
+  const name = manager?.display_name.trim() || manager?.short_code.trim() || "";
+  const parts = name.split(/[\s.-]+/).filter(Boolean);
+  if (parts.length > 1) {
+    return parts.map((part) => Array.from(part)[0]).join("").toLocaleUpperCase("de");
+  }
+  return (Array.from(name).length <= 2 ? name : Array.from(name)[0] ?? "").toLocaleUpperCase("de");
 }
 
 function mapProjectManagerOptions(sites: SiteMapItem[]): MapProjectManagerOption[] {
