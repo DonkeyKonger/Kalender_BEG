@@ -20,8 +20,15 @@ von FOSSGIS/OSRM (`https://routing.openstreetmap.de/routed-car/route/v1/driving/
 Der Browser sendet ausschließlich die beiden Koordinatenpaare, ohne Namen oder
 Kalender-Zugangsdaten. Der Dienst erhält dadurch auch die öffentliche IP-Adresse
 und den Browser-Ursprung; seine Datenschutzhinweise sind über den Quellenlink
-im Routentool erreichbar. Die Backend-Isolation des lokalen Testkalenders bleibt
-unverändert. Der Browser benötigt Internetzugang, wie für die Kartenkacheln.
+im Routentool erreichbar. Der Browser benötigt Internetzugang, wie für die Kartenkacheln.
+
+Der isolierte lokale Testkalender sperrt externe Browser-Anfragen über seine
+Content Security Policy. Sein Docker-Build setzt `VITE_LOCAL_TEST_MODE=isolated`;
+das Routentool zeigt dort nach Auswahl beider Adressen einen entsprechenden
+Hinweis und fragt den externen Dienst nicht an. Suche und Kartenübernahme lassen
+sich dort prüfen. Die echte Routenberechnung wird mit öffentlichen Testkoordinaten
+in einer separaten Browser-Vorschau geprüft. Die lokale Netzwerkisolation bleibt
+unverändert.
 
 Die Anzeige verwendet die Straßenentfernung und geschätzte Dauer der empfohlenen
 Pkw-Route, ohne Live-Verkehr. Die Anbindung begrenzt auf eine Anfrage je 1,1 Sekunden

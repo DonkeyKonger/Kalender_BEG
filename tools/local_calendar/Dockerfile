@@ -5,6 +5,7 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 # Never use the developer's or cloud's Vite configuration/secrets.
 ENV VITE_API_BASE_URL=/api
+ENV VITE_LOCAL_TEST_MODE=isolated
 RUN npm run build
 
 FROM python:3.13-slim-bookworm

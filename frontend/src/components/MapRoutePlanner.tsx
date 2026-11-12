@@ -5,6 +5,8 @@ import {
   type DrivingRoute, type RouteField, type RouteFields, type RoutePlace,
 } from "../lib/mapRouting";
 
+const ISOLATED_LOCAL_TEST = import.meta.env.VITE_LOCAL_TEST_MODE === "isolated";
+
 export function MapRoutePlanner({ fields, places, loading, onChange }: {
   fields: RouteFields;
   places: RoutePlace[];
@@ -20,7 +22,7 @@ export function MapRoutePlanner({ fields, places, loading, onChange }: {
   useEffect(() => {
     setError(null);
     setRoute(null);
-    if (!start || !end) return;
+    if (!start || !end || ISOLATED_LOCAL_TEST) return;
     const controller = new AbortController();
     getDrivingRoute(start, end, controller.signal)
       .then((value) => { if (!controller.signal.aborted) setRoute({ start, end, value }); })
@@ -39,7 +41,8 @@ export function MapRoutePlanner({ fields, places, loading, onChange }: {
         <div className="map-route-result" role="status" aria-live="polite">
           <Car size={17} aria-hidden="true" />
           {!start || !end ? <span>Start und Ziel wählen oder Kartenpunkte anklicken.</span>
-            : error ? <span className="map-route-error">{error} <button type="button" onClick={() => setRetry((value) => value + 1)}>Erneut versuchen</button></span>
+            : ISOLATED_LOCAL_TEST ? <span>Im isolierten Testkalender ist die Online-Routenberechnung gesperrt.</span>
+              : error ? <span className="map-route-error">{error} <button type="button" onClick={() => setRetry((value) => value + 1)}>Erneut versuchen</button></span>
               : currentRoute ? <strong>{formatDrivingRoute(currentRoute)}</strong>
                 : <span>Fahrstrecke wird berechnet…</span>}
         </div>

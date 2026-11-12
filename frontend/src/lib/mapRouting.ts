@@ -85,7 +85,7 @@ function waitForRouteSlot(milliseconds: number, signal: AbortSignal): Promise<vo
 
 /** Interactive requests only: serialized, at most one per second, with a bounded memory cache.
  * Only coordinates leave the browser; application credentials and names are never sent.
- * The browser request also works with the deliberately offline local-calendar backend.
+ * The isolated local-calendar build disables this client in the route planner.
  */
 export function createDrivingRouteClient({
   fetcher = fetch, minimumIntervalMs = 1100, timeoutMs = 12000, cacheTtlMs = 300000,

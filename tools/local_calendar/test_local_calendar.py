@@ -94,6 +94,7 @@ class SafetyTests(unittest.TestCase):
         self.assertIn("**/.env.*", ignore)
         self.assertIn("**/*firebase-adminsdk*", ignore)
         self.assertIn("ENV VITE_API_BASE_URL=/api", (HERE / "Dockerfile").read_text())
+        self.assertIn("ENV VITE_LOCAL_TEST_MODE=isolated", (HERE / "Dockerfile").read_text())
 
     def test_shell_keeps_app_viewport_separate_and_never_inserts_credentials(self):
         html = (HERE / "index.html").read_text()
