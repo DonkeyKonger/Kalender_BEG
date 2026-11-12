@@ -514,7 +514,7 @@ function SiteMapPopup({ site }: { site: SiteMapItem }) {
         </span>
       </div>
       <footer className="site-map-overview-footer">
-        <Link className="site-map-open-site" to={`/sites/${site.id}`}><ArrowUpRight size={15} aria-hidden="true" />Baustelle öffnen</Link>
+        <Link className="site-map-open-site" to={`/sites/${site.id}`} state={{ returnTo: "site-map" }}><ArrowUpRight size={15} aria-hidden="true" />Baustelle öffnen</Link>
       </footer>
     </div>
   );

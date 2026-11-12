@@ -209,7 +209,7 @@ export function SiteDetailPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const siteDetailReturnTo = (location.state as { returnTo?: string } | null)?.returnTo;
-  const siteDetailBackPath = siteDetailReturnTo === "matrix" ? "/matrix" : "/sites";
+  const siteDetailBackPath = siteDetailReturnTo === "site-map" ? "/site-map" : siteDetailReturnTo === "matrix" ? "/matrix" : "/sites";
   const requestedProjectTab = searchParams.get("tab");
   const requestedMeasurementSubtab = searchParams.get("measurementSubtab");
   const [site, setSite] = useState<Site | null>(null);
@@ -1638,7 +1638,7 @@ export function SiteDetailPage() {
         }}
       >
         <ArrowLeft aria-hidden="true" size={16} />
-        <span>Baustellen</span>
+        <span>{siteDetailReturnTo === "site-map" ? "Baustellenkarte" : "Baustellen"}</span>
       </Link>
 
       <div className="site-detail-header site-project-header">
