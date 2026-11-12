@@ -38,17 +38,13 @@ export function MapRoutePlanner({ fields, places, loading, onChange }: {
       <RouteAddressField label="Start" field={fields[0]} places={places} loading={loading} onChange={(field) => onChange(0, field)} />
       <RouteAddressField label="Ziel" field={fields[1]} places={places} loading={loading} onChange={(field) => onChange(1, field)} />
       <div className="map-route-summary">
-        <div className="map-route-result" role="status" aria-live="polite">
+        <div className="map-route-result" role="status" aria-live="polite" title="Geschätzte Pkw-Fahrzeit ohne Live-Verkehr">
           <Car size={17} aria-hidden="true" />
-          {!start || !end ? <span>Start und Ziel wählen oder Kartenpunkte anklicken.</span>
+          {!start || !end ? <span>Start und Ziel wählen.</span>
             : ISOLATED_LOCAL_TEST ? <span>Im isolierten Testkalender ist die Online-Routenberechnung gesperrt.</span>
               : error ? <span className="map-route-error">{error} <button type="button" onClick={() => setRetry((value) => value + 1)}>Erneut versuchen</button></span>
               : currentRoute ? <strong>{formatDrivingRoute(currentRoute)}</strong>
                 : <span>Fahrstrecke wird berechnet…</span>}
-        </div>
-        <div className="map-route-credit">
-          <span>Pkw · ohne Live-Verkehr</span>
-          <span><a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noreferrer">OSRM / FOSSGIS</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noreferrer">Kartenfehler melden</a></span>
         </div>
       </div>
     </section>
@@ -88,10 +84,9 @@ function RouteAddressField({ label, field, places, loading, onChange }: {
         <Search size={14} aria-hidden="true" />
         <input
           id={id} role="combobox" autoComplete="off" value={field.query}
-          placeholder="Monteur, Baustelle oder Adresse …"
+          placeholder="Monteur / Baustelle / Adresse …" title={field.place?.address || undefined}
           aria-expanded={open} aria-autocomplete="list" aria-controls={`${id}-options`}
           aria-activedescendant={open && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
-          aria-describedby={`${id}-address`}
           onFocus={(event) => { setOpen(true); setActive(0); event.currentTarget.select(); }}
           onChange={(event) => { onChange({ query: event.target.value, place: null }); setOpen(true); setActive(0); }}
           onKeyDown={(event) => {
@@ -109,9 +104,6 @@ function RouteAddressField({ label, field, places, loading, onChange }: {
           document.getElementById(id)?.focus();
         }}><X size={14} aria-hidden="true" /></button>}
       </div>
-      <span id={`${id}-address`} className="map-route-address" title={field.place?.address}>
-        {field.place ? `${field.place.kind === "person" ? "Startort" : "Baustelle"}: ${field.place.address || "Hinterlegter Kartenpunkt"}` : "In hinterlegten Kartenadressen suchen"}
-      </span>
       {open && <div className="map-route-options" id={`${id}-options`} role="listbox" aria-label={`${label} auswählen`}>
         {options.map((place, index) => (
           <button

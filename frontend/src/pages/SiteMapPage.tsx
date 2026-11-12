@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, Tooltip, useMapEvents } from "react-leaflet";
 import { divIcon } from "leaflet";
-import { ChevronDown } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 
 import { useAuth } from "../auth/AuthContext";
 import { siteStatusLabels } from "../components/StatusBadge";
 import { MapRoutePlanner } from "../components/MapRoutePlanner";
+import { MapFilterSelect } from "../components/MapFilterSelect";
 import { buildRoutePlaces, fillNextRouteField, personRoutePlace, siteRoutePlace, type RouteFields } from "../lib/mapRouting";
 import { api, ApiError, type VehicleLatestPositionItem } from "../lib/api";
 import { formatGermanDateTimeShort } from "../lib/formatters";
@@ -270,43 +270,36 @@ export function SiteMapPage() {
         <h1>Baustellenkarte</h1>
       </header>
 
-      <section className="site-map-controls" aria-label="Kartenfilter">
-        <label className="site-map-filter">
-          <span>Projekte anzeigen</span>
-          <span className="site-map-select">
-            <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-              <option value={ALL_FILTER}>Alle</option>
-              {projectManagers.map((manager) => (
-                <option key={manager.id} value={manager.id}>
-                  {calendarPersonCode(manager)}
-                </option>
-              ))}
-            </select>
-            <ChevronDown aria-hidden="true" size={14} />
-          </span>
-        </label>
-        <label className="site-map-filter">
-          <span>Personen anzeigen</span>
-          <span className="site-map-select">
-            <select value={personFilter} onChange={(event) => setPersonFilter(event.target.value)} disabled={!showPersons}>
-              <option value={ALL_FILTER}>Alle</option>
-              {personProjectManagers.map((manager) => (
-                <option key={manager.id} value={manager.id}>
-                  {calendarPersonCode(manager)}
-                </option>
-              ))}
-            </select>
-            <ChevronDown aria-hidden="true" size={14} />
-          </span>
-        </label>
-        <label className="switch-control site-map-toggle">
-          <input checked={showPersons} type="checkbox" onChange={(event) => setShowPersons(event.target.checked)} />
-          <span>Personen auf Karte anzeigen</span>
-        </label>
-        <label className="switch-control site-map-toggle">
-          <input checked={showVehicles} type="checkbox" onChange={(event) => setShowVehicles(event.target.checked)} />
-          <span>Fahrzeuge auf Karte anzeigen</span>
-        </label>
+      <div className="site-map-toolbar">
+        <section className="site-map-controls" aria-label="Kartenfilter">
+          <MapFilterSelect
+            label="Projekte anzeigen" value={projectFilter} onChange={setProjectFilter}
+            options={[{ value: ALL_FILTER, label: "Alle" }, ...projectManagers.map((manager) => ({ value: String(manager.id), label: calendarPersonCode(manager) }))]}
+          />
+          <MapFilterSelect
+            label="Personen anzeigen" value={personFilter} onChange={setPersonFilter} disabled={!showPersons}
+            options={[{ value: ALL_FILTER, label: "Alle" }, ...personProjectManagers.map((manager) => ({ value: String(manager.id), label: calendarPersonCode(manager) }))]}
+          />
+          <label className="switch-control site-map-toggle" title="Personen auf Karte anzeigen">
+            <input aria-label="Personen auf Karte anzeigen" checked={showPersons} type="checkbox" onChange={(event) => setShowPersons(event.target.checked)} />
+            <span>Personen</span>
+          </label>
+          <label className="switch-control site-map-toggle" title="Fahrzeuge auf Karte anzeigen">
+            <input aria-label="Fahrzeuge auf Karte anzeigen" checked={showVehicles} type="checkbox" onChange={(event) => setShowVehicles(event.target.checked)} />
+            <span>Fahrzeuge</span>
+          </label>
+        </section>
+
+        <MapRoutePlanner
+          fields={routeFields} places={routePlaces} loading={isLoading || isLoadingPeople}
+          onChange={(index, field) => setRouteFields((current) => {
+            const next: RouteFields = [...current];
+            next[index] = field;
+            return next;
+          })}
+        />
+      </div>
+      <div className="site-map-loading-notes">
         {isLoadingPeople && <span className="site-map-loading-note">Personen werden geladen...</span>}
         {isLoadingVehicles && <span className="site-map-loading-note">Fahrzeuge werden geladen...</span>}
         {showVehicles && !isLoadingVehicles && vehicleData && vehicles.length === 0 ? (
@@ -315,16 +308,7 @@ export function SiteMapPage() {
         {showVehicles && !isLoadingVehicles && vehicles.length > 0 && visibleVehiclesForMap.length === 0 ? (
           <span className="site-map-loading-note">Fahrzeugpositionen ohne gueltige Koordinaten.</span>
         ) : null}
-      </section>
-
-      <MapRoutePlanner
-        fields={routeFields} places={routePlaces} loading={isLoading || isLoadingPeople}
-        onChange={(index, field) => setRouteFields((current) => {
-          const next: RouteFields = [...current];
-          next[index] = field;
-          return next;
-        })}
-      />
+      </div>
 
       {error ? <p className="form-error">{error}</p> : null}
       {personError ? <p className="form-error">{personError}</p> : null}
@@ -344,7 +328,7 @@ export function SiteMapPage() {
               onVisibleMarkersChange={updateVisibleMarkerState}
             />
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · <a href="https://routing.openstreetmap.de/about.html">OSRM / FOSSGIS</a> · <a href="https://www.openstreetmap.org/fixthemap">Kartenfehler melden</a>'
               referrerPolicy="strict-origin-when-cross-origin"
               url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
