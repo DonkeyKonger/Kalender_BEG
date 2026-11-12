@@ -7,6 +7,8 @@ import "leaflet/dist/leaflet.css";
 
 import { useAuth } from "../auth/AuthContext";
 import { siteStatusLabels } from "../components/StatusBadge";
+import { MapRoutePlanner } from "../components/MapRoutePlanner";
+import { buildRoutePlaces, fillNextRouteField, personRoutePlace, siteRoutePlace, type RouteFields } from "../lib/mapRouting";
 import { api, ApiError, type VehicleLatestPositionItem } from "../lib/api";
 import { formatGermanDateTimeShort } from "../lib/formatters";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
@@ -92,6 +94,7 @@ export function SiteMapPage() {
   const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
+  const [routeFields, setRouteFields] = useState<RouteFields>([{ query: "", place: null }, { query: "", place: null }]);
 
   useEffect(() => {
     if (!user) {
@@ -137,9 +140,6 @@ export function SiteMapPage() {
   }, []);
 
   useEffect(() => {
-    if (!showPersons || personData) {
-      return;
-    }
     let cancelled = false;
     setIsLoadingPeople(true);
     setPersonError(null);
@@ -168,7 +168,7 @@ export function SiteMapPage() {
     return () => {
       cancelled = true;
     };
-  }, [personData, showPersons]);
+  }, []);
 
   useEffect(() => {
     if (!showVehicles || vehicleData) {
@@ -238,6 +238,7 @@ export function SiteMapPage() {
   const sites = data?.sites ?? EMPTY_SITES;
   const people = personData?.people ?? EMPTY_PEOPLE;
   const vehicles = vehicleData ?? EMPTY_VEHICLES;
+  const routePlaces = useMemo(() => buildRoutePlaces(sites, people), [sites, people]);
   const projectManagers = useMemo(() => mapProjectManagerOptions(sites), [sites]);
   const personProjectManagers = useMemo(() => personProjectManagerOptions(people, projectManagers), [people, projectManagers]);
   const filteredSites = useMemo(
@@ -316,6 +317,15 @@ export function SiteMapPage() {
         ) : null}
       </section>
 
+      <MapRoutePlanner
+        fields={routeFields} places={routePlaces} loading={isLoading || isLoadingPeople}
+        onChange={(index, field) => setRouteFields((current) => {
+          const next: RouteFields = [...current];
+          next[index] = field;
+          return next;
+        })}
+      />
+
       {error ? <p className="form-error">{error}</p> : null}
       {personError ? <p className="form-error">{personError}</p> : null}
       {vehicleError ? <p className="form-error">{vehicleError}</p> : null}
@@ -355,6 +365,7 @@ export function SiteMapPage() {
                   eventHandlers={{
                     click: () => {
                       setSelectedSiteId(site.id);
+                      setRouteFields((current) => fillNextRouteField(current, siteRoutePlace(site)));
                       setSelectedPersonId(null);
                       setSelectedVehicleId(null);
                     },
@@ -392,6 +403,7 @@ export function SiteMapPage() {
                   eventHandlers={{
                     click: () => {
                       setSelectedPersonId(person.id);
+                      setRouteFields((current) => fillNextRouteField(current, personRoutePlace(person)));
                       setSelectedSiteId(null);
                       setSelectedVehicleId(null);
                     },
