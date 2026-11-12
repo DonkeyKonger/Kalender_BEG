@@ -4603,7 +4603,9 @@ button.person-chip:focus-visible {
 
 .matrix-page .matrix-actions .matrix-pm-filter button,
 .matrix-page .matrix-actions .switch-control,
-.matrix-page .matrix-actions > .icon-button.secondary {
+.matrix-page .matrix-actions > .icon-button.secondary,
+.site-map-controls select,
+.site-map-controls .switch-control {
   min-height: 30px;
   border: 1px solid #cad5e5;
   border-radius: 2px;
@@ -4618,7 +4620,9 @@ button.person-chip:focus-visible {
 }
 
 .matrix-page .matrix-actions .switch-control,
-.matrix-page .matrix-actions > .icon-button.secondary {
+.matrix-page .matrix-actions > .icon-button.secondary,
+.site-map-controls select,
+.site-map-controls .switch-control {
   padding: 5px 10px;
 }
 
@@ -4627,7 +4631,11 @@ button.person-chip:focus-visible {
 .matrix-page .matrix-actions .switch-control:hover,
 .matrix-page .matrix-actions .switch-control:focus-within,
 .matrix-page .matrix-actions > .icon-button.secondary:not(:disabled):hover,
-.matrix-page .matrix-actions > .icon-button.secondary:not(:disabled):focus-visible {
+.matrix-page .matrix-actions > .icon-button.secondary:not(:disabled):focus-visible,
+.site-map-controls select:not(:disabled):hover,
+.site-map-controls select:focus-visible,
+.site-map-controls .switch-control:hover,
+.site-map-controls .switch-control:focus-within {
   border-color: #b9c7da;
   background: #f6f9fd;
   color: #1f3657;
@@ -4653,14 +4661,16 @@ button.person-chip:focus-visible {
   font-size: .82rem;
 }
 
-.matrix-page .matrix-actions .switch-control:has(input:checked) {
+.matrix-page .matrix-actions .switch-control:has(input:checked),
+.site-map-controls .switch-control:has(input:checked) {
   border-color: #9db7da;
   background: #eaf2fb;
   color: #1f3657;
   box-shadow: inset 0 0 0 1px rgb(157 183 218 / 38%);
 }
 
-.matrix-page .matrix-actions .switch-control input {
+.matrix-page .matrix-actions .switch-control input,
+.site-map-controls .switch-control input {
   accent-color: #1f3657;
 }
 
@@ -26173,52 +26183,79 @@ body.mobile-modal-scroll-locked {
   }
 }
 
-.site-map-page .page-subtitle {
-  margin: 6px 0 0;
-  color: #65738a;
-  font-weight: 650;
+.site-map-page {
+  gap: 14px;
 }
 
 .site-map-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   align-items: end;
-  border: 1px solid #d7deea;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 12px;
-  box-shadow: 0 10px 26px rgb(18 29 52 / 5%);
 }
 
-.site-map-controls label:not(.checkbox-field) {
+.site-map-filter {
   display: grid;
-  min-width: 190px;
+  flex: 0 1 190px;
+  min-width: 0;
   gap: 6px;
   color: #334155;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 750;
 }
 
+.site-map-select {
+  position: relative;
+  display: flex;
+}
+
 .site-map-controls select {
-  min-height: 38px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #172033;
-  padding: 8px 10px;
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding-right: 30px;
   font-weight: 700;
+  cursor: pointer;
+}
+
+.site-map-select > svg {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.site-map-controls select:disabled {
+  background: #f8fafc;
+  color: #7b8798;
+  cursor: not-allowed;
+}
+
+.site-map-select:has(select:disabled) > svg {
+  color: #7b8798;
 }
 
 .site-map-toggle {
-  min-height: 38px;
-  align-items: center;
+  cursor: pointer;
 }
 
 .site-map-loading-note {
   color: #65738a;
   font-size: 0.84rem;
   font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .site-map-filter {
+    flex: 1 1 calc(50% - 5px);
+  }
+
+  .site-map-toggle,
+  .site-map-loading-note {
+    width: 100%;
+  }
 }
 
 .site-map-card {

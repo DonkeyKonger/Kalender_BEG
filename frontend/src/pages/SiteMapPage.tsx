@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, Tooltip, useMapEvents } from "react-leaflet";
 import { divIcon } from "leaflet";
+import { ChevronDown } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 
 import { useAuth } from "../auth/AuthContext";
@@ -265,41 +266,43 @@ export function SiteMapPage() {
   return (
     <div className="page-stack site-map-page">
       <header className="page-header">
-        <div>
-          <p className="eyebrow">Baustellen</p>
-          <h1>Baustellenkarte</h1>
-          <p className="page-subtitle">Aktive und pausierte Baustellen sowie optionale Startorte von Personen.</p>
-        </div>
+        <h1>Baustellenkarte</h1>
       </header>
 
       <section className="site-map-controls" aria-label="Kartenfilter">
-        <label>
+        <label className="site-map-filter">
           <span>Projekte anzeigen</span>
-          <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-            <option value={ALL_FILTER}>Alle</option>
-            {projectManagers.map((manager) => (
-              <option key={manager.id} value={manager.id}>
-                {calendarPersonCode(manager)}
-              </option>
-            ))}
-          </select>
+          <span className="site-map-select">
+            <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+              <option value={ALL_FILTER}>Alle</option>
+              {projectManagers.map((manager) => (
+                <option key={manager.id} value={manager.id}>
+                  {calendarPersonCode(manager)}
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden="true" size={14} />
+          </span>
         </label>
-        <label>
+        <label className="site-map-filter">
           <span>Personen anzeigen</span>
-          <select value={personFilter} onChange={(event) => setPersonFilter(event.target.value)} disabled={!showPersons}>
-            <option value={ALL_FILTER}>Alle</option>
-            {personProjectManagers.map((manager) => (
-              <option key={manager.id} value={manager.id}>
-                {calendarPersonCode(manager)}
-              </option>
-            ))}
-          </select>
+          <span className="site-map-select">
+            <select value={personFilter} onChange={(event) => setPersonFilter(event.target.value)} disabled={!showPersons}>
+              <option value={ALL_FILTER}>Alle</option>
+              {personProjectManagers.map((manager) => (
+                <option key={manager.id} value={manager.id}>
+                  {calendarPersonCode(manager)}
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden="true" size={14} />
+          </span>
         </label>
-        <label className="checkbox-field site-map-toggle">
+        <label className="switch-control site-map-toggle">
           <input checked={showPersons} type="checkbox" onChange={(event) => setShowPersons(event.target.checked)} />
           <span>Personen auf Karte anzeigen</span>
         </label>
-        <label className="checkbox-field site-map-toggle">
+        <label className="switch-control site-map-toggle">
           <input checked={showVehicles} type="checkbox" onChange={(event) => setShowVehicles(event.target.checked)} />
           <span>Fahrzeuge auf Karte anzeigen</span>
         </label>
