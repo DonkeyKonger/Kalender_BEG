@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CircleMarker, MapContainer, Marker, Popup, TileLayer, Tooltip, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import { divIcon } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -8,6 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { siteStatusLabels } from "../components/StatusBadge";
 import { MapRoutePlanner } from "../components/MapRoutePlanner";
 import { MapFilterSelect } from "../components/MapFilterSelect";
+import { mapPointLabelMode, type MapPointLabelMode } from "../lib/mapPointLabels";
 import { buildRoutePlaces, fillNextRouteField, personRoutePlace, siteRoutePlace, type RouteFields } from "../lib/mapRouting";
 import { api, ApiError, type VehicleLatestPositionItem } from "../lib/api";
 import { formatGermanDateTimeShort } from "../lib/formatters";
@@ -42,16 +43,12 @@ const SELECTED_VEHICLE_MARKER_ICON = divIcon({
   tooltipAnchor: [0, -20],
 });
 
-type SiteLabelMode = "full" | "number" | "points";
-type PersonLabelMode = "full" | "short" | "points";
 type VehicleLabelMode = "full" | "points";
 type VisibleMarkerState = {
   sites: number;
   persons: number;
   vehicles: number;
   zoom: number;
-  hasDenseSites: boolean;
-  hasDensePersons: boolean;
   hasDenseVehicles: boolean;
 };
 
@@ -87,8 +84,6 @@ export function SiteMapPage() {
     persons: 15,
     vehicles: 15,
     zoom: DEFAULT_ZOOM,
-    hasDenseSites: false,
-    hasDensePersons: false,
     hasDenseVehicles: false,
   });
   const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
@@ -254,8 +249,9 @@ export function SiteMapPage() {
     () => showVehicles ? vehicles.filter(hasValidVehicleCoordinates) : [],
     [showVehicles, vehicles],
   );
-  const siteLabelMode = siteLabelModeForVisibleMarkers(visibleMarkers);
-  const personLabelMode = personLabelModeForVisibleMarkers(visibleMarkers);
+  // React Leaflet fixes tooltip options on creation; the mode keys below rebind them.
+  const siteLabelMode = mapPointLabelMode(visibleMarkers.sites, visibleMarkers.persons);
+  const personLabelMode = siteLabelMode;
   const vehicleLabelMode = vehicleLabelModeForVisibleMarkers(visibleMarkers);
   const siteLabelOffsets = useMemo(() => buildLabelOffsets(filteredSites), [filteredSites]);
   const personLabelOffsets = useMemo(() => buildLabelOffsets(filteredPeople), [filteredPeople]);
@@ -356,13 +352,14 @@ export function SiteMapPage() {
                   }}
                 >
                   <Tooltip
+                    key={siteLabelMode}
                     permanent={siteLabelMode !== "points"}
                     direction="top"
                     offset={siteLabelMode === "points" ? [0, -8] : siteLabelOffsets[site.id] ?? LABEL_OFFSET_PATTERN[0]}
                     opacity={1}
                     className={siteLabelMode === "points" ? "site-map-marker-label site-map-marker-label-hover" : "site-map-marker-label"}
                   >
-                    {siteMarkerLabel(site, siteLabelMode)}
+                    {siteMarkerLabel(site)}
                   </Tooltip>
                   <Popup>
                     <SiteMapPopup site={site} />
@@ -394,13 +391,14 @@ export function SiteMapPage() {
                   }}
                 >
                   <Tooltip
+                    key={personLabelMode}
                     permanent={personLabelMode !== "points"}
                     direction="top"
                     offset={personLabelMode === "points" ? [0, -8] : personLabelOffsets[person.id] ?? LABEL_OFFSET_PATTERN[0]}
                     opacity={1}
                     className={personLabelMode === "points" ? "site-map-marker-label site-map-person-label site-map-marker-label-hover" : "site-map-marker-label site-map-person-label"}
                   >
-                    {personMarkerLabel(person, personLabelMode)}
+                    {personMarkerLabel(person)}
                   </Tooltip>
                   <Popup>
                     <PersonMapPopup person={person} />
@@ -457,12 +455,9 @@ function VisibleMarkerTracker({
   vehicles: VehicleLatestPositionItem[];
   onVisibleMarkersChange: (markers: VisibleMarkerState) => void;
 }) {
-  const map = useMapEvents({
-    moveend: updateVisibleMarkers,
-    zoomend: updateVisibleMarkers,
-  });
+  const map = useMap();
 
-  function updateVisibleMarkers() {
+  const updateVisibleMarkers = useCallback(() => {
     if (!map || typeof map.getBounds !== "function") {
       return;
     }
@@ -476,15 +471,24 @@ function VisibleMarkerTracker({
       persons: visiblePeople.length,
       vehicles: visibleVehicles.length,
       zoom,
-      hasDenseSites: hasDenseSiteGroup(visibleSites, zoom),
-      hasDensePersons: hasDensePersonGroup(visiblePeople, zoom),
       hasDenseVehicles: hasDenseVehicleGroup(visibleVehicles, zoom),
     });
-  }
+  }, [map, onVisibleMarkersChange, people, sites, vehicles]);
 
   useEffect(() => {
+    const events = { moveend: updateVisibleMarkers, zoomend: updateVisibleMarkers, resize: updateVisibleMarkers };
+    map.on(events);
     updateVisibleMarkers();
-  }, [map, onVisibleMarkersChange, people, sites, vehicles]);
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize({ pan: false });
+      updateVisibleMarkers();
+    });
+    observer.observe(map.getContainer());
+    return () => {
+      observer.disconnect();
+      map.off(events);
+    };
+  }, [map, updateVisibleMarkers]);
 
   return null;
 }
@@ -539,19 +543,13 @@ function formatAddress(site: SiteMapItem): string {
   return [streetLine, cityLine].filter(Boolean).join(", ") || "Adresse nicht hinterlegt";
 }
 
-function siteMarkerLabel(site: SiteMapItem, mode: SiteLabelMode): string {
-  if (mode === "number") {
-    return site.number || truncateLabel(site.name || site.city || "Baustelle", 12);
-  }
+function siteMarkerLabel(site: SiteMapItem): string {
   const prefix = site.number ? `${site.number} · ` : "";
   return `${prefix}${truncateLabel(site.name || site.city || "Baustelle")}`;
 }
 
-function personMarkerLabel(person: PersonMapItem, mode: PersonLabelMode): string {
+function personMarkerLabel(person: PersonMapItem): string {
   const name = person.short_name || truncateLabel(person.display_name, 16);
-  if (mode === "short") {
-    return name;
-  }
   const place = person.address_city ? truncateLabel(person.address_city, 18) : "Startort";
   return `${name} · ${place}`;
 }
@@ -589,7 +587,7 @@ function truncateLabel(value: string, max = 24): string {
   return `${value.slice(0, max - 3)}...`;
 }
 
-function siteMarkerFill(site: SiteMapItem, mode: SiteLabelMode): string {
+function siteMarkerFill(site: SiteMapItem, mode: MapPointLabelMode): string {
   if (mode === "points") {
     return "#64748b";
   }
@@ -611,7 +609,7 @@ function siteMarkerFill(site: SiteMapItem, mode: SiteLabelMode): string {
   return "#64748b";
 }
 
-function personMarkerFill(mode: PersonLabelMode): string {
+function personMarkerFill(mode: MapPointLabelMode): string {
   return mode === "points" ? "#b45309" : "#f97316";
 }
 
@@ -640,38 +638,6 @@ function formatVehicleIgnition(value: boolean | null): string {
   return value ? "an" : "aus";
 }
 
-function siteLabelModeForVisibleMarkers(markers: VisibleMarkerState): SiteLabelMode {
-  if (markers.sites <= 0) {
-    return "points";
-  }
-  if (markers.sites < 5) {
-    if (markers.zoom <= 6) {
-      return "points";
-    }
-    return markers.hasDenseSites || markers.zoom < 8 ? "number" : "full";
-  }
-  if (markers.sites < 15) {
-    return markers.zoom >= 13 && !markers.hasDenseSites ? "full" : "number";
-  }
-  return "points";
-}
-
-function personLabelModeForVisibleMarkers(markers: VisibleMarkerState): PersonLabelMode {
-  if (markers.persons <= 0) {
-    return "points";
-  }
-  if (markers.persons < 5) {
-    if (markers.zoom <= 6) {
-      return "points";
-    }
-    return markers.hasDensePersons || markers.zoom < 8 ? "short" : "full";
-  }
-  if (markers.persons < 15) {
-    return markers.zoom >= 13 && !markers.hasDensePersons ? "short" : "points";
-  }
-  return "points";
-}
-
 function vehicleLabelModeForVisibleMarkers(markers: VisibleMarkerState): VehicleLabelMode {
   if (markers.vehicles <= 0) {
     return "points";
@@ -690,23 +656,7 @@ function areVisibleMarkerStatesEqual(left: VisibleMarkerState, right: VisibleMar
     && left.persons === right.persons
     && left.vehicles === right.vehicles
     && left.zoom === right.zoom
-    && left.hasDenseSites === right.hasDenseSites
-    && left.hasDensePersons === right.hasDensePersons
     && left.hasDenseVehicles === right.hasDenseVehicles;
-}
-
-function hasDenseSiteGroup(sites: SiteMapItem[], zoom: number): boolean {
-  return hasDenseMarkerGroup(
-    sites.map((site) => ({ latitude: site.latitude, longitude: site.longitude })),
-    zoom,
-  );
-}
-
-function hasDensePersonGroup(people: PersonMapItem[], zoom: number): boolean {
-  return hasDenseMarkerGroup(
-    people.map((person) => ({ latitude: person.address_latitude, longitude: person.address_longitude })),
-    zoom,
-  );
 }
 
 function hasDenseVehicleGroup(vehicles: VehicleLatestPositionItem[], zoom: number): boolean {
