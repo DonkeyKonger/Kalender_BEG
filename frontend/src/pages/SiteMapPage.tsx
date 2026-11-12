@@ -13,7 +13,7 @@ import { buildRoutePlaces, fillNextRouteField, personRoutePlace, siteRoutePlace,
 import { api, ApiError, type VehicleLatestPositionItem } from "../lib/api";
 import { formatGermanDateTimeShort } from "../lib/formatters";
 import { getSiteColorDisplayValue } from "../lib/siteColors";
-import { calendarPersonCode, type PersonMapItem, type PersonMapResponse, type PersonType } from "../types/person";
+import type { PersonMapItem, PersonMapResponse, PersonType } from "../types/person";
 import type { SiteMapItem, SiteMapResponse } from "../types/site";
 
 const GERMANY_CENTER: [number, number] = [51.1657, 10.4515];
@@ -366,7 +366,7 @@ export function SiteMapPage() {
                   >
                     {siteMarkerLabel(site)}
                   </Tooltip>
-                  <Popup className="site-map-site-popup" minWidth={240} maxWidth={300} autoPanPaddingTopLeft={[12, 80]} autoPanPaddingBottomRight={[12, 12]}>
+                  <Popup className="site-map-overview-popup site-map-site-popup" minWidth={240} maxWidth={300} autoPanPaddingTopLeft={[12, 80]} autoPanPaddingBottomRight={[12, 12]}>
                     <SiteMapPopup site={site} />
                   </Popup>
                 </CircleMarker>
@@ -405,7 +405,7 @@ export function SiteMapPage() {
                   >
                     {personMarkerLabel(person)}
                   </Tooltip>
-                  <Popup>
+                  <Popup className="site-map-overview-popup site-map-person-popup" minWidth={240} maxWidth={300} autoPanPaddingTopLeft={[12, 80]} autoPanPaddingBottomRight={[12, 12]}>
                     <PersonMapPopup person={person} />
                   </Popup>
                 </CircleMarker>
@@ -502,18 +502,18 @@ function SiteMapPopup({ site }: { site: SiteMapItem }) {
   const managerName = site.project_manager?.display_name.trim() || site.project_manager?.short_code.trim() || "";
   const projectManager = mapProjectManagerInitials(site.project_manager);
   return (
-    <div className="site-map-site-overview">
-      <header className="site-map-site-overview-header">
+    <div className="site-map-overview">
+      <header className="site-map-overview-header">
         <strong>{site.name}</strong>
         {site.number ? <span>{site.number}</span> : null}
       </header>
-      <div className="site-map-site-overview-body">
-        <div className="site-map-site-address"><MapPin size={15} aria-hidden="true" /><span>{formatAddress(site)}</span></div>
+      <div className="site-map-overview-body">
+        <div className="site-map-overview-address"><MapPin size={15} aria-hidden="true" /><span>{formatAddress(site)}</span></div>
         <span className="site-map-project-manager" title={managerName ? `Projektleitung: ${managerName}` : "Projektleitung nicht zugeordnet"} aria-label={`Projektleitung: ${projectManager || "Nicht zugeordnet"}`}>
           {projectManager || "Nicht zugeordnet"}
         </span>
       </div>
-      <footer className="site-map-site-overview-footer">
+      <footer className="site-map-overview-footer">
         <Link className="site-map-open-site" to={`/sites/${site.id}`}><ArrowUpRight size={15} aria-hidden="true" />Baustelle öffnen</Link>
       </footer>
     </div>
@@ -521,13 +521,22 @@ function SiteMapPopup({ site }: { site: SiteMapItem }) {
 }
 
 function PersonMapPopup({ person }: { person: PersonMapItem }) {
-  const projectManager = person.project_manager_assignment ? calendarPersonCode(person.project_manager_assignment) : "Nicht zugeordnet";
+  const manager = person.project_manager_assignment;
+  const managerName = manager?.display_name.trim() || manager?.short_code.trim() || "";
+  const projectManager = mapProjectManagerInitials(manager) || "Nicht zugeordnet";
   return (
-    <div className="site-map-popup">
-      <strong>{person.display_name}</strong>
-      <span>{personTypeLabels[person.role]}</span>
-      <span>Startort: {[person.address_postal_code, person.address_city].filter(Boolean).join(" ") || "Nicht hinterlegt"}</span>
-      <span>PL-Zuordnung: {projectManager}</span>
+    <div className="site-map-overview">
+      <header className="site-map-overview-header">
+        <strong>{person.display_name}</strong>
+        <span>{personTypeLabels[person.role]}</span>
+      </header>
+      <div className="site-map-overview-body">
+        <div className="site-map-overview-address"><MapPin size={15} aria-hidden="true" /><span>Startort: {[person.address_postal_code, person.address_city].filter(Boolean).join(" ") || "Nicht hinterlegt"}</span></div>
+        <div className="site-map-person-project-manager">
+          <span>PL-Zuordnung</span>
+          <span className="site-map-project-manager" title={managerName ? `Projektleitung: ${managerName}` : "Projektleitung nicht zugeordnet"}>{projectManager}</span>
+        </div>
+      </div>
     </div>
   );
 }
