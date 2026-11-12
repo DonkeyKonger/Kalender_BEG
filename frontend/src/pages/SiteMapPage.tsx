@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { CircleMarker, MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { CircleMarker, FeatureGroup, MapContainer, Marker, Pane, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import { divIcon } from "leaflet";
 import { ArrowUpRight, MapPin } from "lucide-react";
 import "leaflet/dist/leaflet.css";
@@ -18,6 +18,7 @@ import type { SiteMapItem, SiteMapResponse } from "../types/site";
 
 const GERMANY_CENTER: [number, number] = [51.1657, 10.4515];
 const DEFAULT_ZOOM = 6;
+const POINT_HIT_RADIUS = 12;
 const ALL_FILTER = "all";
 const LABEL_OFFSET_PATTERN: Array<[number, number]> = [[0, -14], [18, -18], [-18, -18], [18, 6], [-18, 6]];
 const EMPTY_SITES: SiteMapItem[] = [];
@@ -343,27 +344,21 @@ export function SiteMapPage() {
               referrerPolicy="strict-origin-when-cross-origin"
               url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+            <Pane name="site-map-hit-targets" style={{ zIndex: 0 }} />
             {filteredSites.map((site) => {
               const isSelected = selectedSiteId === site.id;
               return (
-                <CircleMarker
+                <MapPointMarker
                   key={`site-${site.id}`}
                   center={[site.latitude, site.longitude]}
-                  radius={isSelected ? 5.5 : 3.8}
-                  pathOptions={{
-                    color: isSelected ? "#ffffff" : siteMarkerFill(site, siteLabelMode),
-                    fillColor: siteMarkerFill(site, siteLabelMode),
-                    fillOpacity: siteLabelMode === "points" ? 0.68 : 0.82,
-                    opacity: isSelected ? 1 : 0.9,
-                    weight: isSelected ? 2 : 0,
-                  }}
-                  eventHandlers={{
-                    click: () => {
-                      setSelectedSiteId(site.id);
-                      setRouteFields((current) => fillNextRouteField(current, siteRoutePlace(site)));
-                      setSelectedPersonId(null);
-                      setSelectedVehicleId(null);
-                    },
+                  selected={isSelected}
+                  color={siteMarkerFill(site, siteLabelMode)}
+                  labelMode={siteLabelMode}
+                  onClick={() => {
+                    setSelectedSiteId(site.id);
+                    setRouteFields((current) => fillNextRouteField(current, siteRoutePlace(site)));
+                    setSelectedPersonId(null);
+                    setSelectedVehicleId(null);
                   }}
                 >
                   <Tooltip
@@ -379,30 +374,23 @@ export function SiteMapPage() {
                   <Popup className="site-map-overview-popup site-map-site-popup" minWidth={240} maxWidth={300} autoPanPaddingTopLeft={[12, 80]} autoPanPaddingBottomRight={[12, 12]}>
                     <SiteMapPopup site={site} />
                   </Popup>
-                </CircleMarker>
+                </MapPointMarker>
               );
             })}
             {showPersons && filteredPeople.map((person) => {
               const isSelected = selectedPersonId === person.id;
               return (
-                <CircleMarker
+                <MapPointMarker
                   key={`person-${person.id}`}
                   center={[person.address_latitude, person.address_longitude]}
-                  radius={isSelected ? 5.5 : 3.8}
-                  pathOptions={{
-                    color: isSelected ? "#ffffff" : personMarkerFill(personLabelMode),
-                    fillColor: personMarkerFill(personLabelMode),
-                    fillOpacity: personLabelMode === "points" ? 0.68 : 0.82,
-                    opacity: isSelected ? 1 : 0.9,
-                    weight: isSelected ? 2 : 0,
-                  }}
-                  eventHandlers={{
-                    click: () => {
-                      setSelectedPersonId(person.id);
-                      setRouteFields((current) => fillNextRouteField(current, personRoutePlace(person)));
-                      setSelectedSiteId(null);
-                      setSelectedVehicleId(null);
-                    },
+                  selected={isSelected}
+                  color={personMarkerFill(personLabelMode)}
+                  labelMode={personLabelMode}
+                  onClick={() => {
+                    setSelectedPersonId(person.id);
+                    setRouteFields((current) => fillNextRouteField(current, personRoutePlace(person)));
+                    setSelectedSiteId(null);
+                    setSelectedVehicleId(null);
                   }}
                 >
                   <Tooltip
@@ -418,7 +406,7 @@ export function SiteMapPage() {
                   <Popup className="site-map-overview-popup site-map-person-popup" minWidth={240} maxWidth={300} autoPanPaddingTopLeft={[12, 80]} autoPanPaddingBottomRight={[12, 12]}>
                     <PersonMapPopup person={person} />
                   </Popup>
-                </CircleMarker>
+                </MapPointMarker>
               );
             })}
             {visibleVehiclesForMap.map((item) => {
@@ -456,6 +444,40 @@ export function SiteMapPage() {
         )}
       </section>
     </div>
+  );
+}
+
+function MapPointMarker({ center, selected, color, labelMode, onClick, children }: {
+  center: [number, number];
+  selected: boolean;
+  color: string;
+  labelMode: MapPointLabelMode;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <FeatureGroup eventHandlers={{ click: onClick }}>
+      <CircleMarker
+        className="site-map-point-hit-area"
+        pane="site-map-hit-targets"
+        center={center}
+        radius={POINT_HIT_RADIUS}
+        pathOptions={{ stroke: false, fillOpacity: 0 }}
+      />
+      <CircleMarker
+        className="site-map-point"
+        center={center}
+        radius={selected ? 5.5 : 3.8}
+        pathOptions={{
+          color: selected ? "#ffffff" : color,
+          fillColor: color,
+          fillOpacity: labelMode === "points" ? 0.68 : 0.82,
+          opacity: selected ? 1 : 0.9,
+          weight: selected ? 2 : 0,
+        }}
+      />
+      {children}
+    </FeatureGroup>
   );
 }
 

@@ -26461,6 +26461,10 @@ body.mobile-modal-scroll-locked {
   z-index: 10;
 }
 
+/* Visible markers take priority over nearby transparent hit areas. */
+.site-map-card .leaflet-overlay-pane { z-index: 1; }
+.site-map-card .leaflet-marker-pane { z-index: 2; }
+
 .site-map-marker-label {
   border: 1px solid rgb(203 213 225 / 86%);
   border-radius: 6px;
