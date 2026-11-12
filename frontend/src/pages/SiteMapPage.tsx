@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import { divIcon } from "leaflet";
+import { ArrowUpRight, MapPin } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 
 import { useAuth } from "../auth/AuthContext";
-import { siteStatusLabels } from "../components/StatusBadge";
 import { MapRoutePlanner } from "../components/MapRoutePlanner";
 import { MapFilterSelect } from "../components/MapFilterSelect";
 import { mapPointLabelMode, type MapPointLabelMode } from "../lib/mapPointLabels";
@@ -230,11 +230,16 @@ export function SiteMapPage() {
     writeMapPreference(user.id, "map_person_filter", personFilter);
   }, [personFilter, user]);
 
-  const sites = data?.sites ?? EMPTY_SITES;
+  const sites = useMemo(() => (data?.sites ?? EMPTY_SITES).filter((site) => site.status === "active"), [data]);
   const people = personData?.people ?? EMPTY_PEOPLE;
   const vehicles = vehicleData ?? EMPTY_VEHICLES;
   const routePlaces = useMemo(() => buildRoutePlaces(sites, people), [sites, people]);
   const projectManagers = useMemo(() => mapProjectManagerOptions(sites), [sites]);
+  useEffect(() => {
+    if (data && projectFilter !== ALL_FILTER && !projectManagers.some((manager) => String(manager.id) === projectFilter)) {
+      setProjectFilter(ALL_FILTER);
+    }
+  }, [data, projectFilter, projectManagers]);
   const personProjectManagers = useMemo(() => personProjectManagerOptions(people, projectManagers), [people, projectManagers]);
   const filteredSites = useMemo(
     () => sites.filter((site) => projectFilter === ALL_FILTER || String(site.project_manager?.id) === projectFilter),
@@ -361,7 +366,7 @@ export function SiteMapPage() {
                   >
                     {siteMarkerLabel(site)}
                   </Tooltip>
-                  <Popup>
+                  <Popup className="site-map-site-popup" minWidth={240} maxWidth={300} autoPanPaddingTopLeft={[12, 80]} autoPanPaddingBottomRight={[12, 12]}>
                     <SiteMapPopup site={site} />
                   </Popup>
                 </CircleMarker>
@@ -494,16 +499,26 @@ function VisibleMarkerTracker({
 }
 
 function SiteMapPopup({ site }: { site: SiteMapItem }) {
-  const projectManager = site.project_manager ? calendarPersonCode(site.project_manager) : "Nicht zugeordnet";
+  const managerName = site.project_manager?.display_name.trim() || site.project_manager?.short_code.trim() || "";
+  const nameParts = managerName.split(/[\s.-]+/).filter(Boolean);
+  const projectManager = nameParts.length > 1
+    ? nameParts.map((part) => Array.from(part)[0]).join("").toLocaleUpperCase("de")
+    : Array.from(managerName).length <= 2 ? managerName.toLocaleUpperCase("de") : Array.from(managerName)[0]?.toLocaleUpperCase("de");
   return (
-    <div className="site-map-popup">
-      <strong>{site.name}</strong>
-      {site.number ? <span>{site.number}</span> : null}
-      <span>{formatAddress(site)}</span>
-      <span>PL: {projectManager}</span>
-      <span>Status: {siteStatusLabels[site.status]}</span>
-      <span>Radius: {site.geofence_radius_m.toLocaleString("de-DE")} m</span>
-      <Link to={`/sites/${site.id}`}>Baustelle oeffnen</Link>
+    <div className="site-map-site-overview">
+      <header className="site-map-site-overview-header">
+        <strong>{site.name}</strong>
+        {site.number ? <span>{site.number}</span> : null}
+      </header>
+      <div className="site-map-site-overview-body">
+        <div className="site-map-site-address"><MapPin size={15} aria-hidden="true" /><span>{formatAddress(site)}</span></div>
+        <span className="site-map-project-manager" title={managerName ? `Projektleitung: ${managerName}` : "Projektleitung nicht zugeordnet"} aria-label={`Projektleitung: ${projectManager || "Nicht zugeordnet"}`}>
+          {projectManager || "Nicht zugeordnet"}
+        </span>
+      </div>
+      <footer className="site-map-site-overview-footer">
+        <Link className="site-map-open-site" to={`/sites/${site.id}`}><ArrowUpRight size={15} aria-hidden="true" />Baustelle öffnen</Link>
+      </footer>
     </div>
   );
 }

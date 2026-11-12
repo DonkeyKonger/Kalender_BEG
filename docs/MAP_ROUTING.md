@@ -8,8 +8,8 @@ Stammdaten vervollständigt werden; eine freie externe Adresssuche ist hier nich
 enthalten.
 
 Ein Klick auf einen Personen- oder Baustellenmarker füllt das erste leere Feld,
-dann das zweite. Auch pausierte/geplante Baustellen können direkt über ihren
-vorhandenen Kartenmarker gewählt werden. Bereits eingegebener Text wird nicht
+dann das zweite. Auf der Karte und in der Suche stehen nur aktive Baustellen zur
+Verfügung. Bereits eingegebener Text wird nicht
 überschrieben. Das Kreuz leert ein Feld; Änderungen verwerfen das bisherige
 Ergebnis und brechen laufende Anfragen ab.
 

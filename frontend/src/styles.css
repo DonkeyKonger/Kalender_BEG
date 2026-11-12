@@ -26553,6 +26553,79 @@ body.mobile-modal-scroll-locked {
   text-decoration: none;
 }
 
+.site-map-card .site-map-site-popup .leaflet-popup-content-wrapper {
+  padding: 0;
+  border: 1px solid #cad5e5;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgb(18 29 52 / 12%);
+}
+
+.site-map-card .site-map-site-popup .leaflet-popup-content {
+  margin: 0;
+  max-width: calc(100vw - 48px);
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.site-map-site-overview { color: #334155; font-size: 0.8rem; overflow-wrap: anywhere; }
+.site-map-site-overview-header {
+  display: grid;
+  gap: 3px;
+  padding: 12px 42px 11px 14px;
+  border-bottom: 1px solid #d7deea;
+  background: #f8fafc;
+}
+.site-map-site-overview-header strong { color: #172033; font-size: 0.95rem; font-weight: 750; }
+.site-map-site-overview-header > span { color: #65738a; font-size: 0.75rem; font-weight: 650; }
+.site-map-site-overview-body { display: grid; justify-items: start; gap: 10px; padding: 12px 14px; }
+.site-map-site-address { display: flex; align-items: start; gap: 7px; }
+.site-map-site-address > svg { flex-shrink: 0; margin-top: 2px; color: #657b98; }
+.site-map-project-manager {
+  padding: 3px 7px;
+  border: 1px solid #cad5e5;
+  border-radius: 2px;
+  background: #eaf2fb;
+  color: #1f3657;
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+.site-map-site-overview-footer { padding: 10px 14px; border-top: 1px solid #d7deea; background: #f8fafc; }
+.site-map-site-popup a.site-map-open-site {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #213047;
+  border-radius: 2px;
+  background: #213047;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+.site-map-site-popup a.site-map-open-site:hover { background: #2c4566; border-color: #2c4566; }
+.site-map-site-popup a.site-map-open-site:focus-visible { outline: 2px solid #83a7d4; outline-offset: 2px; }
+.site-map-card .site-map-site-popup a.leaflet-popup-close-button {
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #cad5e5;
+  border-radius: 2px;
+  background: #fff;
+  color: #52647e;
+  font-family: inherit;
+  font-size: 20px;
+  line-height: 1;
+}
+.site-map-card .site-map-site-popup a.leaflet-popup-close-button:hover { background: #edf3fa; color: #172033; }
+.site-map-card .site-map-site-popup .leaflet-popup-tip { background: #f8fafc; box-shadow: none; }
+
 .site-address-search {
   position: relative;
 }
