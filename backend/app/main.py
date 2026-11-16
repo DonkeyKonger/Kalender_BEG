@@ -13,6 +13,7 @@ from app.api.routes import (
     exports,
     health,
     matrix,
+    material_orders,
     me,
     operational_absences,
     payroll_setup,
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(payroll_months.router, prefix="/api")
     app.include_router(exports.router, prefix="/api")
     app.include_router(matrix.router, prefix="/api")
+    app.include_router(material_orders.router, prefix="/api")
     app.include_router(me.router, prefix="/api")
 
     @app.on_event("startup")

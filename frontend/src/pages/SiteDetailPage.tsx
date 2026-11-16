@@ -1,5 +1,7 @@
 import { ProjectNoteDeleteButton } from "../components/ProjectNoteDeleteButton";
 import { ProjectFolderCreateDialog } from "../components/ProjectFolderCreateDialog";
+import { MaterialOrderDialog } from "../components/MaterialOrderDialog";
+import "../components/MaterialOrderEntry.css";
 import { ProjectFolderAccessMenu, type FolderAccessMenuTarget } from "../components/ProjectFolderAccessMenu";
 import { ProjectDocumentFilename } from "../components/ProjectDocumentFilename";
 import { ProjectFolderPhotoGrid } from "../components/ProjectFolderPhotoGrid";
@@ -2558,6 +2560,9 @@ function ProjectFolderDocumentBrowser({
 }) {
   const { user } = useAuth();
   const canDeleteDocuments = canEditMainPage(user, "sites");
+  const canCreateMaterialOrder = canDeleteDocuments && folder.folder_key === "lagerbestellungen";
+  const [materialOrderOpen, setMaterialOrderOpen] = useState(false);
+  const [materialOrderMessage, setMaterialOrderMessage] = useState<string | null>(null);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -2681,6 +2686,11 @@ function ProjectFolderDocumentBrowser({
   }
 
   async function handleOpen(item: ProjectFolderDocumentItem): Promise<void> {
+    if (canCreateMaterialOrder && item.name.toLowerCase() === "materialschein_formular_master.pdf") {
+      setMaterialOrderMessage(null);
+      setMaterialOrderOpen(true);
+      return;
+    }
     setOpenError(null);
     setOpeningItemId(item.id);
     const openedWindow = window.open("about:blank", "_blank");
@@ -2849,7 +2859,7 @@ function ProjectFolderDocumentBrowser({
           <strong>Dateien hier ablegen</strong>
         </div>
       ) : null}
-      <div className="project-document-browser-header">
+      <div className={`project-document-browser-header${canCreateMaterialOrder ? " has-material-order-action" : ""}`}>
         <div className="project-document-browser-title">
           <span>Ordner {folder.sort_order}</span>
           <h3>{currentFolderTitle}</h3>
@@ -2865,6 +2875,16 @@ function ProjectFolderDocumentBrowser({
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>
+          ) : null}
+          {hasSharePointFolder && canCreateMaterialOrder ? (
+            <button
+              type="button"
+              className="primary-action project-material-order-create"
+              onClick={() => { setMaterialOrderMessage(null); setMaterialOrderOpen(true); }}
+            >
+              <Plus aria-hidden="true" size={15} />
+              <span>Neue Lagerbestellung</span>
+            </button>
           ) : null}
           {isInSubfolder ? (
             <button type="button"
@@ -2905,6 +2925,20 @@ function ProjectFolderDocumentBrowser({
         </div>
       </div>
 
+      {materialOrderMessage ? <div className="project-record-empty-state is-success" role="status">{materialOrderMessage}</div> : null}
+      {materialOrderOpen ? (
+        <MaterialOrderDialog
+          siteId={siteId}
+          onClose={() => setMaterialOrderOpen(false)}
+          onCompleted={(document) => {
+            setMaterialOrderOpen(false);
+            setMaterialOrderMessage(`„${document.name}“ wurde in Lagerbestellungen abgelegt.`);
+            setFolderStack([]);
+            setQuery("");
+            onRetry();
+          }}
+        />
+      ) : null}
       {uploadMessage ? <div className="project-record-empty-state is-success">{uploadMessage}</div> : null}
       {uploadError ? <div className="project-record-empty-state is-error"><strong>{uploadError}</strong></div> : null}
       {folderNavigationError ? <div className="project-record-empty-state is-error"><strong>{folderNavigationError}</strong></div> : null}

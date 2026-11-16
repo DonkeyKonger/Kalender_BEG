@@ -1,0 +1,487 @@
+body.material-order-dialog-open {
+  overflow: hidden;
+}
+
+.material-order-dialog-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgb(20 31 48 / 58%);
+  backdrop-filter: blur(2px);
+}
+
+.material-order-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, 100%);
+  height: min(940px, calc(100dvh - 36px));
+  overflow: hidden;
+  border: 1px solid #aeb9c8;
+  border-radius: 2px;
+  background: #f6f8fb;
+  box-shadow: 0 22px 70px rgb(14 27 46 / 30%);
+  color: #172033;
+}
+
+.material-order-dialog-header,
+.material-order-dialog-footer,
+.material-order-toolbar {
+  position: relative;
+  z-index: 2;
+  background: #fff;
+}
+
+.material-order-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 68px;
+  padding: 12px 16px 11px 18px;
+  border-bottom: 1px solid #d5dce6;
+}
+
+.material-order-dialog-header h2,
+.material-order-dialog-header p {
+  margin: 0;
+}
+
+.material-order-dialog-header h2 {
+  margin-top: 2px;
+  font-size: 1.16rem;
+  line-height: 1.25;
+}
+
+.material-order-dialog-eyebrow {
+  color: #657286;
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.material-order-icon-button,
+.material-order-secondary-button,
+.material-order-primary-button,
+.material-order-error button,
+.material-order-loading button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  border-radius: 2px;
+  font-weight: 700;
+}
+
+.material-order-conflict-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.material-order-icon-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  border: 1px solid #c9d2df;
+  background: #f8fafc;
+  color: #3e4b5f;
+}
+
+.material-order-icon-button:hover:not(:disabled),
+.material-order-icon-button:focus-visible,
+.material-order-secondary-button:hover:not(:disabled),
+.material-order-secondary-button:focus-visible {
+  border-color: #8194aa;
+  background: #edf2f7;
+}
+
+.material-order-icon-button:focus-visible,
+.material-order-secondary-button:focus-visible,
+.material-order-primary-button:focus-visible,
+.material-order-error button:focus-visible,
+.material-order-loading button:focus-visible,
+.material-order-zoom select:focus-visible {
+  outline: 3px solid rgb(49 95 145 / 24%);
+  outline-offset: 1px;
+}
+
+.material-order-icon-button svg,
+.material-order-secondary-button svg,
+.material-order-primary-button svg,
+.material-order-error button svg,
+.material-order-loading button svg,
+.material-order-save-status svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.material-order-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 8px 16px 8px 18px;
+  border-bottom: 1px solid #dce2ea;
+}
+
+.material-order-save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin-right: auto;
+  color: #667489;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.material-order-save-status.is-success { color: #26704f; }
+.material-order-save-status.is-warning { color: #98651c; }
+.material-order-save-status.is-danger { color: #a13c43; }
+.material-order-save-status.is-working { color: #315f91; }
+
+.material-order-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #56657a;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.material-order-zoom select {
+  height: 36px;
+  min-width: 79px;
+  border: 1px solid #bdc8d5;
+  border-radius: 2px;
+  background: #fff;
+  padding: 0 9px;
+  color: #25354b;
+}
+
+.material-order-secondary-button,
+.material-order-primary-button {
+  border: 1px solid transparent;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+
+.material-order-secondary-button {
+  border-color: #bdc8d5;
+  background: #fff;
+  color: #33445b;
+}
+
+.material-order-primary-button {
+  border-color: #214e7c;
+  background: #285f96;
+  color: #fff;
+}
+
+.material-order-primary-button:hover:not(:disabled) {
+  background: #214f80;
+}
+
+.material-order-recovery-note,
+.material-order-error {
+  margin: 0;
+  border-bottom: 1px solid;
+  padding: 9px 18px;
+  font-size: 0.82rem;
+}
+
+.material-order-recovery-note {
+  border-color: #bcd5ca;
+  background: #edf7f2;
+  color: #26624a;
+}
+
+.material-order-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-color: #e0b7ba;
+  background: #fff0f1;
+  color: #8c3038;
+}
+
+.material-order-error button,
+.material-order-loading button {
+  border: 1px solid currentColor;
+  background: transparent;
+  padding: 6px 10px;
+  color: inherit;
+}
+
+.material-order-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 38%) 1px, transparent 1px),
+    linear-gradient(rgb(255 255 255 / 38%) 1px, transparent 1px),
+    #e8edf3;
+  background-size: 18px 18px;
+  scrollbar-gutter: stable;
+}
+
+.material-order-paper-stage {
+  display: grid;
+  min-width: min-content;
+  min-height: 100%;
+  place-items: start center;
+  padding: 26px 32px 38px;
+}
+
+.material-order-paper {
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid #b8c0cb;
+  background: #fff;
+  box-shadow: 0 8px 28px rgb(32 46 65 / 18%);
+  container-type: inline-size;
+}
+
+.material-order-pdf-background,
+.material-order-field-overlay {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.material-order-pdf-background {
+  z-index: 0;
+  object-fit: fill;
+  user-select: none;
+}
+
+.material-order-field-overlay {
+  z-index: 1;
+}
+
+.material-order-text-field,
+.material-order-checkbox-field {
+  position: absolute;
+  display: block;
+}
+
+.material-order-text-field input {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 1px;
+  background: rgb(239 247 255 / 20%);
+  padding: 0.04em 0.18em;
+  color: #111827;
+  font-family: Arial, sans-serif;
+  font-size: clamp(7px, 1.62cqw, 13px);
+  line-height: 1;
+  transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.material-order-text-field input:hover:not(:disabled) {
+  border-color: rgb(49 95 145 / 42%);
+  background: rgb(233 244 255 / 46%);
+}
+
+.material-order-text-field input:focus {
+  border-color: #315f91;
+  outline: 0;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 0 0 2px rgb(49 95 145 / 20%);
+}
+
+.material-order-checkbox-field {
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.material-order-checkbox-field input {
+  width: min(74%, 18px);
+  height: min(74%, 18px);
+  min-width: 8px;
+  min-height: 8px;
+  margin: 0;
+  border: 1px solid rgb(37 53 75 / 60%);
+  border-radius: 1px;
+  appearance: none;
+  background: rgb(255 255 255 / 62%);
+}
+
+.material-order-checkbox-field input:checked {
+  background:
+    linear-gradient(45deg, transparent 43%, #183f67 43% 55%, transparent 55%) 14% 45% / 44% 65% no-repeat,
+    linear-gradient(-45deg, transparent 42%, #183f67 42% 54%, transparent 54%) 78% 35% / 68% 85% no-repeat,
+    rgb(235 244 252 / 86%);
+}
+
+.material-order-checkbox-field input:focus-visible {
+  outline: 2px solid #315f91;
+  outline-offset: 2px;
+}
+
+.material-order-loading {
+  display: flex;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 32px;
+  color: #5b687a;
+  text-align: center;
+}
+
+.material-order-loading > svg {
+  width: 26px;
+  height: 26px;
+  color: #315f91;
+}
+
+.material-order-loading strong {
+  color: #26364d;
+}
+
+.material-order-loading span {
+  font-size: 0.86rem;
+}
+
+.material-order-loading.is-error {
+  color: #923841;
+}
+
+.material-order-dialog-footer {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 16px 11px 18px;
+  border-top: 1px solid #cfd7e2;
+}
+
+.material-order-dialog-footer > span {
+  overflow: hidden;
+  color: #68768a;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-order-dialog-footer > div {
+  display: flex;
+  gap: 9px;
+  margin-left: auto;
+}
+
+.material-order-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.material-order-dialog .is-spinning {
+  animation: material-order-spin 800ms linear infinite;
+}
+
+@keyframes material-order-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 720px) {
+  .material-order-dialog-backdrop {
+    padding: 0;
+  }
+
+  .material-order-dialog {
+    width: 100%;
+    height: 100dvh;
+    border: 0;
+  }
+
+  .material-order-dialog-header {
+    min-height: 62px;
+    padding: max(9px, env(safe-area-inset-top, 0px)) 12px 9px;
+  }
+
+  .material-order-dialog-header h2 {
+    font-size: 1.03rem;
+  }
+
+  .material-order-toolbar {
+    flex-wrap: wrap;
+    gap: 7px;
+    padding: 7px 10px;
+  }
+
+  .material-order-save-status {
+    width: 100%;
+  }
+
+  .material-order-zoom {
+    margin-right: auto;
+  }
+
+  .material-order-paper-stage {
+    place-items: start;
+    padding: 18px 16px 28px;
+  }
+
+  .material-order-error {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .material-order-conflict-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .material-order-dialog-footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 7px;
+    padding: 8px 10px max(8px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .material-order-dialog-footer > span {
+    display: none;
+  }
+
+  .material-order-dialog-footer > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    width: 100%;
+    margin: 0;
+  }
+
+  .material-order-dialog-footer button {
+    min-height: 42px;
+    padding-inline: 7px;
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .material-order-dialog .is-spinning {
+    animation-duration: 1600ms;
+  }
+}

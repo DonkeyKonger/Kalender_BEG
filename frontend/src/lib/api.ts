@@ -20,6 +20,7 @@ import { buildToolMaterialSearchParams, type ToolMaterialListParams } from "./to
 
 import { fetchWithAuthRefresh } from "./authenticatedFetch";
 import type { WarehouseBooking, WarehouseDirection, WarehouseHistoryDetail, WarehouseHistoryEntry, WarehouseHistoryPage, WarehousePerson, WarehouseReceipt, WarehouseToolPage } from "../types/warehouse";
+import type { MaterialOrderDraft, MaterialOrderForm, MaterialOrderSavePayload } from "./materialOrders";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 const AUTH_REFRESH_PATH = "/auth/refresh";
@@ -373,6 +374,25 @@ async function requestBlob(path: string, signal?: AbortSignal): Promise<Blob> {
       responseBody: payload,
     });
     throw new ApiError(response.status, detail);
+  }
+  return response.blob();
+}
+
+async function requestMutationBlob(path: string, options: RequestInit): Promise<Blob> {
+  const response = await authenticatedFetch(path, {
+    ...options,
+    headers: {
+      Accept: "application/pdf",
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    const payload = contentType.includes("application/json")
+      ? await response.json()
+      : await response.text();
+    throw new ApiError(response.status, getApiErrorDetail(payload));
   }
   return response.blob();
 }
@@ -1267,6 +1287,59 @@ export const api = {
 
   async projectFolders(siteId: number): Promise<ProjectFolder[]> {
     return request<ProjectFolder[]>(`/sites/${siteId}/project-folders`);
+  },
+
+  async createMaterialOrderDraft(siteId: number): Promise<MaterialOrderDraft> {
+    return request<MaterialOrderDraft>(`/sites/${encodeURIComponent(String(siteId))}/material-orders/draft`, {
+      method: "POST",
+    });
+  },
+
+  async materialOrderTemplate(siteId: number): Promise<Blob> {
+    return requestBlob(`/sites/${encodeURIComponent(String(siteId))}/material-orders/template`);
+  },
+
+  async materialOrderForm(siteId: number): Promise<MaterialOrderForm> {
+    return request<MaterialOrderForm>(`/sites/${encodeURIComponent(String(siteId))}/material-orders/form`);
+  },
+
+  async materialOrderDraft(siteId: number, draftId: string): Promise<MaterialOrderDraft> {
+    return request<MaterialOrderDraft>(
+      `/sites/${encodeURIComponent(String(siteId))}/material-orders/${encodeURIComponent(draftId)}`,
+    );
+  },
+
+  async updateMaterialOrderDraft(
+    siteId: number,
+    draftId: string,
+    payload: MaterialOrderSavePayload,
+  ): Promise<MaterialOrderDraft> {
+    return request<MaterialOrderDraft>(
+      `/sites/${encodeURIComponent(String(siteId))}/material-orders/${encodeURIComponent(draftId)}`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    );
+  },
+
+  async completeMaterialOrder(
+    siteId: number,
+    draftId: string,
+    payload: MaterialOrderSavePayload,
+  ): Promise<{ draft: MaterialOrderDraft; document: ProjectFolderDocumentItem }> {
+    return request<{ draft: MaterialOrderDraft; document: ProjectFolderDocumentItem }>(
+      `/sites/${encodeURIComponent(String(siteId))}/material-orders/${encodeURIComponent(draftId)}/complete`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  async materialOrderPreviewPdf(
+    siteId: number,
+    draftId: string,
+    payload: MaterialOrderSavePayload,
+  ): Promise<Blob> {
+    return requestMutationBlob(
+      `/sites/${encodeURIComponent(String(siteId))}/material-orders/${encodeURIComponent(draftId)}/preview-pdf`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
   },
 
   async updateProjectFolderVisibility(siteId: number, folderKey: string, visible: boolean): Promise<ProjectFolder> {

@@ -8,6 +8,7 @@ from app.models.dashboard_message_dismissal import DashboardMessageDismissal
 from app.models.dashboard_note import DashboardNote
 from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, ExtraWorkTicketPhoto
 from app.models.gps_point import GpsPoint
+from app.models.material_order import MaterialOrderDraft
 from app.models.operational_absence import OperationalAbsence
 from app.models.person import Person
 from app.models.person_hours_account import PersonHoursAccountEntry
@@ -70,6 +71,7 @@ __all__ = [
     "ExtraWorkTicketEntry",
     "ExtraWorkTicketPhoto",
     "GpsPoint",
+    "MaterialOrderDraft",
     "OperationalAbsence",
     "Person",
     "PersonHoursAccountEntry",
