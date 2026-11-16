@@ -113,6 +113,46 @@ def test_signed_snapshot_binds_manifest_and_pdf_to_the_same_original_bytes(monke
     assert ticket.signed_pdf_sha256 == sha256(content).hexdigest()
 
 
+def test_historical_signed_snapshot_keeps_bytes_and_stored_name_but_uses_current_delivery_name():
+    db = db_session()
+    frozen = b"%PDF-historical-signed-snapshot"
+    site = Site(site_number="8031", name="CHC Emden")
+    ticket = ExtraWorkTicket(
+        site=site,
+        sequence_number=3,
+        display_number="8031.SZ03",
+        kind="billing",
+        status="signed",
+        first_reviewed_or_completed_at=datetime(2026, 11, 3, 10, 30, tzinfo=timezone.utc),
+        customer_signed_at=datetime(2026, 11, 3, 10, 30, tzinfo=timezone.utc),
+        signed_pdf_content=frozen,
+        signed_pdf_filename="Zusatzauftrag_8031_8031.SZ03.pdf",
+        signed_pdf_sha256=sha256(frozen).hexdigest(),
+        signed_photo_manifest={"document_page_count": 1, "photos": []},
+    )
+    db.add_all([site, ticket])
+    db.commit()
+
+    first_content, first_name = ExtraWorkPdfService(db).build_site_ticket_pdf(
+        site_id=site.id,
+        ticket_id=ticket.id,
+    )
+    second_content, second_name = ExtraWorkPdfService(db).build_site_ticket_pdf(
+        site_id=site.id,
+        ticket_id=ticket.id,
+    )
+    db.refresh(ticket)
+
+    assert first_content == second_content == frozen
+    assert first_name == second_name == "8031.Z03_261103_CHC_Emden.pdf"
+    assert ticket.signed_pdf_content == frozen
+    assert ticket.signed_pdf_sha256 == sha256(frozen).hexdigest()
+    assert ticket.signed_pdf_filename == "Zusatzauftrag_8031_8031.SZ03.pdf"
+    assert ExtraWorkPdfService._build_supplemental_filename(ticket) == (
+        "8031.Z03_261103_CHC_Emden_Fotodokumentation.pdf"
+    )
+
+
 @pytest.mark.parametrize("legacy", [False, True])
 def test_signed_photo_selection_changes_only_appendix_for_desktop_and_mobile(monkeypatch, tmp_path, legacy):
     from PIL import Image
@@ -454,7 +494,7 @@ def test_desktop_fields_surcharges_and_exact_checkbox_mapping_are_rendered(monke
     reader = PdfReader(BytesIO(rendered))
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
 
-    assert filename == "Zusatzauftrag_8015_8015.SZ01.pdf"
+    assert filename == "8015.Z01_Entwurf_FFW_Barmbeck_Hamburg.pdf"
     assert len(reader.pages) == 1
     assert text.split().count("Test") == entry.remarks.split().count("Test")
     _assert_customer_form(reader, rendered)

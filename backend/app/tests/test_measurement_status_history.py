@@ -39,6 +39,8 @@ def undo(service, site, batch, actor, revision=None):
 def test_actual_path_skips_unsigned_stage_and_each_request_undoes_only_one_transition(setup):
     db, service, site, batch, actor, entry = setup
     service.set_site_batch_reviewed(site_id=site.id, batch_id=batch.id)
+    first_reviewed_at = batch.first_reviewed_or_completed_at
+    assert first_reviewed_at is not None
     completed = service.set_site_batch_billing_status(site_id=site.id, batch_id=batch.id, billing_status="billed")
     assert completed.previous_status == "reviewed"
     assert completed.status_path == ["submitted", "reviewed", "billed"]
@@ -58,6 +60,9 @@ def test_actual_path_skips_unsigned_stage_and_each_request_undoes_only_one_trans
     assert entry.area_or_comment == "2. OG"
     assert entry.status == "draft"
     assert batch.customer_signed_at is None
+    assert batch.first_submitted_at is None
+    assert batch.first_worker_submitted_at is None
+    assert batch.first_reviewed_or_completed_at == first_reviewed_at
 
 
 def test_real_signature_is_a_permanent_rollback_floor(setup):
@@ -95,6 +100,21 @@ def test_invoice_completion_and_duplicate_forward_requests_do_not_duplicate_hist
     service.set_site_batch_billing_status(site_id=site.id, batch_id=batch.id, billing_status="billed")
     assert undo(service, site, batch, actor).status == "reviewed"
     assert undo(service, site, batch, actor).status == "submitted"
+
+
+def test_legacy_completed_alias_does_not_invent_a_first_completion_date(setup):
+    db, service, site, batch, _actor, _entry = setup
+    batch.status = "completed"
+    batch.first_reviewed_or_completed_at = None
+    db.commit()
+
+    service.set_site_batch_billing_status(
+        site_id=site.id,
+        batch_id=batch.id,
+        billing_status="billed",
+    )
+
+    assert batch.first_reviewed_or_completed_at is None
 
 
 @pytest.mark.parametrize("status", ["reviewed", "billed", "approved", "closed", "completed"])

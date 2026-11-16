@@ -12,6 +12,7 @@ from app.models.measurement_group import MeasurementGroup, MeasurementGroupMembe
 from app.models.site import Site
 from app.models.site_measurement_item import SiteMeasurementBatch, SiteMeasurementEntry
 from app.schemas.measurement import MeasurementGroupRead
+from app.services.document_filename import measurement_group_filename
 from app.services.document_pdf_cache import build_pdf_version_hash
 from app.services.measurement_status_history import COMPLETED_STATUSES
 
@@ -33,7 +34,8 @@ def source_version(batch):
     imports/SQL updates as well, including catalog changes without batch updates.
     """
     omitted = {"internal_label", "original_submitted_snapshot", "customer_signed_snapshot",
-               "worker_signature_strokes", "customer_signature_strokes"}
+               "worker_signature_strokes", "customer_signature_strokes",
+               "first_worker_submitted_at", "first_reviewed_or_completed_at"}
     def columns(obj):
         return {attr.key: _normalized(getattr(obj, attr.key)) for attr in inspect(type(obj)).column_attrs
                 if attr.key not in omitted}
@@ -197,5 +199,5 @@ class MeasurementGroupService:
         batches = {batch.id: batch for batch in self._batches(site_id, [source["id"] for source in group.sources], lock=True)}
         if not group_is_current(group, batches):
             raise HTTPException(409, "Ein enthaltenes Aufmaß wurde geändert. Bitte die Aufmaße erneut zusammenfassen.")
-        filename = "Gesamtaufmass_" + group.number_label.replace("/", "-").replace(" ", "_") + ".pdf"
+        filename = measurement_group_filename(group, batches)
         return render_group_pdf(group), filename

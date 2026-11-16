@@ -63,6 +63,10 @@ class ExtraWorkTicket(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    first_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    first_reviewed_or_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     notes: Mapped[str | None] = mapped_column(Text)
     customer_name: Mapped[str | None] = mapped_column(String(200))
     ordered_by_name: Mapped[str | None] = mapped_column(String(160))

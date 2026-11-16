@@ -32,7 +32,7 @@ class CurrentDataPdfService:
             f"status={ticket.status};order_date={ticket.manual_order_date};"
             f"week={ticket.manual_execution_week}/{ticket.manual_execution_week_year}"
         ).encode()
-        return content, "Zusatzauftrag_9999_9999.SZ03.pdf"
+        return content, "9999.Z03_260804_Testbaustelle.pdf"
 
 
 class RecordingStorageService:
@@ -105,7 +105,7 @@ def test_completed_extra_work_ticket_archives_pdf_with_latest_corrected_dates():
     assert storage_service.calls == [
         {
             "project_folder_item_id": "project-root-1",
-            "filename": "Zusatzauftrag_9999_9999.SZ03.pdf",
+            "filename": "9999.Z03_260804_Testbaustelle.pdf",
             "content": b"status=billed;order_date=2026-08-04;week=33/2026",
         }
     ]

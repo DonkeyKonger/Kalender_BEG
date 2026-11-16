@@ -43,6 +43,7 @@ from app.schemas.extra_work import (
 from app.schemas.site_email_recipient import SiteEmailRecipientPayload, SiteEmailRecipientsUpdate
 from app.services.extra_work_pdf_service import ExtraWorkPdfService
 from app.services.extra_work_email_service import ExtraWorkEmailService
+from app.services.document_filename import extra_work_filename
 from app.services import extra_work_email_service as extra_work_email_module
 from app.services import extra_work_pdf_service as extra_work_pdf_module
 from app.services import extra_work_service as extra_work_module
@@ -262,6 +263,9 @@ def test_mobile_extra_work_ticket_persists_per_assignment_site_and_can_be_submit
     assert created.status == "draft"
     assert submitted.status == "submitted"
     assert submitted.submitted_at is not None
+    submitted_ticket = db.get(ExtraWorkTicket, created.id)
+    assert submitted_ticket is not None
+    assert submitted_ticket.first_submitted_at == submitted_ticket.submitted_at
     assert [ticket.id for ticket in tickets] == [created.id]
     assert other_tickets == []
 
@@ -331,6 +335,10 @@ def test_manual_extra_work_status_promotion_only_moves_up_and_preserves_signatur
     )
     assert submitted.status == "submitted"
     assert submitted.customer_signed_at is None
+    stored = db.get(ExtraWorkTicket, created.id)
+    assert stored is not None
+    assert stored.first_submitted_at is None
+    assert stored.first_reviewed_or_completed_at is None
 
     with pytest.raises(HTTPException) as downgrade:
         service.promote_site_ticket_status(
@@ -350,7 +358,6 @@ def test_manual_extra_work_status_promotion_only_moves_up_and_preserves_signatur
         )
     assert signed.value.status_code == 400
 
-    stored = db.get(ExtraWorkTicket, created.id)
     stored.status = "signed"
     stored.customer_signature_name = "Kunde Beispiel"
     stored.customer_signed_at = datetime.now(UTC)
@@ -365,6 +372,10 @@ def test_manual_extra_work_status_promotion_only_moves_up_and_preserves_signatur
     assert completed.customer_signature_name == "Kunde Beispiel"
     assert completed.customer_signed_at is not None
     assert archive_service.calls == [(site.id, created.id)]
+    completed_at = db.get(
+        ExtraWorkTicket, created.id
+    ).first_reviewed_or_completed_at
+    assert completed_at is not None
 
     repeated = service.promote_site_ticket_status(
         site_id=site.id,
@@ -373,6 +384,10 @@ def test_manual_extra_work_status_promotion_only_moves_up_and_preserves_signatur
         current_user=actor,
     )
     assert repeated.status == "billed"
+    assert (
+        db.get(ExtraWorkTicket, created.id).first_reviewed_or_completed_at
+        == completed_at
+    )
     assert archive_service.calls == [(site.id, created.id), (site.id, created.id)]
     assert db.query(AuditLog).filter_by(action="extra_work.status_promoted").count() == 2
 
@@ -899,7 +914,8 @@ def test_legacy_signed_ticket_freezes_current_pdf_once_without_user_facing_marke
     db.refresh(ticket)
     assert ticket.signed_snapshot_kind == "legacy_frozen_current_state"
     assert ticket.signed_photo_manifest["snapshot_kind"] == "legacy_frozen_current_state"
-    assert "legacy" not in _filename.lower()
+    assert _filename == extra_work_filename(ticket)
+    assert "legacy_frozen_current_state" not in _filename.lower()
     ticket.title = "Nachträglich geändert"
     db.commit()
     again, _ = ExtraWorkPdfService(db).build_mobile_ticket_pdf(
@@ -1758,7 +1774,7 @@ def test_mobile_extra_work_email_send_allows_missing_customer_signature(monkeypa
             self.db = db
 
         def build_mobile_ticket_pdf(self, *, assignment_id, ticket_id, current_user):
-            return b"%PDF-test", "Stundenzettel_3_Hauptauftrag.pdf"
+            return b"%PDF-test", "8007.Z01_Entwurf_Schüchtermann_Klinik.pdf"
 
     class FakeEmailDeliveryService:
         def send_document_email(self, *, recipients, subject, body, attachment):
@@ -1784,7 +1800,7 @@ def test_mobile_extra_work_email_send_allows_missing_customer_signature(monkeypa
     db.refresh(stored_ticket)
     assert stored_ticket.customer_signed_at is None
     assert result.recipients == ["kunde@example.de"]
-    assert result.filename == "Stundenzettel_3_Hauptauftrag.pdf"
+    assert result.filename == "8007.Z01_Entwurf_Schüchtermann_Klinik.pdf"
     assert deliveries == [
         {
             "recipients": ["kunde@example.de"],
@@ -1800,7 +1816,7 @@ def test_mobile_extra_work_email_send_allows_missing_customer_signature(monkeypa
                 "Eingetragen: Amtsgericht Walsrode – HRB 120028\n"
                 "Geschäftsführer: Axel Biesewig · Kerstin Erichsen"
             ),
-            "filename": "Stundenzettel_3_Hauptauftrag.pdf",
+            "filename": "8007.Z01_Entwurf_Schüchtermann_Klinik.pdf",
             "content": b"%PDF-test",
             "content_type": "application/pdf",
         }
@@ -1847,7 +1863,7 @@ def test_mobile_extra_work_email_send_delivers_signed_pdf_and_records_audit(monk
             self.db = db
 
         def build_mobile_ticket_pdf(self, *, assignment_id, ticket_id, current_user):
-            return b"%PDF-test", "Stundenzettel_3_Hauptauftrag.pdf"
+            return b"%PDF-test", "8007.Z01_Entwurf_Schüchtermann_Klinik.pdf"
 
         def build_mobile_ticket_supplemental_photo_pdf(self, *, assignment_id, ticket_id, current_user):
             raise AssertionError("Selected photos are already in the downloaded PDF; do not attach them twice")
@@ -1871,7 +1887,7 @@ def test_mobile_extra_work_email_send_delivers_signed_pdf_and_records_audit(monk
 
     audit_log = db.query(AuditLog).filter_by(action="extra_work.email_sent").one()
     assert result.recipients == ["kunde@example.de"]
-    assert result.filename == "Stundenzettel_3_Hauptauftrag.pdf"
+    assert result.filename == "8007.Z01_Entwurf_Schüchtermann_Klinik.pdf"
     assert deliveries[0]["recipients"] == ["kunde@example.de"]
     assert [attachment.content for attachment in deliveries[0]["attachments"]] == [
         b"%PDF-test",
@@ -1880,7 +1896,7 @@ def test_mobile_extra_work_email_send_delivers_signed_pdf_and_records_audit(monk
         "application/pdf",
     ]
     assert audit_log.new_value_json["attachment_filenames"] == [
-        "Stundenzettel_3_Hauptauftrag.pdf",
+        "8007.Z01_Entwurf_Schüchtermann_Klinik.pdf",
     ]
     assert audit_log.entity_type == "extra_work_ticket"
     assert audit_log.entity_id == ticket.id
@@ -1924,7 +1940,7 @@ def test_mobile_measurement_email_send_allows_submitted_batch_without_customer_s
             self.db = db
 
         def build_batch_pdf(self, *, site_id, batch_id, mode):
-            return b"%PDF-measurement", "Aufmass_geprueft_8007.01.pdf"
+            return b"%PDF-measurement", "8007.01_260611_Schüchtermann_Klinik.pdf"
 
     class FakeEmailDeliveryService:
         def send_document_email(self, *, recipients, subject, body, attachment):
@@ -1952,7 +1968,7 @@ def test_mobile_measurement_email_send_allows_submitted_batch_without_customer_s
     assert batch.worker_signed_at is None
     assert batch.customer_signed_at is None
     assert result.recipients == ["kunde@example.de"]
-    assert result.filename == "Aufmass_geprueft_8007.01.pdf"
+    assert result.filename == "8007.01_260611_Schüchtermann_Klinik.pdf"
     assert deliveries[0]["recipients"] == ["kunde@example.de"]
     assert deliveries[0]["subject"] == "Anliegend erhalten Sie Aufmaß 8007.01 - Schüchtermann Klinik"
     assert deliveries[0]["body"] == (
@@ -1970,7 +1986,7 @@ def test_mobile_measurement_email_send_allows_submitted_batch_without_customer_s
     assert deliveries[0]["content_type"] == "application/pdf"
     assert audit_log.entity_type == "measurement_batch"
     assert audit_log.entity_id == batch.id
-    assert audit_log.new_value_json["filename"] == "Aufmass_geprueft_8007.01.pdf"
+    assert audit_log.new_value_json["filename"] == "8007.01_260611_Schüchtermann_Klinik.pdf"
     assert audit_log.new_value_json["customer_signature_present"] is False
 
 
@@ -2845,7 +2861,7 @@ def test_mobile_extra_work_pdf_builds_billing_template_pdf():
     )
 
     assert content.startswith(b"%PDF")
-    assert filename == "Zusatzauftrag_8007_8007.Z01.pdf"
+    assert filename == extra_work_filename(db.get(ExtraWorkTicket, ticket.id))
     pdf_reader = PdfReader(BytesIO(content))
     pdf_text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
     assert len(pdf_reader.pages) == 1
@@ -2959,7 +2975,7 @@ def test_extra_work_pdf_is_available_again_after_restore():
     assert restored.status == submitted.status
     assert restored.total_hours == 2.5
     assert content.startswith(b"%PDF")
-    assert filename == "Zusatzauftrag_8007_8007.Z01.pdf"
+    assert filename == extra_work_filename(db.get(ExtraWorkTicket, ticket.id))
 
 
 def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):
@@ -3030,7 +3046,7 @@ def test_mobile_extra_work_pdf_appends_uploaded_photos(monkeypatch):
         current_user=current_user,
     )
 
-    assert filename == "Zusatzauftrag_8007_8007.Z01.pdf"
+    assert filename == "8007.Z01_Entwurf_Schüchtermann_Klinik.pdf"
     pdf_reader = PdfReader(BytesIO(content))
     pdf_text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
     assert len(pdf_reader.pages) == 2
@@ -3111,7 +3127,7 @@ def test_mobile_extra_work_pdf_builds_approval_template_pdf():
     )
 
     assert content.startswith(b"%PDF")
-    assert filename == "Zusatzauftrag_8007_8007.Z01.pdf"
+    assert filename == "8007.Z01_Entwurf_Schüchtermann_Klinik.pdf"
     assert len(PdfReader(BytesIO(content)).pages) == 1
 
 

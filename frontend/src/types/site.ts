@@ -320,6 +320,7 @@ export type MobileMeasurementBatch = {
   is_current_offer: boolean;
   number: number;
   title: string;
+  document_filename: string;
   status: "draft" | "submitted" | "reviewed" | "customer_signed" | "billed" | "in_review" | "approved" | "rejected" | "closed" | string;
   origin: "MONTEUR" | "OFFICE" | "LEGACY";
   position_mode: "OFFER_BASED" | "BLANK";
@@ -399,6 +400,7 @@ export type MobileExtraWorkTicket = {
   sequence_number: number;
   display_number: string;
   title: string | null;
+  document_filename: string;
   internal_label?: string | null;
   kind: "billing" | "approval" | string;
   approval_ticket_id: number | null;

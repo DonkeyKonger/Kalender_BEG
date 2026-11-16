@@ -538,12 +538,12 @@ def test_extra_work_archive_folder_is_created_on_demand_and_upload_is_idempotent
 
     first = service.upload_extra_work_archive_pdf(
         project_folder_item_id="existing-project-root",
-        filename="Zusatzauftrag_9999_9999.SZ03.pdf",
+        filename="9999.Z03_260804_Testbaustelle.pdf",
         content=b"first-current-pdf",
     )
     second = service.upload_extra_work_archive_pdf(
         project_folder_item_id="existing-project-root",
-        filename="Zusatzauftrag_9999_9999.SZ03.pdf",
+        filename="9999.Z03_260804_Testbaustelle.pdf",
         content=b"corrected-current-pdf",
     )
 
@@ -555,8 +555,8 @@ def test_extra_work_archive_folder_is_created_on_demand_and_upload_is_idempotent
     assert len(graph.puts) == 2
     upload_paths = [path for path, _, _ in graph.puts]
     assert upload_paths == [
-        "/drives/drive-1/items/folder-2:/Zusatzauftrag_9999_9999.SZ03.pdf:/content",
-        "/drives/drive-1/items/folder-2:/Zusatzauftrag_9999_9999.SZ03.pdf:/content",
+        "/drives/drive-1/items/folder-2:/9999.Z03_260804_Testbaustelle.pdf:/content",
+        "/drives/drive-1/items/folder-2:/9999.Z03_260804_Testbaustelle.pdf:/content",
     ]
     assert graph.puts[-1][1] == b"corrected-current-pdf"
 

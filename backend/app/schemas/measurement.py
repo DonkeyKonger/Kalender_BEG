@@ -210,6 +210,7 @@ class MeasurementGroupRead(BaseModel):
 
 
 class MobileMeasurementBatchRead(BaseModel):
+    document_filename: str = ""
     combined_measurement: MeasurementGroupRead | None = None
     id: int
     site_id: int

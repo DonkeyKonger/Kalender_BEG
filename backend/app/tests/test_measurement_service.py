@@ -33,7 +33,8 @@ from app.schemas.measurement import (
     MobileMeasurementFreeItemCreate,
     OfficeMeasurementBatchCreate,
 )
-from app.services.measurement_service import MeasurementService, _measurement_archive_filename
+from app.services.measurement_service import MeasurementService
+from app.services.document_filename import measurement_filename
 from app.services.measurement_timesheet_parser import (
     ParsedMeasurementItem,
     MeasurementTimesheetParseResult,
@@ -367,38 +368,74 @@ def parsed_timesheet_positions(
     )
 
 
-def test_measurement_archive_filename_uses_completion_date_site_name_and_number():
+def test_measurement_archive_reuses_stable_pdf_names_without_cross_batch_collision(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.services.measurement_pdf_service import MeasurementPdfService
+    from app.services.project_folder_service import ProjectFolderService
+    from app.services.project_storage_service import ProjectStorageService
+
+    db = db_session()
     site = Site(
-        name="Schüchtermann Klinik",
-        site_number="8007",
+        name="CHC Emden",
+        site_number="8031",
         status=SiteStatus.ACTIVE,
         location_status=SiteLocationStatus.UNCHECKED,
     )
-    batch = SiteMeasurementBatch(site=site, number=18)
+    actor = User(
+        username="archive-test",
+        display_name="Archivtest",
+        password_hash="x",
+        role=UserRole.OFFICE,
+    )
+    completed_at = datetime(2026, 11, 3, 10, 30, tzinfo=timezone.utc)
+    batches = [
+        SiteMeasurementBatch(
+            site=site,
+            number=number,
+            title=f"Aufmaß {number}",
+            status="billed",
+            first_reviewed_or_completed_at=completed_at,
+        )
+        for number in (3, 4)
+    ]
+    db.add_all([site, actor, *batches])
+    db.commit()
 
-    filename = _measurement_archive_filename(
-        batch,
-        completed_at=datetime(2026, 6, 11, 10, 30, tzinfo=timezone.utc),
+    monkeypatch.setattr(
+        ProjectFolderService,
+        "get_project_folder_for_site_by_key",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            external_drive_id="drive-1",
+            external_item_id="folder-1",
+        ),
     )
 
-    assert filename == "260611_Aufmaß_Schüchtermann_Klinik_8007.pdf"
+    def build_pdf(_self, *, site_id, batch_id, mode):
+        assert site_id == site.id
+        assert mode == "checked"
+        batch = db.get(SiteMeasurementBatch, batch_id)
+        return f"%PDF-{batch_id}".encode(), measurement_filename(batch)
 
-
-def test_measurement_archive_filename_sanitizes_forbidden_file_characters():
-    site = Site(
-        name=' Projekt / Nord: A * B ? "Test" ',
-        site_number=" 80/07 ",
-        status=SiteStatus.ACTIVE,
-        location_status=SiteLocationStatus.UNCHECKED,
-    )
-    batch = SiteMeasurementBatch(site=site, number=18)
-
-    filename = _measurement_archive_filename(
-        batch,
-        completed_at=datetime(2026, 6, 11, 10, 30, tzinfo=timezone.utc),
+    uploads = []
+    monkeypatch.setattr(MeasurementPdfService, "build_batch_pdf", build_pdf)
+    monkeypatch.setattr(
+        ProjectStorageService,
+        "upload_file_to_folder",
+        lambda _self, **kwargs: uploads.append(kwargs) or {"id": f"item-{len(uploads)}"},
     )
 
-    assert filename == "260611_Aufmaß_Projekt_Nord_A_B_Test_80_07.pdf"
+    service = MeasurementService(db)
+    service._archive_billed_batch_pdf(batch=batches[0], current_user=actor)
+    service._archive_billed_batch_pdf(batch=batches[1], current_user=actor)
+    service._archive_billed_batch_pdf(batch=batches[0], current_user=actor)
+
+    assert [upload["filename"] for upload in uploads] == [
+        "8031.03_261103_CHC_Emden.pdf",
+        "8031.04_261103_CHC_Emden.pdf",
+        "8031.03_261103_CHC_Emden.pdf",
+    ]
+    assert uploads[0]["filename"] != uploads[1]["filename"]
 
 
 def test_import_timesheet_stores_zero_quantity_and_rejects_only_existing_positions(monkeypatch):
@@ -1555,6 +1592,7 @@ def test_mobile_measurement_batch_submit_requires_entries_and_locks_batch():
     stored_batch = db.get(SiteMeasurementBatch, batch.id)
     assert stored_batch is not None
     assert stored_batch.first_submitted_at == stored_batch.submitted_at
+    assert stored_batch.first_worker_submitted_at == stored_batch.submitted_at
 
     with pytest.raises(HTTPException) as locked:
         service.create_mobile_entry(
@@ -3795,8 +3833,13 @@ def test_dashboard_submissions_include_customer_signed_batches_until_billed():
         batch_id=batch.id,
         mode="checked",
     )
+    _original_content, original_filename = MeasurementPdfService(db).build_batch_pdf(
+        site_id=site.id,
+        batch_id=batch.id,
+        mode="original",
+    )
 
-    assert filename == "Aufmass_geprueft_8007.01.pdf"
+    assert filename == original_filename == measurement_filename(stored_batch)
     assert b"Kunde Beispiel" in pdf_content
     assert b"Klinikweg 8" in pdf_content
     assert b"Adresse:" in pdf_content

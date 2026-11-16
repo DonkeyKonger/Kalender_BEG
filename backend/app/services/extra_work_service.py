@@ -38,6 +38,7 @@ from app.services.document_photo_optimizer import (
     create_document_photo_thumbnail,
     optimize_document_photo,
 )
+from app.services.document_filename import extra_work_filename
 from app.services.extra_work_archive_service import (
     ExtraWorkArchiveService,
     is_extra_work_completed_status,
@@ -110,6 +111,7 @@ class ExtraWorkService:
         statement = (
             select(ExtraWorkTicket)
             .options(
+                selectinload(ExtraWorkTicket.site),
                 selectinload(ExtraWorkTicket.created_by).selectinload(User.person),
                 selectinload(ExtraWorkTicket.deleted_by).selectinload(User.person),
                 selectinload(ExtraWorkTicket.entries),
@@ -394,6 +396,11 @@ class ExtraWorkService:
             return self._build_ticket_read(ticket)
         target_status = validate_extra_work_status_promotion(previous_status, target_status)
         ticket.status = target_status
+        if (
+            (target_status == "reviewed" or is_extra_work_completed_status(target_status))
+            and ticket.first_reviewed_or_completed_at is None
+        ):
+            ticket.first_reviewed_or_completed_at = datetime.now(UTC)
         AuditService(self.db).record(
             user_id=current_user.id,
             action="extra_work.status_promoted",
@@ -437,6 +444,8 @@ class ExtraWorkService:
         )
         if status_changed:
             ticket.status = "billed"
+            if ticket.first_reviewed_or_completed_at is None:
+                ticket.first_reviewed_or_completed_at = datetime.now(UTC)
         AuditService(self.db).record(
             user_id=current_user.id,
             action="extra_work.invoiced_updated",
@@ -529,6 +538,8 @@ class ExtraWorkService:
         ticket.status = "submitted"
         ticket.submitted_by_user_id = current_user.id
         ticket.submitted_at = datetime.now(UTC)
+        if ticket.first_submitted_at is None:
+            ticket.first_submitted_at = ticket.submitted_at
         self.db.add(ticket)
         self.db.commit()
         self.db.refresh(ticket)
@@ -1364,6 +1375,7 @@ class ExtraWorkService:
         include_entry_summaries: bool = False,
     ) -> ExtraWorkTicketRead:
         result = ExtraWorkTicketRead.model_validate(ticket)
+        result.document_filename = extra_work_filename(ticket)
         result.created_by_name = self._format_user_display_name(ticket.created_by)
         result.deleted_by_name = self._format_user_display_name(ticket.deleted_by)
         if include_entry_summaries:

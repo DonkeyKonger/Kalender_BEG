@@ -68,6 +68,8 @@ from app.services.measurement_timesheet_parser import (
     parse_measurement_timesheet_pdf,
 )
 from app.services.document_photo_optimizer import optimize_document_photo
+from app.services.document_filename import measurement_filename
+from app.services.document_dates import REVIEWED_OR_COMPLETED_STATUSES
 from app.services.photo_filename import (
     build_photo_filename,
     measurement_photo_document_label,
@@ -1003,6 +1005,8 @@ class MeasurementService:
         batch.submitted_at = submitted_at
         if batch.first_submitted_at is None:
             batch.first_submitted_at = submitted_at
+        if batch.first_worker_submitted_at is None:
+            batch.first_worker_submitted_at = submitted_at
         if batch.original_submitted_snapshot is None:
             batch.original_submitted_snapshot = self._build_original_submitted_snapshot(
                 batch=batch,
@@ -1351,6 +1355,7 @@ class MeasurementService:
                 defer(SiteMeasurementBatch.customer_signed_snapshot, raiseload=True),
                 defer(SiteMeasurementBatch.customer_signature_strokes, raiseload=True),
                 defer(SiteMeasurementBatch.worker_signature_strokes, raiseload=True),
+                selectinload(SiteMeasurementBatch.site),
                 selectinload(SiteMeasurementBatch.entries).selectinload(
                     SiteMeasurementEntry.measurement_item
                 ),
@@ -1828,6 +1833,11 @@ class MeasurementService:
         )
         batch.is_invoiced = is_invoiced
         if status_changed:
+            if (
+                previous_status not in REVIEWED_OR_COMPLETED_STATUSES
+                and batch.first_reviewed_or_completed_at is None
+            ):
+                batch.first_reviewed_or_completed_at = datetime.now(timezone.utc)
             record_status_transition(batch, "billed")
             batch.status = "billed"
             for entry in _current_measurement_entries(list(batch.entries)):
@@ -1870,12 +1880,17 @@ class MeasurementService:
 
         self._get_site(site_id)
         batch = self._get_batch_for_site(batch_id, site_id, for_update=True)
+        previous_status = batch.status
         # Status reset (mark-open) deliberately preserves quantities, snapshots,
         # signatures and invoicing. Restoring worker data is a separate endpoint.
         record_status_transition(batch, normalized_status)
         batch.status = normalized_status
-        if normalized_status == "submitted" and batch.first_submitted_at is None:
-            batch.first_submitted_at = datetime.now(timezone.utc)
+        if (
+            normalized_status == "billed"
+            and previous_status not in REVIEWED_OR_COMPLETED_STATUSES
+            and batch.first_reviewed_or_completed_at is None
+        ):
+            batch.first_reviewed_or_completed_at = datetime.now(timezone.utc)
         for entry in _current_measurement_entries(list(batch.entries)):
             entry.status = normalized_status
         if normalized_status == "billed" and current_user is not None:
@@ -1971,6 +1986,11 @@ class MeasurementService:
 
         record_status_transition(batch, "reviewed")
         batch.status = "reviewed"
+        if (
+            previous_status not in REVIEWED_OR_COMPLETED_STATUSES
+            and batch.first_reviewed_or_completed_at is None
+        ):
+            batch.first_reviewed_or_completed_at = datetime.now(timezone.utc)
         for entry in _current_measurement_entries(list(batch.entries)):
             entry.status = "reviewed"
         self.db.commit()
@@ -3038,6 +3058,7 @@ class MeasurementService:
         )
         signature_barrier = has_signature_barrier(batch, signed_snapshot_present=snapshot_presence[1] if snapshot_presence is not None else None)
         return MobileMeasurementBatchRead(
+            document_filename=measurement_filename(batch),
             id=batch.id,
             site_id=batch.site_id,
             measurement_base_id=batch.measurement_base_id,
@@ -3667,7 +3688,7 @@ class MeasurementService:
         )
         from app.services.measurement_pdf_service import MeasurementPdfService
 
-        pdf_content, _generated_filename = MeasurementPdfService(self.db).build_batch_pdf(
+        pdf_content, filename = MeasurementPdfService(self.db).build_batch_pdf(
             site_id=batch.site_id,
             batch_id=batch.id,
             mode="checked",
@@ -3675,7 +3696,7 @@ class MeasurementService:
         ProjectStorageService().upload_file_to_folder(
             drive_id=folder.external_drive_id,
             folder_item_id=folder.external_item_id,
-            filename=_measurement_archive_filename(batch),
+            filename=filename,
             content=pdf_content,
             content_type="application/pdf",
         )
@@ -3729,25 +3750,3 @@ def _trim_signature_location(value: str) -> str:
 
 def _normalize_content_type(value: str | None) -> str:
     return (value or "application/octet-stream").split(";", 1)[0].strip().lower()
-
-
-def _measurement_archive_filename(
-    batch: SiteMeasurementBatch,
-    completed_at: datetime | None = None,
-) -> str:
-    completed_at = completed_at or datetime.now(MEASUREMENT_ARCHIVE_TIMEZONE)
-    date_prefix = completed_at.astimezone(MEASUREMENT_ARCHIVE_TIMEZONE).strftime("%y%m%d")
-    site_name = _safe_measurement_archive_filename_part(
-        batch.site.name if batch.site and batch.site.name else "Projekt"
-    )
-    site_number = _safe_measurement_archive_filename_part(
-        batch.site.site_number if batch.site and batch.site.site_number else "ohne_Nummer"
-    )
-    return f"{date_prefix}_Aufmaß_{site_name}_{site_number}.pdf"
-
-
-def _safe_measurement_archive_filename_part(value: str) -> str:
-    normalized = re.sub(r'[/\\:*?"<>|]+', "_", value.strip())
-    normalized = re.sub(r"\s+", "_", normalized)
-    normalized = re.sub(r"_+", "_", normalized)
-    return normalized.strip("._ ") or "Projekt"

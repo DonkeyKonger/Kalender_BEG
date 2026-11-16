@@ -21,6 +21,7 @@ import { buildToolMaterialSearchParams, type ToolMaterialListParams } from "./to
 import { fetchWithAuthRefresh } from "./authenticatedFetch";
 import type { WarehouseBooking, WarehouseDirection, WarehouseHistoryDetail, WarehouseHistoryEntry, WarehouseHistoryPage, WarehousePerson, WarehouseReceipt, WarehouseToolPage } from "../types/warehouse";
 import type { MaterialOrderDraft, MaterialOrderForm, MaterialOrderSavePayload } from "./materialOrders";
+import { parseContentDispositionFilename, type NamedBlob } from "./namedBlob";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 const AUTH_REFRESH_PATH = "/auth/refresh";
@@ -359,7 +360,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-async function requestBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+async function requestBlobResponse(path: string, signal?: AbortSignal): Promise<Response> {
   const response = await authenticatedFetch(path, { headers: { Accept: "*/*" }, signal });
   if (!response.ok) {
     const contentType = response.headers.get("content-type") ?? "";
@@ -375,7 +376,19 @@ async function requestBlob(path: string, signal?: AbortSignal): Promise<Blob> {
     });
     throw new ApiError(response.status, detail);
   }
-  return response.blob();
+  return response;
+}
+
+async function requestBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  return (await requestBlobResponse(path, signal)).blob();
+}
+
+async function requestNamedBlob(path: string, signal?: AbortSignal): Promise<NamedBlob> {
+  const response = await requestBlobResponse(path, signal);
+  return {
+    blob: await response.blob(),
+    filename: parseContentDispositionFilename(response.headers.get("content-disposition")),
+  };
 }
 
 async function requestMutationBlob(path: string, options: RequestInit): Promise<Blob> {
@@ -1672,8 +1685,8 @@ export const api = {
     });
   },
 
-  async downloadSiteMeasurementBatchPdf(siteId: number, batchId: number, mode: "checked" | "original" = "checked"): Promise<Blob> {
-    return requestBlob(`/sites/${siteId}/measurement-batches/${batchId}/pdf?mode=${mode}`);
+  async downloadSiteMeasurementBatchPdf(siteId: number, batchId: number, mode: "checked" | "original" = "checked"): Promise<NamedBlob> {
+    return requestNamedBlob(`/sites/${siteId}/measurement-batches/${batchId}/pdf?mode=${mode}`);
   },
 
   async combineSiteMeasurements(siteId: number, batchIds: number[]): Promise<MeasurementGroup> {
@@ -1682,8 +1695,8 @@ export const api = {
     });
   },
 
-  async downloadSiteMeasurementGroupPdf(siteId: number, groupId: number): Promise<Blob> {
-    return requestBlob(`/sites/${siteId}/measurement-groups/${groupId}/pdf`);
+  async downloadSiteMeasurementGroupPdf(siteId: number, groupId: number): Promise<NamedBlob> {
+    return requestNamedBlob(`/sites/${siteId}/measurement-groups/${groupId}/pdf`);
   },
 
   async siteExtraWorkTickets(
@@ -1829,8 +1842,8 @@ export const api = {
     });
   },
 
-  async downloadSiteExtraWorkTicketPdf(siteId: number, ticketId: number): Promise<Blob> {
-    return requestBlob(`/sites/${siteId}/extra-work-tickets/${ticketId}/pdf`);
+  async downloadSiteExtraWorkTicketPdf(siteId: number, ticketId: number): Promise<NamedBlob> {
+    return requestNamedBlob(`/sites/${siteId}/extra-work-tickets/${ticketId}/pdf`);
   },
 
   async deleteSiteExtraWorkTicket(siteId: number, ticketId: number): Promise<void> {
@@ -2184,8 +2197,8 @@ export const api = {
     });
   },
 
-  async mobileExtraWorkTicketPdf(assignmentId: number, ticketId: number): Promise<Blob> {
-    return requestBlob(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/pdf`);
+  async mobileExtraWorkTicketPdf(assignmentId: number, ticketId: number): Promise<NamedBlob> {
+    return requestNamedBlob(`/me/assignments/${assignmentId}/extra-work-tickets/${ticketId}/pdf`);
   },
 
   async sendMobileExtraWorkTicketEmail(
@@ -2281,8 +2294,8 @@ export const api = {
     );
   },
 
-  async mobileMeasurementBatchPdf(assignmentId: number, batchId: number): Promise<Blob> {
-    return requestBlob(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/pdf?mode=checked`);
+  async mobileMeasurementBatchPdf(assignmentId: number, batchId: number): Promise<NamedBlob> {
+    return requestNamedBlob(`/me/assignments/${assignmentId}/measurement-batches/${batchId}/pdf?mode=checked`);
   },
 
   async mobileMeasurementTimesheetPdf(assignmentId: number): Promise<Blob> {

@@ -12,7 +12,8 @@ from app.models.enums import UserRole
 from app.models.measurement_group import MeasurementGroup, MeasurementGroupMember
 from app.models.site_measurement_item import SiteMeasurementAreaRow, SiteMeasurementBatch, SiteMeasurementBatchPhoto, SiteMeasurementEntry, SiteMeasurementItem
 from app.models.user import User
-from app.services.measurement_group_service import MeasurementGroupService, groups_for_overview
+from app.services.measurement_group_service import MeasurementGroupService, groups_for_overview, source_version
+from app.services.measurement_pdf_service import MeasurementPdfService
 from app.services.measurement_service import MeasurementService
 from app.tests.test_measurement_service import create_site, db_session
 
@@ -27,6 +28,7 @@ def setup_group(db, count=2):
     batches = []
     for number in range(11, 11 + count):
         batch = SiteMeasurementBatch(site=site, number=number, title=f"Aufmaß {number}", status="billed",
+            first_reviewed_or_completed_at=datetime(2026, 9, number, tzinfo=timezone.utc),
             is_invoiced=number == 11, worker_signed_at=datetime(2026, 9, number, tzinfo=timezone.utc),
             worker_signature_name=f"Monteur {number}", worker_signature_strokes=INK,
             customer_signed_at=datetime(2026, 9, number, tzinfo=timezone.utc),
@@ -46,6 +48,40 @@ def setup_group(db, count=2):
 def create_group(db, site, user, batches):
     result = MeasurementGroupService(db).create(site.id, [batch.id for batch in batches], user)
     return db.get(MeasurementGroup, result.id)
+
+
+def test_filename_event_dates_do_not_change_existing_group_content_hash():
+    with db_session() as db:
+        _site, _user, batches = setup_group(db)
+        batch = batches[0]
+        original = source_version(batch)
+        original_pdf = MeasurementPdfService(db)._build_batch_pdf_version_hash(
+            batch,
+            mode="checked",
+        )
+
+        batch.first_worker_submitted_at = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        batch.first_reviewed_or_completed_at = datetime(2026, 10, 1, tzinfo=timezone.utc)
+
+        assert source_version(batch) == original
+        assert (
+            MeasurementPdfService(db)._build_batch_pdf_version_hash(
+                batch,
+                mode="checked",
+            )
+            == original_pdf
+        )
+
+        # This pre-existing field remains part of the historical content hash.
+        batch.first_submitted_at = datetime(2026, 7, 1, tzinfo=timezone.utc)
+        assert source_version(batch) != original
+        assert (
+            MeasurementPdfService(db)._build_batch_pdf_version_hash(
+                batch,
+                mode="checked",
+            )
+            == original_pdf
+        )
 
 
 def test_aggregate_sums_same_service_without_adding_quantities_to_ledger():
@@ -260,7 +296,7 @@ def test_pdf_is_one_merged_matrix_and_every_page_lists_sources():
         site, user, batches = setup_group(db, 8)
         group = create_group(db, site, user, batches)
         content, filename = MeasurementGroupService(db).pdf(site.id, group.id)
-        assert filename == "Gesamtaufmass_8007.18G.pdf"
+        assert filename == "8007.18G_260918_Testbaustelle.pdf"
         pages = PdfReader(BytesIO(content)).pages
         assert len(pages) == 3  # ONE matrix plus two signature continuation pages.
         for page in pages:
@@ -299,7 +335,7 @@ def test_group_routes_use_existing_office_permissions(monkeypatch, role, permiss
             return {"id": 1, "number_label": "8007.12G", "created_at": datetime.now(timezone.utc),
                     "sources": [{"id": 11, "number_label": "8007.11"}, {"id": 12, "number_label": "8007.12"}],
                     "position_count": 1, "worker_signature_count": 0, "has_customer_signature": False}
-        def pdf(self, site_id, group_id): return b"%PDF-test", "Gesamtaufmass_8007.12G.pdf"
+        def pdf(self, site_id, group_id): return b"%PDF-test", "8007.12G_260912_Testbaustelle.pdf"
     monkeypatch.setattr(sites, "MeasurementGroupService", FakeGroups)
     client = api_client(monkeypatch, current_user(role, *permissions))
     response = client.post("/api/sites/8/measurement-groups", json={"batch_ids": [11, 12]})
@@ -308,4 +344,4 @@ def test_group_routes_use_existing_office_permissions(monkeypatch, role, permiss
     assert response.status_code == (200 if expected == 201 else 403)
     if response.status_code == 200:
         assert response.headers["cache-control"] == "no-store"
-        assert "Gesamtaufmass_8007.12G.pdf" in response.headers["content-disposition"]
+        assert "8007.12G_260912_Testbaustelle.pdf" in response.headers["content-disposition"]

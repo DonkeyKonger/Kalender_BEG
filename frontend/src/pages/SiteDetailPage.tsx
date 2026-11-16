@@ -40,6 +40,7 @@ import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } 
 import { SupplementaryOrderDetail } from "../components/SupplementaryOrderDetail";
 import { ApiError, api } from "../lib/api";
 import { MaterialOrderPreviewResourceCache } from "../lib/materialOrderPreview";
+import { createNamedBlobObjectUrl, showNamedPdfPreview } from "../lib/namedBlob";
 import {
   MATERIAL_ORDER_DESKTOP_ZOOM,
   MATERIAL_ORDER_MOBILE_ZOOM,
@@ -1109,12 +1110,8 @@ export function SiteDetailPage() {
     setMeasurementReviewMessage(null);
     setMeasurementReviewError(null);
     try {
-      const blob = await api.downloadSiteMeasurementBatchPdf(site.id, batch.id, mode);
-      const packageNumber = formatMeasurementPackageNumber(site.site_number, batch.number, batch.title)
-        .replace(/^Aufmaß\s+/, "")
-        .replace(/[^\w.-]+/g, "_");
-      const prefix = mode === "checked" ? "Aufmass_geprueft" : "Aufmass";
-      triggerBrowserDownload(blob, `${prefix}_${packageNumber}.pdf`);
+      const download = await api.downloadSiteMeasurementBatchPdf(site.id, batch.id, mode);
+      triggerBrowserDownload(download.blob, download.filename || batch.document_filename || "Aufmaß.pdf");
     } catch (requestError) {
       setMeasurementReviewError(readApiError(requestError, "PDF konnte nicht erstellt werden."));
     }
@@ -1125,15 +1122,23 @@ export function SiteDetailPage() {
       return;
     }
     const actionKey = `${ticket.id}:${mode}`;
-    const openedWindow = mode === "open" ? window.open("about:blank", "_blank", "noopener,noreferrer") : null;
+    const openedWindow = mode === "open" ? window.open("about:blank", "_blank") : null;
+    if (openedWindow) {
+      openedWindow.opener = null;
+    }
     setExtraWorkPdfAction(actionKey);
     setExtraWorkError(null);
     try {
-      const blob = await api.downloadSiteExtraWorkTicketPdf(site.id, ticket.id);
+      const download = await api.downloadSiteExtraWorkTicketPdf(site.id, ticket.id);
+      const filename = download.filename || ticket.document_filename || "Zusatzauftrag.pdf";
       if (mode === "open") {
-        openBlobInNewTab(blob, openedWindow);
+        if (openedWindow && !openedWindow.closed) {
+          showNamedPdfPreview(openedWindow, download.blob, filename);
+        } else if (!openedWindow) {
+          triggerBrowserDownload(download.blob, filename);
+        }
       } else {
-        triggerBrowserDownload(blob, formatExtraWorkTicketPdfFilename(site, ticket));
+        triggerBrowserDownload(download.blob, filename);
       }
     } catch (requestError) {
       if (openedWindow) {
@@ -2758,7 +2763,18 @@ function ProjectFolderDocumentBrowser({
     }
     try {
       const blob = await api.projectFolderDocumentContent(siteId, folder.folder_key, item.id, "inline");
-      openBlobInNewTab(blob, openedWindow);
+      const usesNamedBillingPreview = (
+        folder.folder_key === "aufmass" || folder.folder_key === "zusatzauftraege"
+      ) && getProjectDocumentKind(item) === "pdf";
+      if (usesNamedBillingPreview) {
+        if (openedWindow && !openedWindow.closed) {
+          showNamedPdfPreview(openedWindow, blob, item.name);
+        } else if (!openedWindow) {
+          triggerBrowserDownload(blob, item.name);
+        }
+      } else {
+        openBlobInNewTab(blob, openedWindow, item.name);
+      }
     } catch (requestError) {
       openedWindow?.close();
       setOpenError(readApiError(requestError, "Datei konnte nicht geöffnet werden."));
@@ -6814,8 +6830,11 @@ function MeasurementReviewPanel({
           return group;
         } : undefined}
         onExportGroup={async (group) => {
-          const blob = await api.downloadSiteMeasurementGroupPdf(site.id, group.id);
-          triggerBrowserDownload(blob, `Gesamtaufmass_${group.number_label.replace(/[/\\]/g, "-")}.pdf`);
+          const download = await api.downloadSiteMeasurementGroupPdf(site.id, group.id);
+          triggerBrowserDownload(
+            download.blob,
+            download.filename || "Gesamtaufmaß.pdf",
+          );
         }}
         renderPhotos={(batch) => <ExtraWorkOverviewPhotos key={`measurement:${site.id}:${batch.id}:${archiveMode}`} siteId={site.id} ticket={batch} photoKind="measurement" includeDeleted={archiveMode} canUpload={!archiveMode && canEditMeasurementContent(batch, canCreateBatch)} onPhotoCountUpdated={onBatchPhotoCountUpdated} />}
         title={(batch) => formatMeasurementPackageNumber(siteNumber, batch.number, batch.title)}
@@ -9361,8 +9380,8 @@ function triggerBrowserDownload(blob: Blob, filename: string): void {
   window.URL.revokeObjectURL(url);
 }
 
-function openBlobInNewTab(blob: Blob, openedWindow: Window | null): void {
-  const url = window.URL.createObjectURL(blob);
+function openBlobInNewTab(blob: Blob, openedWindow: Window | null, filename: string | null = null): void {
+  const url = createNamedBlobObjectUrl(blob, filename);
   if (openedWindow) {
     openedWindow.location.href = url;
   } else {
@@ -9488,16 +9507,6 @@ function formatExtraWorkOverviewCreatedDate(value: string): string {
     month: "2-digit",
     year: "2-digit",
   }).format(parsed);
-}
-
-function formatExtraWorkTicketPdfFilename(site: Site, ticket: MobileExtraWorkTicket): string {
-  const siteNumber = sanitizeDownloadPart(site.site_number || String(site.id));
-  const ticketNumber = sanitizeDownloadPart(ticket.display_number || String(ticket.sequence_number));
-  return `Zusatzauftrag_${siteNumber}_${ticketNumber}.pdf`;
-}
-
-function sanitizeDownloadPart(value: string): string {
-  return value.trim().replace(/[^\w.-]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "") || "ohne_nummer";
 }
 
 function getMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): {

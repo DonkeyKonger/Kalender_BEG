@@ -284,6 +284,7 @@ class ExtraWorkTicketLabelRead(BaseModel):
 class ExtraWorkTicketRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    document_filename: str = ""
     id: int
     site_id: int
     sequence_number: int

@@ -54,6 +54,7 @@ import { formatExtraWorkMaterialQuantity, parseExtraWorkMaterialInput, parseExtr
 import { formatExtraWorkSequenceLabel } from "../lib/extraWorkNumber";
 import { formatGermanDateKey, formatGermanDateKeyRange, formatGermanDayMonth } from "../lib/formatters";
 import { buildMeasurementSourceDocumentGroups } from "../lib/measurementPositionGroups";
+import { buildNamedPdfCachePath, showNamedPdfPreview } from "../lib/namedBlob";
 import { loadCompatiblePdfJs } from "../lib/pdfJsCompatibility";
 import {
   PDF_PREVIEW_RENDER_ERROR_MESSAGE,
@@ -883,7 +884,7 @@ function ExtraWorkOrderOverview({
   const isPhotoLimitReached = (order.photo_count ?? 0) >= photoLimit;
   const canRename = order.status === "draft" && !hasCustomerSignature;
   const workerName = order.worker_signature_name ?? user?.display_name ?? user?.username ?? "";
-  const emailPdfFilename = `${formatMobileExtraWorkOrderTitle(order)}.pdf`;
+  const emailPdfFilename = order.document_filename || "Zusatzauftrag.pdf";
   const emailSendPrerequisitesMet = emailRecipients.length > 0;
   const shouldWarnMissingCustomerSignatureForEmail = emailRecipients.length > 0 && !hasCustomerSignature;
   const emailSendHint = getDocumentEmailSendHint({
@@ -929,22 +930,25 @@ function ExtraWorkOrderOverview({
     if (isOpeningPdf) {
       return;
     }
+    const isAndroid = isNativeAndroidApp();
+    const openedWindow = isAndroid ? null : window.open("about:blank", "_blank");
+    if (openedWindow) {
+      openedWindow.opener = null;
+    }
     setIsOpeningPdf(true);
     setPdfError(null);
     try {
-      const blob = await api.mobileExtraWorkTicketPdf(assignmentId, order.id);
-      const filename = getMobileExtraWorkPdfFilename(order);
-      if (isNativeAndroidApp()) {
-        await openAndroidPdfBlob(blob, filename);
-      } else {
-        const url = window.URL.createObjectURL(blob);
-        const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
-        if (!openedWindow) {
-          downloadBlobFile(blob, filename);
-        }
-        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+      const download = await api.mobileExtraWorkTicketPdf(assignmentId, order.id);
+      const filename = download.filename || order.document_filename || "Zusatzauftrag.pdf";
+      if (isAndroid) {
+        await openAndroidPdfBlob(download.blob, filename);
+      } else if (openedWindow && !openedWindow.closed) {
+        showNamedPdfPreview(openedWindow, download.blob, filename);
+      } else if (!openedWindow) {
+        downloadBlobFile(download.blob, filename);
       }
     } catch (requestError) {
+      openedWindow?.close();
       setPdfError(readApiError(requestError, `${kindLabel}-PDF konnte nicht geöffnet werden.`));
     } finally {
       setIsOpeningPdf(false);
@@ -1703,8 +1707,8 @@ function ExtraWorkCustomerSignatureOverlay({
       setPdfError(null);
       setPdfData(null);
       try {
-        const blob = await api.mobileExtraWorkTicketPdf(assignmentId, activeOrder.id);
-        const arrayBuffer = await blob.arrayBuffer();
+        const download = await api.mobileExtraWorkTicketPdf(assignmentId, activeOrder.id);
+        const arrayBuffer = await download.blob.arrayBuffer();
         if (isActive) {
           setPdfData(arrayBuffer);
         }
@@ -4235,9 +4239,8 @@ async function openAndroidPdfFromProjectFolder(
 
 async function openAndroidPdfBlob(blob: Blob, filename: string): Promise<void> {
   const data = await blobToBase64(blob);
-  const safeFilename = toSafePdfFilename(filename);
   const writtenFile = await Filesystem.writeFile({
-    path: `pdf-cache/${Date.now()}-${safeFilename}`,
+    path: buildNamedPdfCachePath(filename, Date.now()),
     data,
     directory: Directory.Cache,
     recursive: true,
@@ -4264,17 +4267,6 @@ function blobToBase64(blob: Blob): Promise<string> {
     };
     reader.readAsDataURL(blob);
   });
-}
-
-function toSafePdfFilename(filename: string): string {
-  const withoutPath = filename.split(/[\\/]/).pop() ?? "dokument.pdf";
-  const sanitized = withoutPath
-    .trim()
-    .replace(/[^\p{L}\p{N}._ -]+/gu, "_")
-    .replace(/\s+/g, " ")
-    .slice(0, 90);
-  const fallback = sanitized || "dokument.pdf";
-  return fallback.toLocaleLowerCase("de-DE").endsWith(".pdf") ? fallback : `${fallback}.pdf`;
 }
 
 function readAndroidPdfOpenError(error: unknown): string {
@@ -4605,22 +4597,25 @@ function MobileMeasurementTab({
     if (isOpeningPdf) {
       return;
     }
+    const isAndroid = isNativeAndroidApp();
+    const openedWindow = isAndroid ? null : window.open("about:blank", "_blank");
+    if (openedWindow) {
+      openedWindow.opener = null;
+    }
     setIsOpeningPdf(true);
     setError(null);
     try {
-      const blob = await api.mobileMeasurementBatchPdf(assignment.id, batch.id);
-      const filename = getMobileMeasurementPdfFilename(batch);
-      if (isNativeAndroidApp()) {
-        await openAndroidPdfBlob(blob, filename);
-      } else {
-        const url = window.URL.createObjectURL(blob);
-        const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
-        if (!openedWindow) {
-          downloadBlobFile(blob, filename);
-        }
-        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+      const download = await api.mobileMeasurementBatchPdf(assignment.id, batch.id);
+      const filename = download.filename || batch.document_filename || "Aufmaß.pdf";
+      if (isAndroid) {
+        await openAndroidPdfBlob(download.blob, filename);
+      } else if (openedWindow && !openedWindow.closed) {
+        showNamedPdfPreview(openedWindow, download.blob, filename);
+      } else if (!openedWindow) {
+        downloadBlobFile(download.blob, filename);
       }
     } catch (requestError) {
+      openedWindow?.close();
       setError(readApiError(requestError, "Aufmaß-PDF konnte nicht geöffnet werden."));
     } finally {
       setIsOpeningPdf(false);
@@ -5350,7 +5345,7 @@ function MeasurementBatchOverview({
   const [emailSendMessage, setEmailSendMessage] = useState<string | null>(null);
   const hasCustomerSignature = Boolean(batch.customer_signed_at);
   const hasWorkerSignature = Boolean(batch.worker_signed_at);
-  const emailPdfFilename = getMobileMeasurementPdfFilename(batch);
+  const emailPdfFilename = batch.document_filename || "Aufmaß.pdf";
   const emailSendPrerequisitesMet = emailRecipients.length > 0;
   const shouldWarnMissingCustomerSignatureForEmail = emailRecipients.length > 0 && !hasCustomerSignature;
   const emailSendHint = getDocumentEmailSendHint({
@@ -7461,8 +7456,8 @@ function CustomerSignatureOverlay({
       setPdfError(null);
       setPdfData(null);
       try {
-        const blob = await api.mobileMeasurementBatchPdf(assignmentId, batch.id);
-        const arrayBuffer = await blob.arrayBuffer();
+        const download = await api.mobileMeasurementBatchPdf(assignmentId, batch.id);
+        const arrayBuffer = await download.blob.arrayBuffer();
         if (isActive) {
           setPdfData(arrayBuffer);
         }
@@ -8556,11 +8551,6 @@ function formatMobileExtraWorkKindLabel(kind: string): string {
   return kind === "approval" ? "Stundenfreigabe" : "Stundenzettel";
 }
 
-function getMobileExtraWorkPdfFilename(order: MobileExtraWorkTicket): string {
-  const number = order.display_number || String(order.id);
-  return `Zusatzauftrag_${number.replace(/[\\/:*?"<>|\s]+/g, "_")}.pdf`;
-}
-
 type MobileCustomerEmailStatusItem = {
   customer_email_sent_at: string | null;
   customer_email_signature_present: boolean | null;
@@ -9061,10 +9051,6 @@ function buildGoogleMapsDirectionsUrl(site: MobileAssignment["site"]): string | 
   }
   const destinationWithCountry = /deutschland/i.test(destination) ? destination : `${destination}, Deutschland`;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationWithCountry)}&travelmode=driving&dir_action=navigate`;
-}
-
-function getMobileMeasurementPdfFilename(batch: MobileMeasurementBatch): string {
-  return `${formatMobileMeasurementBatchTitle(batch).replace(/\s+/g, "_")}.pdf`;
 }
 
 function getMobileMeasurementBatchStatusBadge(batch: MobileMeasurementBatch): { label: string; className: string } {

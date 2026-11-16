@@ -12,7 +12,7 @@ const overview = source.slice(source.indexOf("function MeasurementBatchOverview(
 const measurementTab = source.slice(source.indexOf("function MobileMeasurementTab("), source.indexOf("function MeasurementBatchOverview("));
 const openPhoto = measurementTab.slice(measurementTab.indexOf("  function openPhotoCapture("), measurementTab.indexOf("  async function handlePhotoInputChange("));
 const photoControls = measurementTab.slice(measurementTab.indexOf("  const photoSourceControls ="), measurementTab.indexOf("  async function handleCreateFreePosition("));
-const helpers = ["MobileOverviewPhotoAction", "MobileCameraButton", "formatMeasurementNumber", "formatMobileMeasurementBatchTitle", "getMobileMeasurementPdfFilename", "getDocumentEmailSendHint", "getMobileCustomerEmailStatus"]
+const helpers = ["MobileOverviewPhotoAction", "MobileCameraButton", "formatMeasurementNumber", "formatMobileMeasurementBatchTitle", "getDocumentEmailSendHint", "getMobileCustomerEmailStatus"]
   .map(name => source.match(new RegExp(`^function ${name}\\([^]*?^}\\n`, "m"))[0]).join("\n");
 const compiled = await build({
   stdin: {
@@ -44,7 +44,7 @@ const module = { exports: {} };
 new Function("require", "module", "exports", compiled.outputFiles[0].text)(createRequire(import.meta.url), module, module.exports);
 const render = (batch = {}, props = {}) => module.exports.render({
   assignmentId: 1, siteNumber: "9999", photoLimit: 5,
-  batch: { id: 1, number: 28, status: "draft", entry_count: 1, position_count: 1, reported_hours: "0", photo_count: 0, ...batch },
+  batch: { id: 1, number: 28, document_filename: "9999.28_260921_Testbaustelle.pdf", status: "draft", entry_count: 1, position_count: 1, reported_hours: "0", photo_count: 0, ...batch },
   customerSignatureDisabled: true, customerSignatureHint: "Prüfung durch Projektleiter erforderlich.",
   ...props,
 });

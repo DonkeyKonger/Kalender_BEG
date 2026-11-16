@@ -28,6 +28,7 @@ from app.models.site_measurement_item import (
 )
 from app.models.enums import MeasurementBatchOrigin
 from app.models.user import User
+from app.services.document_filename import measurement_filename
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
 from app.services.customer_pdf_form import measurement_customer_form
 from app.services.measurement_service import MEASUREMENT_PHOTO_FOLDER_KEY, _current_measurement_entries
@@ -330,10 +331,7 @@ class MeasurementPdfService:
                 status.HTTP_409_CONFLICT,
                 "Kein originales Monteur-Aufmaß vorhanden.",
             )
-        file_number = _format_batch_number(batch.site.site_number, batch.number)
-        safe_number = file_number.replace("/", "-").replace(" ", "_")
-        prefix = "Aufmass_geprueft" if mode == "checked" else "Aufmass"
-        filename = f"{prefix}_{safe_number}.pdf"
+        filename = measurement_filename(batch)
         version_hash = self._build_batch_pdf_version_hash(batch, mode=mode)
         content, cache_hit = DocumentPdfCache().get_or_build(
             cache_key=f"measurement-{batch.id}-{mode}",

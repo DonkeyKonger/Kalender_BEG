@@ -166,8 +166,8 @@ test("rendering errors stop later pages and remain a clear retryable UI state", 
 });
 
 test("authenticated Blob loading and both signature workflows remain unchanged", () => {
-  assert.match(mobileSource, /api\.mobileExtraWorkTicketPdf\(assignmentId, activeOrder\.id\)[\s\S]*blob\.arrayBuffer\(\)/);
-  assert.match(mobileSource, /api\.mobileMeasurementBatchPdf\(assignmentId, batch\.id\)[\s\S]*blob\.arrayBuffer\(\)/);
+  assert.match(mobileSource, /api\.mobileExtraWorkTicketPdf\(assignmentId, activeOrder\.id\)[\s\S]*download\.blob\.arrayBuffer\(\)/);
+  assert.match(mobileSource, /api\.mobileMeasurementBatchPdf\(assignmentId, batch\.id\)[\s\S]*download\.blob\.arrayBuffer\(\)/);
   assert.equal(mobileSource.match(/<PdfCanvasPreview data=\{pdfData\} \/>/g)?.length, 2);
   assert.doesNotMatch(mobileSource, /mobile-customer-signature-frame" src=\{/);
   assert.match(mobileSource, /getPdfPreviewRenderScale\([\s\S]*activePdfDocument\.numPages/);

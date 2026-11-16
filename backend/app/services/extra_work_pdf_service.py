@@ -23,6 +23,7 @@ from app.models.extra_work_ticket import ExtraWorkTicket, ExtraWorkTicketEntry, 
 from app.models.project_folder import ProjectFolder
 from app.models.user import User
 from app.services.customer_pdf_form import CustomerFormField, add_customer_form
+from app.services.document_filename import extra_work_filename
 from app.services.document_pdf_cache import DocumentPdfCache, build_pdf_version_hash
 from app.services.extra_work_assignment import get_mobile_extra_work_assignment
 from app.services.extra_work_document_context import (
@@ -307,7 +308,8 @@ class ExtraWorkPdfService:
     ) -> tuple[bytes, str]:
         # The stored signature snapshot is never rewritten. Only the optional
         # photo appendix is rebuilt from the current selection for each output.
-        frozen, filename = self._get_or_freeze_signed_pdf(ticket, assignment)
+        frozen, _stored_filename = self._get_or_freeze_signed_pdf(ticket, assignment)
+        filename = self._build_filename(ticket)
         manifest = ticket.signed_photo_manifest or {}
         original_ids = {item["photo_id"] for item in manifest.get("photos", []) if isinstance(item, dict) and "photo_id" in item}
         photos = sorted(
@@ -1061,15 +1063,11 @@ class ExtraWorkPdfService:
 
     @staticmethod
     def _build_filename(ticket: ExtraWorkTicket) -> str:
-        site_number = _safe_filename_part(ticket.site.site_number or "ohne-komnr")
-        ticket_number = _safe_filename_part(ticket.display_number or str(ticket.sequence_number))
-        return f"Zusatzauftrag_{site_number}_{ticket_number}.pdf"
+        return extra_work_filename(ticket)
 
     @staticmethod
     def _build_supplemental_filename(ticket: ExtraWorkTicket) -> str:
-        site_number = _safe_filename_part(ticket.site.site_number or "ohne-komnr")
-        ticket_number = _safe_filename_part(ticket.display_number or str(ticket.sequence_number))
-        return f"Ergaenzende_Fotodokumentation_{site_number}_{ticket_number}.pdf"
+        return f"{extra_work_filename(ticket).removesuffix('.pdf')}_Fotodokumentation.pdf"
 
 
 @lru_cache(maxsize=2)
@@ -1743,13 +1741,6 @@ def _ticket_number(ticket: ExtraWorkTicket, page_number: int, total_pages: int) 
 
 def _ticket_document_description(ticket: ExtraWorkTicket) -> str:
     return _clean_text(ticket.title) or "Zusatzarbeiten"
-
-
-def _safe_filename_part(value: str) -> str:
-    cleaned = "".join("_" if char in '/\\:*?"<>| ' else char for char in value.strip())
-    while "__" in cleaned:
-        cleaned = cleaned.replace("__", "_")
-    return cleaned.strip("_") or "ohne-angabe"
 
 
 def _chunk(values: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:

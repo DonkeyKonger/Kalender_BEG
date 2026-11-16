@@ -7,7 +7,7 @@ import {build} from 'esbuild';
 const source=await readFile(new URL('../src/pages/MobileAssignmentDetailPage.tsx',import.meta.url),'utf8');
 const styles=await readFile(new URL('../src/pages/MobileSiteOverview.css',import.meta.url),'utf8');
 const components=source.slice(source.indexOf('function OverviewPanel('),source.indexOf('function MobileProjectPhotoCapture('));
-const helpers=source.slice(source.indexOf('function formatMobileSiteAddressLabel('),source.indexOf('function getMobileMeasurementPdfFilename('));
+const helpers=source.slice(source.indexOf('function formatMobileSiteAddressLabel('),source.indexOf('function getMobileMeasurementBatchStatusBadge('));
 const compiled=await build({stdin:{contents:`import React from 'react'; import {renderToStaticMarkup} from 'react-dom/server';
   import {MapPin,ExternalLink,UserRound,Building2,MessageSquare} from 'lucide-react';
   let options,stateIndex=0;const useEffect=()=>{};
