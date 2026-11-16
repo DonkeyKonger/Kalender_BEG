@@ -130,25 +130,44 @@ def get_material_order_template() -> bytes:
     return _normalized_template_pdf()
 
 
-def build_material_order_pdf(values: Mapping[str, str | bool]) -> bytes:
+def build_material_order_pdf(
+    values: Mapping[str, str | bool],
+    *,
+    metadata: Mapping[str, str] | None = None,
+) -> bytes:
     """Fill allowed material-order values and return an interactive PDF.
 
     Omitted fields remain blank/off.  Unknown fields, mismatched value types,
     control characters, and text exceeding the field-specific limit are
     rejected instead of being silently truncated or written outside the form.
+    Trusted completion metadata can be added without a second PDF rewrite.
     """
 
     normalized_values = _validate_values(values)
-    writer = PdfWriter(clone_from=PdfReader(BytesIO(_normalized_template_pdf())))
+    values_to_update = {
+        name: value
+        for name, value in normalized_values.items()
+        if value is True or (isinstance(value, str) and value)
+    }
+    reader = PdfReader(BytesIO(_normalized_template_pdf()))
+    writer = PdfWriter(clone_from=reader)
     writer.update_page_form_field_values(
         None,
-        _pypdf_values(normalized_values, fit_text=True),
+        _pypdf_values(values_to_update, fit_text=True),
         auto_regenerate=False,
     )
+    if metadata is not None:
+        merged_metadata = {
+            str(key): str(value)
+            for key, value in (reader.metadata or {}).items()
+            if isinstance(key, str) and value is not None
+        }
+        merged_metadata.update(metadata)
+        writer.add_metadata(merged_metadata)
     output = BytesIO()
     writer.write(output)
     content = output.getvalue()
-    _verify_pdf(content, normalized_values)
+    _verify_pdf(content, normalized_values, expected_metadata=metadata)
     return content
 
 
@@ -733,13 +752,26 @@ def _pypdf_values(
     return result
 
 
-def _verify_pdf(content: bytes, expected_values: Mapping[str, str | bool]) -> None:
+def _verify_pdf(
+    content: bytes,
+    expected_values: Mapping[str, str | bool],
+    *,
+    expected_metadata: Mapping[str, str] | None = None,
+) -> None:
     reader = PdfReader(BytesIO(content))
     if len(reader.pages) != 1:
         raise RuntimeError("Erzeugter Materialschein enthält nicht genau eine Seite.")
     root = _resolve(reader.trailer["/Root"])
     if any(key in root for key in ("/Names", "/OpenAction", "/AA")):
         raise RuntimeError("Erzeugter Materialschein enthält aktive Dokumentaktionen.")
+
+    if expected_metadata is not None:
+        actual_metadata = reader.metadata or {}
+        for key, expected in expected_metadata.items():
+            if str(actual_metadata.get(key, "")) != expected:
+                raise RuntimeError(
+                    f"PDF-Metadatum wurde nicht korrekt gespeichert: {key}"
+                )
 
     fields = reader.get_fields() or {}
     if set(fields) != set(expected_values):

@@ -38,9 +38,102 @@ class MicrosoftGraphRequestError(Exception):
         super().__init__(message)
 
 
-class MicrosoftGraphClient:
-    def __init__(self, config=settings) -> None:
+class MicrosoftGraphTokenProvider:
+    """Thread-safe token cache bound to one immutable Graph configuration."""
+
+    def __init__(self, *, config, http_client: httpx.Client) -> None:
         self.config = config
+        self.http_client = http_client
+        self._config_key = _token_config_key(config)
+        self._access_token: str | None = None
+        self._access_token_expires_at: datetime | None = None
+        self._access_token_lock = Lock()
+        self._token_audience: str | None = None
+
+    @property
+    def token_audience(self) -> str | None:
+        return self._token_audience
+
+    def ensure_compatible(self, config) -> None:
+        if _token_config_key(config) != self._config_key:
+            raise ValueError("Microsoft Graph token provider configuration mismatch.")
+
+    def get_access_token(self, config) -> str:
+        self.ensure_compatible(config)
+        _ensure_auth_config(config)
+        cached = self._valid_cached_access_token()
+        if cached:
+            return cached
+        with self._access_token_lock:
+            cached = self._valid_cached_access_token()
+            if cached:
+                return cached
+            return self._request_access_token()
+
+    def invalidate(self, access_token: str) -> None:
+        """Drop only the still-current token after a confirmed 401 response."""
+
+        with self._access_token_lock:
+            if self._access_token != access_token:
+                return
+            self._access_token = None
+            self._access_token_expires_at = None
+            self._token_audience = None
+
+    def _valid_cached_access_token(self) -> str | None:
+        access_token = self._access_token
+        expires_at = self._access_token_expires_at
+        if access_token and expires_at and expires_at > datetime.now(UTC):
+            return access_token
+        return None
+
+    def _request_access_token(self) -> str:
+        token_url = (
+            f"https://login.microsoftonline.com/{self.config.ms_tenant_id}"
+            "/oauth2/v2.0/token"
+        )
+        payload = _token_request_payload(self.config)
+        try:
+            response = self.http_client.post(
+                token_url,
+                data=payload,
+                timeout=self.config.ms_graph_timeout_seconds,
+            )
+        except httpx.TimeoutException as error:
+            raise MicrosoftGraphRequestError(
+                None, "Microsoft Graph token request timed out."
+            ) from error
+        except httpx.HTTPError as error:
+            raise MicrosoftGraphRequestError(
+                None, "Microsoft Graph token request failed."
+            ) from error
+
+        access_token, expires_at, token_audience = _parse_access_token_response(response)
+        self._access_token = access_token
+        self._access_token_expires_at = expires_at
+        self._token_audience = token_audience
+        return access_token
+
+
+class MicrosoftGraphClient:
+    def __init__(
+        self,
+        config=settings,
+        *,
+        http_client: httpx.Client | None = None,
+        token_provider: MicrosoftGraphTokenProvider | None = None,
+    ) -> None:
+        self.config = config
+        self._http_client = http_client
+        self._token_provider = token_provider
+        if token_provider is not None:
+            if http_client is None:
+                raise ValueError("A shared token provider requires an HTTP client.")
+            token_provider.ensure_compatible(config)
+            if token_provider.http_client is not http_client:
+                raise ValueError(
+                    "A shared token provider requires its configured HTTP client."
+                )
         self._access_token: str | None = None
         self._access_token_expires_at: datetime | None = None
         self._access_token_lock = Lock()
@@ -49,9 +142,13 @@ class MicrosoftGraphClient:
 
     @property
     def token_audience(self) -> str | None:
+        if self._token_provider is not None:
+            return self._token_provider.token_audience
         return self._token_audience
 
     def get_access_token(self) -> str:
+        if self._token_provider is not None:
+            return self._token_provider.get_access_token(self.config)
         self._ensure_auth_config()
         cached = self._valid_cached_access_token()
         if cached:
@@ -63,9 +160,10 @@ class MicrosoftGraphClient:
             return self._request_access_token()
 
     def _valid_cached_access_token(self) -> str | None:
-        if self._access_token and self._access_token_expires_at:
-            if self._access_token_expires_at > datetime.now(UTC):
-                return self._access_token
+        access_token = self._access_token
+        expires_at = self._access_token_expires_at
+        if access_token and expires_at and expires_at > datetime.now(UTC):
+            return access_token
         return None
 
     def _request_access_token(self) -> str:
@@ -73,14 +171,10 @@ class MicrosoftGraphClient:
             f"https://login.microsoftonline.com/{self.config.ms_tenant_id}"
             "/oauth2/v2.0/token"
         )
-        payload = {
-            "client_id": self.config.ms_client_id,
-            "client_secret": self.config.ms_client_secret,
-            "scope": GRAPH_SCOPE,
-            "grant_type": "client_credentials",
-        }
+        payload = _token_request_payload(self.config)
         try:
-            response = httpx.post(
+            request = self._http_client.post if self._http_client is not None else httpx.post
+            response = request(
                 token_url,
                 data=payload,
                 timeout=self.config.ms_graph_timeout_seconds,
@@ -90,24 +184,10 @@ class MicrosoftGraphClient:
         except httpx.HTTPError as error:
             raise MicrosoftGraphRequestError(None, "Microsoft Graph token request failed.") from error
 
-        data = _safe_json(response)
-        if response.status_code >= 400:
-            raise MicrosoftGraphRequestError(
-                response.status_code,
-                f"Microsoft Graph token request failed with status {response.status_code}.",
-                error_code=_safe_error_code(data)
-                or _safe_www_authenticate_error(response.headers.get("WWW-Authenticate")),
-                error_message_short=_safe_error_message_short(data),
-            )
-
-        access_token = data.get("access_token")
-        if not isinstance(access_token, str) or not access_token:
-            raise MicrosoftGraphRequestError(response.status_code, "Microsoft Graph token missing.")
-        expires_in = data.get("expires_in")
-        ttl_seconds = int(expires_in) if isinstance(expires_in, int | float | str) else 3600
+        access_token, expires_at, token_audience = _parse_access_token_response(response)
         self._access_token = access_token
-        self._access_token_expires_at = datetime.now(UTC) + timedelta(seconds=max(ttl_seconds - 60, 60))
-        self._token_audience = _safe_jwt_claim(access_token, "aud")
+        self._access_token_expires_at = expires_at
+        self._token_audience = token_audience
         return access_token
 
     def get(self, path: str) -> dict[str, Any]:
@@ -126,14 +206,16 @@ class MicrosoftGraphClient:
         token = self.get_access_token()
         url = f"{self.config.ms_graph_base_url.rstrip('/')}/{path.lstrip('/')}"
         headers = {"Authorization": f"Bearer {token}", "Accept": "*/*"}
-        self.last_request_diagnostics = _request_diagnostics(
+        diagnostics = _request_diagnostics(
             method="GET",
             url=url,
             headers=headers,
             graph_base_url=self.config.ms_graph_base_url,
         )
+        self.last_request_diagnostics = diagnostics
         try:
-            response = httpx.get(
+            request = self._http_client.get if self._http_client is not None else httpx.get
+            response = request(
                 url,
                 headers=headers,
                 timeout=self.config.ms_graph_timeout_seconds,
@@ -143,16 +225,17 @@ class MicrosoftGraphClient:
             raise MicrosoftGraphRequestError(
                 None,
                 "Microsoft Graph request timed out.",
-                diagnostics=self.last_request_diagnostics,
+                diagnostics=diagnostics,
             ) from error
         except httpx.HTTPError as error:
             raise MicrosoftGraphRequestError(
                 None,
                 "Microsoft Graph request failed.",
-                diagnostics=self.last_request_diagnostics,
+                diagnostics=diagnostics,
             ) from error
 
         if response.status_code >= 400:
+            self._invalidate_shared_token_on_unauthorized(response, token)
             data = _safe_json(response)
             raise MicrosoftGraphRequestError(
                 response.status_code,
@@ -160,7 +243,7 @@ class MicrosoftGraphClient:
                 error_code=_safe_error_code(data)
                 or _safe_www_authenticate_error(response.headers.get("WWW-Authenticate")),
                 error_message_short=_safe_error_message_short(data),
-                diagnostics=self.last_request_diagnostics,
+                diagnostics=diagnostics,
             )
         return response.content, response.headers.get("content-type")
 
@@ -170,14 +253,16 @@ class MicrosoftGraphClient:
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         if content_type:
             headers["Content-Type"] = content_type
-        self.last_request_diagnostics = _request_diagnostics(
+        diagnostics = _request_diagnostics(
             method="PUT",
             url=url,
             headers=headers,
             graph_base_url=self.config.ms_graph_base_url,
         )
+        self.last_request_diagnostics = diagnostics
         try:
-            response = httpx.put(
+            request = self._http_client.put if self._http_client is not None else httpx.put
+            response = request(
                 url,
                 content=content,
                 headers=headers,
@@ -187,24 +272,25 @@ class MicrosoftGraphClient:
             raise MicrosoftGraphRequestError(
                 None,
                 "Microsoft Graph request timed out.",
-                diagnostics=self.last_request_diagnostics,
+                diagnostics=diagnostics,
             ) from error
         except httpx.HTTPError as error:
             raise MicrosoftGraphRequestError(
                 None,
                 "Microsoft Graph request failed.",
-                diagnostics=self.last_request_diagnostics,
+                diagnostics=diagnostics,
             ) from error
 
         data = _safe_json(response)
         if response.status_code >= 400:
+            self._invalidate_shared_token_on_unauthorized(response, token)
             raise MicrosoftGraphRequestError(
                 response.status_code,
                 f"Microsoft Graph request failed with status {response.status_code}.",
                 error_code=_safe_error_code(data)
                 or _safe_www_authenticate_error(response.headers.get("WWW-Authenticate")),
                 error_message_short=_safe_error_message_short(data),
-                diagnostics=self.last_request_diagnostics,
+                diagnostics=diagnostics,
             )
         return data if isinstance(data, dict) else {}
 
@@ -219,14 +305,20 @@ class MicrosoftGraphClient:
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         if payload is not None:
             headers["Content-Type"] = "application/json"
-        self.last_request_diagnostics = _request_diagnostics(
+        diagnostics = _request_diagnostics(
             method=method,
             url=url,
             headers=headers,
             graph_base_url=self.config.ms_graph_base_url,
         )
+        self.last_request_diagnostics = diagnostics
         try:
-            response = httpx.request(
+            request = (
+                self._http_client.request
+                if self._http_client is not None
+                else httpx.request
+            )
+            response = request(
                 method,
                 url,
                 json=payload,
@@ -237,41 +329,103 @@ class MicrosoftGraphClient:
             raise MicrosoftGraphRequestError(
                 None,
                 "Microsoft Graph request timed out.",
-                diagnostics=self.last_request_diagnostics,
+                diagnostics=diagnostics,
             ) from error
         except httpx.HTTPError as error:
             raise MicrosoftGraphRequestError(
                 None,
                 "Microsoft Graph request failed.",
-                diagnostics=self.last_request_diagnostics,
+                diagnostics=diagnostics,
             ) from error
 
         data = _safe_json(response)
         if response.status_code >= 400:
+            self._invalidate_shared_token_on_unauthorized(response, token)
             raise MicrosoftGraphRequestError(
                 response.status_code,
                 f"Microsoft Graph request failed with status {response.status_code}.",
                 error_code=_safe_error_code(data)
                 or _safe_www_authenticate_error(response.headers.get("WWW-Authenticate")),
                 error_message_short=_safe_error_message_short(data),
-                diagnostics=self.last_request_diagnostics,
+                diagnostics=diagnostics,
             )
         if response.status_code == 204 or not response.content:
             return {}
         return data if isinstance(data, dict) else {"value": data}
 
     def _ensure_auth_config(self) -> None:
-        missing = [
-            name
-            for name, value in {
-                "MS_TENANT_ID": self.config.ms_tenant_id,
-                "MS_CLIENT_ID": self.config.ms_client_id,
-                "MS_CLIENT_SECRET": self.config.ms_client_secret,
-            }.items()
-            if not value
-        ]
-        if missing:
-            raise MicrosoftGraphConfigError(missing)
+        _ensure_auth_config(self.config)
+
+    def _invalidate_shared_token_on_unauthorized(
+        self,
+        response: httpx.Response,
+        access_token: str,
+    ) -> None:
+        if response.status_code == 401 and self._token_provider is not None:
+            self._token_provider.invalidate(access_token)
+
+
+def _token_config_key(config) -> tuple[object, ...]:
+    return (
+        config.ms_tenant_id,
+        config.ms_client_id,
+        config.ms_client_secret,
+        config.ms_graph_timeout_seconds,
+        config.ms_graph_base_url.rstrip("/"),
+    )
+
+
+def _ensure_auth_config(config) -> None:
+    missing = [
+        name
+        for name, value in {
+            "MS_TENANT_ID": config.ms_tenant_id,
+            "MS_CLIENT_ID": config.ms_client_id,
+            "MS_CLIENT_SECRET": config.ms_client_secret,
+        }.items()
+        if not value
+    ]
+    if missing:
+        raise MicrosoftGraphConfigError(missing)
+
+
+def _token_request_payload(config) -> dict[str, str]:
+    return {
+        "client_id": config.ms_client_id,
+        "client_secret": config.ms_client_secret,
+        "scope": GRAPH_SCOPE,
+        "grant_type": "client_credentials",
+    }
+
+
+def _parse_access_token_response(
+    response: httpx.Response,
+) -> tuple[str, datetime, str | None]:
+    data = _safe_json(response)
+    if response.status_code >= 400:
+        raise MicrosoftGraphRequestError(
+            response.status_code,
+            f"Microsoft Graph token request failed with status {response.status_code}.",
+            error_code=_safe_error_code(data)
+            or _safe_www_authenticate_error(response.headers.get("WWW-Authenticate")),
+            error_message_short=_safe_error_message_short(data),
+        )
+
+    access_token = data.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        raise MicrosoftGraphRequestError(
+            response.status_code, "Microsoft Graph token missing."
+        )
+    expires_in = data.get("expires_in")
+    ttl_seconds = (
+        int(expires_in) if isinstance(expires_in, int | float | str) else 3600
+    )
+    ttl_seconds = max(ttl_seconds, 0)
+    refresh_margin = min(60.0, ttl_seconds / 10)
+    expires_at = datetime.now(UTC) + timedelta(
+        seconds=max(ttl_seconds - refresh_margin, 0)
+    )
+    return access_token, expires_at, _safe_jwt_claim(access_token, "aud")
 
 
 def _safe_json(response: httpx.Response) -> dict[str, Any]:

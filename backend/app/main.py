@@ -34,6 +34,7 @@ from app.services.ctrack_scheduler import (
     start_ctrack_sync_scheduler,
     stop_ctrack_sync_scheduler,
 )
+from app.services.material_order_graph_runtime import close_material_order_graph_runtime
 from app.services.push_scheduler import start_push_plan_scheduler, stop_push_plan_scheduler
 
 
@@ -101,6 +102,7 @@ def create_app() -> FastAPI:
     async def stop_background_tasks() -> None:
         await stop_ctrack_sync_scheduler()
         await stop_push_plan_scheduler()
+        close_material_order_graph_runtime()
 
     return app
 

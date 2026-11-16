@@ -39,6 +39,12 @@ import { SiteColorSelect } from "../components/SiteColorSelect";
 import { SiteStatusBadge, StatusBadge, type StatusBadgeTone, siteStatusLabels } from "../components/StatusBadge";
 import { SupplementaryOrderDetail } from "../components/SupplementaryOrderDetail";
 import { ApiError, api } from "../lib/api";
+import { MaterialOrderPreviewResourceCache } from "../lib/materialOrderPreview";
+import {
+  MATERIAL_ORDER_DESKTOP_ZOOM,
+  MATERIAL_ORDER_MOBILE_ZOOM,
+  readMaterialOrderZoom,
+} from "../lib/materialOrders";
 import { containsDraggedFiles } from "../lib/fileDrag";
 import { getCustomerEmailStatus } from "../lib/customerEmailStatus";
 import {
@@ -2561,6 +2567,24 @@ function ProjectFolderDocumentBrowser({
   const { user } = useAuth();
   const canDeleteDocuments = canEditMainPage(user, "sites");
   const canCreateMaterialOrder = canDeleteDocuments && folder.folder_key === "lagerbestellungen";
+  const materialOrderResourceScope = `${siteId}:${folder.id}:${user?.id ?? "anonymous"}`;
+  const materialOrderResourceRef = useRef<{
+    scope: string;
+    cache: MaterialOrderPreviewResourceCache;
+  } | null>(null);
+  if (!materialOrderResourceRef.current || materialOrderResourceRef.current.scope !== materialOrderResourceScope) {
+    materialOrderResourceRef.current = {
+      scope: materialOrderResourceScope,
+      cache: new MaterialOrderPreviewResourceCache(async () => {
+        const [form, template] = await Promise.all([
+          api.materialOrderForm(siteId),
+          api.materialOrderTemplate(siteId),
+        ]);
+        return { form, template };
+      }),
+    };
+  }
+  const materialOrderResourceCache = materialOrderResourceRef.current.cache;
   const [materialOrderOpen, setMaterialOrderOpen] = useState(false);
   const [materialOrderMessage, setMaterialOrderMessage] = useState<string | null>(null);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
@@ -2575,6 +2599,41 @@ function ProjectFolderDocumentBrowser({
     browserMountedRef.current = true;
     return () => { browserMountedRef.current = false; };
   }, []);
+
+  const warmMaterialOrderResources = useCallback(() => {
+    if (!canCreateMaterialOrder || !hasSharePointFolder) return;
+    let storage: Storage | null = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      storage = null;
+    }
+    const fallbackZoom = window.innerWidth < 720
+      ? MATERIAL_ORDER_MOBILE_ZOOM
+      : MATERIAL_ORDER_DESKTOP_ZOOM;
+    const zoom = readMaterialOrderZoom(storage, user?.id, fallbackZoom);
+    void materialOrderResourceCache.warm(zoom, window.devicePixelRatio || 1).catch(() => undefined);
+  }, [canCreateMaterialOrder, hasSharePointFolder, materialOrderResourceCache, user?.id]);
+
+  useEffect(() => {
+    if (!canCreateMaterialOrder || !hasSharePointFolder) return;
+    let cancelled = false;
+    const warm = () => {
+      if (!cancelled) warmMaterialOrderResources();
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const idleId = window.requestIdleCallback(warm, { timeout: 1_200 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback(idleId);
+      };
+    }
+    const timer = window.setTimeout(warm, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [canCreateMaterialOrder, hasSharePointFolder, warmMaterialOrderResources]);
 
   async function handleDelete(item: ProjectFolderDocumentItem): Promise<void> {
     if (!canDeleteDocuments || item.is_folder || !item.id || deletePendingRef.current) return;
@@ -2880,6 +2939,8 @@ function ProjectFolderDocumentBrowser({
             <button
               type="button"
               className="primary-action project-material-order-create"
+              onFocus={warmMaterialOrderResources}
+              onPointerEnter={warmMaterialOrderResources}
               onClick={() => { setMaterialOrderMessage(null); setMaterialOrderOpen(true); }}
             >
               <Plus aria-hidden="true" size={15} />
@@ -2929,6 +2990,7 @@ function ProjectFolderDocumentBrowser({
       {materialOrderOpen ? (
         <MaterialOrderDialog
           siteId={siteId}
+          resourceCache={materialOrderResourceCache}
           onClose={() => setMaterialOrderOpen(false)}
           onCompleted={(document) => {
             setMaterialOrderOpen(false);

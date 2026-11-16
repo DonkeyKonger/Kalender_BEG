@@ -6,7 +6,7 @@ from urllib.parse import unquote
 
 import pytest
 from fastapi import HTTPException
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -94,6 +94,8 @@ class FakeGraphStorage:
         self.items: list[dict] = []
         self.contents: dict[str, bytes] = {}
         self.puts: list[str] = []
+        self.list_calls = 0
+        self.downloads: list[str] = []
 
     def add_existing(self, name: str, content: bytes | None = None) -> None:
         item_id = f"item-{len(self.items) + 1}"
@@ -101,9 +103,11 @@ class FakeGraphStorage:
         self.contents[item_id] = content or pdf_bytes()
 
     def list_folder_children(self, **_kwargs):
+        self.list_calls += 1
         return [dict(item) for item in self.items]
 
     def download_file_from_folder(self, *, item_id: str, **_kwargs):
+        self.downloads.append(item_id)
         return {
             "content": self.contents[item_id],
             "content_type": "application/pdf",
@@ -167,6 +171,7 @@ class ExactNameLookupStorage(FakeGraphStorage):
     """Simulate a candidate absent from the first children page but addressable by path."""
 
     def list_folder_children(self, **_kwargs):
+        self.list_calls += 1
         return []
 
     def get(self, path: str):
@@ -335,6 +340,41 @@ def test_local_pdf_build_failure_does_not_create_pending_reservation():
     assert storage.puts == []
 
 
+def test_default_pdf_builder_embeds_recovery_metadata_without_second_pass(monkeypatch):
+    db = db_session()
+    site, user = seed(db)
+    storage = FakeGraphStorage()
+    order_service = MaterialOrderService(
+        db,
+        storage_service=storage,
+        now_provider=lambda: datetime(2026, 11, 16, 23, 30, tzinfo=UTC),
+    )
+    draft = order_service.open_draft(site_id=site.id, current_user=user)
+
+    def unexpected_metadata_pass(*_args, **_kwargs):
+        raise AssertionError("default builder must write metadata in its only pass")
+
+    monkeypatch.setattr(
+        "app.services.material_order_service._add_completion_metadata",
+        unexpected_metadata_pass,
+    )
+    completed = order_service.complete(
+        site_id=site.id,
+        draft_id=draft.id,
+        current_user=user,
+        payload=MaterialOrderValuesUpdate(
+            revision=0,
+            values={"material_1": "Kabelrinne"},
+        ),
+        drive_id="drive-1",
+        folder_item_id="folder-1",
+    )
+
+    metadata = PdfReader(BytesIO(storage.contents[completed.document.id])).metadata
+    assert metadata["/MaterialOrderDraftId"] == draft.id
+    assert metadata["/MaterialOrderCompletionToken"]
+
+
 def test_complete_uses_berlin_filename_collision_suffix_and_never_overwrites():
     db = db_session()
     site, user = seed(db)
@@ -358,6 +398,8 @@ def test_complete_uses_berlin_filename_collision_suffix_and_never_overwrites():
         "261117_Lagerbestellung.pdf",
         "261117_Lagerbestellung_02.pdf",
     ]
+    assert storage.list_calls == 1
+    assert storage.downloads == []
     assert "conflictBehavior=fail" in storage.puts[0]
 
     retry = order_service.complete(
@@ -397,6 +439,39 @@ def test_foreign_collision_uses_suffix_even_if_corrupt_or_absent_from_first_page
         "261117_Lagerbestellung.pdf",
         "261117_Lagerbestellung_02.pdf",
     ]
+    if isinstance(storage, ExactNameLookupStorage):
+        assert storage.downloads == ["item-1"]
+    else:
+        assert storage.downloads == []
+
+
+def test_fresh_collision_reserves_hinted_suffix_before_upload_failure():
+    db = db_session()
+    site, user = seed(db)
+    storage = FakeGraphStorage(fail_upload=True)
+    storage.add_existing("261117_Lagerbestellung.pdf")
+    order_service = service(db, storage)
+    draft = order_service.open_draft(site_id=site.id, current_user=user)
+
+    with pytest.raises(HTTPException) as error:
+        order_service.complete(
+            site_id=site.id,
+            draft_id=draft.id,
+            current_user=user,
+            payload=MaterialOrderValuesUpdate(
+                revision=0,
+                values={"material_1": "Kabelrinne"},
+            ),
+            drive_id="drive-1",
+            folder_item_id="folder-1",
+        )
+
+    assert error.value.status_code == 502
+    stored = db.get(MaterialOrderDraft, draft.id)
+    assert stored.completion_pending is True
+    assert stored.completion_filename == "261117_Lagerbestellung_02.pdf"
+    assert "261117_Lagerbestellung_02.pdf" in unquote(storage.puts[0])
+    assert storage.downloads == []
 
 
 def test_graph_failure_keeps_latest_draft_and_recovery_reservation():
@@ -446,6 +521,7 @@ def test_concurrent_same_draft_upload_recovers_winner_instead_of_creating_suffix
     assert completed.draft.filename == "261117_Lagerbestellung.pdf"
     assert [item["name"] for item in storage.items] == ["261117_Lagerbestellung.pdf"]
     assert len(storage.puts) == 1
+    assert storage.downloads == ["item-1"]
 
 
 def test_retry_recovers_remote_upload_after_failure_before_final_db_commit(monkeypatch):
@@ -494,3 +570,4 @@ def test_retry_recovers_remote_upload_after_failure_before_final_db_commit(monke
     assert recovered.draft.filename == "261117_Lagerbestellung.pdf"
     assert len(storage.items) == 1
     assert len(storage.puts) == 1
+    assert storage.downloads == ["item-1"]

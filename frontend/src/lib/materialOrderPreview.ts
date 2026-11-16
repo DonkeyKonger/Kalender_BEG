@@ -1,3 +1,5 @@
+import type { MaterialOrderForm, MaterialOrderZoom } from "./materialOrders";
+
 const MATERIAL_ORDER_PREVIEW_MAX_DEVICE_PIXEL_RATIO = 3;
 export const MATERIAL_ORDER_PREVIEW_MAX_PIXELS = 12_000_000;
 
@@ -6,6 +8,20 @@ type PdfDocumentLoadingTask = ReturnType<PdfJsLegacyModule["getDocument"]>;
 type PdfDocumentProxy = Awaited<PdfDocumentLoadingTask["promise"]>;
 type PdfPageProxy = Awaited<ReturnType<PdfDocumentProxy["getPage"]>>;
 type PdfRenderTask = ReturnType<PdfPageProxy["render"]>;
+
+export type MaterialOrderPreviewResources = {
+  form: MaterialOrderForm;
+  template: Blob;
+};
+
+async function loadMaterialOrderPdfJs(): Promise<PdfJsLegacyModule> {
+  const { loadCompatiblePdfJs } = await import("./pdfJsCompatibility");
+  return loadCompatiblePdfJs();
+}
+
+export async function preloadMaterialOrderPreviewRuntime(): Promise<void> {
+  await loadMaterialOrderPdfJs();
+}
 
 function normalizedPositiveNumber(value: number, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
@@ -24,6 +40,92 @@ export function getMaterialOrderPreviewOutputScale(
   );
   const budgetScale = Math.sqrt(MATERIAL_ORDER_PREVIEW_MAX_PIXELS / (width * height));
   return Math.min(requestedScale, budgetScale);
+}
+
+export function getMaterialOrderPreviewCacheKey(
+  form: Pick<MaterialOrderForm, "width" | "height">,
+  zoom: MaterialOrderZoom,
+  devicePixelRatio: number,
+): string {
+  const cssWidth = form.width * zoom / 100;
+  const cssHeight = form.height * zoom / 100;
+  const outputScale = getMaterialOrderPreviewOutputScale(cssWidth, cssHeight, devicePixelRatio);
+  return `${zoom}:${Math.ceil(cssWidth * outputScale)}x${Math.ceil(cssHeight * outputScale)}`;
+}
+
+export class MaterialOrderPreviewResourceCache {
+  private readonly loadResources: () => Promise<MaterialOrderPreviewResources>;
+  private resourcesPromise: Promise<MaterialOrderPreviewResources> | null = null;
+  private preview: { key: string; blob: Blob } | null = null;
+  private pendingPreview: { key: string; promise: Promise<Blob> } | null = null;
+
+  constructor(loadResources: () => Promise<MaterialOrderPreviewResources>) {
+    this.loadResources = loadResources;
+  }
+
+  resources(): Promise<MaterialOrderPreviewResources> {
+    if (!this.resourcesPromise) {
+      const promise = this.loadResources().catch((error) => {
+        if (this.resourcesPromise === promise) this.resourcesPromise = null;
+        throw error;
+      });
+      this.resourcesPromise = promise;
+    }
+    return this.resourcesPromise;
+  }
+
+  cachedPreview(key: string): Blob | null {
+    return this.preview?.key === key ? this.preview.blob : null;
+  }
+
+  storePreview(key: string, blob: Blob): void {
+    this.preview = { key, blob };
+  }
+
+  previewFor(key: string, create: () => Promise<Blob>): Promise<Blob> {
+    const cached = this.cachedPreview(key);
+    if (cached) return Promise.resolve(cached);
+    if (this.pendingPreview?.key === key) return this.pendingPreview.promise;
+    const promise = create().then(
+      (blob) => {
+        if (this.pendingPreview?.promise === promise) {
+          this.preview = { key, blob };
+          this.pendingPreview = null;
+        }
+        return blob;
+      },
+      (error) => {
+        if (this.pendingPreview?.promise === promise) this.pendingPreview = null;
+        throw error;
+      },
+    );
+    this.pendingPreview = { key, promise };
+    return promise;
+  }
+
+  async warm(zoom: MaterialOrderZoom, devicePixelRatio: number): Promise<void> {
+    await this.previewBlob(zoom, devicePixelRatio);
+  }
+
+  async previewBlob(zoom: MaterialOrderZoom, devicePixelRatio: number): Promise<Blob> {
+    const { form, template } = await this.resources();
+    const key = getMaterialOrderPreviewCacheKey(form, zoom, devicePixelRatio);
+    return this.previewFor(key, async () => {
+      await preloadMaterialOrderPreviewRuntime();
+      const renderer = await MaterialOrderTemplateRenderer.create(template);
+      try {
+        const blob = await renderer.render(
+          form.width * zoom / 100,
+          form.height * zoom / 100,
+          devicePixelRatio,
+        );
+        if (!blob) throw new Error("PDF-Vorschau wurde vorzeitig beendet.");
+        return blob;
+      } finally {
+        await renderer.dispose();
+      }
+    });
+  }
 }
 
 export class LatestSerialTaskQueue {
@@ -86,11 +188,10 @@ export class MaterialOrderTemplateRenderer {
   }
 
   static async create(template: Blob): Promise<MaterialOrderTemplateRenderer> {
-    const [{ loadCompatiblePdfJs }, data] = await Promise.all([
-      import("./pdfJsCompatibility"),
+    const [pdfjs, data] = await Promise.all([
+      loadMaterialOrderPdfJs(),
       template.arrayBuffer(),
     ]);
-    const pdfjs = await loadCompatiblePdfJs();
     const loadingTask = pdfjs.getDocument({ data: new Uint8Array(data) });
     try {
       const pdfDocument = await loadingTask.promise;

@@ -134,10 +134,16 @@ def test_build_fills_unicode_text_and_checkbox_rows_independently():
             "packed_1": True,
             "packed_2": False,
             "packed_23": True,
-        }
+        },
+        metadata={
+            "/MaterialOrderDraftId": "draft-123",
+            "/MaterialOrderCompletionToken": "token-456",
+        },
     )
     reader = PdfReader(BytesIO(content))
     fields = reader.get_fields()
+    assert reader.metadata["/MaterialOrderDraftId"] == "draft-123"
+    assert reader.metadata["/MaterialOrderCompletionToken"] == "token-456"
     assert fields["customer"]["/V"] == "Müller & Söhne GmbH"
     assert fields["material_1"]["/V"] == "Kabelrinne 200 mm"
     assert fields["commission"]["/V"] == "8039"
@@ -182,6 +188,32 @@ def test_build_fills_unicode_text_and_checkbox_rows_independently():
     assert b"/Helv 14.0 Tf 0.986 0.007 0.027 rg" in reopened_commission["/AP"][
         "/N"
     ].get_data()
+
+
+def test_build_keeps_omitted_and_explicitly_empty_fields_blank_and_printable():
+    content = build_material_order_pdf(
+        {
+            "material_1": "",
+            "packed_1": False,
+            "packed_2": True,
+        }
+    )
+    reader = PdfReader(BytesIO(content))
+    fields = reader.get_fields()
+    widgets = {widget["/T"]: widget for widget in _widgets(reader)}
+
+    assert len(fields) == 121
+    assert len(widgets) == 121
+    assert fields["material_1"]["/V"] == ""
+    assert fields["material_2"]["/V"] == ""
+    assert fields["packed_1"]["/V"] == "/Off"
+    assert fields["packed_2"]["/V"] == "/Yes"
+    assert fields["packed_3"]["/V"] == "/Off"
+    assert widgets["material_1"]["/AP"]["/N"].get_data()
+    assert widgets["material_2"]["/AP"]["/N"].get_data()
+    assert widgets["packed_1"]["/AP"]["/N"]["/Off"].get_data()
+    assert widgets["packed_2"]["/AP"]["/N"]["/Yes"].get_data()
+    assert widgets["packed_3"]["/AP"]["/N"]["/Off"].get_data()
 
 
 @pytest.mark.parametrize(

@@ -12,8 +12,10 @@ from app.schemas.material_order import (
     MaterialOrderFormRead,
     MaterialOrderValuesUpdate,
 )
+from app.services.material_order_graph_runtime import get_material_order_storage_service
 from app.services.material_order_service import MaterialOrderService
 from app.services.project_folder_service import ProjectFolderService
+from app.services.project_storage_service import ProjectStorageService
 
 
 router = APIRouter(prefix="/sites/{site_id}/material-orders", tags=["material-orders"])
@@ -127,9 +129,10 @@ def complete_material_order(
     payload: MaterialOrderValuesUpdate,
     current_user: User = Depends(CAN_EDIT_MATERIAL_ORDERS),
     db: Session = Depends(get_db),
+    storage_service: ProjectStorageService = Depends(get_material_order_storage_service),
 ) -> MaterialOrderCompleteRead:
     folder = _material_order_folder(db, site_id, current_user)
-    return MaterialOrderService(db).complete(
+    return MaterialOrderService(db, storage_service=storage_service).complete(
         site_id=site_id,
         draft_id=draft_id,
         current_user=current_user,

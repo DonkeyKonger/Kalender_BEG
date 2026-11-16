@@ -120,3 +120,26 @@ def test_graph_client_reuses_one_token_during_parallel_requests(monkeypatch):
 
     assert tokens == [access_token, access_token, access_token]
     assert token_calls == 1
+
+
+def test_injected_http_client_handles_both_token_and_graph_requests():
+    requested_hosts = []
+    access_token = fake_jwt({"aud": "https://graph.microsoft.com"})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_hosts.append(request.url.host)
+        if request.url.host == "login.microsoftonline.com":
+            return httpx.Response(
+                200,
+                json={"access_token": access_token, "expires_in": 3600},
+            )
+        return httpx.Response(200, json={"id": "drive-1"})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
+        result = MicrosoftGraphClient(
+            config=graph_config(),
+            http_client=http_client,
+        ).get("/drives/drive-1")
+
+    assert result == {"id": "drive-1"}
+    assert requested_hosts == ["login.microsoftonline.com", "graph.microsoft.com"]

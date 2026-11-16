@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   LatestSerialTaskQueue,
   MATERIAL_ORDER_PREVIEW_MAX_PIXELS,
+  MaterialOrderPreviewResourceCache,
+  getMaterialOrderPreviewCacheKey,
   getMaterialOrderPreviewOutputScale,
 } from "../src/lib/materialOrderPreview.ts";
 
@@ -72,4 +74,62 @@ test("invalidating the queue prevents an in-flight preview from being published"
   queue.invalidate();
   release();
   assert.equal(await result, null);
+});
+
+test("folder-scoped material-order resources deduplicate successful loads and retry failures", async () => {
+  const resources = { form: { width: 600, height: 800, fields: [] }, template: new Blob(["pdf"]) };
+  let loads = 0;
+  const cache = new MaterialOrderPreviewResourceCache(async () => {
+    loads += 1;
+    return resources;
+  });
+
+  const [first, second] = await Promise.all([cache.resources(), cache.resources()]);
+  assert.equal(first, resources);
+  assert.equal(second, resources);
+  assert.equal(loads, 1);
+
+  let attempts = 0;
+  const retryingCache = new MaterialOrderPreviewResourceCache(async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error("temporary");
+    return resources;
+  });
+  await assert.rejects(retryingCache.resources(), /temporary/);
+  assert.equal(await retryingCache.resources(), resources);
+  assert.equal(attempts, 2);
+});
+
+test("folder-scoped preview cache shares one pending render and retains only its latest blob", async () => {
+  const cache = new MaterialOrderPreviewResourceCache(async () => ({
+    form: { width: 600, height: 800, fields: [] },
+    template: new Blob(["pdf"]),
+  }));
+  let resolvePreview;
+  const gate = new Promise((resolve) => { resolvePreview = resolve; });
+  let renders = 0;
+  const create = async () => {
+    renders += 1;
+    return gate;
+  };
+
+  const first = cache.previewFor("125:1500x2100", create);
+  const second = cache.previewFor("125:1500x2100", create);
+  const firstBlob = new Blob(["first"]);
+  resolvePreview(firstBlob);
+  assert.equal(await first, firstBlob);
+  assert.equal(await second, firstBlob);
+  assert.equal(renders, 1);
+  assert.equal(cache.cachedPreview("125:1500x2100"), firstBlob);
+
+  const secondBlob = new Blob(["second"]);
+  assert.equal(await cache.previewFor("150:1800x2520", async () => secondBlob), secondBlob);
+  assert.equal(cache.cachedPreview("125:1500x2100"), null);
+  assert.equal(cache.cachedPreview("150:1800x2520"), secondBlob);
+});
+
+test("preview cache keys follow the bounded physical output dimensions", () => {
+  const form = { width: 595.2755, height: 841.8898 };
+  assert.equal(getMaterialOrderPreviewCacheKey(form, 100, 2), "100:1191x1684");
+  assert.equal(getMaterialOrderPreviewCacheKey(form, 100, 4), "100:1786x2526");
 });

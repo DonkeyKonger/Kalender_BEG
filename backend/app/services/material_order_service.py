@@ -49,7 +49,7 @@ class MaterialOrderService:
         storage_service: ProjectStorageService | None = None,
         form_provider: Callable[[], dict[str, Any]] = get_material_order_form,
         template_provider: Callable[[], bytes] = get_material_order_template,
-        pdf_builder: Callable[[dict[str, str | bool]], bytes] = build_material_order_pdf,
+        pdf_builder: Callable[..., bytes] = build_material_order_pdf,
         values_validator: Callable[[dict[str, str | bool]], None] = validate_material_order_values,
         now_provider: Callable[[], datetime] | None = None,
     ) -> None:
@@ -58,6 +58,7 @@ class MaterialOrderService:
         self.form_provider = form_provider
         self.template_provider = template_provider
         self.pdf_builder = pdf_builder
+        self._pdf_builder_accepts_metadata = pdf_builder is build_material_order_pdf
         self.values_validator = values_validator
         self.now_provider = now_provider or (lambda: datetime.now(MATERIAL_ORDER_TIMEZONE))
 
@@ -185,7 +186,9 @@ class MaterialOrderService:
                 "SharePoint-Ordner für Lagerbestellungen ist noch nicht angebunden.",
             )
 
-        if draft.completion_token:
+        draft_id_value = draft.id
+        is_pending_retry = bool(draft.completion_token)
+        if is_pending_retry:
             if (
                 values != draft.values
                 or payload.revision not in {draft.revision, draft.completion_payload_revision}
@@ -196,9 +199,9 @@ class MaterialOrderService:
                 )
             completion_token = draft.completion_token
             completion_filename = draft.completion_filename
-            content = _add_completion_metadata(
-                self._build_pdf(values),
-                draft_id=draft.id,
+            content = self._build_completion_pdf(
+                values,
+                draft_id=draft_id_value,
                 completion_token=completion_token,
             )
         else:
@@ -207,16 +210,16 @@ class MaterialOrderService:
             completion_filename = material_order_filename(self.now_provider())
             # Definite local failures happen before a pending reservation so the
             # draft remains editable when no external write was attempted.
-            content = _add_completion_metadata(
-                self._build_pdf(values),
-                draft_id=draft.id,
+            content = self._build_completion_pdf(
+                values,
+                draft_id=draft_id_value,
                 completion_token=completion_token,
             )
             # Read-only Graph preflight: definite configuration, permission, or
             # folder failures must leave the draft normally editable. Only an
             # upload that may have partially succeeded creates a pending lock.
             try:
-                self.storage.list_folder_children(
+                existing_items = self.storage.list_folder_children(
                     drive_id=drive_id,
                     folder_item_id=folder_item_id,
                 )
@@ -225,6 +228,16 @@ class MaterialOrderService:
                     status.HTTP_400_BAD_REQUEST,
                     "Microsoft Graph ist nicht vollständig konfiguriert.",
                 ) from error
+            completion_filename = _first_unlisted_material_order_filename(
+                completion_filename,
+                {
+                    str(item.get("name"))
+                    for item in existing_items
+                    if isinstance(item, dict)
+                    and isinstance(item.get("name"), str)
+                    and item["name"]
+                },
+            )
             # Persist current values and an idempotency reservation before Graph.
             # A retry can recognize an uploaded PDF after a process/DB failure.
             draft.values = values
@@ -247,11 +260,12 @@ class MaterialOrderService:
                 folder_item_id=folder_item_id,
                 filename=completion_filename,
                 content=content,
-                draft_id=draft.id,
+                draft_id=draft_id_value,
                 completion_token=completion_token,
+                recover_reserved_upload=is_pending_retry,
                 reserve_filename=lambda candidate: self._reserve_completion_filename(
                     site_id=site_id,
-                    draft_id=draft.id,
+                    draft_id=draft_id_value,
                     user_id=current_user.id,
                     completion_token=completion_token,
                     filename=candidate,
@@ -259,7 +273,7 @@ class MaterialOrderService:
             )
             draft = self._get_draft(
                 site_id=site_id,
-                draft_id=draft.id,
+                draft_id=draft_id_value,
                 user_id=current_user.id,
                 for_update=True,
             )
@@ -389,6 +403,39 @@ class MaterialOrderService:
             )
         return content
 
+    def _build_completion_pdf(
+        self,
+        values: dict[str, str | bool],
+        *,
+        draft_id: str,
+        completion_token: str,
+    ) -> bytes:
+        metadata = {
+            "/MaterialOrderDraftId": draft_id,
+            "/MaterialOrderCompletionToken": completion_token,
+        }
+        if self._pdf_builder_accepts_metadata:
+            try:
+                content = self.pdf_builder(values, metadata=metadata)
+            except HTTPException:
+                raise
+            except (TypeError, ValueError) as error:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    str(error) or "Lagerbestellung enthält ungültige Werte.",
+                ) from error
+            if not isinstance(content, bytes) or not content.startswith(b"%PDF"):
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    "Lagerbestellungs-PDF konnte nicht erzeugt werden.",
+                )
+            return content
+        return _add_completion_metadata(
+            self._build_pdf(values),
+            draft_id=draft_id,
+            completion_token=completion_token,
+        )
+
     def _get_draft(
         self,
         *,
@@ -474,33 +521,40 @@ def upload_material_order_pdf_without_overwrite(
     content: bytes,
     draft_id: str | None = None,
     completion_token: str | None = None,
+    recover_reserved_upload: bool = True,
     reserve_filename: Callable[[str], None] | None = None,
 ) -> ProjectFolderDocumentItem:
     candidate_number = _filename_number(filename)
     base_filename = _base_filename(filename)
     conflict_retries = 0
+    check_existing = recover_reserved_upload
     while candidate_number <= 9999:
         candidate = _numbered_filename(base_filename, candidate_number)
-        existing = _find_material_order_item_by_name(
-            storage=storage,
-            drive_id=drive_id,
-            folder_item_id=folder_item_id,
-            filename=candidate,
-        )
-        if existing is not None:
-            recovered = _recover_reserved_upload(
+        if check_existing:
+            existing = _find_material_order_item_by_name(
                 storage=storage,
                 drive_id=drive_id,
                 folder_item_id=folder_item_id,
-                item=existing,
-                draft_id=draft_id,
-                completion_token=completion_token,
+                filename=candidate,
             )
-            if recovered is not None:
-                return recovered
-            candidate_number += 1
-            conflict_retries = 0
-            continue
+            if existing is not None:
+                recovered = _recover_reserved_upload(
+                    storage=storage,
+                    drive_id=drive_id,
+                    folder_item_id=folder_item_id,
+                    item=existing,
+                    draft_id=draft_id,
+                    completion_token=completion_token,
+                )
+                if recovered is not None:
+                    return recovered
+                candidate_number += 1
+                conflict_retries = 0
+                # The next candidate has not produced a conflict. Reserve it
+                # and attempt the fail-on-conflict PUT directly.
+                check_existing = False
+                continue
+            check_existing = False
         if reserve_filename is not None and candidate != filename:
             reserve_filename(candidate)
             filename = candidate
@@ -522,8 +576,10 @@ def upload_material_order_pdf_without_overwrite(
             }:
                 conflict_retries += 1
                 if conflict_retries <= 3:
-                    # Re-list this name: another request for the same draft is
-                    # recovered by its token rather than becoming `_02`.
+                    # A failed PUT is the only fresh-upload case that needs an
+                    # exact lookup. It may be another request for this draft,
+                    # which must be recovered by token rather than suffixed.
+                    check_existing = True
                     continue
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
@@ -539,6 +595,24 @@ def upload_material_order_pdf_without_overwrite(
                 "Microsoft Graph ist nicht vollständig konfiguriert.",
             ) from error
         return _uploaded_document(response, fallback_name=candidate)
+    raise HTTPException(
+        status.HTTP_409_CONFLICT,
+        "Für das heutige Datum sind zu viele Lagerbestellungen vorhanden.",
+    )
+
+
+def _first_unlisted_material_order_filename(
+    filename: str,
+    existing_names: set[str],
+) -> str:
+    candidate_number = _filename_number(filename)
+    base_filename = _base_filename(filename)
+    normalized_names = {name.casefold() for name in existing_names}
+    while candidate_number <= 9999:
+        candidate = _numbered_filename(base_filename, candidate_number)
+        if candidate.casefold() not in normalized_names:
+            return candidate
+        candidate_number += 1
     raise HTTPException(
         status.HTTP_409_CONFLICT,
         "Für das heutige Datum sind zu viele Lagerbestellungen vorhanden.",
