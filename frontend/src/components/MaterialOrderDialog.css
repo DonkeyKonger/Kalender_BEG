@@ -14,9 +14,10 @@ body.material-order-dialog-open {
 }
 
 .material-order-dialog {
+  position: relative;
   display: flex;
   flex-direction: column;
-  width: min(1180px, 100%);
+  width: min(1298px, 100%);
   height: min(940px, calc(100dvh - 36px));
   overflow: hidden;
   border: 1px solid #aeb9c8;
@@ -26,11 +27,9 @@ body.material-order-dialog-open {
   color: #172033;
 }
 
-.material-order-dialog-header,
-.material-order-dialog-footer,
-.material-order-toolbar {
+.material-order-dialog-header {
   position: relative;
-  z-index: 2;
+  z-index: 6;
   background: #fff;
 }
 
@@ -38,29 +37,35 @@ body.material-order-dialog-open {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  min-height: 68px;
-  padding: 12px 16px 11px 18px;
+  gap: 12px;
+  min-height: 48px;
+  padding: 5px 9px 5px 14px;
   border-bottom: 1px solid #d5dce6;
 }
 
-.material-order-dialog-header h2,
-.material-order-dialog-header p {
-  margin: 0;
-}
-
 .material-order-dialog-header h2 {
-  margin-top: 2px;
-  font-size: 1.16rem;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1rem;
   line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.material-order-dialog-eyebrow {
-  color: #657286;
-  font-size: 0.7rem;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.material-order-header-title,
+.material-order-header-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.material-order-header-title {
+  gap: 12px;
+}
+
+.material-order-header-actions {
+  flex: 0 0 auto;
+  gap: 7px;
 }
 
 .material-order-icon-button,
@@ -84,9 +89,10 @@ body.material-order-dialog-open {
 }
 
 .material-order-icon-button {
-  width: 38px;
-  min-width: 38px;
-  height: 38px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
   border: 1px solid #c9d2df;
   background: #f8fafc;
   color: #3e4b5f;
@@ -105,7 +111,7 @@ body.material-order-dialog-open {
 .material-order-primary-button:focus-visible,
 .material-order-error button:focus-visible,
 .material-order-loading button:focus-visible,
-.material-order-zoom select:focus-visible {
+.material-order-zoom-trigger:focus-visible {
   outline: 3px solid rgb(49 95 145 / 24%);
   outline-offset: 1px;
 }
@@ -121,24 +127,15 @@ body.material-order-dialog-open {
   flex: 0 0 auto;
 }
 
-.material-order-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 54px;
-  padding: 8px 16px 8px 18px;
-  border-bottom: 1px solid #dce2ea;
-}
-
 .material-order-save-status {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  margin-right: auto;
   color: #667489;
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .material-order-save-status.is-success { color: #26704f; }
@@ -147,29 +144,82 @@ body.material-order-dialog-open {
 .material-order-save-status.is-working { color: #315f91; }
 
 .material-order-zoom {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #56657a;
-  font-size: 0.8rem;
-  font-weight: 700;
+  position: relative;
 }
 
-.material-order-zoom select {
-  height: 36px;
-  min-width: 79px;
+.material-order-zoom-trigger {
+  display: inline-flex;
+  height: 34px;
+  min-width: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
   border: 1px solid #bdc8d5;
   border-radius: 2px;
   background: #fff;
   padding: 0 9px;
   color: #25354b;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
+
+.material-order-zoom-trigger svg {
+  width: 14px;
+  height: 14px;
+  color: #66758a;
+}
+
+.material-order-zoom-trigger:hover,
+.material-order-zoom-trigger:focus-visible,
+.material-order-zoom-trigger[aria-expanded="true"] {
+  border-color: #8194aa;
+  background: #f4f7fa;
+}
+
+.material-order-zoom-options {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  width: 104px;
+  overflow: hidden;
+  border: 1px solid #aeb9c8;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgb(22 38 60 / 20%);
+}
+
+.material-order-zoom-options button {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-bottom: 1px solid #e4e8ee;
+  background: #fff;
+  padding: 6px 9px;
+  color: #29394e;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.material-order-zoom-options button:last-child { border-bottom: 0; }
+.material-order-zoom-options button:hover,
+.material-order-zoom-options button.is-active { background: #eaf1f8; }
+.material-order-zoom-options button[aria-selected="true"] { color: #214f80; font-weight: 750; }
+.material-order-zoom-options svg { width: 14px; height: 14px; }
 
 .material-order-secondary-button,
 .material-order-primary-button {
   border: 1px solid transparent;
   padding: 7px 12px;
   white-space: nowrap;
+}
+
+.material-order-header-actions .material-order-secondary-button {
+  min-height: 34px;
+  padding: 5px 10px;
 }
 
 .material-order-secondary-button {
@@ -238,7 +288,7 @@ body.material-order-dialog-open {
   min-width: min-content;
   min-height: 100%;
   place-items: start center;
-  padding: 26px 32px 38px;
+  padding: 26px 32px 108px;
 }
 
 .material-order-paper {
@@ -365,27 +415,26 @@ body.material-order-dialog-open {
 }
 
 .material-order-dialog-footer {
+  position: absolute;
+  z-index: 5;
+  right: 16px;
+  bottom: 14px;
   display: flex;
-  min-height: 64px;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 11px 16px 11px 18px;
-  border-top: 1px solid #cfd7e2;
-}
-
-.material-order-dialog-footer > span {
-  overflow: hidden;
-  color: #68768a;
-  font-size: 0.78rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
 }
 
 .material-order-dialog-footer > div {
   display: flex;
   gap: 9px;
-  margin-left: auto;
+  pointer-events: auto;
+}
+
+.material-order-dialog-footer button {
+  box-shadow: 0 5px 16px rgb(28 45 68 / 18%);
 }
 
 .material-order-visually-hidden {
@@ -418,31 +467,17 @@ body.material-order-dialog-open {
   }
 
   .material-order-dialog-header {
-    min-height: 62px;
-    padding: max(9px, env(safe-area-inset-top, 0px)) 12px 9px;
+    min-height: 48px;
+    padding: max(5px, env(safe-area-inset-top, 0px)) 8px 5px 10px;
   }
 
   .material-order-dialog-header h2 {
     font-size: 1.03rem;
   }
 
-  .material-order-toolbar {
-    flex-wrap: wrap;
-    gap: 7px;
-    padding: 7px 10px;
-  }
-
-  .material-order-save-status {
-    width: 100%;
-  }
-
-  .material-order-zoom {
-    margin-right: auto;
-  }
-
   .material-order-paper-stage {
     place-items: start;
-    padding: 18px 16px 28px;
+    padding: 18px 16px 104px;
   }
 
   .material-order-error {
@@ -456,14 +491,9 @@ body.material-order-dialog-open {
   }
 
   .material-order-dialog-footer {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 7px;
-    padding: 8px 10px max(8px, env(safe-area-inset-bottom, 0px));
-  }
-
-  .material-order-dialog-footer > span {
-    display: none;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    left: 10px;
   }
 
   .material-order-dialog-footer > div {
@@ -477,6 +507,29 @@ body.material-order-dialog-open {
     min-height: 42px;
     padding-inline: 7px;
     white-space: normal;
+  }
+
+  .material-order-header-title .material-order-save-status {
+    display: none;
+  }
+
+  .material-order-print-button {
+    width: 34px;
+    min-width: 34px;
+    padding: 0;
+  }
+
+  .material-order-print-button > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .material-order-zoom-trigger {
+    min-width: 68px;
+    padding-inline: 7px;
   }
 }
 

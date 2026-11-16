@@ -22,6 +22,9 @@ export type MaterialOrderField = {
   type: "text" | "checkbox";
   rect: [number, number, number, number];
   max_length: number | null;
+  font_size: number | null;
+  text_color: [number, number, number] | null;
+  text_align: "left" | "center" | "right" | null;
 };
 
 export type MaterialOrderForm = {
@@ -43,6 +46,50 @@ export type MaterialOrderRecovery = {
 };
 
 export const MATERIAL_ORDER_ZOOM_LEVELS = [75, 90, 100, 110, 125, 150] as const;
+export type MaterialOrderZoom = (typeof MATERIAL_ORDER_ZOOM_LEVELS)[number];
+export const MATERIAL_ORDER_DESKTOP_ZOOM: MaterialOrderZoom = 125;
+export const MATERIAL_ORDER_MOBILE_ZOOM: MaterialOrderZoom = 90;
+
+export function getMaterialOrderZoomStorageKey(userId: number | null | undefined): string {
+  return `kb_material_order_zoom:${userId ?? "anonymous"}`;
+}
+
+export function normalizeMaterialOrderZoom(
+  value: unknown,
+  fallback: MaterialOrderZoom = MATERIAL_ORDER_DESKTOP_ZOOM,
+): MaterialOrderZoom {
+  const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return MATERIAL_ORDER_ZOOM_LEVELS.includes(numeric as MaterialOrderZoom)
+    ? numeric as MaterialOrderZoom
+    : fallback;
+}
+
+export function readMaterialOrderZoom(
+  storage: Pick<Storage, "getItem"> | null,
+  userId: number | null | undefined,
+  fallback: MaterialOrderZoom,
+): MaterialOrderZoom {
+  if (!storage) return fallback;
+  try {
+    return normalizeMaterialOrderZoom(storage.getItem(getMaterialOrderZoomStorageKey(userId)), fallback);
+  } catch {
+    return fallback;
+  }
+}
+
+export function writeMaterialOrderZoom(
+  storage: Pick<Storage, "setItem"> | null,
+  userId: number | null | undefined,
+  zoom: MaterialOrderZoom,
+): boolean {
+  if (!storage) return false;
+  try {
+    storage.setItem(getMaterialOrderZoomStorageKey(userId), String(zoom));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function materialOrderRectStyle(
   rect: MaterialOrderField["rect"],

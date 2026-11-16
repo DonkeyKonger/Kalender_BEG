@@ -1,4 +1,4 @@
-import { Check, LoaderCircle, Printer, RefreshCw, Save, WifiOff, X } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, Printer, RefreshCw, Save, WifiOff, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -15,17 +15,24 @@ import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import {
   MATERIAL_ORDER_ZOOM_LEVELS,
+  MATERIAL_ORDER_DESKTOP_ZOOM,
+  MATERIAL_ORDER_MOBILE_ZOOM,
   clearMaterialOrderRecovery,
   getMaterialOrderRecoveryKey,
   materialOrderRectStyle,
   materialOrderValuesEqual,
   normalizeMaterialOrderValues,
   readMaterialOrderRecovery,
+  readMaterialOrderZoom,
   writeMaterialOrderRecovery,
+  writeMaterialOrderZoom,
   type MaterialOrderDraft,
+  type MaterialOrderField,
   type MaterialOrderForm,
   type MaterialOrderValues,
+  type MaterialOrderZoom,
 } from "../lib/materialOrders";
+import { prepareMaterialOrderPrint, type PreparedMaterialOrderPrint } from "../lib/materialOrderPrinting";
 import { loadCompatiblePdfJs } from "../lib/pdfJsCompatibility";
 import type { ProjectFolderDocumentItem } from "../types/site";
 
@@ -48,8 +55,10 @@ function cloneValues(values: MaterialOrderValues): MaterialOrderValues {
   return { ...values };
 }
 
-function initialZoom(): number {
-  return typeof window !== "undefined" && window.innerWidth < 720 ? 90 : 125;
+function defaultMaterialOrderZoom(): MaterialOrderZoom {
+  return typeof window !== "undefined" && window.innerWidth < 720
+    ? MATERIAL_ORDER_MOBILE_ZOOM
+    : MATERIAL_ORDER_DESKTOP_ZOOM;
 }
 
 function getMaterialOrderStorage(): Storage | null {
@@ -58,6 +67,15 @@ function getMaterialOrderStorage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+function materialOrderInputStyle(field: MaterialOrderField, form: MaterialOrderForm): CSSProperties {
+  const textColor = field.text_color?.map((channel) => Math.round(Math.max(0, Math.min(1, channel)) * 255));
+  return {
+    fontSize: field.font_size ? `${field.font_size / form.width * 100}cqw` : undefined,
+    color: textColor ? `rgb(${textColor.join(" ")})` : undefined,
+    textAlign: field.text_align ?? undefined,
+  };
 }
 
 async function renderTemplatePreview(blob: Blob): Promise<string> {
@@ -97,70 +115,15 @@ async function renderTemplatePreview(blob: Blob): Promise<string> {
   }
 }
 
-function openPrintWindow(): Window {
-  const printWindow = window.open("", "_blank", "popup,width=920,height=820");
-  if (!printWindow) throw new Error("Das Druckfenster wurde blockiert. Bitte Pop-ups für den Kalender erlauben.");
-  printWindow.document.open();
-  printWindow.document.write(`<!doctype html><html lang="de"><head><title>Lagerbestellung</title>
-    <style>
-      @page { size: A4; margin: 0; }
-      html, body { margin: 0; background: #fff; }
-      body { font-family: Arial, sans-serif; }
-      .loading { display: grid; min-height: 100vh; place-items: center; color: #334155; }
-      canvas { display: block; width: 210mm; height: auto; break-after: page; page-break-after: always; }
-      canvas:last-child { break-after: auto; page-break-after: auto; }
-      @media print { .loading { display: none; } }
-    </style></head><body><p class="loading">Druckansicht wird erstellt …</p></body></html>`);
-  printWindow.document.close();
-  return printWindow;
-}
-
-async function renderPdfForPrint(blob: Blob, printWindow: Window): Promise<void> {
-  const pdfjsLib = await loadCompatiblePdfJs();
-  const data = await blob.arrayBuffer();
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data) });
-  try {
-    const pdfDocument = await loadingTask.promise;
-    const body = printWindow.document.body;
-    body.replaceChildren();
-    for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
-      const page = await pdfDocument.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 2 });
-      const renderCanvas = document.createElement("canvas");
-      renderCanvas.width = Math.ceil(viewport.width);
-      renderCanvas.height = Math.ceil(viewport.height);
-      const renderContext = renderCanvas.getContext("2d", { alpha: false });
-      if (!renderContext) throw new Error("Druckansicht konnte nicht gerendert werden.");
-      await page.render({
-        canvas: renderCanvas,
-        canvasContext: renderContext,
-        viewport,
-        intent: "print",
-        annotationMode: pdfjsLib.AnnotationMode.ENABLE,
-      }).promise;
-      const printCanvas = printWindow.document.createElement("canvas");
-      printCanvas.width = renderCanvas.width;
-      printCanvas.height = renderCanvas.height;
-      printCanvas.setAttribute("aria-label", `Lagerbestellung Seite ${pageNumber}`);
-      const printContext = printCanvas.getContext("2d", { alpha: false });
-      if (!printContext) throw new Error("Druckansicht konnte nicht übertragen werden.");
-      printContext.drawImage(renderCanvas, 0, 0);
-      body.append(printCanvas);
-      renderCanvas.width = 0;
-      renderCanvas.height = 0;
-    }
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 80));
-    if (printWindow.closed) throw new Error("Das Druckfenster wurde vorzeitig geschlossen.");
-    printWindow.focus();
-    printWindow.print();
-  } finally {
-    void loadingTask.destroy();
-  }
-}
-
 export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOrderDialogProps) {
   const { user } = useAuth();
+  const onCloseRef = useRef(onClose);
+  const onCompletedRef = useRef(onCompleted);
+  onCloseRef.current = onClose;
+  onCompletedRef.current = onCompleted;
   const dialogRef = useRef<HTMLElement | null>(null);
+  const zoomMenuRef = useRef<HTMLDivElement | null>(null);
+  const zoomTriggerRef = useRef<HTMLButtonElement | null>(null);
   const firstFocusRef = useRef<HTMLButtonElement | null>(null);
   const draftRef = useRef<MaterialOrderDraft | null>(null);
   const formRef = useRef<MaterialOrderForm | null>(null);
@@ -168,6 +131,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
   const persistedValuesRef = useRef<MaterialOrderValues>({});
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const actionRef = useRef<DialogAction>(null);
+  const printIntentRef = useRef(false);
   const mountedRef = useRef(true);
   const recoveryStoredRef = useRef(false);
   const openerRef = useRef<HTMLElement | null>(
@@ -189,9 +153,14 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
   const [isRecoveryStored, setIsRecoveryStored] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [action, setActionState] = useState<DialogAction>(null);
-  const [zoom, setZoom] = useState(initialZoom);
+  const [zoom, setZoom] = useState<MaterialOrderZoom>(() => (
+    readMaterialOrderZoom(getMaterialOrderStorage(), user?.id, defaultMaterialOrderZoom())
+  ));
+  const [isZoomOpen, setIsZoomOpen] = useState(false);
+  const [activeZoomIndex, setActiveZoomIndex] = useState(() => MATERIAL_ORDER_ZOOM_LEVELS.indexOf(zoom));
   const [isOnline, setIsOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const [recoveryNotice, setRecoveryNotice] = useState(false);
+  const [hasPrintIntent, setHasPrintIntentState] = useState(false);
   const recoveryKey = useMemo(
     () => getMaterialOrderRecoveryKey(siteId, user?.id),
     [siteId, user?.id],
@@ -201,6 +170,27 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
     actionRef.current = next;
     setActionState(next);
   }, []);
+
+  const setPrintIntent = useCallback((next: boolean) => {
+    printIntentRef.current = next;
+    setHasPrintIntentState(next);
+  }, []);
+
+  const changeZoom = useCallback((next: MaterialOrderZoom) => {
+    setZoom(next);
+    setActiveZoomIndex(MATERIAL_ORDER_ZOOM_LEVELS.indexOf(next));
+    setIsZoomOpen(false);
+    writeMaterialOrderZoom(getMaterialOrderStorage(), user?.id, next);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!isZoomOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!zoomMenuRef.current?.contains(event.target as Node)) setIsZoomOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [isZoomOpen]);
 
   const persistRecovery = useCallback((draftId: string, revision: number, nextValues: MaterialOrderValues): boolean => {
     const storage = getMaterialOrderStorage();
@@ -235,6 +225,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
 
   useEffect(() => {
     const appShell = document.querySelector<HTMLElement>(".app-shell");
+    const opener = openerRef.current;
     const previousInert = appShell?.inert ?? false;
     const previousAriaHidden = appShell?.getAttribute("aria-hidden") ?? null;
     document.body.classList.add("material-order-dialog-open");
@@ -249,7 +240,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
         if (previousAriaHidden === null) appShell.removeAttribute("aria-hidden");
         else appShell.setAttribute("aria-hidden", previousAriaHidden);
       }
-      openerRef.current?.focus();
+      opener?.focus();
     };
   }, []);
 
@@ -282,16 +273,38 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
       draftLoader,
       api.materialOrderForm(siteId),
       api.materialOrderTemplate(siteId),
-    ]).then(async ([nextDraft, nextForm, template]) => {
+    ]).then(async ([loadedDraft, nextForm, template]) => {
       nextPreviewUrl = await renderTemplatePreview(template);
       if (cancelled) {
         URL.revokeObjectURL(nextPreviewUrl);
         return;
       }
+      let nextDraft = loadedDraft;
+      let activeRecovery = recovery;
+      if (
+        recovery
+        && !recoveryDraftMissing
+        && recovery.draftId === loadedDraft.id
+        && loadedDraft.status === "completed"
+      ) {
+        const completedValues = normalizeMaterialOrderValues(nextForm, loadedDraft.values);
+        const recoveredValues = normalizeMaterialOrderValues(nextForm, recovery.values);
+        if (materialOrderValuesEqual(completedValues, recoveredValues)) {
+          discardRecovery();
+          nextDraft = await api.createMaterialOrderDraft(siteId);
+          activeRecovery = null;
+          if (cancelled) {
+            URL.revokeObjectURL(nextPreviewUrl);
+            return;
+          }
+        }
+      }
       const serverValues = normalizeMaterialOrderValues(nextForm, nextDraft.values);
-      const hasMatchingRecovery = Boolean(recovery && (recovery.draftId === nextDraft.id || recoveryDraftMissing));
+      const hasMatchingRecovery = Boolean(
+        activeRecovery && (activeRecovery.draftId === nextDraft.id || recoveryDraftMissing),
+      );
       const recoveryValues = hasMatchingRecovery
-        ? normalizeMaterialOrderValues(nextForm, recovery?.values)
+        ? normalizeMaterialOrderValues(nextForm, activeRecovery?.values)
         : serverValues;
       const hasDifferentRecovery = Boolean(
         hasMatchingRecovery && !materialOrderValuesEqual(recoveryValues, serverValues),
@@ -301,8 +314,8 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
       const hasStaleRecovery = Boolean(
         hasDifferentRecovery
         && !recoveryDraftMissing
-        && recovery
-        && recovery.revision < nextDraft.revision
+        && activeRecovery
+        && activeRecovery.revision < nextDraft.revision
         && nextDraft.status === "draft"
         && !nextDraft.completion_pending,
       );
@@ -310,13 +323,13 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
       if (nextDraft.status === "completed" && nextDraft.document && !hasDifferentRecovery) {
         discardRecovery();
         window.dispatchEvent(new Event("project-files-changed"));
-        onCompleted(nextDraft.document);
+        onCompletedRef.current(nextDraft.document);
         return;
       }
       draftRef.current = nextDraft;
       formRef.current = nextForm;
-      recoveryRevisionRef.current = hasDifferentRecovery && recovery && !recoveryDraftMissing
-        ? recovery.revision
+      recoveryRevisionRef.current = hasDifferentRecovery && activeRecovery && !recoveryDraftMissing
+        ? activeRecovery.revision
         : nextDraft.revision;
       valuesRef.current = initialValues;
       persistedValuesRef.current = serverValues;
@@ -353,7 +366,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
       cancelled = true;
       if (nextPreviewUrl) URL.revokeObjectURL(nextPreviewUrl);
     };
-  }, [discardRecovery, loadVersion, onCompleted, recoveryKey, siteId]);
+  }, [discardRecovery, loadVersion, recoveryKey, siteId]);
 
   const queueSave = useCallback((snapshot: MaterialOrderValues): Promise<void> => {
     const queuedValues = cloneValues(snapshot);
@@ -399,6 +412,18 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
 
   useEffect(() => {
     if (!draft || !form) return;
+    if (draft.status === "completed") {
+      const completedValues = normalizeMaterialOrderValues(form, draft.values);
+      persistedValuesRef.current = completedValues;
+      if (materialOrderValuesEqual(values, completedValues)) {
+        discardRecovery();
+        setSaveState("saved");
+      } else {
+        persistRecovery(draft.id, draft.revision, values);
+        setSaveState("error");
+      }
+      return;
+    }
     persistRecovery(draft.id, recoveryRevisionRef.current ?? draft.revision, values);
     if (materialOrderValuesEqual(values, persistedValuesRef.current)) {
       setSaveState("saved");
@@ -410,7 +435,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
       if (actionRef.current === null) void queueSave(values).catch(() => undefined);
     }, AUTOSAVE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [action, completionStateUnknown, draft, form, hasRevisionConflict, persistRecovery, queueSave, values]);
+  }, [action, completionStateUnknown, discardRecovery, draft, form, hasRevisionConflict, persistRecovery, queueSave, values]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -438,7 +463,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
   const closeWithSave = useCallback(async () => {
     if (actionRef.current !== null) return;
     if (!draftRef.current) {
-      onClose();
+      onCloseRef.current();
       return;
     }
     if (hasCompletedConflict) {
@@ -455,7 +480,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
     }
     if (draftRef.current.status !== "draft" || draftRef.current.completion_pending || completionStateUnknown) {
       if (!completionStateUnknown) discardRecovery();
-      onClose();
+      onCloseRef.current();
       return;
     }
     if (hasRevisionConflict) {
@@ -467,20 +492,37 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
     try {
       await queueSave(valuesRef.current);
       discardRecovery();
-      onClose();
+      onCloseRef.current();
     } catch {
       // The visible error and recovery copy intentionally keep the dialog open.
     } finally {
       if (mountedRef.current) setAction(null);
     }
-  }, [completionStateUnknown, discardRecovery, hasCompletedConflict, hasPendingConflict, hasRevisionConflict, onClose, queueSave, setAction]);
+  }, [completionStateUnknown, discardRecovery, hasCompletedConflict, hasPendingConflict, hasRevisionConflict, queueSave, setAction]);
 
-  const complete = useCallback(async () => {
-    if (actionRef.current !== null || !draftRef.current) return;
+  const complete = useCallback(async (options?: {
+    snapshot?: MaterialOrderValues;
+    onStored?: (storedDraft: MaterialOrderDraft, document: ProjectFolderDocumentItem) => void;
+  }): Promise<boolean> => {
+    const continuingPrint = actionRef.current === "print" && Boolean(options?.onStored);
+    if ((actionRef.current !== null && !continuingPrint) || !draftRef.current) return false;
     const attemptedDraftId = draftRef.current.id;
-    setAction("complete");
+    if (!continuingPrint) setAction("complete");
     setSaveError(null);
-    const snapshot = cloneValues(valuesRef.current);
+    const snapshot = options?.snapshot ?? cloneValues(valuesRef.current);
+    const finishStored = (storedDraft: MaterialOrderDraft, document: ProjectFolderDocumentItem) => {
+      const completedDraft = { ...storedDraft, status: "completed" as const, completion_pending: false, document };
+      persistedValuesRef.current = formRef.current
+        ? normalizeMaterialOrderValues(formRef.current, completedDraft.values)
+        : cloneValues(completedDraft.values);
+      recoveryRevisionRef.current = completedDraft.revision;
+      draftRef.current = completedDraft;
+      setDraft(completedDraft);
+      discardRecovery();
+      window.dispatchEvent(new Event("project-files-changed"));
+      if (options?.onStored) options.onStored(completedDraft, document);
+      else onCompletedRef.current(document);
+    };
     try {
       if (draftRef.current.status === "draft" && !draftRef.current.completion_pending && !completionStateUnknown) {
         await queueSave(snapshot);
@@ -491,9 +533,8 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
         revision: activeDraft.revision,
         values: snapshot,
       });
-      discardRecovery();
-      window.dispatchEvent(new Event("project-files-changed"));
-      onCompleted(result.document);
+      finishStored(result.draft, result.document);
+      return true;
     } catch (error) {
       setCompletionStateUnknown(true);
       try {
@@ -504,10 +545,8 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
           : cloneValues(currentDraft.values);
         const matchesAttemptedValues = materialOrderValuesEqual(serverValues, snapshot);
         if (currentDraft.status === "completed" && currentDraft.document && matchesAttemptedValues) {
-          discardRecovery();
-          window.dispatchEvent(new Event("project-files-changed"));
-          onCompleted(currentDraft.document);
-          return;
+          finishStored(currentDraft, currentDraft.document);
+          return true;
         }
         draftRef.current = currentDraft;
         recoveryRevisionRef.current = currentDraft.revision;
@@ -550,46 +589,106 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
             : "Der Ablagestatus konnte nicht geprüft werden. Ihre Eingaben liegen nur in diesem geöffneten Fenster vor; versuchen Sie die Ablage erneut.");
         }
       }
+      return false;
     } finally {
-      if (mountedRef.current) setAction(null);
+      if (!continuingPrint && mountedRef.current) setAction(null);
     }
-  }, [completionStateUnknown, discardRecovery, onCompleted, persistRecovery, queueSave, setAction, siteId]);
+  }, [completionStateUnknown, discardRecovery, persistRecovery, queueSave, setAction, siteId]);
 
   const printCurrentValues = useCallback(async () => {
-    if (actionRef.current !== null || !draftRef.current) return;
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    let printWindow: Window;
-    try {
-      printWindow = openPrintWindow();
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Druckfenster konnte nicht geöffnet werden.");
-      return;
-    }
-    printWindow.addEventListener("afterprint", () => {
-      if (!printWindow.closed) printWindow.close();
-      previousFocus?.focus();
-    }, { once: true });
+    if (
+      actionRef.current !== null
+      || !draftRef.current
+      || hasRevisionConflict
+      || hasPendingConflict
+      || hasCompletedConflict
+    ) return;
+    setPrintIntent(true);
     setAction("print");
     setSaveError(null);
+    let prepared: PreparedMaterialOrderPrint | null = null;
+    let printStarted = false;
     try {
-      await saveQueueRef.current;
-      const activeDraft = draftRef.current;
-      if (!activeDraft) throw new Error("Der Entwurf ist nicht mehr verfügbar.");
-      const pdf = await api.materialOrderPreviewPdf(siteId, activeDraft.id, {
-        revision: activeDraft.revision,
-        values: cloneValues(valuesRef.current),
-      });
-      await renderPdfForPrint(pdf, printWindow);
+      const snapshot = cloneValues(valuesRef.current);
+      if (completionStateUnknown) {
+        const currentDraft = await api.materialOrderDraft(siteId, draftRef.current.id);
+        const serverValues = formRef.current
+          ? normalizeMaterialOrderValues(formRef.current, currentDraft.values)
+          : cloneValues(currentDraft.values);
+        const valuesMatch = materialOrderValuesEqual(snapshot, serverValues);
+        draftRef.current = currentDraft;
+        recoveryRevisionRef.current = currentDraft.revision;
+        persistedValuesRef.current = serverValues;
+        setDraft(currentDraft);
+        setCompletionStateUnknown(false);
+        if (currentDraft.status === "completed" && !valuesMatch) {
+          persistRecovery(currentDraft.id, currentDraft.revision, snapshot);
+          setHasCompletedConflict(true);
+          setSaveState("error");
+          setSaveError("Diese Bestellung wurde inzwischen an anderer Stelle mit anderen Eingaben abgelegt. Ihre Eingaben bleiben erhalten.");
+          return;
+        }
+        if (currentDraft.completion_pending) {
+          if (!valuesMatch) {
+            persistRecovery(currentDraft.id, currentDraft.revision, snapshot);
+            setHasPendingConflict(true);
+            setSaveError("Diese Bestellung wird an anderer Stelle mit anderen Eingaben abgelegt. Ihre Eingaben bleiben erhalten.");
+            setSaveState("error");
+            return;
+          }
+          valuesRef.current = serverValues;
+          setValues(serverValues);
+          discardRecovery();
+        }
+        if (currentDraft.status === "draft" && !valuesMatch) {
+          persistRecovery(currentDraft.id, currentDraft.revision, snapshot);
+          setHasRevisionConflict(true);
+          setSaveState("error");
+          setSaveError("Dieser Entwurf wurde inzwischen an anderer Stelle geändert. Ihre Eingaben bleiben erhalten.");
+          return;
+        }
+      }
+      let storedDocument = draftRef.current.status === "completed" ? draftRef.current.document : null;
+      if (!storedDocument) {
+        const storedDocumentRef: { current: ProjectFolderDocumentItem | null } = { current: null };
+        const stored = await complete({
+          snapshot,
+          onStored: (_storedDraft, document) => { storedDocumentRef.current = document; },
+        });
+        storedDocument = storedDocumentRef.current;
+        if (!stored || !storedDocument) return;
+      }
+      const storedPdf = await api.projectFolderDocumentContent(siteId, "lagerbestellungen", storedDocument.id, "inline");
+      prepared = await prepareMaterialOrderPrint(storedPdf);
+      prepared.print();
+      printStarted = true;
+      setPrintIntent(false);
+      discardRecovery();
+      onCompletedRef.current(storedDocument);
     } catch (error) {
-      if (!printWindow.closed) printWindow.close();
       if (mountedRef.current) {
-        setSaveError(error instanceof Error ? error.message : "Druckansicht konnte nicht erstellt werden.");
+        setSaveState("error");
+        setSaveError(draftRef.current?.status === "completed"
+          ? error instanceof Error ? `Die PDF wurde abgelegt. ${error.message}` : "Die PDF wurde abgelegt, der Druck konnte aber nicht gestartet werden."
+          : error instanceof Error ? error.message : "Druckansicht konnte nicht erstellt werden.");
         setHasRevisionConflict(error instanceof ApiError && error.status === 409);
       }
     } finally {
+      if (!printStarted) prepared?.dispose();
       if (mountedRef.current) setAction(null);
     }
-  }, [setAction, siteId]);
+  }, [
+    complete,
+    completionStateUnknown,
+    discardRecovery,
+    hasCompletedConflict,
+    hasPendingConflict,
+    hasRevisionConflict,
+    persistRecovery,
+    setAction,
+    setPrintIntent,
+    siteId,
+  ]);
 
   const resolveRevisionConflict = useCallback(async () => {
     if (actionRef.current !== null) return;
@@ -613,7 +712,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
         if (matchesCompletedValues && currentDraft.document) {
           discardRecovery();
           window.dispatchEvent(new Event("project-files-changed"));
-          onCompleted(currentDraft.document);
+          onCompletedRef.current(currentDraft.document);
           return;
         }
         persistRecovery(currentDraft.id, currentDraft.revision, localValues);
@@ -652,7 +751,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
     } finally {
       if (mountedRef.current) setAction(null);
     }
-  }, [discardRecovery, onCompleted, persistRecovery, queueSave, setAction, siteId]);
+  }, [discardRecovery, persistRecovery, queueSave, setAction, siteId]);
 
   const useServerRevision = useCallback(async () => {
     const activeDraft = draftRef.current;
@@ -696,8 +795,8 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
     if (!hasCompletedConflict || !completedDocument || actionRef.current !== null) return;
     discardRecovery();
     window.dispatchEvent(new Event("project-files-changed"));
-    onCompleted(completedDocument);
-  }, [discardRecovery, hasCompletedConflict, onCompleted]);
+    onCompletedRef.current(completedDocument);
+  }, [discardRecovery, hasCompletedConflict]);
 
   const continueCompletedConflictAsNew = useCallback(async () => {
     if (!hasCompletedConflict || actionRef.current !== null || !formRef.current) return;
@@ -750,7 +849,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
       if (currentDraft.status === "completed" && valuesMatch && currentDraft.document) {
         discardRecovery();
         window.dispatchEvent(new Event("project-files-changed"));
-        onCompleted(currentDraft.document);
+        onCompletedRef.current(currentDraft.document);
         return;
       }
       if (currentDraft.status === "completed") {
@@ -788,7 +887,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
     } finally {
       if (mountedRef.current) setAction(null);
     }
-  }, [discardRecovery, hasPendingConflict, onCompleted, persistRecovery, setAction, siteId]);
+  }, [discardRecovery, hasPendingConflict, persistRecovery, setAction, siteId]);
 
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -799,13 +898,18 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
       }
       if (event.key === "Escape") {
         event.preventDefault();
+        if (isZoomOpen) {
+          setIsZoomOpen(false);
+          window.requestAnimationFrame(() => zoomTriggerRef.current?.focus());
+          return;
+        }
         void closeWithSave();
         return;
       }
       if (event.key !== "Tab" || !dialogRef.current) return;
       const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
         'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      )).filter((element) => !element.hidden);
+      )).filter((element) => !element.hidden && element.tabIndex >= 0);
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -819,7 +923,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [closeWithSave, printCurrentValues]);
+  }, [closeWithSave, isZoomOpen, printCurrentValues]);
 
   function updateField(event: ChangeEvent<HTMLInputElement>, name: string, type: "text" | "checkbox") {
     const value = type === "checkbox" ? event.currentTarget.checked : event.currentTarget.value;
@@ -872,6 +976,9 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
               tone: "danger",
             }
           : { icon: <Save aria-hidden="true" />, text: "Ungespeicherte Änderungen", tone: "neutral" };
+  const showSaveStatus = !isLoading && (
+    saveState !== "saved" || !isOnline || completionStateUnknown || Boolean(draft?.completion_pending)
+  );
 
   return createPortal(
     <div className="material-order-dialog-backdrop" role="presentation">
@@ -884,43 +991,109 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
         onKeyDown={keepFocusInside}
       >
         <header className="material-order-dialog-header">
-          <div>
-            <span className="material-order-dialog-eyebrow">Baustellendokument</span>
+          <div className="material-order-header-title">
             <h2 id="material-order-dialog-title">Neue Lagerbestellung</h2>
+            {showSaveStatus ? (
+              <span className={`material-order-save-status is-${status.tone}`} role="status" aria-live="polite">
+                {status.icon}<span>{status.text}</span>
+              </span>
+            ) : null}
           </div>
-          <button
-            ref={firstFocusRef}
-            type="button"
-            className="material-order-icon-button"
-            aria-label="Schließen – Entwurf bleibt erhalten"
-            title="Schließen – Entwurf bleibt erhalten"
-            disabled={isBusy}
-            onClick={() => void closeWithSave()}
-          >
-            <X aria-hidden="true" />
-          </button>
+          <div className="material-order-header-actions">
+            <div className="material-order-zoom" ref={zoomMenuRef}>
+              <button
+                ref={zoomTriggerRef}
+                type="button"
+                role="combobox"
+                className="material-order-zoom-trigger"
+                aria-label="Dokumentzoom"
+                aria-haspopup="listbox"
+                aria-expanded={isZoomOpen}
+                aria-controls="material-order-zoom-options"
+                aria-activedescendant={isZoomOpen ? `material-order-zoom-option-${activeZoomIndex}` : undefined}
+                onClick={() => {
+                  setActiveZoomIndex(MATERIAL_ORDER_ZOOM_LEVELS.indexOf(zoom));
+                  setIsZoomOpen((current) => !current);
+                }}
+                onKeyDown={(event) => {
+                  const selectedIndex = MATERIAL_ORDER_ZOOM_LEVELS.indexOf(zoom);
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsZoomOpen(false);
+                    zoomTriggerRef.current?.focus();
+                    return;
+                  }
+                  if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                    event.preventDefault();
+                    const nextIndex = event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? MATERIAL_ORDER_ZOOM_LEVELS.length - 1
+                        : !isZoomOpen
+                          ? selectedIndex
+                          : Math.max(0, Math.min(
+                              MATERIAL_ORDER_ZOOM_LEVELS.length - 1,
+                              activeZoomIndex + (event.key === "ArrowDown" ? 1 : -1),
+                            ));
+                    setActiveZoomIndex(nextIndex);
+                    setIsZoomOpen(true);
+                  } else if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    if (isZoomOpen) changeZoom(MATERIAL_ORDER_ZOOM_LEVELS[activeZoomIndex] ?? zoom);
+                    else {
+                      setActiveZoomIndex(selectedIndex);
+                      setIsZoomOpen(true);
+                    }
+                  }
+                }}
+              >
+                <span>{zoom} %</span><ChevronDown aria-hidden="true" />
+              </button>
+              {isZoomOpen ? (
+                <div className="material-order-zoom-options" id="material-order-zoom-options" role="listbox" aria-label="Dokumentzoom">
+                  {MATERIAL_ORDER_ZOOM_LEVELS.map((level, index) => (
+                    <button
+                      key={level}
+                      id={`material-order-zoom-option-${index}`}
+                      type="button"
+                      role="option"
+                      tabIndex={-1}
+                      aria-selected={level === zoom}
+                      className={index === activeZoomIndex ? "is-active" : ""}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => changeZoom(level)}
+                    >
+                      <span>{level} %</span>{level === zoom ? <Check aria-hidden="true" /> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="material-order-secondary-button material-order-print-button"
+              aria-label="Drucken und ablegen"
+              title="Drucken und ablegen"
+              disabled={isBusy || isLoading || !draft || hasRevisionConflict || hasPendingConflict || hasCompletedConflict}
+              onClick={() => void printCurrentValues()}
+            >
+              {action === "print" ? <LoaderCircle aria-hidden="true" className="is-spinning" /> : <Printer aria-hidden="true" />}
+              <span>Drucken</span>
+            </button>
+            <button
+              ref={firstFocusRef}
+              type="button"
+              className="material-order-icon-button"
+              aria-label="Schließen – Entwurf bleibt erhalten"
+              title="Schließen – Entwurf bleibt erhalten"
+              disabled={isBusy}
+              onClick={() => void closeWithSave()}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </div>
         </header>
-
-        <div className="material-order-toolbar">
-          <div className={`material-order-save-status is-${status.tone}`} role="status" aria-live="polite">
-            {status.icon}<span>{status.text}</span>
-          </div>
-          <label className="material-order-zoom">
-            <span>Zoom</span>
-            <select aria-label="Dokumentzoom" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
-              {MATERIAL_ORDER_ZOOM_LEVELS.map((level) => <option key={level} value={level}>{level} %</option>)}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="material-order-secondary-button"
-            disabled={isBusy || isLoading || !draft}
-            onClick={() => void printCurrentValues()}
-          >
-            {action === "print" ? <LoaderCircle aria-hidden="true" className="is-spinning" /> : <Printer aria-hidden="true" />}
-            Drucken
-          </button>
-        </div>
 
         {recoveryNotice ? (
           <p className="material-order-recovery-note" role="status">
@@ -1001,6 +1174,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
                           aria-label={field.label}
                           autoComplete="off"
                           maxLength={field.max_length ?? undefined}
+                          style={materialOrderInputStyle(field, form)}
                           value={typeof fieldValue === "string" ? fieldValue : ""}
                           disabled={isFormReadOnly}
                           onChange={(event) => updateField(event, field.name, field.type)}
@@ -1015,7 +1189,6 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
         </div>
 
         <footer className="material-order-dialog-footer">
-          <span>Ablage: Lagerbestellungen</span>
           <div>
             <button
               type="button"
@@ -1029,12 +1202,26 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
             <button
               type="button"
               className="material-order-primary-button"
-              disabled={isBusy || isLoading || !draft || hasRevisionConflict || hasPendingConflict || draft.status === "completed"}
-              onClick={() => void complete()}
+              disabled={
+                isBusy
+                || isLoading
+                || !draft
+                || hasRevisionConflict
+                || hasPendingConflict
+                || hasCompletedConflict
+                || (draft.status === "completed" && !hasPrintIntent)
+              }
+              onClick={() => void (hasPrintIntent ? printCurrentValues() : complete())}
             >
-              {action === "complete" ? <LoaderCircle aria-hidden="true" className="is-spinning" /> : <Check aria-hidden="true" />}
-              {draft?.status === "completed"
-                ? "Bereits abgelegt"
+              {action === "complete" || action === "print"
+                ? <LoaderCircle aria-hidden="true" className="is-spinning" />
+                : hasPrintIntent ? <Printer aria-hidden="true" /> : <Check aria-hidden="true" />}
+              {hasPrintIntent && draft?.status === "completed"
+                ? "Drucken erneut versuchen"
+                : hasPrintIntent
+                  ? "Ablage & Drucken erneut versuchen"
+                : draft?.status === "completed"
+                  ? "Bereits abgelegt"
                 : draft?.completion_pending || completionStateUnknown
                   ? "Ablage erneut versuchen"
                   : "Speichern & schließen"}

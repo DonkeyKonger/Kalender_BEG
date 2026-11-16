@@ -3,20 +3,26 @@ import test from "node:test";
 
 import {
   clearMaterialOrderRecovery,
+  getMaterialOrderZoomStorageKey,
   getMaterialOrderRecoveryKey,
+  MATERIAL_ORDER_DESKTOP_ZOOM,
+  MATERIAL_ORDER_MOBILE_ZOOM,
   materialOrderRectStyle,
   materialOrderValuesEqual,
   normalizeMaterialOrderValues,
+  normalizeMaterialOrderZoom,
+  readMaterialOrderZoom,
   readMaterialOrderRecovery,
   writeMaterialOrderRecovery,
+  writeMaterialOrderZoom,
 } from "../src/lib/materialOrders.ts";
 
 const form = {
   width: 600,
   height: 800,
   fields: [
-    { name: "customer", label: "Kunde", type: "text", rect: [60, 80, 240, 20], max_length: 120 },
-    { name: "packed_1", label: "Gepackt", type: "checkbox", rect: [540, 400, 12, 12], max_length: null },
+    { name: "customer", label: "Kunde", type: "text", rect: [60, 80, 240, 20], max_length: 120, font_size: null, text_color: null, text_align: null },
+    { name: "packed_1", label: "Gepackt", type: "checkbox", rect: [540, 400, 12, 12], max_length: null, font_size: null, text_color: null, text_align: null },
   ],
 };
 
@@ -104,4 +110,25 @@ test("recovery parsing retains only supported scalar field values", () => {
     customer: "Kunde",
     packed_1: true,
   });
+});
+
+test("zoom is validated and persisted independently for each signed-in user", () => {
+  const storage = memoryStorage();
+  assert.equal(readMaterialOrderZoom(storage, 7, MATERIAL_ORDER_DESKTOP_ZOOM), 125);
+  assert.equal(readMaterialOrderZoom(storage, 8, MATERIAL_ORDER_MOBILE_ZOOM), 90);
+  assert.equal(writeMaterialOrderZoom(storage, 7, 150), true);
+  assert.equal(readMaterialOrderZoom(storage, 7, MATERIAL_ORDER_DESKTOP_ZOOM), 150);
+  assert.equal(readMaterialOrderZoom(storage, 8, MATERIAL_ORDER_MOBILE_ZOOM), 90);
+  storage.setItem(getMaterialOrderZoomStorageKey(7), "95");
+  assert.equal(readMaterialOrderZoom(storage, 7, MATERIAL_ORDER_DESKTOP_ZOOM), 125);
+  assert.equal(normalizeMaterialOrderZoom("110", MATERIAL_ORDER_MOBILE_ZOOM), 110);
+});
+
+test("unavailable zoom storage falls back without breaking the dialog", () => {
+  const unavailableStorage = {
+    getItem() { throw new Error("blocked"); },
+    setItem() { throw new Error("blocked"); },
+  };
+  assert.equal(readMaterialOrderZoom(unavailableStorage, 7, MATERIAL_ORDER_MOBILE_ZOOM), 90);
+  assert.equal(writeMaterialOrderZoom(unavailableStorage, 7, 125), false);
 });

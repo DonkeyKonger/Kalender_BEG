@@ -3,6 +3,7 @@ from io import BytesIO
 import pytest
 from pypdf import PdfReader, PdfWriter
 
+from app.schemas.material_order import MaterialOrderFormRead
 from app.services.material_order_pdf_service import (
     MaterialOrderPdfValidationError,
     build_material_order_pdf,
@@ -21,6 +22,7 @@ def _widgets(reader: PdfReader):
 
 def test_form_descriptor_uses_stable_names_and_top_left_pdf_points():
     form = get_material_order_form()
+    parsed_form = MaterialOrderFormRead.model_validate(form)
     assert form["width"] == 595.2755
     assert form["height"] == 841.8898
     assert len(form["fields"]) == 121
@@ -33,7 +35,33 @@ def test_form_descriptor_uses_stable_names_and_top_left_pdf_points():
         "type": "text",
         "rect": [106.582, 129.393, 233.64, 14.173],
         "max_length": 120,
+        "font_size": None,
+        "text_color": None,
+        "text_align": None,
     }
+    assert fields["commission"] == {
+        "name": "commission",
+        "label": "Kommission",
+        "type": "text",
+        "rect": [489.12, 149.013, 66.72, 22.677],
+        "max_length": 60,
+        "font_size": 14.0,
+        "text_color": [0.986, 0.007, 0.027],
+        "text_align": "center",
+    }
+    parsed_commission = next(
+        field for field in parsed_form.fields if field.name == "commission"
+    )
+    assert parsed_commission.font_size == 14.0
+    assert parsed_commission.text_color == (0.986, 0.007, 0.027)
+    assert parsed_commission.text_align == "center"
+    assert all(
+        field["font_size"] is None
+        and field["text_color"] is None
+        and field["text_align"] is None
+        for name, field in fields.items()
+        if name != "commission"
+    )
     assert fields["material_1"]["rect"] == [56.693, 273.526, 257.682, 20.16]
     assert fields["order_number_1"]["rect"] == [315.213, 273.418, 55.08, 20.16]
     assert fields["quantity_1"]["rect"] == [371.994, 272.871, 55.08, 20.16]
@@ -87,6 +115,10 @@ def test_blank_template_is_passive_interactive_and_has_independent_widgets():
         else:
             assert normal.get_data()
 
+    commission = next(widget for widget in widgets if widget["/T"] == "commission")
+    assert commission["/DA"] == "/Helv 14 Tf 0.986 0.007 0.027 rg"
+    assert commission["/Q"] == 1
+
 
 def test_build_fills_unicode_text_and_checkbox_rows_independently():
     content = build_material_order_pdf(
@@ -108,6 +140,7 @@ def test_build_fills_unicode_text_and_checkbox_rows_independently():
     fields = reader.get_fields()
     assert fields["customer"]["/V"] == "Müller & Söhne GmbH"
     assert fields["material_1"]["/V"] == "Kabelrinne 200 mm"
+    assert fields["commission"]["/V"] == "8039"
     assert fields["packed_1"]["/V"] == "/Yes"
     assert fields["packed_2"]["/V"] == "/Off"
     assert fields["packed_23"]["/V"] == "/Yes"
@@ -117,6 +150,9 @@ def test_build_fills_unicode_text_and_checkbox_rows_independently():
     assert widgets["packed_2"]["/AS"] == "/Off"
     assert widgets["packed_23"]["/AS"] == "/Yes"
     assert b"Tj" in widgets["customer"]["/AP"]["/N"].get_data()
+    commission_appearance = widgets["commission"]["/AP"]["/N"].get_data()
+    assert b"/Helv 14.0 Tf" in commission_appearance
+    assert b"0.986 0.007 0.027 rg" in commission_appearance
     assert b"/Helv 3.22 Tf" in widgets["requested_by"]["/AP"]["/N"].get_data()
     assert widgets["packed_1"]["/AP"]["/N"]["/Yes"].get_data()
 
@@ -124,15 +160,28 @@ def test_build_fills_unicode_text_and_checkbox_rows_independently():
     writer = PdfWriter(clone_from=reader)
     writer.update_page_form_field_values(
         None,
-        {"customer": "Neu", "packed_1": "/Off", "packed_2": "/Yes"},
+        {
+            "customer": "Neu",
+            "commission": "8040",
+            "packed_1": "/Off",
+            "packed_2": "/Yes",
+        },
         auto_regenerate=False,
     )
     refilled = BytesIO()
     writer.write(refilled)
     reopened = PdfReader(BytesIO(refilled.getvalue()))
     assert reopened.get_fields()["customer"]["/V"] == "Neu"
+    assert reopened.get_fields()["commission"]["/V"] == "8040"
     assert reopened.get_fields()["packed_1"]["/V"] == "/Off"
     assert reopened.get_fields()["packed_2"]["/V"] == "/Yes"
+    reopened_commission = next(
+        widget for widget in _widgets(reopened) if widget["/T"] == "commission"
+    )
+    assert reopened_commission["/DA"] == "/Helv 14 Tf 0.986 0.007 0.027 rg"
+    assert b"/Helv 14.0 Tf 0.986 0.007 0.027 rg" in reopened_commission["/AP"][
+        "/N"
+    ].get_data()
 
 
 @pytest.mark.parametrize(

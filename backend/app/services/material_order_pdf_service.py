@@ -51,6 +51,9 @@ class _FieldDefinition:
     type: Literal["text", "checkbox"]
     rect: tuple[float, float, float, float]  # top-left x, y, width, height
     max_length: int | None = None
+    font_size: float | None = None
+    text_color: tuple[float, float, float] | None = None
+    text_align: Literal["left", "center", "right"] | None = None
 
 
 _HEADER_SOURCE_FIELDS = (
@@ -81,6 +84,9 @@ def get_material_order_form() -> dict[str, object]:
                 "type": field.type,
                 "rect": list(field.rect),
                 "max_length": field.max_length,
+                "font_size": field.font_size,
+                "text_color": list(field.text_color) if field.text_color else None,
+                "text_align": field.text_align,
             }
             for field in definitions
         ],
@@ -152,14 +158,17 @@ def _material_order_schema() -> tuple[float, float, tuple[_FieldDefinition, ...]
 
     definitions: list[_FieldDefinition] = []
     for name, label, source_name, max_length in _HEADER_SOURCE_FIELDS:
+        source_widget = _required_widget(direct_widgets, source_name)
+        style = _source_text_style(source_widget) if name == "commission" else {}
         definitions.append(
             _definition_from_widget(
                 name,
                 label,
                 "text",
-                _required_widget(direct_widgets, source_name),
+                source_widget,
                 height,
                 max_length,
+                **style,
             )
         )
 
@@ -247,6 +256,10 @@ def _definition_from_widget(
     widget: DictionaryObject,
     page_height: float,
     max_length: int | None,
+    *,
+    font_size: float | None = None,
+    text_color: tuple[float, float, float] | None = None,
+    text_align: Literal["left", "center", "right"] | None = None,
 ) -> _FieldDefinition:
     x1, y1, x2, y2 = (float(value) for value in widget["/Rect"])
     return _FieldDefinition(
@@ -260,7 +273,39 @@ def _definition_from_widget(
             round(y2 - y1, 3),
         ),
         max_length=max_length,
+        font_size=font_size,
+        text_color=text_color,
+        text_align=text_align,
     )
+
+
+def _source_text_style(widget: DictionaryObject) -> dict[str, object]:
+    """Extract the commission emphasis from the supplied master widget."""
+
+    default_appearance = widget.get("/DA")
+    if not isinstance(default_appearance, str):
+        raise RuntimeError("Das Kommissionsfeld besitzt keine gültige PDF-Textdarstellung.")
+    tokens = default_appearance.split()
+    try:
+        font_operator = tokens.index("Tf")
+        color_operator = tokens.index("rg")
+        font_size = float(tokens[font_operator - 1])
+        text_color = tuple(float(value) for value in tokens[color_operator - 3 : color_operator])
+    except (ValueError, IndexError) as error:
+        raise RuntimeError(
+            "Die Textdarstellung des Kommissionsfeldes entspricht nicht der Vorlage."
+        ) from error
+    if len(text_color) != 3 or not all(0 <= value <= 1 for value in text_color):
+        raise RuntimeError("Das Kommissionsfeld besitzt keine gültige PDF-RGB-Farbe.")
+
+    alignment = {0: "left", 1: "center", 2: "right"}.get(int(widget.get("/Q", 0)))
+    if alignment is None:
+        raise RuntimeError("Das Kommissionsfeld besitzt eine unbekannte Textausrichtung.")
+    return {
+        "font_size": font_size,
+        "text_color": text_color,
+        "text_align": alignment,
+    }
 
 
 def _page_widgets(page: DictionaryObject) -> list[DictionaryObject]:
@@ -398,13 +443,19 @@ def _add_normalized_form(
                 {
                     # Size zero keeps the field auto-sizing when a user edits
                     # the returned interactive PDF in a regular PDF viewer.
-                    NameObject("/DA"): TextStringObject("/Helv 0 Tf 0 g"),
+                    NameObject("/DA"): TextStringObject(
+                        _default_text_appearance(definition)
+                    ),
                     NameObject("/V"): TextStringObject(""),
                     NameObject("/AP"): DictionaryObject(
                         {NameObject("/N"): writer._add_object(appearance)}
                     ),
                 }
             )
+            if definition.text_align is not None:
+                widget[NameObject("/Q")] = NumberObject(
+                    {"left": 0, "center": 1, "right": 2}[definition.text_align]
+                )
             if definition.max_length is not None:
                 widget[NameObject("/MaxLen")] = NumberObject(definition.max_length)
 
@@ -417,6 +468,15 @@ def _add_normalized_form(
         _pypdf_values(_blank_values(definitions)),
         auto_regenerate=False,
     )
+
+
+def _default_text_appearance(definition: _FieldDefinition) -> str:
+    font_size = definition.font_size if definition.font_size is not None else 0
+    if definition.text_color is None:
+        color = "0 g"
+    else:
+        color = " ".join(f"{component:g}" for component in definition.text_color) + " rg"
+    return f"/Helv {font_size:g} Tf {color}"
 
 
 def _checkbox_appearance(width: float, height: float, *, checked: bool) -> DecodedStreamObject:
@@ -498,12 +558,13 @@ def _validate_values(values: Mapping[str, str | bool]) -> dict[str, str | bool]:
 
 
 def _fitted_font_size(definition: _FieldDefinition, value: str) -> float:
+    maximum_font_size = definition.font_size or DEFAULT_TEXT_FONT_SIZE
     if not value:
-        return DEFAULT_TEXT_FONT_SIZE
+        return maximum_font_size
     available_width = max(definition.rect[2] - 4, 1)
     text_width_at_one_point = stringWidth(value, "Helvetica", 1)
     fitted_size = min(
-        DEFAULT_TEXT_FONT_SIZE,
+        maximum_font_size,
         available_width / max(text_width_at_one_point, 0.001),
     )
     if fitted_size < MINIMUM_TEXT_FONT_SIZE:

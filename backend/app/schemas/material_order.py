@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StrictBool, StrictStr, field_validator
 
@@ -7,6 +7,7 @@ from app.schemas.project_folder import ProjectFolderDocumentItem
 
 
 MaterialOrderValue = StrictStr | StrictBool
+MaterialOrderRgbComponent = Annotated[float, Field(ge=0, le=1)]
 
 
 class MaterialOrderValuesUpdate(BaseModel):
@@ -49,6 +50,13 @@ class MaterialOrderFormFieldRead(BaseModel):
     type: Literal["text", "checkbox"]
     rect: tuple[float, float, float, float]
     max_length: int | None = Field(default=None, ge=1)
+    font_size: float | None = Field(default=None, gt=0)
+    text_color: tuple[
+        MaterialOrderRgbComponent,
+        MaterialOrderRgbComponent,
+        MaterialOrderRgbComponent,
+    ] | None = None
+    text_align: Literal["left", "center", "right"] | None = None
 
 
 class MaterialOrderFormRead(BaseModel):
