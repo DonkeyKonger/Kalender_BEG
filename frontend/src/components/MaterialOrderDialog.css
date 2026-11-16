@@ -293,6 +293,7 @@ body.material-order-dialog-open {
 
 .material-order-paper {
   position: relative;
+  box-sizing: content-box;
   flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid #b8c0cb;
@@ -333,7 +334,7 @@ body.material-order-dialog-open {
   min-width: 0;
   border: 1px solid transparent;
   border-radius: 1px;
-  background: rgb(239 247 255 / 20%);
+  background: transparent;
   padding: 0.04em 0.18em;
   color: #111827;
   font-family: Arial, sans-serif;
@@ -344,7 +345,7 @@ body.material-order-dialog-open {
 
 .material-order-text-field input:hover:not(:disabled) {
   border-color: rgb(49 95 145 / 42%);
-  background: rgb(233 244 255 / 46%);
+  background: transparent;
 }
 
 .material-order-text-field input:focus {

@@ -38,6 +38,37 @@ CHECKBOX_ON_VALUE = "/Yes"
 CHECKBOX_OFF_VALUE = "/Off"
 DEFAULT_TEXT_FONT_SIZE = 8.0
 MINIMUM_TEXT_FONT_SIZE = 3.0
+TABLE_GRID_COLOR = 0.0
+TABLE_PALE_BLUE = (0.753, 0.902, 0.961)
+TABLE_LINE_WIDTH = 0.48
+TABLE_COLUMN_BOUNDARIES = (55.926, 314.646, 371.286, 428.166, 484.806, 541.686)
+TABLE_ROW_BOUNDARIES = (
+    568.524,
+    547.164,
+    525.564,
+    504.204,
+    482.604,
+    461.004,
+    439.644,
+    418.044,
+    396.684,
+    375.084,
+    353.724,
+    332.124,
+    310.524,
+    289.164,
+    267.564,
+    246.204,
+    224.604,
+    203.004,
+    181.644,
+    160.044,
+    138.684,
+    117.084,
+    95.724,
+    74.124,
+)
+TABLE_HEADER_TOP = 595.884
 
 
 class MaterialOrderPdfValidationError(ValueError):
@@ -330,6 +361,7 @@ def _normalized_template_pdf() -> bytes:
     for key in ("/Annots", "/AA"):
         page.pop(NameObject(key), None)
     writer.add_page(page)
+    _normalize_table_background(writer)
     for key in ("/AcroForm", "/Names", "/OpenAction", "/AA"):
         writer._root_object.pop(NameObject(key), None)
     _add_normalized_form(writer, definitions, width, height)
@@ -339,6 +371,116 @@ def _normalized_template_pdf() -> bytes:
     content = output.getvalue()
     _verify_pdf(content, _blank_values(definitions))
     return content
+
+
+def _normalize_table_background(writer: PdfWriter) -> None:
+    """Overlay a coherent table palette without rewriting the supplied master.
+
+    The master draws its body grid as hundreds of 0.48-point filled rectangles,
+    mixing cyan edges in the material column with black edges elsewhere.  Its
+    pale-blue alternating fill also stops after the material column.  The body
+    contains no static text, so a tightly bounded opaque overlay can safely
+    replace only that artwork while all form widgets remain above the page
+    content.  Header labels and the original header fill remain untouched.
+    """
+
+    left = TABLE_COLUMN_BOUNDARIES[0]
+    right = TABLE_COLUMN_BOUNDARIES[-1]
+    top = TABLE_ROW_BOUNDARIES[0]
+    bottom = TABLE_ROW_BOUNDARIES[-1]
+    commands = [
+        b"% Material-order table palette normalization",
+        b"q",
+        b"1 g",
+        _pdf_rectangle(left, bottom, right - left, top - bottom),
+        b"f",
+        (
+            " ".join(f"{component:g}" for component in TABLE_PALE_BLUE) + " rg"
+        ).encode("ascii"),
+    ]
+
+    for row_number in range(2, MATERIAL_ORDER_ROW_COUNT + 1, 2):
+        upper = TABLE_ROW_BOUNDARIES[row_number - 1]
+        lower = TABLE_ROW_BOUNDARIES[row_number]
+        commands.extend(
+            (
+                _pdf_rectangle(left, lower, right - left, upper - lower),
+                b"f",
+            )
+        )
+
+    commands.append(f"{TABLE_GRID_COLOR:g} g".encode("ascii"))
+    for boundary in TABLE_ROW_BOUNDARIES:
+        commands.extend(
+            (
+                _pdf_rectangle(
+                    left,
+                    boundary,
+                    right - left,
+                    TABLE_LINE_WIDTH,
+                ),
+                b"f",
+            )
+        )
+    for boundary in TABLE_COLUMN_BOUNDARIES[:-1]:
+        commands.extend(
+            (
+                _pdf_rectangle(
+                    boundary,
+                    bottom,
+                    TABLE_LINE_WIDTH,
+                    top - bottom + TABLE_LINE_WIDTH,
+                ),
+                b"f",
+            )
+        )
+
+    # Preserve the master's open header layout and static labels.  Only cover
+    # its three cyan material-header edges with the same black 0.48-point grid.
+    commands.extend(
+        (
+            _pdf_rectangle(
+                left,
+                TABLE_HEADER_TOP,
+                TABLE_COLUMN_BOUNDARIES[1] - left + TABLE_LINE_WIDTH,
+                TABLE_LINE_WIDTH,
+            ),
+            b"f",
+            _pdf_rectangle(
+                left,
+                top + TABLE_LINE_WIDTH,
+                TABLE_LINE_WIDTH,
+                TABLE_HEADER_TOP - top - TABLE_LINE_WIDTH,
+            ),
+            b"f",
+            _pdf_rectangle(
+                TABLE_COLUMN_BOUNDARIES[1],
+                top + TABLE_LINE_WIDTH,
+                TABLE_LINE_WIDTH,
+                TABLE_HEADER_TOP - top - TABLE_LINE_WIDTH,
+            ),
+            b"f",
+            b"Q",
+        )
+    )
+
+    overlay = DecodedStreamObject()
+    overlay.set_data(b"\n".join(commands) + b"\n")
+    overlay_reference = writer._add_object(overlay)
+    page = writer.pages[0]
+    existing_contents = page.get("/Contents")
+    if isinstance(existing_contents, ArrayObject):
+        existing_contents.append(overlay_reference)
+    elif existing_contents is not None:
+        page[NameObject("/Contents")] = ArrayObject(
+            [existing_contents, overlay_reference]
+        )
+    else:
+        page[NameObject("/Contents")] = overlay_reference
+
+
+def _pdf_rectangle(x: float, y: float, width: float, height: float) -> bytes:
+    return f"{x:g} {y:g} {width:g} {height:g} re".encode("ascii")
 
 
 def _add_normalized_form(

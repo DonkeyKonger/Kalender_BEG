@@ -14,6 +14,11 @@ import { createPortal } from "react-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, api } from "../lib/api";
 import {
+  createDecodedMaterialOrderPreviewUrl,
+  MaterialOrderTemplateRenderer,
+  observeMaterialOrderDevicePixelRatio,
+} from "../lib/materialOrderPreview";
+import {
   MATERIAL_ORDER_ZOOM_LEVELS,
   MATERIAL_ORDER_DESKTOP_ZOOM,
   MATERIAL_ORDER_MOBILE_ZOOM,
@@ -33,7 +38,6 @@ import {
   type MaterialOrderZoom,
 } from "../lib/materialOrders";
 import { prepareMaterialOrderPrint, type PreparedMaterialOrderPrint } from "../lib/materialOrderPrinting";
-import { loadCompatiblePdfJs } from "../lib/pdfJsCompatibility";
 import type { ProjectFolderDocumentItem } from "../types/site";
 
 import "./MaterialOrderDialog.css";
@@ -48,8 +52,6 @@ type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 type DialogAction = "close" | "complete" | "print" | "resolve-conflict" | null;
 
 const AUTOSAVE_DELAY_MS = 700;
-const PREVIEW_WIDTH = 1_600;
-const PREVIEW_MAX_PIXELS = 4_000_000;
 
 function cloneValues(values: MaterialOrderValues): MaterialOrderValues {
   return { ...values };
@@ -78,43 +80,6 @@ function materialOrderInputStyle(field: MaterialOrderField, form: MaterialOrderF
   };
 }
 
-async function renderTemplatePreview(blob: Blob): Promise<string> {
-  const data = await blob.arrayBuffer();
-  const pdfjsLib = await loadCompatiblePdfJs();
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data) });
-  try {
-    const pdfDocument = await loadingTask.promise;
-    const page = await pdfDocument.getPage(1);
-    const baseViewport = page.getViewport({ scale: 1 });
-    const aspectRatio = baseViewport.width / baseViewport.height;
-    const budgetWidth = Math.floor(Math.sqrt(PREVIEW_MAX_PIXELS * aspectRatio));
-    const renderWidth = Math.min(PREVIEW_WIDTH, budgetWidth);
-    const viewport = page.getViewport({ scale: renderWidth / baseViewport.width });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil(viewport.width);
-    canvas.height = Math.ceil(viewport.height);
-    const context = canvas.getContext("2d", { alpha: false });
-    if (!context) throw new Error("PDF-Vorschau konnte nicht initialisiert werden.");
-    await page.render({
-      canvas,
-      canvasContext: context,
-      viewport,
-      annotationMode: pdfjsLib.AnnotationMode.DISABLE,
-    }).promise;
-    const preview = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((result) => {
-        if (result) resolve(result);
-        else reject(new Error("PDF-Vorschau konnte nicht erzeugt werden."));
-      }, "image/png");
-    });
-    canvas.width = 0;
-    canvas.height = 0;
-    return URL.createObjectURL(preview);
-  } finally {
-    void loadingTask.destroy();
-  }
-}
-
 export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOrderDialogProps) {
   const { user } = useAuth();
   const onCloseRef = useRef(onClose);
@@ -134,6 +99,8 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
   const printIntentRef = useRef(false);
   const mountedRef = useRef(true);
   const recoveryStoredRef = useRef(false);
+  const previewRendererRef = useRef<MaterialOrderTemplateRenderer | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
   const openerRef = useRef<HTMLElement | null>(
     typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
@@ -143,6 +110,11 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
   const [form, setForm] = useState<MaterialOrderForm | null>(null);
   const [values, setValues] = useState<MaterialOrderValues>({});
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewRendererVersion, setPreviewRendererVersion] = useState(0);
+  const [isPreviewRendering, setIsPreviewRendering] = useState(true);
+  const [devicePixelRatio, setDevicePixelRatio] = useState(() => (
+    typeof window === "undefined" ? 1 : window.devicePixelRatio || 1
+  ));
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -174,6 +146,13 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
   const setPrintIntent = useCallback((next: boolean) => {
     printIntentRef.current = next;
     setHasPrintIntentState(next);
+  }, []);
+
+  const replacePreviewUrl = useCallback((nextUrl: string | null) => {
+    const previousUrl = previewUrlRef.current;
+    previewUrlRef.current = nextUrl;
+    setPreviewUrl(nextUrl);
+    if (previousUrl && previousUrl !== nextUrl) URL.revokeObjectURL(previousUrl);
   }, []);
 
   const changeZoom = useCallback((next: MaterialOrderZoom) => {
@@ -223,6 +202,13 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
     };
   }, []);
 
+  useEffect(() => observeMaterialOrderDevicePixelRatio(setDevicePixelRatio), []);
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+  }, []);
+
   useEffect(() => {
     const appShell = document.querySelector<HTMLElement>(".app-shell");
     const opener = openerRef.current;
@@ -246,8 +232,9 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
 
   useEffect(() => {
     let cancelled = false;
-    let nextPreviewUrl: string | null = null;
+    let nextRenderer: MaterialOrderTemplateRenderer | null = null;
     setIsLoading(true);
+    setIsPreviewRendering(true);
     setLoadError(null);
     setSaveError(null);
     setHasRevisionConflict(false);
@@ -257,6 +244,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
     setIsRecoveryStored(false);
     recoveryStoredRef.current = false;
     setRecoveryNotice(false);
+    replacePreviewUrl(null);
     const storage = getMaterialOrderStorage();
     const recovery = storage ? readMaterialOrderRecovery(storage, recoveryKey) : null;
     let recoveryDraftMissing = false;
@@ -274,9 +262,10 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
       api.materialOrderForm(siteId),
       api.materialOrderTemplate(siteId),
     ]).then(async ([loadedDraft, nextForm, template]) => {
-      nextPreviewUrl = await renderTemplatePreview(template);
+      nextRenderer = await MaterialOrderTemplateRenderer.create(template);
       if (cancelled) {
-        URL.revokeObjectURL(nextPreviewUrl);
+        void nextRenderer?.dispose();
+        nextRenderer = null;
         return;
       }
       let nextDraft = loadedDraft;
@@ -294,7 +283,8 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
           nextDraft = await api.createMaterialOrderDraft(siteId);
           activeRecovery = null;
           if (cancelled) {
-            URL.revokeObjectURL(nextPreviewUrl);
+            void nextRenderer?.dispose();
+            nextRenderer = null;
             return;
           }
         }
@@ -333,10 +323,11 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
         : nextDraft.revision;
       valuesRef.current = initialValues;
       persistedValuesRef.current = serverValues;
+      previewRendererRef.current = nextRenderer;
       setDraft(nextDraft);
       setForm(nextForm);
       setValues(initialValues);
-      setPreviewUrl(nextPreviewUrl);
+      setPreviewRendererVersion((current) => current + 1);
       setRecoveryNotice(hasDifferentRecovery && !hasStaleRecovery && !hasCompletedRecoveryConflict && !hasPendingRecoveryConflict);
       setHasRevisionConflict(hasStaleRecovery);
       setHasCompletedConflict(hasCompletedRecoveryConflict);
@@ -355,8 +346,13 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
         : materialOrderValuesEqual(initialValues, serverValues) ? "saved" : "dirty");
       window.requestAnimationFrame(() => firstFocusRef.current?.focus());
     }).catch((error) => {
-      if (nextPreviewUrl) URL.revokeObjectURL(nextPreviewUrl);
+      if (nextRenderer) {
+        if (previewRendererRef.current === nextRenderer) previewRendererRef.current = null;
+        void nextRenderer.dispose();
+        nextRenderer = null;
+      }
       if (!cancelled) {
+        setIsPreviewRendering(false);
         setLoadError(error instanceof Error ? error.message : "Lagerbestellung konnte nicht geladen werden.");
       }
     }).finally(() => {
@@ -364,9 +360,44 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
     });
     return () => {
       cancelled = true;
-      if (nextPreviewUrl) URL.revokeObjectURL(nextPreviewUrl);
+      if (nextRenderer) {
+        if (previewRendererRef.current === nextRenderer) previewRendererRef.current = null;
+        void nextRenderer.dispose();
+        nextRenderer = null;
+      }
     };
-  }, [discardRecovery, loadVersion, recoveryKey, siteId]);
+  }, [discardRecovery, loadVersion, recoveryKey, replacePreviewUrl, siteId]);
+
+  useEffect(() => {
+    const renderer = previewRendererRef.current;
+    if (!renderer || !form) return;
+    let cancelled = false;
+    const isInitialPreview = previewUrlRef.current === null;
+    if (isInitialPreview) setIsPreviewRendering(true);
+    const cssWidth = form.width * zoom / 100;
+    const cssHeight = form.height * zoom / 100;
+    void renderer.render(cssWidth, cssHeight, devicePixelRatio).then(async (previewBlob) => {
+      if (!previewBlob || cancelled) return;
+      const nextUrl = await createDecodedMaterialOrderPreviewUrl(previewBlob);
+      if (cancelled || previewRendererRef.current !== renderer) {
+        URL.revokeObjectURL(nextUrl);
+        return;
+      }
+      replacePreviewUrl(nextUrl);
+      setIsPreviewRendering(false);
+    }).catch((error) => {
+      if (cancelled || previewRendererRef.current !== renderer) return;
+      console.error("Material order preview render failed", error);
+      setIsPreviewRendering(false);
+      if (!previewUrlRef.current) {
+        setLoadError(error instanceof Error ? error.message : "Lagerbestellung konnte nicht dargestellt werden.");
+      }
+    });
+    return () => {
+      cancelled = true;
+      renderer.cancelPendingRender();
+    };
+  }, [devicePixelRatio, form, previewRendererVersion, replacePreviewUrl, zoom]);
 
   const queueSave = useCallback((snapshot: MaterialOrderValues): Promise<void> => {
     const queuedValues = cloneValues(snapshot);
@@ -1131,7 +1162,7 @@ export function MaterialOrderDialog({ siteId, onClose, onCompleted }: MaterialOr
         ) : null}
 
         <div className="material-order-workspace">
-          {isLoading ? (
+          {isLoading || (!loadError && isPreviewRendering && !previewUrl) ? (
             <div className="material-order-loading" role="status">
               <LoaderCircle aria-hidden="true" className="is-spinning" />
               <strong>Lagerbestellung wird vorbereitet …</strong>
