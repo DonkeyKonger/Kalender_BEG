@@ -12,7 +12,7 @@ let activePrint: PreparedMaterialOrderPrint | null = null;
 const PRINT_STYLES = `
 #${PRINT_ROOT_ID} { display: none; }
 @media print {
-  @page material-order { size: A4; margin: 0; }
+  @page { size: A4 portrait; margin: 0; }
   html.${PRINT_CLASS}, html.${PRINT_CLASS} body {
     display: block !important; position: static !important;
     width: auto !important; height: auto !important; min-height: 0 !important;
@@ -22,17 +22,20 @@ const PRINT_STYLES = `
   html.${PRINT_CLASS} body > :not(#${PRINT_ROOT_ID}) { display: none !important; }
   html.${PRINT_CLASS} #${PRINT_ROOT_ID} {
     display: block !important; position: static !important;
-    width: 210mm !important; margin: 0 !important; padding: 0 !important;
+    /* Leave a small tolerance for physical-unit rounding in browser printing. */
+    width: 209.5mm !important; margin: 0 auto !important; padding: 0 !important;
   }
   html.${PRINT_CLASS} #${PRINT_ROOT_ID} canvas {
-    page: material-order; display: block !important;
-    width: 210mm !important; height: auto !important; max-height: 297mm !important;
-    margin: 0 !important; padding: 0 !important; border: 0 !important;
-    break-inside: avoid; break-after: page; page-break-after: always;
+    display: block !important;
+    /* Keep the page wide and inset its content: shrinking the root lets Safari
+       fit it back to full width, overflowing when headers/footers are enabled. */
+    width: 190mm !important; height: auto !important; max-height: 270mm !important;
+    margin: 0 auto !important; padding: 0 !important; border: 0 !important;
+    break-inside: avoid; page-break-inside: avoid;
     print-color-adjust: exact; -webkit-print-color-adjust: exact;
   }
-  html.${PRINT_CLASS} #${PRINT_ROOT_ID} canvas:last-child {
-    break-after: auto; page-break-after: auto;
+  html.${PRINT_CLASS} #${PRINT_ROOT_ID} canvas:not(:last-child) {
+    break-after: page; page-break-after: always;
   }
 }
 `;
