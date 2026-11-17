@@ -121,7 +121,7 @@ function ToolSelection({ direction, person, selected, tools, onToggle, onBack, o
   return <>
     <div className="wh-context"><button className="wh-button wh-quiet" type="button" onClick={onBack}><ArrowLeft size={20} />Monteur ändern</button><strong><UserRound size={20} />{person.display_name}</strong></div>
     <section className="wh-panel">
-      <div className="wh-section-heading"><h2>Werkzeuge auswählen</h2><p>{direction === "issue" ? "Verfügbare Werkzeuge im Lager. Werkzeuge mit offenen Meldungen sind ausgeschlossen." : "Diese Werkzeuge sind dir zugeordnet. Wähle aus, was du zurückgibst."}</p></div>
+      <div className="wh-section-heading"><h2>{direction === "issue" ? "Werkzeuge zum Mitnehmen aus dem Lager auswählen" : "Werkzeug zur Rückgabe ins Lager auswählen"}</h2></div>
       <SearchField label="Werkzeug suchen" value={search} onChange={list.search} placeholder="BEG-Nr. oder Werkzeug suchen …" />
       {selected.length > 0 && <div className="wh-selection" aria-label="Ausgewählte Werkzeuge">
         <span>{selected.length} ausgewählt</span>{selected.map((item) => <button type="button" key={item.id} onClick={() => onToggle(item)} aria-label={`${item.beg_number || "Ohne BEG-Nr."} · ${item.item_type || "Ohne Typ"} aus Auswahl entfernen`}>
