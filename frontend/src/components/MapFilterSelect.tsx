@@ -4,11 +4,13 @@ import { Check, ChevronDown } from "lucide-react";
 type Option = { value: string; label: string };
 
 /** A compact select with a square, field-aligned list instead of the OS menu. */
-export function MapFilterSelect({ label, value, options, disabled = false, onChange }: {
+export function MapFilterSelect({ label, ariaLabel, value, options, disabled = false, revealOptions = false, onChange }: {
   label: string;
+  ariaLabel?: string;
   value: string;
   options: Option[];
   disabled?: boolean;
+  revealOptions?: boolean;
   onChange: (value: string) => void;
 }) {
   const id = useId();
@@ -33,6 +35,10 @@ export function MapFilterSelect({ label, value, options, disabled = false, onCha
     if (expanded) document.getElementById(`${id}-option-${activeIndex}`)?.scrollIntoView({ block: "nearest" });
   }, [activeIndex, expanded, id]);
 
+  useEffect(() => {
+    if (expanded && revealOptions) document.getElementById(`${id}-options`)?.scrollIntoView({ block: "nearest" });
+  }, [expanded, revealOptions, id]);
+
   function choose(index: number) {
     if (options[index]) onChange(options[index].value);
     setOpen(false);
@@ -46,7 +52,7 @@ export function MapFilterSelect({ label, value, options, disabled = false, onCha
       <div className="site-map-select">
         <button
           type="button" role="combobox" className="site-map-select-trigger" id={id}
-          aria-labelledby={`${id}-label`} aria-haspopup="listbox" aria-expanded={expanded}
+          aria-label={ariaLabel} aria-labelledby={ariaLabel ? undefined : `${id}-label`} aria-haspopup="listbox" aria-expanded={expanded}
           aria-controls={`${id}-options`} disabled={disabled}
           aria-activedescendant={expanded && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
           onClick={() => { setActive(selected); setOpen((current) => !current); search.current.text = ""; }}

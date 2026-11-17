@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpFromLine, Check, CheckCircle2, ChevronRight, Search, Trash2, UserRound, Warehouse, X } from "lucide-react";
 
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
+import { MapFilterSelect } from "../components/MapFilterSelect";
 import { useWarehouseToolList } from "../hooks/useWarehouseToolList";
 import { api, ApiError } from "../lib/api";
 import { drawSignatureCanvas, getNormalizedSignaturePoint } from "../lib/signatureCanvas";
@@ -189,18 +190,18 @@ function BookingReview({ direction, person, items, returnReasons, onReasonChange
     <div className="wh-review-grid">
       <section className="wh-panel"><div className="wh-section-heading"><h2>{direction === "issue" ? "Das nimmst du mit" : "Das gibst du zurück"}</h2><p>{items.length} {items.length === 1 ? "Werkzeug" : "Werkzeuge"} · Bitte Auswahl prüfen.</p></div>
         <ul className={`wh-review-items ${direction === "return" ? "has-return-reasons" : ""}`}>{items.map((item) => <li key={item.id}>
-          <ToolMaterialCategoryIcon category={item.category} size={24} /><ToolLabel item={item} showIdentity />
-          {direction === "return" && <label className="wh-return-reason"><span>Rückgabegrund</span>
-            <select aria-label={`Rückgabegrund für ${item.beg_number || "ohne BEG-Nr."} · ${item.designation} (Eintrag ${item.id})`} value={returnReasons[item.id] ?? "warehouse"} disabled={frozen}
-              onChange={(event) => { onReasonChange(item.id, event.target.value as WarehouseReturnReason); setStrokes([]); pending.current = null; setError(""); }}>
-              {warehouseReturnReasons.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select></label>}
+          <ToolMaterialCategoryIcon category={item.category} size={24} /><ToolLabel item={item} showIdentity={direction === "issue"} returnSummary={direction === "return"} />
+          {direction === "return" && <div className="wh-return-reason">
+            <MapFilterSelect label="Rückgabegrund" ariaLabel={`Rückgabegrund für ${item.beg_number || "ohne BEG-Nr."} · ${item.designation} (Eintrag ${item.id})`} value={returnReasons[item.id] ?? "warehouse"} disabled={frozen}
+              options={warehouseReturnReasons} revealOptions
+              onChange={(value) => { onReasonChange(item.id, value as WarehouseReturnReason); setStrokes([]); pending.current = null; setError(""); }} />
+          </div>}
         </li>)}</ul>
       </section>
       <section className="wh-panel wh-signature-panel"><div className="wh-section-heading"><h2>Deine Unterschrift</h2><p>Ich bestätige {direction === "issue" ? "den Empfang" : "die angegebenen Rückgabegründe"} der aufgeführten Werkzeuge.</p></div>
         <strong className="wh-signer">{person.display_name}</strong>
-        <SignaturePad strokes={strokes} onChange={setStrokes} disabled={frozen} />
-        <button className="wh-button wh-quiet wh-clear-signature" type="button" disabled={frozen || !strokes.length} onClick={() => setStrokes([])}><Trash2 size={18} />Unterschrift leeren</button>
+        <SignaturePad strokes={strokes} onChange={setStrokes} disabled={frozen} largePlaceholder={direction === "return"} />
+        <button className="wh-button wh-quiet wh-clear-signature" type="button" disabled={frozen || !strokes.length} onClick={() => setStrokes([])}>{direction === "return" ? "Erneut versuchen" : <><Trash2 size={18} />Unterschrift leeren</>}</button>
         {error && <p className="wh-error" role="alert">{error}</p>}
         <button className="wh-button wh-primary wh-confirm" type="button" disabled={saving || !hasWarehouseSignature(strokes)} onClick={() => void save()}>
           {saving ? "Wird gespeichert …" : uncertain ? "Erneut bestätigen" : bookingTitle[direction]}<Check size={22} /></button>
@@ -210,7 +211,7 @@ function BookingReview({ direction, person, items, returnReasons, onReasonChange
   </>;
 }
 
-function SignaturePad({ strokes, onChange, disabled }: { strokes: CustomerSignatureStroke[]; onChange: (value: CustomerSignatureStroke[]) => void; disabled: boolean }) {
+function SignaturePad({ strokes, onChange, disabled, largePlaceholder = false }: { strokes: CustomerSignatureStroke[]; onChange: (value: CustomerSignatureStroke[]) => void; disabled: boolean; largePlaceholder?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef<number | null>(null);
   const live = useRef(strokes);
@@ -222,7 +223,8 @@ function SignaturePad({ strokes, onChange, disabled }: { strokes: CustomerSignat
     observer.observe(canvas.current);
     return () => observer.disconnect();
   }, []);
-  return <div className="wh-signature-wrap"><span>Hier mit dem Finger oder Stift unterschreiben</span>
+  return <div className="wh-signature-wrap">
+    {largePlaceholder ? strokes.length === 0 && <svg className="wh-signature-placeholder" viewBox="0 0 500 100" aria-hidden="true"><text x="250" y="50" textAnchor="middle" dominantBaseline="central">Unterschrift</text></svg> : <span>Hier mit dem Finger oder Stift unterschreiben</span>}
     <canvas ref={canvas} aria-label="Unterschrift zeichnen" className="wh-signature" onPointerDown={(event) => {
       if (disabled || drawing.current !== null || !event.isPrimary || event.button !== 0 || live.current.length >= 100) return;
       event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); drawing.current = event.pointerId;
@@ -244,9 +246,9 @@ function SignaturePad({ strokes, onChange, disabled }: { strokes: CustomerSignat
   </div>;
 }
 
-function ToolLabel({ item, showIdentity = false }: { item: WarehouseTool; showIdentity?: boolean }) {
+function ToolLabel({ item, showIdentity = false, returnSummary = false }: { item: WarehouseTool; showIdentity?: boolean; returnSummary?: boolean }) {
   return <span className="wh-tool-label"><strong>{item.designation}</strong>
-    <small>{[item.manufacturer, item.beg_number || "Ohne BEG-Nr.", item.item_type].filter(Boolean).join(" · ")}</small>
+    <small>{[item.manufacturer, item.beg_number || "Ohne BEG-Nr.", ...(!returnSummary ? [item.item_type] : [])].filter(Boolean).join(" · ")}</small>
     {showIdentity && <small>{warehouseToolIdentity(item)}</small>}</span>;
 }
 function SearchField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
