@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpFromLine, Check, CheckCircle2, ChevronRight, Search, UserRound, X } from "lucide-react";
 
+import { useAuth } from "../auth/AuthContext";
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
 import { MapFilterSelect } from "../components/MapFilterSelect";
 import { useWarehouseToolList } from "../hooks/useWarehouseToolList";
@@ -15,6 +16,8 @@ const directionTitle = { issue: "Werkzeugausgabe", return: "Werkzeugrückgabe" }
 const bookingTitle = { issue: "Ausgabe bestätigen", return: "Rückgabe bestätigen" };
 
 export function WarehousePage() {
+  const { logout } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
   const [direction, setDirection] = useState<WarehouseDirection | null>(null);
   const [person, setPerson] = useState<WarehousePerson | null>(null);
   const [selected, setSelected] = useState<WarehouseTool[]>([]);
@@ -40,6 +43,14 @@ export function WarehousePage() {
   }
   function cancel() {
     if (!dirty || window.confirm("Auswahl verwerfen und zurück zur Startseite? Es wird nichts gebucht.")) reset();
+  }
+  async function signOut() {
+    if (locked || loggingOut) return;
+    if (dirty && !window.confirm("Auswahl verwerfen und abmelden? Es wird nichts gebucht.")) return;
+    setLoggingOut(true);
+    try { await logout(); }
+    catch { /* AuthContext clears the local session even when the logout request fails. */ }
+    finally { setLoggingOut(false); }
   }
 
   return <div className="warehouse-workspace">
@@ -81,6 +92,9 @@ export function WarehousePage() {
         <button type="button" className="wh-button wh-primary" onClick={reset}>Fertig – zurück zum Start <ArrowRight size={22} /></button>
       </section>}
     </main>
+    <footer className="wh-maintenance-footer">
+      <button className="wh-maintenance-logout" type="button" disabled={locked || loggingOut} onClick={() => void signOut()}>Abmelden</button>
+    </footer>
   </div>;
 }
 
