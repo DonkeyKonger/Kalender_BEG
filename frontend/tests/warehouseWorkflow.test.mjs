@@ -57,20 +57,20 @@ test("physical device labels preserve both identifiers or fall back to inventory
   assert.equal(warehouseToolIdentity({ id: 2 }), "Eintrag #2");
 });
 
-test("warehouse tiles and issue review retain details; return review uses the short summary", async () => {
+test("warehouse selection tiles retain type; both reviews use the short summary", async () => {
   const page = await readFile(new URL("../src/pages/WarehousePage.tsx", import.meta.url), "utf8");
   const label = page.slice(page.indexOf("function ToolLabel("), page.indexOf("function SearchField("));
-  assert.match(label, /showIdentity = false/);
+  assert.match(label, /summary = false/);
   assert.match(label, /item\.beg_number/);
   assert.match(label, /item\.designation/);
-  assert.match(label, /!returnSummary \? \[item\.item_type\] : \[\]/);
+  assert.match(label, /!summary \? \[item\.item_type\] : \[\]/);
   assert.doesNotMatch(label, /className="wh-beg"/);
-  assert.match(label, /\{showIdentity && <small>\{warehouseToolIdentity\(item\)\}<\/small>\}/);
+  assert.doesNotMatch(label, /device_number|serial_number|warehouseToolIdentity/);
   const tiles = page.slice(page.indexOf('<div className="wh-tools-grid">'), page.indexOf('{!page.items.length'));
   assert.match(tiles, /<ToolLabel item=\{item\} \/>/);
   assert.doesNotMatch(tiles, /showIdentity|device_number|serial_number|warehouseToolIdentity/);
   const review = page.slice(page.indexOf("function BookingReview("), page.indexOf("function SignaturePad("));
-  assert.match(review, /<ToolLabel item=\{item\} showIdentity=\{direction === "issue"\} returnSummary=\{direction === "return"\} \/>/);
+  assert.match(review, /<ToolLabel item=\{item\} summary \/>/);
 });
 
 test("return reasons use exact labels, default to warehouse and only include selected tools", () => {

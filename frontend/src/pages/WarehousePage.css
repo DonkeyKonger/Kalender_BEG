@@ -100,7 +100,6 @@
 .wh-return-reason .site-map-select-options > button:last-child { border-radius: 0 0 9px 9px; }
 .wh-signer { display: block; font-size: 19px; margin-bottom: 16px; }
 .wh-signature-wrap { position: relative; border: 1px solid #c9dced; background: #fbfdff; border-radius: 12px; overflow: hidden; }
-.wh-signature-wrap > span { display: block; color: #627c96; font-size: 13px; padding: 14px 14px 0; pointer-events: none; }
 .wh-signature-placeholder { position: absolute; inset: 0 12px; width: calc(100% - 24px); height: 100%; pointer-events: none; fill: #b0bfd0; font-size: 78px; font-weight: 500; }
 .wh-signature { display: block; width: 100%; height: auto; aspect-ratio: 3; min-height: 180px; touch-action: none; }
 .wh-clear-signature { margin-block: 6px 12px; }
