@@ -27,19 +27,18 @@
   flex-direction: column; gap: 10px; text-align: left; min-height: 255px;
 }
 .wh-start-card-issue {
-  --wh-card-background: #f4e6e4; --wh-card-border: #c8a39e; --wh-card-ink: #6d3f3a;
-  --wh-card-icon: #ead2cf; --wh-card-hover: #eddad7;
+  --wh-card-background: #e9eeeb; --wh-card-border: #b4bfb9; --wh-card-ink: #46574f;
+  --wh-card-icon: #dce4df; --wh-card-hover: #e1e8e4;
 }
 .wh-start-card-return {
-  --wh-card-background: #e4eee8; --wh-card-border: #a3c0b0; --wh-card-ink: #315c4c;
-  --wh-card-icon: #cddfd5; --wh-card-hover: #d7e7dd;
+  --wh-card-background: #f0ebea; --wh-card-border: #c1b5b3; --wh-card-ink: #60504e;
+  --wh-card-icon: #e7dddb; --wh-card-hover: #e9e0df;
 }
 .wh-start-card .wh-muted { color: var(--wh-card-ink); }
 .wh-start-card .wh-large-icon { width: 64px; height: 64px; margin-bottom: 4px; background: var(--wh-card-icon); color: var(--wh-card-ink); }
 .wh-large-icon { display: grid; place-items: center; width: 76px; height: 76px; border-radius: 21px; background: #eaf2f9; color: var(--wh-blue); margin-bottom: 10px; }
 .wh-card-label { font-size: clamp(22px, 2.4vw, 29px); font-weight: 750; letter-spacing: -.4px; }
 .wh-start-link { display: flex; align-items: center; gap: 12px; font-weight: 700; padding-top: 12px; margin-top: auto; }
-.wh-start-note { display: flex; justify-content: center; align-items: center; gap: 10px; color: var(--wh-muted); font-size: 14px; margin-top: 20px; }
 .wh-button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; padding: 12px 19px; border: 1px solid #ccdaea; border-radius: 12px; background: white; color: var(--wh-ink); font-weight: 650 !important; }
 .wh-button svg { flex-shrink: 0; }
 .wh-button.wh-quiet { background: transparent; border-color: transparent; padding-inline: 8px; color: var(--wh-muted); }
@@ -134,7 +133,6 @@
   .wh-intro { margin-bottom: 16px; }
   .wh-start-grid, .wh-tools-grid, .wh-people-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .wh-start-card { padding: 20px; min-height: 225px; }
-  .wh-start-note { font-size: 12px; }
   .wh-panel { padding: 18px; }
   .wh-steps { gap: 9px; font-size: 13px; }
   .wh-steps li { gap: 6px; }

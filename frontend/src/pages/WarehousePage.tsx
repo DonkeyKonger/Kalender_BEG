@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpFromLine, Check, CheckCircle2, ChevronRight, Search, Trash2, UserRound, Warehouse, X } from "lucide-react";
+import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpFromLine, Check, CheckCircle2, ChevronRight, Search, Trash2, UserRound, X } from "lucide-react";
 
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
 import { MapFilterSelect } from "../components/MapFilterSelect";
@@ -57,7 +57,6 @@ export function WarehousePage() {
             <span className="wh-muted">Wieder im Lager abgeben</span><span className="wh-start-link">Rückgabe starten <ArrowRight size={22} /></span>
           </button>
         </div>
-        <p className="wh-start-note"><Warehouse size={19} aria-hidden="true" />Monteur wählen · Werkzeug auswählen · Unterschreiben</p>
       </>}
       {direction && !receipt && <>
         <div className="wh-flow-heading"><h1>{directionTitle[direction]}</h1>
