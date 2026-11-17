@@ -39,17 +39,17 @@ test("selection limit remains removable", () => {
   assert.equal(toggleWarehouseTool(items, items[0]).length, 99);
 });
 
-test("selected warehouse tool bubbles show only BEG number and type with fallbacks", async () => {
+test("selected warehouse tool bubbles show designation then BEG number with fallbacks", async () => {
   const page = await readFile(new URL("../src/pages/WarehousePage.tsx", import.meta.url), "utf8");
   const start = page.indexOf('{selected.length > 0 && <div className="wh-selection"');
   const end = page.indexOf("{selected.length === 100", start);
   assert.notEqual(start, -1, "selection bubble block exists");
   assert.notEqual(end, -1, "selection bubble block has a stable boundary");
   const selection = page.slice(start, end);
-  assert.match(selection, /aria-label=\{`\$\{item\.beg_number \|\| "Ohne BEG-Nr\."\} · \$\{item\.item_type \|\| "Ohne Typ"\} aus Auswahl entfernen`\}/);
-  assert.match(selection, /\{item\.beg_number \|\| "Ohne BEG-Nr\."\} · \{item\.item_type \|\| "Ohne Typ"\}<X size=\{16\} \/>/);
+  assert.match(selection, /aria-label=\{`\$\{item\.designation \|\| "Ohne Typ"\} \| \$\{item\.beg_number \|\| "Ohne BEG-Nr\."\} aus Auswahl entfernen`\}/);
+  assert.match(selection, /\{item\.designation \|\| "Ohne Typ"\} \| \{item\.beg_number \|\| "Ohne BEG-Nr\."\}<X size=\{16\} \/>/);
   assert.match(selection, /onClick=\{\(\) => onToggle\(item\)\}/);
-  assert.doesNotMatch(selection, /designation|manufacturer|device_number|serial_number|warehouseToolIdentity/);
+  assert.doesNotMatch(selection, /item_type|manufacturer|device_number|serial_number|warehouseToolIdentity/);
 });
 
 test("physical device labels preserve both identifiers or fall back to inventory id", () => {

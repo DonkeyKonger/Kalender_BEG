@@ -138,8 +138,8 @@ function ToolSelection({ direction, person, selected, tools, onToggle, onBack, o
       <div className="wh-section-heading"><h2>{direction === "issue" ? "Werkzeuge zum Mitnehmen aus dem Lager auswählen" : "Werkzeug zur Rückgabe ins Lager auswählen"}</h2></div>
       <SearchField label="Werkzeug suchen" value={search} onChange={list.search} placeholder="BEG-Nr. oder Werkzeug suchen …" />
       {selected.length > 0 && <div className="wh-selection" aria-label="Ausgewählte Werkzeuge">
-        <span>{selected.length} ausgewählt</span>{selected.map((item) => <button type="button" key={item.id} onClick={() => onToggle(item)} aria-label={`${item.beg_number || "Ohne BEG-Nr."} · ${item.item_type || "Ohne Typ"} aus Auswahl entfernen`}>
-          {item.beg_number || "Ohne BEG-Nr."} · {item.item_type || "Ohne Typ"}<X size={16} />
+        <span>{selected.length} ausgewählt</span>{selected.map((item) => <button type="button" key={item.id} onClick={() => onToggle(item)} aria-label={`${item.designation || "Ohne Typ"} | ${item.beg_number || "Ohne BEG-Nr."} aus Auswahl entfernen`}>
+          {item.designation || "Ohne Typ"} | {item.beg_number || "Ohne BEG-Nr."}<X size={16} />
         </button>)}
       </div>}
       {selected.length === 100 && <p role="status">Maximal 100 Einträge pro Vorgang.</p>}
