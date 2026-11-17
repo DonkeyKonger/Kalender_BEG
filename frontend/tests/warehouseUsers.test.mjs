@@ -22,7 +22,7 @@ test("warehouse opens its own protected workspace outside the calendar shell", a
   assert.match(app, /ProtectedRoute roles=\{\["admin", "project_manager", "office", "monteur"\]\}/);
   assert.match(await source("auth/permissions.ts"), /user\.role === "warehouse"[\s\S]*?return "\/warehouse"/);
   const warehouse = await source("pages/WarehousePage.tsx");
-  assert.match(warehouse, /logout\(\)/);
+  assert.doesNotMatch(warehouse, /warehouse-header|BEG · Lager|Abmelden|logout\(\)/);
   assert.doesNotMatch(warehouse, /AppShell|api\.listPersons|api\.listToolMaterialItems/);
 });
 

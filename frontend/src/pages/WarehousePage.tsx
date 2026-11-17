@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpFromLine, Check, CheckCircle2, ChevronRight, LogOut, Search, Trash2, UserRound, Warehouse, X } from "lucide-react";
+import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpFromLine, Check, CheckCircle2, ChevronRight, Search, Trash2, UserRound, Warehouse, X } from "lucide-react";
 
-import { useAuth } from "../auth/AuthContext";
 import { ToolMaterialCategoryIcon } from "../components/ToolMaterialCategoryIcon";
 import { useWarehouseToolList } from "../hooks/useWarehouseToolList";
 import { api, ApiError } from "../lib/api";
@@ -15,7 +14,6 @@ const directionTitle = { issue: "Werkzeugausgabe", return: "Werkzeugrückgabe" }
 const bookingTitle = { issue: "Ausgabe bestätigen", return: "Rückgabe bestätigen" };
 
 export function WarehousePage() {
-  const { user, logout } = useAuth();
   const [direction, setDirection] = useState<WarehouseDirection | null>(null);
   const [person, setPerson] = useState<WarehousePerson | null>(null);
   const [selected, setSelected] = useState<WarehouseTool[]>([]);
@@ -44,25 +42,16 @@ export function WarehousePage() {
   }
 
   return <div className="warehouse-workspace">
-    <header className="warehouse-header">
-      <div className="warehouse-brand">
-        <img src="/beg-sidebar-logo.svg" alt="BEG Logo" width={44} height={44} />
-        <div><strong>BEG · Lager</strong><span>{user?.display_name}</span></div>
-      </div>
-      <button className="wh-button wh-quiet" type="button" disabled={locked} onClick={() => {
-        if (!dirty || window.confirm("Auswahl verwerfen und abmelden?")) void logout();
-      }}><LogOut size={20} aria-hidden="true" />Abmelden</button>
-    </header>
     <main className="warehouse-main">
       {!direction && !receipt && <>
         <div className="wh-intro"><h1>Was möchtest du tun?</h1>
           <p>Werkzeug abholen oder zurückgeben – in drei einfachen Schritten.</p></div>
         <div className="wh-start-grid">
-          <button className="wh-start-card" type="button" onClick={() => setDirection("issue")}>
+          <button className="wh-start-card wh-start-card-issue" type="button" onClick={() => setDirection("issue")}>
             <span className="wh-large-icon"><ArrowUpFromLine size={38} /></span><span className="wh-card-label">Werkzeug abholen</span>
             <span className="wh-muted">Vom Lager mitnehmen</span><span className="wh-start-link">Ausgabe starten <ArrowRight size={22} /></span>
           </button>
-          <button className="wh-start-card" type="button" onClick={() => setDirection("return")}>
+          <button className="wh-start-card wh-start-card-return" type="button" onClick={() => setDirection("return")}>
             <span className="wh-large-icon"><ArrowDownToLine size={38} /></span><span className="wh-card-label">Werkzeug zurückgeben</span>
             <span className="wh-muted">Wieder im Lager abgeben</span><span className="wh-start-link">Rückgabe starten <ArrowRight size={22} /></span>
           </button>
@@ -70,7 +59,7 @@ export function WarehousePage() {
         <p className="wh-start-note"><Warehouse size={19} aria-hidden="true" />Monteur wählen · Werkzeug auswählen · Unterschreiben</p>
       </>}
       {direction && !receipt && <>
-        <div className="wh-flow-heading"><div><span className="wh-eyebrow">LAGER</span><h1>{directionTitle[direction]}</h1></div>
+        <div className="wh-flow-heading"><h1>{directionTitle[direction]}</h1>
           <button className="wh-button wh-quiet" type="button" disabled={locked} onClick={cancel}><X size={20} />Abbrechen</button></div>
         <ol className="wh-steps" aria-label="Fortschritt">
           {["Monteur", "Werkzeuge", "Unterschrift"].map((label, index) => <li key={label} className={step === index + 1 ? "is-current" : step > index + 1 ? "is-done" : ""} aria-current={step === index + 1 ? "step" : undefined}>
