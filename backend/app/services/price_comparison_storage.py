@@ -7,7 +7,7 @@ with the calendar's Graph client. Local storage exists only in isolated tests.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import fcntl
 import hashlib
@@ -27,6 +27,7 @@ from app.services.material_order_graph_runtime import get_material_order_storage
 FOLDER_NAME = "Preisvergleich"
 FOLDERS = {"offers": "angebote", "datanorm": "datanorm", "cache": "cache"}
 STATE_NAME = "calendar_state.json"
+ONLINE_IMPORT_NAME = "online_import.json"
 MAX_FILE_BYTES = 40 * 1024 * 1024
 MAX_BATCH_BYTES = 160 * 1024 * 1024
 LOCK_KEY = 5342519017
@@ -153,6 +154,7 @@ class Snapshot:
     state: dict
     state_file: StoredFile | None
     revision: str
+    cache_files: list[StoredFile] = field(default_factory=list)
 
     def find(self, kind: str, name: str) -> StoredFile:
         safe_name(name)
@@ -160,6 +162,67 @@ class Snapshot:
         if len(matches) != 1:
             raise HTTPException(404, "Datei im Preisvergleich nicht gefunden.")
         return matches[0]
+
+    def find_cache(self, name: str) -> StoredFile:
+        safe_name(name)
+        matches = [f for f in self.cache_files if f.name == name]
+        if len(matches) != 1:
+            raise HTTPException(422, "Importierter Preisvergleich-Datenstand fehlt.")
+        return matches[0]
+
+
+def _validate_online_import(value: object) -> dict | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict) or value.get("version") != 1:
+        raise ValueError("invalid online import")
+    if value.get("payload_name") != ONLINE_IMPORT_NAME:
+        raise ValueError("invalid online import payload")
+    digest = value.get("payload_sha256")
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise ValueError("invalid online import digest")
+    bindings = value.get("offer_bindings")
+    if not isinstance(bindings, dict) or len(bindings) > 5000:
+        raise ValueError("invalid online import bindings")
+    for name, binding in bindings.items():
+        safe_name(name)
+        if (
+            not isinstance(binding, dict)
+            or binding.get("mode") not in {"snapshot", "excluded"}
+            or not isinstance(binding.get("version"), str)
+            or not binding["version"]
+            or not isinstance(binding.get("modified", ""), str)
+        ):
+            raise ValueError("invalid online import binding")
+    datanorm = value.get("datanorm_binding")
+    if datanorm is not None:
+        if (
+            not isinstance(datanorm, dict)
+            or not isinstance(datanorm.get("name"), str)
+            or not isinstance(datanorm.get("version"), str)
+            or not datanorm["version"]
+        ):
+            raise ValueError("invalid online import datanorm binding")
+        safe_name(datanorm["name"])
+    virtual_sources = value.get("virtual_sources")
+    if (
+        not isinstance(virtual_sources, list)
+        or len(virtual_sources) > 100
+        or len(set(virtual_sources)) != len(virtual_sources)
+    ):
+        raise ValueError("invalid online import virtual sources")
+    for name in virtual_sources:
+        if not isinstance(name, str):
+            raise ValueError("invalid online import virtual source")
+        safe_name(name)
+    for key in ("physical_frames_active", "datanorm_frame_active"):
+        if not isinstance(value.get(key), bool):
+            raise ValueError("invalid online import mode")
+    return value
 
 
 class LocalPriceStorage:
@@ -525,6 +588,7 @@ def snapshot(store) -> Snapshot:
         "deleted_articles": {},
         "frozen_metrics": {},
         "active_datanorm": None,
+        "online_import": None,
     }
     if state_file:
         try:
@@ -567,15 +631,29 @@ def snapshot(store) -> Snapshot:
     ):
         if not isinstance(state.get(key), dict):
             raise HTTPException(422, "Gespeicherte Preisvergleich-Einstellungen sind ungültig.")
+    try:
+        state["online_import"] = _validate_online_import(state.get("online_import"))
+    except (ValueError, HTTPException) as exc:
+        raise HTTPException(
+            422, "Gespeicherter Online-Preisvergleich-Import ist ungültig."
+        ) from exc
+    referenced_cache = {
+        state["online_import"]["payload_name"]
+        if state["online_import"] is not None
+        else None
+    }
     identities = [
         (f.kind, f.name, f.version)
         for f in files + cache_files
-        if f.kind != "cache" or f.name == STATE_NAME or f.name in LEGACY_SETTINGS
+        if f.kind != "cache"
+        or f.name == STATE_NAME
+        or f.name in LEGACY_SETTINGS
+        or f.name in referenced_cache
     ]
     revision = hashlib.sha256(
         json.dumps(sorted(identities), ensure_ascii=False).encode()
     ).hexdigest()
-    return Snapshot(files, state, state_file, revision)
+    return Snapshot(files, state, state_file, revision, cache_files)
 
 
 def require_revision(snap: Snapshot, expected: str):

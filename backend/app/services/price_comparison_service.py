@@ -20,6 +20,10 @@ import pandas as pd
 
 from app.core.config import settings
 from app.services import price_comparison_core as core
+from app.services.price_comparison_online_import import (
+    OnlineImportFrames,
+    load_online_import,
+)
 from app.services.price_comparison_storage import (
     MAX_FILE_BYTES,
     Snapshot,
@@ -34,6 +38,10 @@ SOURCE_VERSION = "4ed988f"
 OFFER_TYPES = ("Erstangebot", "Folgeangebot", "Verhandeltes Angebot")
 CACHE_VERSION = "4ed988f-v1"
 MAX_PARSE_WORKERS = 4
+
+
+class RollbackRecoveryError(RuntimeError):
+    """A source restore succeeded, but shared state needs manual recovery."""
 
 
 @contextmanager
@@ -105,18 +113,99 @@ def references_to_api(rows):
 
 
 @dataclass
+class OfferSource:
+    name: str
+    item: StoredFile | None
+    original_available: bool
+    imported: bool
+
+
+@dataclass
 class PriceData:
     snap: Snapshot
     datanorm: pd.DataFrame
     raw_prices: pd.DataFrame
     prices: pd.DataFrame
     warnings: list[str]
+    offer_sources: list[OfferSource]
+    unavailable_sources: list[str]
 
 
 class PriceComparisonService:
     def __init__(self, store, *, cache_dir=None):
         self.store = store
         self.cache_dir = Path(cache_dir or settings.price_comparison_cache_dir)
+
+    def import_frames(self, snap: Snapshot) -> OnlineImportFrames | None:
+        return load_online_import(self.store, snap, self.cache_dir)
+
+    @staticmethod
+    def _binding_matches(item: StoredFile, binding: object) -> bool:
+        return (
+            isinstance(binding, dict)
+            and item.version == binding.get("version")
+        )
+
+    def file_included(self, snap: Snapshot, item: StoredFile) -> bool:
+        config = snap.state.get("online_import")
+        if not config or not config["physical_frames_active"] or item.kind != "offers":
+            return True
+        binding = config["offer_bindings"].get(item.name)
+        return not (
+            self._binding_matches(item, binding)
+            and binding.get("mode") == "excluded"
+        )
+
+    def _offer_sources(
+        self,
+        snap: Snapshot,
+        imported: OnlineImportFrames | None,
+    ) -> list[OfferSource]:
+        physical = {item.name: item for item in snap.files if item.kind == "offers"}
+        config = snap.state.get("online_import")
+        if config is None or imported is None:
+            return [
+                OfferSource(item.name, item, True, False)
+                for item in snap.files
+                if item.kind == "offers"
+            ]
+
+        sources: dict[str, OfferSource] = {}
+        live: list[StoredFile] = []
+        if config["physical_frames_active"]:
+            for item in physical.values():
+                binding = config["offer_bindings"].get(item.name)
+                if self._binding_matches(item, binding):
+                    if binding["mode"] == "excluded":
+                        continue
+                    if item.name not in imported.authoritative_offer_sources:
+                        raise HTTPException(422, "Importierter Online-Preisvergleich ist ungültig.")
+                    sources[item.name] = OfferSource(item.name, item, True, True)
+                else:
+                    live.append(item)
+        else:
+            live.extend(physical.values())
+
+        for name in config["virtual_sources"]:
+            if name not in physical:
+                if name not in imported.authoritative_offer_sources:
+                    raise HTTPException(422, "Importierter Online-Preisvergleich ist ungültig.")
+                sources[name] = OfferSource(name, None, False, True)
+
+        result = [
+            OfferSource(item.name, item, True, False)
+            for item in sorted(
+                live,
+                key=lambda candidate: (candidate.modified, candidate.name),
+                reverse=True,
+            )
+        ]
+        result.extend(
+            sources[name]
+            for name in imported.offer_source_order
+            if name in sources
+        )
+        return result
 
     def status(self):
         if not self.store.configured:
@@ -131,12 +220,19 @@ class PriceComparisonService:
                 "revision": "",
             }
         snap = snapshot(self.store)
+        physical_names = {item.name for item in snap.files if item.kind == "offers"}
+        virtual = set()
+        config = snap.state.get("online_import")
+        if config is not None:
+            virtual = set(config["virtual_sources"]) - physical_names
         return {
             "configured": True,
             "mode": self.store.mode,
             "folder_name": "Preisvergleich",
             "source_version": SOURCE_VERSION,
-            "offer_count": sum(f.kind == "offers" for f in snap.files),
+            "offer_count": sum(
+                f.kind == "offers" and self.file_included(snap, f) for f in snap.files
+            ) + len(virtual),
             "datanorm_count": sum(f.kind == "datanorm" for f in snap.files),
             "active_datanorm": snap.state["active_datanorm"],
             "revision": snap.revision,
@@ -229,35 +325,67 @@ class PriceComparisonService:
 
     def load(self, snap=None, *, force=False) -> PriceData:
         snap = snap or snapshot(self.store)
+        imported = self.import_frames(snap)
         datanorm = pd.DataFrame()
         if snap.state["active_datanorm"]:
             active = snap.find("datanorm", snap.state["active_datanorm"])
-            datanorm = self.parsed(active, force=force)
+            config = snap.state.get("online_import")
+            binding = config.get("datanorm_binding") if config else None
+            use_import = bool(
+                imported is not None
+                and config["datanorm_frame_active"]
+                and isinstance(binding, dict)
+                and binding.get("name") == active.name
+                and binding.get("version") == active.version
+                and imported.active_datanorm == active.name
+            )
+            datanorm = imported.datanorm.copy() if use_import else self.parsed(active, force=force)
         frames, warnings = [], []
-        offer_items = [item for item in snap.files if item.kind == "offers"]
+        offer_sources = self._offer_sources(snap, imported)
+        imported_names = {
+            source.name for source in offer_sources if source.imported
+        }
+        if imported_names:
+            imported_frame = imported.offers[
+                imported.offers["Quelle"].astype(str).isin(imported_names)
+            ].copy()
+            for source in imported_names:
+                deleted = snap.state["deleted_articles"].get(source, [])
+                if deleted:
+                    imported_frame = imported_frame[
+                        ~(
+                            imported_frame["Quelle"].astype(str).eq(source)
+                            & imported_frame["Artikelnummer"]
+                            .astype(str)
+                            .map(core.clean_artnr)
+                            .isin(deleted)
+                        )
+                    ]
+            frames.append(imported_frame)
+        live_sources = [source for source in offer_sources if not source.imported]
 
-        def parse_offer(item):
+        def parse_offer(source):
             try:
-                frame = self.parsed(item, force=force).copy()
+                frame = self.parsed(source.item, force=force).copy()
             except HTTPException as exc:
                 if exc.status_code != 422:
                     raise
                 return None, str(exc.detail)
-            deleted = snap.state["deleted_articles"].get(item.name, [])
+            deleted = snap.state["deleted_articles"].get(source.name, [])
             if deleted:
                 frame = frame[
                     ~frame["Artikelnummer"].astype(str).map(core.clean_artnr).isin(deleted)
                 ]
             return frame, None
 
-        if len(offer_items) > 1:
+        if len(live_sources) > 1:
             with ThreadPoolExecutor(
-                max_workers=min(MAX_PARSE_WORKERS, len(offer_items)),
+                max_workers=min(MAX_PARSE_WORKERS, len(live_sources)),
                 thread_name_prefix="price-parse",
             ) as executor:
-                parsed_offers = list(executor.map(parse_offer, offer_items))
+                parsed_offers = list(executor.map(parse_offer, live_sources))
         else:
-            parsed_offers = [parse_offer(item) for item in offer_items]
+            parsed_offers = [parse_offer(source) for source in live_sources]
 
         # executor.map preserves the snapshot order, matching the former
         # sequential concatenation while allowing bounded first-load parsing.
@@ -265,9 +393,19 @@ class PriceComparisonService:
             if warning is not None:
                 warnings.append(warning)
             elif frame is not None:
-                frames.append(frame)
-        raw = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-        if not raw.empty:
+                frames.append(
+                    frame.sort_values("Datum", ascending=False, kind="stable")
+                    if imported_names
+                    else frame
+                )
+        raw = (
+            pd.concat(frames, ignore_index=not bool(imported_names))
+            if frames
+            else pd.DataFrame()
+        )
+        if not raw.empty and not imported_names:
+            # Preserve the original viewer/calendar algorithm, including its
+            # default pandas sorting implementation, for non-imported data.
             raw = raw.sort_values("Datum", ascending=False)
         prices = core.prepare_prices(
             raw,
@@ -277,7 +415,16 @@ class PriceComparisonService:
             snap.state["manual_prices"],
             snap.state["offer_types"],
         )
-        return PriceData(snap, datanorm, raw, prices, warnings)
+        unavailable = [source.name for source in offer_sources if not source.original_available]
+        return PriceData(
+            snap,
+            datanorm,
+            raw,
+            prices,
+            warnings,
+            offer_sources,
+            unavailable,
+        )
 
     def clusters(self, data):
         if "Artikelcluster" not in data.datanorm.columns:
@@ -296,6 +443,7 @@ class PriceComparisonService:
             clusters=self.clusters(data),
             active_file=data.snap.state["active_datanorm"],
             warnings=data.warnings,
+            unavailable_sources=data.unavailable_sources,
         )
 
     def suggestions(self, references, **query):
@@ -308,6 +456,7 @@ class PriceComparisonService:
             meta=meta,
             clusters=self.clusters(data),
             warnings=data.warnings,
+            unavailable_sources=data.unavailable_sources,
         )
 
     def offers_list(self, data):
@@ -337,36 +486,40 @@ class PriceComparisonService:
             calculated = core.offer_percent_metrics(data.prices, sources=missing_sources)
             fallback_metrics.update({str(row["Quelle"]): row for row in records(calculated)})
         result = []
-        for item in sorted(
-            (f for f in data.snap.files if f.kind == "offers"),
-            key=lambda f: (f.modified, f.name),
-            reverse=True,
-        ):
-            frame = raw[raw["Quelle"].astype(str).eq(item.name)]
+        offer_sources = data.offer_sources
+        if data.snap.state.get("online_import") is None:
+            offer_sources = sorted(
+                offer_sources,
+                key=lambda source: (source.item.modified, source.name),
+                reverse=True,
+            )
+        for source in offer_sources:
+            frame = raw[raw["Quelle"].astype(str).eq(source.name)]
             if frame.empty:
                 continue
             row = frame.iloc[0]
             date = pd.to_datetime(frame["Datum"], errors="coerce").max()
             totals = pd.to_numeric(frame.get("Gesamt (netto)"), errors="coerce")
             net = totals.max() if isinstance(totals, pd.Series) else None
-            frozen = frozen_metrics.get(item.name)
-            if item.name in missing_sources:
-                frozen = fallback_metrics[item.name]
+            frozen = frozen_metrics.get(source.name)
+            if source.name in missing_sources:
+                frozen = fallback_metrics[source.name]
             if not isinstance(frozen, dict):
                 frozen = {}
             result.append(
                 {
-                    "source": item.name,
+                    "source": source.name,
                     "project": str(row.get("Projekt") or "—"),
                     "offer_number": str(row.get("Angebot") or ""),
                     "date": date.date().isoformat() if pd.notna(date) else None,
-                    "offer_type": data.snap.state["offer_types"].get(item.name, "Erstangebot"),
-                    "discount": data.snap.state["discounts"].get(item.name, 0),
-                    "align_netto": bool(data.snap.state["align_netto"].get(item.name, False)),
+                    "offer_type": data.snap.state["offer_types"].get(source.name, "Erstangebot"),
+                    "discount": data.snap.state["discounts"].get(source.name, 0),
+                    "align_netto": bool(data.snap.state["align_netto"].get(source.name, False)),
                     "position_count": int(frame["Artikelnummer"].nunique()),
                     "total_net": float(net) if pd.notna(net) else None,
                     "price_change": frozen.get("PV_avg_pct_wert"),
                     "price_change_positions": frozen.get("PV_avg_pct_pos"),
+                    "original_available": source.original_available,
                 }
             )
         return result
@@ -390,12 +543,20 @@ class PriceComparisonService:
 
     def positions(self, source):
         data = self.load()
-        data.snap.find("offers", source)
+        if source not in {candidate.name for candidate in data.offer_sources}:
+            raise HTTPException(404, "Angebot im Preisvergleich nicht gefunden.")
         offer = next((o for o in self.offers_list(data) if o["source"] == source), None)
         if offer is None:
             raise HTTPException(422, "Das Angebot enthält keine lesbaren Positionen.")
         frame = core.offer_positions(source, data.datanorm, data.raw_prices, data.snap.state)
-        return table(frame, data.snap, limit=len(frame), offer=offer, warnings=data.warnings)
+        return table(
+            frame,
+            data.snap,
+            limit=len(frame),
+            offer=offer,
+            warnings=data.warnings,
+            unavailable_sources=data.unavailable_sources,
+        )
 
     def articles(self, *, search="", limit=50):
         data = self.load()
@@ -434,10 +595,34 @@ class PriceComparisonService:
                 "median": float(values.median()) if not values.empty else None,
             }
         )
-        return table(history, data.snap, limit=len(history), article=article, statistics=stats)
+        return table(
+            history,
+            data.snap,
+            limit=len(history),
+            article=article,
+            statistics=stats,
+            unavailable_sources=data.unavailable_sources,
+        )
 
     def files(self):
         snap = snapshot(self.store)
+        physical_names = {file.name for file in snap.files if file.kind == "offers"}
+        config = snap.state.get("online_import")
+        virtual_files = []
+        if config is not None:
+            virtual_files = [
+                {
+                    "kind": "offers",
+                    "name": name,
+                    "size": 0,
+                    "modified": "",
+                    "active": False,
+                    "original_available": False,
+                    "included_in_comparison": True,
+                }
+                for name in config["virtual_sources"]
+                if name not in physical_names
+            ]
         return {
             "files": [
                 {
@@ -446,9 +631,11 @@ class PriceComparisonService:
                     "size": f.size,
                     "modified": f.modified,
                     "active": f.kind == "datanorm" and f.name == snap.state["active_datanorm"],
+                    "original_available": True,
+                    "included_in_comparison": self.file_included(snap, f),
                 }
                 for f in snap.files
-            ],
+            ] + virtual_files,
             "revision": snap.revision,
         }
 
@@ -474,7 +661,9 @@ class PriceComparisonService:
         safe_name(source)
 
         def apply(snap):
-            snap.find("offers", source)
+            current = self.load(snap)
+            if source not in {candidate.name for candidate in current.offer_sources}:
+                raise HTTPException(404, "Angebot im Preisvergleich nicht gefunden.")
             state = snap.state
             if "offer_type" in patch:
                 if patch["offer_type"] not in OFFER_TYPES:
@@ -500,7 +689,9 @@ class PriceComparisonService:
             manual = patch.get("manual_prices") or {}
             deleted = patch.get("delete_articles") or []
             if manual or deleted:
-                source_frame = self.parsed(snap.find("offers", source))
+                source_frame = current.raw_prices[
+                    current.raw_prices["Quelle"].astype(str).eq(source)
+                ]
                 articles = set(source_frame["Artikelnummer"].astype(str).map(core.clean_artnr))
                 if any(core.clean_artnr(a) not in articles for a in list(manual) + deleted):
                     raise HTTPException(422, "Artikel gehört nicht zu diesem Angebot.")
@@ -562,7 +753,7 @@ class PriceComparisonService:
         target_sources = (
             [str(source) for source in sources]
             if sources is not None
-            else [item.name for item in snap.files if item.kind == "offers"]
+            else [source.name for source in data.offer_sources]
         )
         target_sources = list(dict.fromkeys(target_sources))
         for source in target_sources:
@@ -576,6 +767,98 @@ class PriceComparisonService:
         frame = core.offer_percent_metrics(data.prices, sources=sources)
         for row in records(frame):
             snap.state["frozen_metrics"][row["Quelle"]] = row
+
+    @staticmethod
+    def _offer_number(frame: pd.DataFrame) -> str | None:
+        numbers = frame.get("Angebot", pd.Series(dtype=object)).dropna().astype(str)
+        return next((number.strip() for number in numbers if number.strip()), None)
+
+    @staticmethod
+    def _remove_offer_settings(state: dict, source: str) -> None:
+        for key in (
+            "discounts",
+            "offer_types",
+            "align_netto",
+            "deleted_articles",
+            "frozen_metrics",
+        ):
+            state[key].pop(source, None)
+        state["manual_prices"] = {
+            key: value
+            for key, value in state["manual_prices"].items()
+            if not key.startswith(source + "||")
+        }
+
+    @staticmethod
+    def _same_stored_file(left: StoredFile | None, right: StoredFile | None) -> bool:
+        if left is None or right is None:
+            return left is right
+        return (
+            left.name == right.name
+            and left.version == right.version
+            and left.item_id == right.item_id
+        )
+
+    def _restore_import_bindings(
+        self,
+        *,
+        original_state_file: StoredFile | None,
+        original_state: dict,
+        attempted_state: dict,
+        restored_versions: list[tuple[StoredFile, StoredFile]],
+    ) -> None:
+        if not original_state.get("online_import"):
+            return
+        try:
+            current = snapshot(self.store)
+        except Exception as exc:
+            raise RollbackRecoveryError(
+                "Preisdateien wurden wiederhergestellt, aber der aktuelle "
+                "Preisvergleich-Zustand konnte nicht sicher geprüft werden. "
+                "Bitte den Preisvergleich vor weiteren Änderungen manuell prüfen."
+            ) from exc
+        state_unchanged = self._same_stored_file(
+            original_state_file, current.state_file
+        )
+        state_is_our_attempt = current.state == attempted_state
+        if not state_unchanged and not state_is_our_attempt:
+            raise RollbackRecoveryError(
+                "Preisdateien wurden wiederhergestellt, aber calendar_state.json "
+                "wurde zwischenzeitlich anderweitig geändert. Der fremde Zustand "
+                "wurde nicht überschrieben; bitte den Preisvergleich manuell prüfen."
+            )
+        if state_unchanged and not restored_versions:
+            # The failed state write did not become visible and a newly
+            # created source was removed again.  Nothing shared needs repair.
+            return
+
+        current.state = deepcopy(original_state)
+        config = current.state["online_import"]
+        for previous, restored in restored_versions:
+            binding = config["offer_bindings"].get(previous.name)
+            if (
+                previous.kind == "offers"
+                and isinstance(binding, dict)
+                and binding.get("version") == previous.version
+            ):
+                binding["version"] = restored.version
+                binding["modified"] = restored.modified
+            datanorm_binding = config.get("datanorm_binding")
+            if (
+                previous.kind == "datanorm"
+                and isinstance(datanorm_binding, dict)
+                and datanorm_binding.get("name") == previous.name
+                and datanorm_binding.get("version") == previous.version
+            ):
+                datanorm_binding["version"] = restored.version
+        try:
+            save_state(self.store, current)
+        except Exception as exc:
+            raise RollbackRecoveryError(
+                "Preisdateien wurden wiederhergestellt, aber ihre neuen Versionen "
+                "konnten nicht sicher in calendar_state.json gebunden werden. "
+                "Bitte den Preisvergleich vor weiteren Änderungen manuell prüfen."
+            ) from exc
 
     def upload(self, kind, uploads, expected_revision, db=None, *, confirmed_duplicates=None):
         if kind not in ("offers", "datanorm"):
@@ -598,11 +881,17 @@ class PriceComparisonService:
         with self.store.lock(db):
             snap = snapshot(self.store)
             require_revision(snap, expected_revision)
+            original_state = deepcopy(snap.state)
             existing_groups: dict[str, list[StoredFile]] = {}
             for item in snap.files:
                 if item.kind == kind:
                     existing_groups.setdefault(item.name.casefold(), []).append(item)
             uploaded_by_casefold = {name.casefold(): name for name, _ in uploads}
+            config = snap.state.get("online_import")
+            virtual_by_casefold = {
+                name.casefold(): name
+                for name in (config["virtual_sources"] if config else [])
+            }
             for folded_name in uploaded_by_casefold:
                 if len(existing_groups.get(folded_name, [])) > 1:
                     raise HTTPException(
@@ -613,7 +902,7 @@ class PriceComparisonService:
                 name: (
                     existing_groups[name.casefold()][0].name
                     if existing_groups.get(name.casefold())
-                    else name
+                    else virtual_by_casefold.get(name.casefold(), name)
                 )
                 for name, _ in uploads
             }
@@ -621,44 +910,54 @@ class PriceComparisonService:
             if kind == "offers":
                 winners = {}
                 for name, _ in uploads:
-                    numbers = (
-                        parsed_uploads[name]
-                        .get("Angebot", pd.Series(dtype=object))
-                        .dropna()
-                        .astype(str)
-                    )
-                    number = next((n.strip() for n in numbers if n.strip()), None)
+                    number = self._offer_number(parsed_uploads[name])
                     if number:
                         if number in winners:
                             excluded.add(winners[number])
                         winners[number] = name
+                current = self.load(snap)
+                current_names = {source.name for source in current.offer_sources}
+                source_column = current.raw_prices.get(
+                    "Quelle", pd.Series(index=current.raw_prices.index, dtype=object)
+                )
+                existing_frames = [
+                    (
+                        source.name,
+                        current.raw_prices[
+                            source_column.astype(str).eq(source.name)
+                        ],
+                    )
+                    for source in current.offer_sources
+                ]
+                # Bound exclusions are absent from the active imported view.
+                # Parse only those few files for duplicate safety; imported
+                # sources never need their PDFs during an incremental upload.
                 for item in snap.files:
-                    if item.kind != "offers":
+                    if item.kind != "offers" or item.name in current_names:
                         continue
-                    matching_upload = uploaded_by_casefold.get(item.name.casefold())
                     try:
                         frame = self.parsed(item)
                     except HTTPException as exc:
                         if exc.status_code != 422:
                             raise
                         frame = pd.DataFrame()
-                    numbers = frame.get("Angebot", pd.Series(dtype=object)).dropna().astype(str)
-                    number = next((n.strip() for n in numbers if n.strip()), None)
+                    existing_frames.append((item.name, frame))
+                for source_name, frame in existing_frames:
+                    matching_upload = uploaded_by_casefold.get(source_name.casefold())
+                    number = self._offer_number(frame)
                     if number in winners or matching_upload is not None:
                         winner_upload = winners.get(number, matching_upload)
                         keep = canonical_names[winner_upload]
                         duplicates.append(
-                            {"offer_number": number or "—", "keep": keep, "remove": item.name}
+                            {
+                                "offer_number": number or "—",
+                                "keep": keep,
+                                "remove": source_name,
+                            }
                         )
                 for number, keep in winners.items():
                     for name in excluded:
-                        numbers = (
-                            parsed_uploads[name]
-                            .get("Angebot", pd.Series(dtype=object))
-                            .dropna()
-                            .astype(str)
-                        )
-                        if len(numbers) and numbers.iloc[0].strip() == number:
+                        if self._offer_number(parsed_uploads[name]) == number:
                             duplicates.append(
                                 {
                                     "offer_number": number,
@@ -690,6 +989,11 @@ class PriceComparisonService:
                     },
                 )
             kept_names = {canonical_names[name] for name, _ in uploads if name not in excluded}
+            virtual_removals = (
+                wanted & set(config["virtual_sources"])
+                if kind == "offers" and config is not None
+                else set()
+            )
             remove_items = [
                 f
                 for f in snap.files
@@ -706,7 +1010,7 @@ class PriceComparisonService:
                     target_name = canonical_names[name]
                     backup = self.store.read(previous) if previous else None
                     updated = self.store.write(kind, target_name, raw, previous)
-                    changed.append((updated, backup))
+                    changed.append((updated, backup, previous))
                     self.parsed(updated, raw=raw)
                     if kind == "datanorm":
                         snap.state["active_datanorm"] = target_name
@@ -715,41 +1019,89 @@ class PriceComparisonService:
                 for item in remove_items:
                     self.store.delete(item)
                     removed.append(item)
-                    for key in (
-                        "discounts",
-                        "offer_types",
-                        "align_netto",
-                        "deleted_articles",
-                        "frozen_metrics",
-                    ):
-                        snap.state[key].pop(item.name, None)
-                    snap.state["manual_prices"] = {
-                        k: v
-                        for k, v in snap.state["manual_prices"].items()
-                        if not k.startswith(item.name + "||")
-                    }
+                    self._remove_offer_settings(snap.state, item.name)
+                if virtual_removals:
+                    config["virtual_sources"] = [
+                        source
+                        for source in config["virtual_sources"]
+                        if source not in virtual_removals
+                    ]
+                    for source in virtual_removals - kept_names:
+                        self._remove_offer_settings(snap.state, source)
                 refreshed = snapshot(self.store)
                 snap.files = refreshed.files
                 # The original incremental upload recalculates every offer
                 # header because the new history can change later offers.
                 self.refresh_metrics(snap)
                 save_state(self.store, snap)
-            except Exception:
-                # Compensate only our writes, using their exact versions.
-                for item in reversed(removed):
-                    self.store.write(item.kind, item.name, backups[item.name], None)
-                for updated, backup in reversed(changed):
-                    if backup is None:
-                        self.store.delete(updated)
-                    else:
-                        self.store.write(updated.kind, updated.name, backup, updated)
-                raise
+            except Exception as original_error:
+                # Compensate only our writes, using their exact versions.  A
+                # restored Graph/local item gets a fresh version, so an active
+                # import binding must follow that version or the rollback would
+                # silently switch the source to the current parser.
+                try:
+                    restored_versions = []
+                    for item in reversed(removed):
+                        restored = self.store.write(
+                            item.kind, item.name, backups[item.name], None
+                        )
+                        restored_versions.append((item, restored))
+                    for updated, backup, previous in reversed(changed):
+                        if backup is None:
+                            self.store.delete(updated)
+                        else:
+                            restored = self.store.write(
+                                updated.kind, updated.name, backup, updated
+                            )
+                            restored_versions.append((previous, restored))
+                    self._restore_import_bindings(
+                        original_state_file=snap.state_file,
+                        original_state=original_state,
+                        attempted_state=deepcopy(snap.state),
+                        restored_versions=restored_versions,
+                    )
+                except RollbackRecoveryError as rollback_error:
+                    raise rollback_error from original_error
+                except Exception as rollback_error:
+                    raise RuntimeError(
+                        "Preisdatei-Upload konnte nicht sicher zurückgerollt werden."
+                    ) from rollback_error
+                raise original_error
             return {"revision": snapshot(self.store).revision}
 
     def delete_file(self, kind, name, expected_revision, db=None):
         with self.store.lock(db):
             snap = snapshot(self.store)
             require_revision(snap, expected_revision)
+            original_state = deepcopy(snap.state)
+            config = snap.state.get("online_import")
+            is_virtual = bool(
+                kind == "offers"
+                and config is not None
+                and name in config["virtual_sources"]
+                and not any(
+                    item.kind == "offers" and item.name == name for item in snap.files
+                )
+            )
+            if is_virtual:
+                config["virtual_sources"] = [
+                    source for source in config["virtual_sources"] if source != name
+                ]
+                for key in (
+                    "discounts",
+                    "offer_types",
+                    "align_netto",
+                    "deleted_articles",
+                    "frozen_metrics",
+                ):
+                    snap.state[key].pop(name, None)
+                snap.state["manual_prices"] = {
+                    key: value
+                    for key, value in snap.state["manual_prices"].items()
+                    if not key.startswith(name + "||")
+                }
+                save_state(self.store, snap)
+                return {"revision": snapshot(self.store).revision}
             item = snap.find(kind, name)
             backup = self.store.read(item)
             self.store.delete(item)
@@ -757,23 +1109,24 @@ class PriceComparisonService:
                 if kind == "datanorm" and snap.state["active_datanorm"] == name:
                     snap.state["active_datanorm"] = None
                 if kind == "offers":
-                    for key in (
-                        "discounts",
-                        "offer_types",
-                        "align_netto",
-                        "deleted_articles",
-                        "frozen_metrics",
-                    ):
-                        snap.state[key].pop(name, None)
-                    snap.state["manual_prices"] = {
-                        k: v
-                        for k, v in snap.state["manual_prices"].items()
-                        if not k.startswith(name + "||")
-                    }
+                    self._remove_offer_settings(snap.state, name)
                 save_state(self.store, snap)
-            except Exception:
-                self.store.write(kind, name, backup, None)
-                raise
+            except Exception as original_error:
+                try:
+                    restored = self.store.write(kind, name, backup, None)
+                    self._restore_import_bindings(
+                        original_state_file=snap.state_file,
+                        original_state=original_state,
+                        attempted_state=deepcopy(snap.state),
+                        restored_versions=[(item, restored)],
+                    )
+                except RollbackRecoveryError as rollback_error:
+                    raise rollback_error from original_error
+                except Exception as rollback_error:
+                    raise RuntimeError(
+                        "Preisdatei-Löschung konnte nicht sicher zurückgerollt werden."
+                    ) from rollback_error
+                raise original_error
             return {"revision": snapshot(self.store).revision}
 
     def rebuild_preview(self, expected_revision):
@@ -819,8 +1172,15 @@ class PriceComparisonService:
                 raise HTTPException(
                     409, "Bitte die aktuelle Liste der doppelten Angebote bestätigen."
                 )
+            original_state = deepcopy(snap.state)
             state = deepcopy(snap.state)
             state["deleted_articles"] = {}
+            if state.get("online_import") is not None:
+                # A confirmed rebuild deliberately switches every physical
+                # offer back to the current parser.  The one source whose PDF
+                # was already missing online remains available from the
+                # immutable import frame until it is explicitly deleted.
+                state["online_import"]["physical_frames_active"] = False
             removed = []
             try:
                 # Original rebuild restores positions from the unchanged PDFs.
@@ -841,8 +1201,25 @@ class PriceComparisonService:
                 self.load(snap, force=True)
                 self.refresh_metrics(snap)
                 save_state(self.store, snap)
-            except Exception:
-                for item, content in reversed(removed):
-                    self.store.write(item.kind, item.name, content, None)
-                raise
+            except Exception as original_error:
+                try:
+                    restored_versions = []
+                    for item, content in reversed(removed):
+                        restored = self.store.write(
+                            item.kind, item.name, content, None
+                        )
+                        restored_versions.append((item, restored))
+                    self._restore_import_bindings(
+                        original_state_file=snap.state_file,
+                        original_state=original_state,
+                        attempted_state=deepcopy(snap.state),
+                        restored_versions=restored_versions,
+                    )
+                except RollbackRecoveryError as rollback_error:
+                    raise rollback_error from original_error
+                except Exception as rollback_error:
+                    raise RuntimeError(
+                        "Angebots-Neuaufbau konnte nicht sicher zurückgerollt werden."
+                    ) from rollback_error
+                raise original_error
             return {"revision": snapshot(self.store).revision, "removed_count": len(removed)}

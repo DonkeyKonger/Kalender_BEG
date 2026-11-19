@@ -316,6 +316,17 @@ def _article_description_lines(value: object) -> list[str]:
 @router.get("/files/{kind}/{name}/download")
 def download_file(kind: Literal["offers", "datanorm"], name: str, service: Service):
     snap = snapshot(service.store)
+    config = snap.state.get("online_import")
+    if (
+        kind == "offers"
+        and config is not None
+        and name in config["virtual_sources"]
+        and not any(item.kind == "offers" and item.name == name for item in snap.files)
+    ):
+        raise HTTPException(
+            422,
+            "Die Original-PDF war im Online-Preisviewer nicht mehr vorhanden.",
+        )
     item = snap.find(kind, name)
     return download(service.store.read(item), name,
                     "application/pdf" if kind == "offers" else "application/octet-stream")
@@ -332,6 +343,8 @@ def maintenance(payload: Maintenance, service: Service, db: Database):
             if not choices:
                 raise HTTPException(422, "Keine DATANORM-Datei vorhanden.")
             active = next((f for f in choices if f.name == snap.state["active_datanorm"]), choices[0])
+            if snap.state.get("online_import") is not None:
+                snap.state["online_import"]["datanorm_frame_active"] = False
             service.parsed(active, force=True)
             snap.state["active_datanorm"] = active.name
         service.refresh_metrics(snap)
@@ -399,7 +412,8 @@ def export(payload: ExportRequest, service: Service):
     if payload.kind.startswith("offer"):
         if not payload.source:
             raise HTTPException(422, "Bitte ein Angebot auswählen.")
-        data.snap.find("offers", payload.source)
+        if payload.source not in {source.name for source in data.offer_sources}:
+            raise HTTPException(404, "Angebot im Preisvergleich nicht gefunden.")
         offer = next((o for o in service.offers_list(data) if o["source"] == payload.source), None)
         if not offer:
             raise HTTPException(422, "Das Angebot enthält keine Preispositionen.")

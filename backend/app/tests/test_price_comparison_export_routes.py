@@ -29,6 +29,7 @@ def _data(**overrides):
         "datanorm": pd.DataFrame(),
         "prices": pd.DataFrame(),
         "raw_prices": pd.DataFrame(),
+        "offer_sources": [],
         "snap": _Snapshot(),
     }
     values.update(overrides)
@@ -127,7 +128,13 @@ def test_offer_excel_uses_original_full_heading_context(monkeypatch):
         return b"xlsx", ".xlsx", "application/x-test"
 
     monkeypatch.setattr(routes.exports, "dataframe_to_excel_download", export_excel)
-    service = _Service(_data(raw_prices=raw_prices), [offer])
+    service = _Service(
+        _data(
+            raw_prices=raw_prices,
+            offer_sources=[SimpleNamespace(name=source)],
+        ),
+        [offer],
+    )
 
     response = routes.export(
         routes.ExportRequest(kind="offer", source=source),

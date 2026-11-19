@@ -19,6 +19,7 @@ export type TableResult = {
   clusters?: string[];
   active_file?: string | null;
   warnings?: string[];
+  unavailable_sources?: string[];
   revision: string;
 };
 
@@ -43,6 +44,7 @@ export type OfferType = "Erstangebot" | "Folgeangebot" | "Verhandeltes Angebot";
 
 export type OfferSummary = {
   source: string;
+  original_available?: boolean;
   project: string;
   offer_number: string;
   date: string | null;
@@ -88,6 +90,7 @@ export type ArticleDetailResult = {
     median?: number | null;
   };
   warnings?: string[];
+  unavailable_sources?: string[];
   revision: string;
 };
 
@@ -103,6 +106,8 @@ export type PriceFile = {
   size: number;
   modified: string;
   active: boolean;
+  original_available?: boolean;
+  included_in_comparison?: boolean;
 };
 
 export type FilesResult = { files: PriceFile[]; revision: string };

@@ -297,7 +297,7 @@ function DatanormView({ onMutation }: { onMutation: () => Promise<void> }) {
         emptyText={search || cluster ? "Keine Artikel für den aktuellen Filter gefunden." : "Noch keine Datanorm-Daten vorhanden."}
       >
         <TableCaption count={data?.total ?? 0} suffix={data?.active_file ? `Aktiv: ${data.active_file}` : undefined} />
-        <DataTable variant="datanorm" columns={data?.columns ?? []} rows={data?.rows ?? []} onArticle={openArticle} onSource={downloadOfferSource} />
+        <DataTable variant="datanorm" columns={data?.columns ?? []} rows={data?.rows ?? []} onArticle={openArticle} onSource={downloadOfferSource} unavailableSources={data?.unavailable_sources} />
         <Pagination offset={offset} limit={limit} total={data?.total ?? 0} onChange={setOffset} />
       </DataPanel>
     </div>
@@ -563,7 +563,7 @@ function NetPriceCalculator({
             <TableCaption count={result.total} suffix="Vorschläge basieren auf qualifizierten Erstangeboten" />
             <button className="price-button" type="button" disabled={!result.total} onClick={() => void exportSuggestions()}><Download size={16} /> Excel</button>
           </div>
-          <DataTable variant="suggestions" columns={result.columns} rows={result.rows} onArticle={onArticle} onSource={onSource} />
+          <DataTable variant="suggestions" columns={result.columns} rows={result.rows} onArticle={onArticle} onSource={onSource} unavailableSources={result.unavailable_sources} />
           <Pagination offset={suggestionOffset} limit={suggestionLimit} total={result.total} onChange={(nextOffset) => void calculate(nextOffset)} />
         </div>
       ) : (
@@ -840,9 +840,12 @@ function OfferDetails({ detailRef, source, onClose, onMutation }: { detailRef: R
             </table>
           </div>
 
+          {data.offer.original_available === false ? (
+            <InlineNotice tone="info">Die Positionen dieses Angebots sind erhalten. Die Original-PDF war im Online-Preisviewer nicht mehr vorhanden. Excel, PDF-Export und UGL bleiben verfügbar.</InlineNotice>
+          ) : null}
           <div className="offer-detail-actions">
             <div>
-              <button className="price-button" type="button" disabled={saving || Boolean(exporting)} onClick={() => void downloadOriginal()}><FileText size={16} /> Original-PDF</button>
+              <button className="price-button" type="button" disabled={saving || Boolean(exporting) || data.offer.original_available === false} title={data.offer.original_available === false ? "Die Original-PDF ist nicht vorhanden." : undefined} onClick={() => void downloadOriginal()}><FileText size={16} /> Original-PDF</button>
               <button className="price-button" type="button" disabled={saving || Boolean(exporting)} onClick={() => void exportOffer("offer")}><Download size={16} /> Excel</button>
               <button className="price-button" type="button" disabled={saving || Boolean(exporting)} onClick={() => void exportOffer("offer_pdf")}><Download size={16} /> PDF</button>
               <button className="price-button" type="button" disabled={saving || Boolean(exporting)} onClick={() => void exportOffer("offer_ugl")}><Download size={16} /> UGL</button>
@@ -1036,7 +1039,11 @@ function ArticleDetail({ articleNumber }: { articleNumber: string }) {
       </div>
       <PriceHistoryChart rows={filteredRows} netPrice={netPrice} medianDelta={medianDelta} mode={chartMode} />
       <div className="article-history-table-wrap">
-        <table className="price-table article-history-table"><thead><tr>{historyColumns.map((column) => <th key={column}>{columnLabel(column, "article")}</th>)}</tr></thead><tbody>{filteredRows.map((row, index) => <tr key={`${String(row.Quelle)}-${index}`}>{historyColumns.map((column) => <td key={column} className={cellClass(column, row[column])}>{column === "Quelle" && row[column] ? <button className="source-download-button" type="button" onClick={() => void downloadSource(String(row[column]))}>{String(row[column])}<Download size={13} /></button> : formatCell(column, row[column])}</td>)}</tr>)}</tbody></table>
+        <table className="price-table article-history-table"><thead><tr>{historyColumns.map((column) => <th key={column}>{columnLabel(column, "article")}</th>)}</tr></thead><tbody>{filteredRows.map((row, index) => <tr key={`${String(row.Quelle)}-${index}`}>{historyColumns.map((column) => <td key={column} className={cellClass(column, row[column])}>{column === "Quelle" && row[column] ? (
+          data.unavailable_sources?.includes(String(row[column]))
+            ? <span title="Die Original-PDF ist nicht vorhanden.">{String(row[column])} · Original-PDF fehlt</span>
+            : <button className="source-download-button" type="button" onClick={() => void downloadSource(String(row[column]))}>{String(row[column])}<Download size={13} /></button>
+        ) : formatCell(column, row[column])}</td>)}</tr>)}</tbody></table>
         {!filteredRows.length ? <p className="compact-empty">Für die ausgewählten Angebotsarten sind keine Preise vorhanden.</p> : null}
       </div>
     </section>
@@ -1169,7 +1176,9 @@ function FilesView({ status, onMutation }: { status: PriceComparisonStatus | nul
   }
 
   async function deleteFile(file: PriceFile) {
-    const confirmation = file.active
+    const confirmation = file.original_available === false
+      ? `Die übernommenen Positionen von „${file.name}“ wirklich löschen? Für dieses Angebot ist keine Original-PDF vorhanden, aus der sie wieder eingelesen werden könnten.`
+      : file.active
       ? `„${file.name}“ ist die aktive Datanorm. Nach dem Löschen stehen bis zur Auswahl bzw. zum Upload einer neuen Datanorm keine Vergleichspreise bereit. Wirklich löschen?`
       : `„${file.name}“ wirklich löschen?`;
     if (!window.confirm(confirmation)) return;
@@ -1347,7 +1356,7 @@ function FileSection({ title, description, files, loading, busy, inputId, select
 }) {
   return (
     <section className="file-section">
-      <header><div><h3>{title}</h3><p>{description}</p></div><span>{formatInteger(files.length)} Dateien</span></header>
+      <header><div><h3>{title}</h3><p>{description}</p></div><span>{formatInteger(files.length)} {files.some((file) => file.original_available === false) ? "Einträge" : "Dateien"}</span></header>
       <div className="file-upload-row">
         <input key={selectedFiles.map((file) => `${file.name}-${file.size}-${file.lastModified}`).join("|") || "empty"} id={inputId} className="sr-only" type="file" accept={accept} multiple={multiple} onChange={(event) => onFiles(Array.from(event.target.files ?? []))} />
         <label className="price-button" htmlFor={inputId}><Plus size={16} /> Dateien auswählen</label>
@@ -1358,9 +1367,9 @@ function FileSection({ title, description, files, loading, busy, inputId, select
         <div className="file-list">{files.map((file) => {
           return <div className="file-list-item" key={`${file.kind}-${file.name}`}>
             <FileText size={18} aria-hidden="true" />
-            <div><strong>{file.name}</strong><span>{formatFileSize(file.size)} · {formatDateTime(file.modified)}</span></div>
+            <div><strong>{file.name}</strong><span>{file.original_available === false ? "Positionen erhalten · Original-PDF fehlt" : `${formatFileSize(file.size)} · ${formatDateTime(file.modified)}`}</span>{file.included_in_comparison === false ? <span>Im übernommenen Online-Vergleich nicht enthalten</span> : null}</div>
             {file.active ? <span className="active-file-badge"><Check size={13} /> Aktiv</span> : null}
-            <div className="file-actions"><button className="price-icon-button" type="button" title="Herunterladen" aria-label={`${file.name} herunterladen`} disabled={Boolean(busy)} onClick={() => onDownload(file)}><Download size={16} /></button><button className="price-icon-button is-danger" type="button" title="Löschen" aria-label={`${file.name} löschen`} disabled={Boolean(busy)} onClick={() => onDelete(file)}><Trash2 size={16} /></button></div>
+            <div className="file-actions"><button className="price-icon-button" type="button" title={file.original_available === false ? "Die Original-PDF ist nicht vorhanden." : "Herunterladen"} aria-label={`${file.name} herunterladen`} disabled={Boolean(busy) || file.original_available === false} onClick={() => onDownload(file)}><Download size={16} /></button><button className="price-icon-button is-danger" type="button" title="Löschen" aria-label={`${file.name} löschen`} disabled={Boolean(busy)} onClick={() => onDelete(file)}><Trash2 size={16} /></button></div>
           </div>;
         })}</div>
       ) : <p className="compact-empty">Keine Dateien vorhanden.</p>}
@@ -1399,11 +1408,12 @@ function TableCaption({ count, suffix }: { count: number; suffix?: string }) {
   return <div className="price-table-caption"><strong>{formatInteger(count)} Treffer</strong>{suffix ? <span>{suffix}</span> : null}</div>;
 }
 
-function DataTable({ columns, rows, onArticle, onSource, variant = "generic" }: {
+function DataTable({ columns, rows, onArticle, onSource, unavailableSources = [], variant = "generic" }: {
   columns: string[];
   rows: Array<Record<string, unknown>>;
   onArticle?: (articleNumber: string) => void;
   onSource?: (source: string) => void | Promise<void>;
+  unavailableSources?: string[];
   variant?: PriceTableVariant;
 }) {
   const renderedColumns = tableColumns(columns, variant);
@@ -1414,7 +1424,9 @@ function DataTable({ columns, rows, onArticle, onSource, variant = "generic" }: 
     const content = column === "Artikelnummer" && value && onArticle
       ? <button className="table-link-button" type="button" onClick={() => onArticle(String(value))}>{String(value)}</button>
       : offerPriceMatch && value !== null && value !== undefined && source && onSource
-        ? <button className="table-link-button is-price" type="button" title={`${source} herunterladen`} onClick={() => void onSource(source)}>{formatCell(column, value)}<Download size={12} /></button>
+        ? unavailableSources.includes(source)
+          ? <span title={`${source}: Die Original-PDF ist nicht vorhanden.`}>{formatCell(column, value)}</span>
+          : <button className="table-link-button is-price" type="button" title={`${source} herunterladen`} onClick={() => void onSource(source)}>{formatCell(column, value)}<Download size={12} /></button>
         : formatCell(column, value);
     const classes = [cellClass(column, value), comparisonCellClass(column, value, row)].filter(Boolean).join(" ") || undefined;
     return <td key={column} className={classes}>{content}</td>;

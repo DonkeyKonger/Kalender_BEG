@@ -1,5 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
+import hashlib
 import io
+import json
 from threading import Lock
 from time import sleep
 from types import SimpleNamespace
@@ -18,6 +21,7 @@ from app.models.enums import UserRole
 from app.services import price_comparison_core as core
 from app.services.price_comparison_service import PriceComparisonService
 from app.services.price_comparison_storage import (
+    ONLINE_IMPORT_NAME,
     STATE_NAME,
     LocalPriceStorage,
     Snapshot,
@@ -25,6 +29,205 @@ from app.services.price_comparison_storage import (
     save_state,
     snapshot,
 )
+
+
+def typed_frame(frame, source_name):
+    split = json.loads(
+        frame.to_json(
+            orient="split",
+            date_format="iso",
+            date_unit="us",
+            double_precision=15,
+        )
+    )
+    expected_dtypes = {
+        "offers_combined.pkl": [
+            "str", "float64", "str", "int64", "object", "float64", "object",
+            "datetime64[us]", "str", "object", "str", "float64", "object",
+        ],
+        "offers_meta.pkl": [
+            "str", "datetime64[us]", "str", "object", "str", "int64", "float64",
+            "float64", "str", "float64", "datetime64[s]", "object", "object",
+        ],
+        "datanorm_active.pkl": [
+            "str", "str", "str", "str", "str", "str", "str", "str", "float64",
+            "str", "float64", "str",
+        ],
+    }
+    expected_index = (
+        "pandas.Index" if source_name == "offers_combined.pkl" else "pandas.RangeIndex"
+    )
+    return {
+        "source_name": source_name,
+        "source_sha256": "0" * 64,
+        "source_size": 1,
+        "object_type": "DataFrame",
+        "shape": list(frame.shape),
+        "columns": [str(column) for column in frame.columns],
+        "dtypes": expected_dtypes[source_name],
+        "index": {
+            "name": frame.index.name,
+            "type": expected_index,
+            "unique": bool(frame.index.is_unique),
+        },
+        "rows": [
+            {"index": index, "values": values}
+            for index, values in zip(split["index"], split["data"], strict=True)
+        ],
+    }
+
+
+def install_online_import(
+    service,
+    *,
+    physical_name="Angebot.pdf",
+    excluded_name="Extra.pdf",
+    virtual_name="Virtual.pdf",
+):
+    snap = snapshot(service.store)
+    physical = snap.find("offers", physical_name)
+    excluded = snap.find("offers", excluded_name)
+    datanorm_item = snap.find("datanorm", "preise.dat")
+    physical_frame = service.parsed(physical).copy()
+    physical_frame["Preis"] = 7.25
+    virtual_frame = physical_frame.copy()
+    virtual_frame["Quelle"] = virtual_name
+    virtual_frame["Angebot"] = "VIRTUAL-1"
+    offers = pd.concat([physical_frame, virtual_frame], ignore_index=True)
+    metadata = pd.DataFrame(
+        [
+            {
+                "Quelle": physical_name,
+                "Datum": pd.Timestamp("2026-05-01"),
+                "Projekt": "Testprojekt",
+                "Anbieter": None,
+                "Angebot": "TEST-1",
+                "Pos_Anzahl": 1,
+                "Gesamt_netto": 1234.0,
+                "Gesamt_brutto": 0.0,
+                "Angebotsart": "Erstangebot",
+                "Upload_ts": 2.0,
+                "Upload": pd.Timestamp("2026-05-01"),
+                "PV_avg_pct_pos": None,
+                "PV_avg_pct_wert": None,
+            },
+            {
+                "Quelle": virtual_name,
+                "Datum": pd.Timestamp("2026-05-01"),
+                "Projekt": "Testprojekt",
+                "Anbieter": None,
+                "Angebot": "VIRTUAL-1",
+                "Pos_Anzahl": 1,
+                "Gesamt_netto": 1234.0,
+                "Gesamt_brutto": 0.0,
+                "Angebotsart": "Erstangebot",
+                "Upload_ts": 1.0,
+                "Upload": pd.Timestamp("2026-05-01"),
+                "PV_avg_pct_pos": None,
+                "PV_avg_pct_wert": None,
+            },
+        ]
+    )
+    datanorm = service.parsed(datanorm_item).copy()
+    datanorm["Artikelcluster"] = "Legacy-Cluster"
+    payload = {
+        "format": "BEG priceviewer exact online frame transfer v1",
+        "migration_mode": "exact_legacy_online_display",
+        "source_audit": [
+            {"name": name, "size": 1, "sha256": "0" * 64}
+            for name in [
+                "offers_combined.pkl",
+                "offers_meta.pkl",
+                "datanorm_active.pkl",
+                "align_netto.json",
+                "datanorm_active.json",
+                "offer_types.json",
+                "offers_combined.json",
+                "offers_meta.json",
+                "manual_prices.json",
+                "rabatte.json",
+                "tab1_net_price_reference_presets.json",
+            ]
+        ],
+        "frames": {
+            "offers_combined": typed_frame(offers, "offers_combined.pkl"),
+            "offers_meta": typed_frame(metadata, "offers_meta.pkl"),
+            "datanorm_active": typed_frame(datanorm, "datanorm_active.pkl"),
+        },
+        "expected_target": {
+            "offer_source_order": [physical_name, virtual_name],
+            "authoritative_offer_source_order": [physical_name, virtual_name],
+            "virtual_sources": [virtual_name],
+            "active_datanorm": "preise.dat",
+            "offer_combined_row_count": len(offers),
+            "offer_meta_row_count": len(metadata),
+            "datanorm_row_count": len(datanorm),
+            "offer_source_count": 2,
+        },
+    }
+    def order_hash(values):
+        return hashlib.sha256(
+            json.dumps(
+                list(values),
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode()
+        ).hexdigest()
+
+    meta_frame = payload["frames"]["offers_meta"]
+    meta_columns = meta_frame["columns"]
+    frozen_indices = [
+        meta_columns.index(column)
+        for column in ("Quelle", "PV_avg_pct_pos", "PV_avg_pct_wert")
+    ]
+    frozen_rows = [
+        {
+            "Quelle": row["values"][frozen_indices[0]],
+            "PV_avg_pct_pos": row["values"][frozen_indices[1]],
+            "PV_avg_pct_wert": row["values"][frozen_indices[2]],
+        }
+        for row in meta_frame["rows"]
+    ]
+    payload["expected_target"]["order_hashes"] = {
+        "offers_combined_rows": order_hash(payload["frames"]["offers_combined"]["rows"]),
+        "offers_meta_rows": order_hash(meta_frame["rows"]),
+        "datanorm_active_rows": order_hash(payload["frames"]["datanorm_active"]["rows"]),
+        "offer_source_order": order_hash(payload["expected_target"]["offer_source_order"]),
+        "authoritative_offer_sources": order_hash(
+            payload["expected_target"]["authoritative_offer_source_order"]
+        ),
+        "frozen_metrics": order_hash(frozen_rows),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, allow_nan=False).encode()
+    service.store.write("cache", ONLINE_IMPORT_NAME, raw, None)
+    snap = snapshot(service.store)
+    snap.state["online_import"] = {
+        "version": 1,
+        "payload_name": ONLINE_IMPORT_NAME,
+        "payload_sha256": hashlib.sha256(raw).hexdigest(),
+        "offer_bindings": {
+            physical_name: {
+                "version": physical.version,
+                "mode": "snapshot",
+                "modified": physical.modified,
+            },
+            excluded_name: {
+                "version": excluded.version,
+                "mode": "excluded",
+                "modified": excluded.modified,
+            },
+        },
+        "datanorm_binding": {
+            "name": datanorm_item.name,
+            "version": datanorm_item.version,
+        },
+        "virtual_sources": [virtual_name],
+        "physical_frames_active": True,
+        "datanorm_frame_active": True,
+    }
+    save_state(service.store, snap)
+    return payload
 
 
 def offer_pdf(number="TEST-1", price="12,34"):
@@ -144,6 +347,480 @@ def test_real_parsers_upload_views_and_original_download(context):
     assert downloaded.content == original
     assert "attachment" in downloaded.headers["content-disposition"]
     assert snapshot(service.store).state["manual_prices"] == {}
+
+
+def test_exact_online_import_preserves_frames_virtual_source_and_file_visibility(context):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1", price="99,00"), None)
+    install_online_import(service)
+
+    status = client.get("/api/price-comparison/status").json()
+    assert status["offer_count"] == 2
+    files = client.get("/api/price-comparison/files").json()["files"]
+    by_name = {item["name"]: item for item in files}
+    assert by_name["Angebot.pdf"]["included_in_comparison"] is True
+    assert by_name["Extra.pdf"]["included_in_comparison"] is False
+    assert by_name["Virtual.pdf"] == {
+        "kind": "offers",
+        "name": "Virtual.pdf",
+        "size": 0,
+        "modified": "",
+        "active": False,
+        "original_available": False,
+        "included_in_comparison": True,
+    }
+
+    offers = client.get("/api/price-comparison/offers").json()
+    assert [offer["source"] for offer in offers["offers"]] == [
+        "Angebot.pdf",
+        "Virtual.pdf",
+    ]
+    assert [offer["original_available"] for offer in offers["offers"]] == [True, False]
+    assert all(offer["total_net"] == pytest.approx(1234.0) for offer in offers["offers"])
+    datanorm = client.get("/api/price-comparison/datanorm").json()
+    assert datanorm["rows"][0]["Artikelcluster"] == "Legacy-Cluster"
+    assert datanorm["unavailable_sources"] == ["Virtual.pdf"]
+
+    missing = client.get("/api/price-comparison/files/offers/Virtual.pdf/download")
+    assert missing.status_code == 422
+    assert "nicht mehr vorhanden" in missing.json()["detail"]
+
+
+def test_virtual_offer_can_be_edited_exported_and_explicitly_deleted(context):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    before = snapshot(service.store)
+
+    changed = client.patch(
+        "/api/price-comparison/offers/Virtual.pdf",
+        json={
+            "expected_revision": before.revision,
+            "manual_prices": {"6047611": 6.5},
+            "discount": 5,
+        },
+    )
+    assert changed.status_code == 200, changed.text
+    detail = client.get("/api/price-comparison/offers/Virtual.pdf/positions").json()
+    assert detail["offer"]["original_available"] is False
+    assert detail["rows"][0]["Preis"] == pytest.approx(6.5)
+    exported = client.post(
+        "/api/price-comparison/exports",
+        json={"kind": "offer", "source": "Virtual.pdf"},
+    )
+    assert exported.status_code == 200, exported.text
+
+    current = snapshot(service.store)
+    deleted = client.delete(
+        "/api/price-comparison/files/offers/Virtual.pdf",
+        params={"expected_revision": current.revision},
+    )
+    assert deleted.status_code == 200, deleted.text
+    assert "Virtual.pdf" not in {
+        offer["source"] for offer in client.get("/api/price-comparison/offers").json()["offers"]
+    }
+    state = snapshot(service.store).state
+    assert state["online_import"]["virtual_sources"] == []
+    assert "Virtual.pdf" not in state["discounts"]
+
+
+def test_changed_excluded_file_becomes_live_instead_of_staying_hidden(context):
+    client, service, _ = context
+    seed(client)
+    excluded = service.store.write(
+        "offers", "Extra.pdf", offer_pdf(number="EXTRA-1", price="99,00"), None
+    )
+    install_online_import(service)
+    assert "Extra.pdf" not in {
+        offer["source"] for offer in client.get("/api/price-comparison/offers").json()["offers"]
+    }
+
+    service.store.write(
+        "offers",
+        "Extra.pdf",
+        offer_pdf(number="EXTRA-2", price="88,00"),
+        excluded,
+    )
+    offers = client.get("/api/price-comparison/offers").json()["offers"]
+    extra = next(offer for offer in offers if offer["source"] == "Extra.pdf")
+    assert extra["offer_number"] == "EXTRA-2"
+    file_entry = next(
+        item
+        for item in client.get("/api/price-comparison/files").json()["files"]
+        if item["name"] == "Extra.pdf"
+    )
+    assert file_entry["included_in_comparison"] is True
+
+
+def test_rebuild_reparses_physical_offers_but_retains_virtual_import(context):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1", price="99,00"), None)
+    install_online_import(service)
+    before = snapshot(service.store)
+    before.state["deleted_articles"] = {"Angebot.pdf": ["6047611"]}
+    save_state(service.store, before)
+    revision = snapshot(service.store).revision
+
+    rebuilt = service.rebuild(revision, [])
+    assert rebuilt["removed_count"] == 0
+    state = snapshot(service.store).state
+    assert state["online_import"]["physical_frames_active"] is False
+    assert state["online_import"]["virtual_sources"] == ["Virtual.pdf"]
+    assert state["deleted_articles"] == {}
+    offers = client.get("/api/price-comparison/offers").json()["offers"]
+    assert {offer["source"] for offer in offers} == {
+        "Angebot.pdf",
+        "Extra.pdf",
+        "Virtual.pdf",
+    }
+    positions = client.get("/api/price-comparison/offers/Angebot.pdf/positions").json()
+    assert positions["rows"][0]["Preis"] == pytest.approx(12.34)
+
+
+def test_reparse_datanorm_disables_only_legacy_datanorm_frame(context):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    revision = snapshot(service.store).revision
+
+    reparsed = client.post(
+        "/api/price-comparison/maintenance",
+        json={"action": "reparse_datanorm", "expected_revision": revision},
+    )
+    assert reparsed.status_code == 200, reparsed.text
+    state = snapshot(service.store).state
+    assert state["online_import"]["datanorm_frame_active"] is False
+    assert state["online_import"]["physical_frames_active"] is True
+    row = client.get("/api/price-comparison/datanorm").json()["rows"][0]
+    assert row["Artikelcluster"] != "Legacy-Cluster"
+
+
+@pytest.mark.parametrize(
+    ("upload_name", "stored_name"),
+    [
+        ("Virtual.pdf", "Virtual.pdf"),
+        ("virtual.PDF", "Virtual.pdf"),
+        ("Replacement.pdf", "Replacement.pdf"),
+    ],
+)
+def test_upload_replaces_virtual_offer_only_after_confirmation_and_never_resurrects_it(
+    context,
+    upload_name,
+    stored_name,
+):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    revision = snapshot(service.store).revision
+    replacement = offer_pdf(number="VIRTUAL-1", price="8,00")
+
+    preview = client.post(
+        "/api/price-comparison/files",
+        data={"kind": "offers", "expected_revision": revision},
+        files=[("files", (upload_name, replacement))],
+    )
+    assert preview.status_code == 409, preview.text
+    assert preview.json()["detail"]["duplicates"] == [
+        {
+            "offer_number": "VIRTUAL-1",
+            "keep": stored_name,
+            "remove": "Virtual.pdf",
+        }
+    ]
+
+    confirmed = client.post(
+        "/api/price-comparison/files",
+        data={
+            "kind": "offers",
+            "expected_revision": revision,
+            "confirmed_duplicates": '["Virtual.pdf"]',
+        },
+        files=[("files", (upload_name, replacement))],
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    state = snapshot(service.store).state
+    assert state["online_import"]["virtual_sources"] == []
+    replacement_offer = next(
+        offer
+        for offer in client.get("/api/price-comparison/offers").json()["offers"]
+        if offer["source"] == stored_name
+    )
+    assert replacement_offer["original_available"] is True
+
+    current = snapshot(service.store)
+    deleted = client.delete(
+        f"/api/price-comparison/files/offers/{stored_name}",
+        params={"expected_revision": current.revision},
+    )
+    assert deleted.status_code == 200, deleted.text
+    assert "Virtual.pdf" not in {
+        offer["source"]
+        for offer in client.get("/api/price-comparison/offers").json()["offers"]
+    }
+
+
+def test_exact_import_upload_does_not_parse_bound_snapshot_sources(context, monkeypatch):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    parsed_names = []
+    original_parsed = service.parsed
+
+    def counted(item, **kwargs):
+        parsed_names.append(item.name)
+        return original_parsed(item, **kwargs)
+
+    monkeypatch.setattr(service, "parsed", counted)
+    result = upload(client, "Added.pdf", offer_pdf(number="ADDED-1"), "offers")
+
+    assert result.status_code == 200, result.text
+    assert "Angebot.pdf" not in parsed_names
+    assert "Virtual.pdf" not in parsed_names
+    assert "Extra.pdf" in parsed_names
+    assert set(parsed_names) <= {"Added.pdf", "Extra.pdf"}
+
+
+def test_failed_imported_offer_replacement_rebinds_restored_file_version(
+    context,
+    monkeypatch,
+):
+    _, service, _ = context
+    original = seed(context[0])
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    before = snapshot(service.store)
+    old_version = before.find("offers", "Angebot.pdf").version
+    original_write = service.store.write
+    failed = False
+
+    def fail_first_state_write(kind, name, raw, previous):
+        nonlocal failed
+        if kind == "cache" and name == STATE_NAME and not failed:
+            failed = True
+            raise RuntimeError("injected state failure")
+        return original_write(kind, name, raw, previous)
+
+    monkeypatch.setattr(service.store, "write", fail_first_state_write)
+    with pytest.raises(RuntimeError, match="injected state failure"):
+        service.upload(
+            "offers",
+            [("Angebot.pdf", offer_pdf(number="TEST-1", price="99,00"))],
+            before.revision,
+            confirmed_duplicates=["Angebot.pdf"],
+        )
+
+    restored = snapshot(service.store)
+    restored_item = restored.find("offers", "Angebot.pdf")
+    assert restored_item.version != old_version
+    assert service.store.read(restored_item) == original
+    assert (
+        restored.state["online_import"]["offer_bindings"]["Angebot.pdf"]["version"]
+        == restored_item.version
+    )
+    positions = service.positions("Angebot.pdf")
+    assert positions["rows"][0]["Preis"] == pytest.approx(7.25)
+
+
+def test_imported_offer_rollback_failure_is_reported_fail_closed(context, monkeypatch):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    before = snapshot(service.store)
+    original_write = service.store.write
+
+    def fail_state_writes(kind, name, raw, previous):
+        if kind == "cache" and name == STATE_NAME:
+            raise RuntimeError("persistent state failure")
+        return original_write(kind, name, raw, previous)
+
+    monkeypatch.setattr(service.store, "write", fail_state_writes)
+    with pytest.raises(RuntimeError, match="manuell prüfen"):
+        service.upload(
+            "offers",
+            [("Angebot.pdf", offer_pdf(number="TEST-1", price="99,00"))],
+            before.revision,
+            confirmed_duplicates=["Angebot.pdf"],
+        )
+
+
+def test_upload_rollback_never_overwrites_concurrent_calendar_state(context, monkeypatch):
+    client, service, _ = context
+    original = seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    before = snapshot(service.store)
+    original_write = service.store.write
+    injected = False
+
+    def replace_state_then_fail(kind, name, raw, previous):
+        nonlocal injected
+        if kind == "cache" and name == STATE_NAME and not injected:
+            injected = True
+            foreign = json.loads(service.store.read(previous))
+            foreign["discounts"]["FOREIGN.pdf"] = 12.5
+            original_write(
+                kind,
+                name,
+                json.dumps(foreign, ensure_ascii=False, allow_nan=False).encode(),
+                previous,
+            )
+            raise RuntimeError("simulated concurrent state write")
+        return original_write(kind, name, raw, previous)
+
+    monkeypatch.setattr(service.store, "write", replace_state_then_fail)
+    with pytest.raises(RuntimeError, match="anderweitig geändert"):
+        service.upload(
+            "offers",
+            [("Angebot.pdf", offer_pdf(number="TEST-1", price="99,00"))],
+            before.revision,
+            confirmed_duplicates=["Angebot.pdf"],
+        )
+
+    current = snapshot(service.store)
+    assert current.state["discounts"]["FOREIGN.pdf"] == 12.5
+    assert service.store.read(current.find("offers", "Angebot.pdf")) == original
+
+
+def test_failed_delete_rebinds_restored_imported_offer(context, monkeypatch):
+    client, service, _ = context
+    original = seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    before = snapshot(service.store)
+    old_item = before.find("offers", "Angebot.pdf")
+    original_write = service.store.write
+    failed = False
+
+    def fail_first_state_write(kind, name, raw, previous):
+        nonlocal failed
+        if kind == "cache" and name == STATE_NAME and not failed:
+            failed = True
+            raise RuntimeError("injected delete state failure")
+        return original_write(kind, name, raw, previous)
+
+    monkeypatch.setattr(service.store, "write", fail_first_state_write)
+    with pytest.raises(RuntimeError, match="injected delete state failure"):
+        service.delete_file("offers", "Angebot.pdf", before.revision)
+
+    current = snapshot(service.store)
+    restored = current.find("offers", "Angebot.pdf")
+    assert restored.version != old_item.version
+    assert service.store.read(restored) == original
+    assert (
+        current.state["online_import"]["offer_bindings"]["Angebot.pdf"]["version"]
+        == restored.version
+    )
+    assert service.positions("Angebot.pdf")["rows"][0]["Preis"] == pytest.approx(7.25)
+
+
+def test_failed_rebuild_rebinds_restored_imported_duplicate(context, monkeypatch):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    service.store.write("offers", "Newer.pdf", offer_pdf(number="TEST-1", price="99,00"), None)
+    before = snapshot(service.store)
+    old_item = before.find("offers", "Angebot.pdf")
+    preview = service.rebuild_preview(before.revision)
+    assert preview["duplicates"] == [
+        {"offer_number": "TEST-1", "keep": "Newer.pdf", "remove": "Angebot.pdf"}
+    ]
+    original_write = service.store.write
+    failed = False
+
+    def fail_first_state_write(kind, name, raw, previous):
+        nonlocal failed
+        if kind == "cache" and name == STATE_NAME and not failed:
+            failed = True
+            raise RuntimeError("injected rebuild state failure")
+        return original_write(kind, name, raw, previous)
+
+    monkeypatch.setattr(service.store, "write", fail_first_state_write)
+    with pytest.raises(RuntimeError, match="injected rebuild state failure"):
+        service.rebuild(before.revision, ["Angebot.pdf"])
+
+    current = snapshot(service.store)
+    restored = current.find("offers", "Angebot.pdf")
+    assert restored.version != old_item.version
+    assert current.state["online_import"]["physical_frames_active"] is True
+    assert (
+        current.state["online_import"]["offer_bindings"]["Angebot.pdf"]["version"]
+        == restored.version
+    )
+    assert service.positions("Angebot.pdf")["rows"][0]["Preis"] == pytest.approx(7.25)
+
+
+def test_upload_physical_restore_failure_is_reported_fail_closed(context, monkeypatch):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    before = snapshot(service.store)
+    original_write = service.store.write
+    offer_writes = 0
+
+    def fail_restore(kind, name, raw, previous):
+        nonlocal offer_writes
+        if kind == "offers" and name == "Angebot.pdf":
+            offer_writes += 1
+            if offer_writes == 2:
+                raise RuntimeError("injected physical restore failure")
+        if kind == "cache" and name == STATE_NAME:
+            raise RuntimeError("injected state failure")
+        return original_write(kind, name, raw, previous)
+
+    monkeypatch.setattr(service.store, "write", fail_restore)
+    with pytest.raises(RuntimeError, match="Upload konnte nicht sicher"):
+        service.upload(
+            "offers",
+            [("Angebot.pdf", offer_pdf(number="TEST-1", price="99,00"))],
+            before.revision,
+            confirmed_duplicates=["Angebot.pdf"],
+        )
+
+
+def test_new_upload_rollback_restores_state_after_persisted_write_loses_response(
+    context,
+    monkeypatch,
+):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    install_online_import(service)
+    before = snapshot(service.store)
+    original_state = deepcopy(before.state)
+    original_write = service.store.write
+    failed = False
+
+    def persist_state_then_fail(kind, name, raw, previous):
+        nonlocal failed
+        result = original_write(kind, name, raw, previous)
+        if kind == "cache" and name == STATE_NAME and not failed:
+            failed = True
+            raise RuntimeError("simulated lost state-write response")
+        return result
+
+    monkeypatch.setattr(service.store, "write", persist_state_then_fail)
+    with pytest.raises(RuntimeError, match="lost state-write response"):
+        service.upload(
+            "offers",
+            [("Added.pdf", offer_pdf(number="ADDED-1"))],
+            before.revision,
+            confirmed_duplicates=[],
+        )
+
+    current = snapshot(service.store)
+    assert "Added.pdf" not in {
+        item.name for item in current.files if item.kind == "offers"
+    }
+    assert current.state == original_state
 
 
 def test_datanorm_export_uses_original_tab1_schema_and_filename(context):
@@ -536,6 +1213,46 @@ def test_initial_offer_load_uses_at_most_four_parallel_parsers(tmp_path, monkeyp
     assert peak == 4
     assert peak <= 4
     assert len(data.raw_prices) == 8
+
+
+def test_non_import_load_preserves_snapshot_order_for_equal_dates(tmp_path, monkeypatch):
+    service = PriceComparisonService(
+        SimpleNamespace(identity="order-test"),
+        cache_dir=tmp_path / "parse-cache",
+    )
+    items = [
+        StoredFile("offers", name, 1, modified, name)
+        for name, modified in (
+            ("second.pdf", "2026-01-02"),
+            ("first.pdf", "2026-01-01"),
+        )
+    ]
+    snap = Snapshot(
+        files=items,
+        state={
+            "active_datanorm": None,
+            "deleted_articles": {},
+            "discounts": {},
+            "align_netto": {},
+            "manual_prices": {},
+            "offer_types": {},
+        },
+        state_file=None,
+        revision="revision",
+    )
+
+    monkeypatch.setattr(
+        service,
+        "parsed",
+        lambda item, **_kwargs: pd.DataFrame(
+            [{"Quelle": item.name, "Artikelnummer": "1", "Datum": pd.Timestamp("2026-01-01")}]
+        ),
+    )
+    monkeypatch.setattr(core, "prepare_prices", lambda raw, *_args: raw)
+
+    data = service.load(snap)
+
+    assert data.raw_prices["Quelle"].tolist() == ["second.pdf", "first.pdf"]
 
 
 def test_duplicate_rebuild_requires_confirmed_fresh_file_list(context):
