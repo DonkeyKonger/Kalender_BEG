@@ -22,7 +22,7 @@
 7. [x] Native Kalenderoberfläche einschließlich Nettopreisrechner und Dateiverwaltung.
 8. [x] Fachliche Gleichheit mit Original und Fehlerfälle prüfen.
 9. [x] Frontend-/Backend-Prüfungen, Build, Desktop-/schmale visuelle QA.
-10. [ ] Nach Git-Prüfung lokal auf main übernehmen; Testkalender neu bauen;
+10. [x] Nach Git-Prüfung lokal auf main übernehmen; Testkalender neu bauen;
     Healthcheck und ausgelieferte Build-Kennung prüfen. Kein Push/Cloud-Deploy.
 
 ## Erhaltungsgrenze
@@ -55,8 +55,12 @@ vorhandene Rabatt-/Typ-/Netto-/manuelle Preisdateien können unverändert gelese
 werden. Abgeleitete lokale Caches enthalten ausschließlich serverseitig erzeugte
 Daten; hochgeladene Pickle-Dateien werden niemals ausgeführt.
 
-Der lokale Testkalender verwendet einen eigenen dauerhaften Datenträger ohne
-Netzwerkzugriff und ohne OneDrive-Zugangsdaten. Vorhandene Kalender-Testdaten
+Der lokale Testkalender verwendet eigene dauerhafte Datenträger ohne
+Netzwerkzugriff und ohne OneDrive-Zugangsdaten. Der interne Parser-Cache liegt
+separat unter `/price-cache` (`price_comparison_cache`), die Quelldateien unter
+`/price-data` (`price_comparison_data`). Damit bleibt das aufwendige erste
+PDF-Einlesen auch über lokale Neubauten hinweg erhalten. Der Cache ist niemals
+ein Unterordner des gemeinsamen OneDrive-Bestands. Vorhandene Kalender-Testdaten
 bleiben erhalten. Produktionsdateien werden für Tests nicht verändert.
 
 ## Erster Datenbestand
@@ -123,9 +127,10 @@ Stand der Abnahme vor lokaler Übernahme (19.11.2026):
 - 217 Backendprüfungen bestanden (Originalparität, echte Parser, Exporte,
   Berechtigungen, Revisionen, Ersetzungsbestätigung, Fehlerkompensation,
   Graph-Anbindung und betroffene Kalenderregressionen).
-- 1.093 Frontendtests bestanden; nach dem letzten mobilen Scroll-Fix zusätzlich
-  alle 5 Preisvergleich-Tests, ESLint und Produktionsbuild erneut bestanden.
-- 16 Prüfungen des isolierten Testkalenders bestanden.
+- 1.097 Frontendtests bestanden, einschließlich kontrollierter Gateway-Retries,
+  Abbruch und ausbleibender Wiederholung von Schreibvorgängen; ESLint und
+  Produktionsbuild erfolgreich.
+- 17 Prüfungen des isolierten Testkalenders bestanden.
 - Ruff und Git-Whitespace-Prüfung erfolgreich. Die unverändert übernommene
   Parserdatei besitzt eng begrenzte, dokumentierte Lint-Ausnahmen.
 - Sichtprüfung bei 1.280, 900 und 390 Pixeln: Tabellen, Suche, Kalkulator,
@@ -135,5 +140,30 @@ Stand der Abnahme vor lokaler Übernahme (19.11.2026):
   keine Quelldatei. Zwei eigens erzeugte Testdubletten wurden anschließend aus
   der temporären QA-Kopie entfernt.
 
-Lokale Übernahme und laufender Docker-Build werden anschließend geprüft.
-Kein Push und kein Cloud-Deploy.
+Lokale Übernahme am 19.11.2026:
+
+- Implementierung per Cherry-Pick als `3b9f6ae` in die normale lokale `main`
+  übernommen; zuvor sauber, `main` gleich `origin/main`, keine Stashes.
+- `manage.py rebuild` erfolgreich; vorhandene Testdatenbank weiterverwendet.
+- Healthcheck `isolated-local-test`; erste bestätigte Build-Kennung
+  `3b9f6ae / ce4f12ba`.
+- GitHub Desktop zeigt den lokalen, noch nicht gepushten Kalender-Commit.
+- Der neue, zuvor leere Preis-Datenträger wurde ausschließlich für lokale Tests
+  mit Kopien der 162 PDFs, zwei DATANORM-Dateien und vier Einstellungsdateien
+  befüllt. Originaldateien bleiben unverändert.
+- Als abschließende Laufzeitverbesserung wird der abgeleitete Parser-Cache im
+  separaten privaten Datenträger erhalten. Das lokale Upload-Limit berücksichtigt
+  das API-Batchlimit von 160 MB plus Multipart-Overhead. Der lokale Gateway
+  lässt lange Erstimporte/Neuaufbauten bis 30 Minuten laufen. Lesende Ansichten
+  wiederholen einen Gateway-Timeout höchstens zweimal; Schreibvorgänge werden
+  nicht automatisch wiederholt.
+
+Zusätzlich im tatsächlich gebauten Container geprüft: 161 auswertbare Angebote,
+38 Historieneinträge für Referenzartikel 6047611, DATANORM-/Angebots-Excel,
+UGL, Artikel-CSV und Artikel-PDF. Der Download der Original-PDF war bytegleich.
+Der erste Komplettlauf mit leerem Cache dauerte über fünf Minuten; der folgende
+Lauf nutzte die vollständigen 163 Cache-Dateien erfolgreich. Der separate
+Datenträger erhält diese Daten über Neubauten hinweg.
+
+Kein Push und kein Cloud-Deploy. Die jeweils aktuelle ausgelieferte Kennung ist
+unter `/__local-test__/metadata` kontrollierbar.

@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir . && useradd --uid 10001 --create-home tester
 # COPY preserves restrictive host permissions (e.g. 0660 on downloaded XLSX).
 # Templates must be readable by the unprivileged runtime user, too.
 RUN chmod -R a+rX /app/backend/app/templates
-RUN mkdir -p /price-data && chown tester:tester /price-data
+RUN mkdir -p /price-data /price-cache && chown tester:tester /price-data /price-cache
 COPY --from=frontend /frontend/dist /app/frontend
 COPY tools/local_calendar/ /app/local_calendar/
 ENV PYTHONPATH=/app/backend:/app/local_calendar

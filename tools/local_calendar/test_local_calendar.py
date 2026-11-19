@@ -96,6 +96,21 @@ class SafetyTests(unittest.TestCase):
         self.assertIn("ENV VITE_API_BASE_URL=/api", (HERE / "Dockerfile").read_text())
         self.assertIn("ENV VITE_LOCAL_TEST_MODE=isolated", (HERE / "Dockerfile").read_text())
 
+    def test_price_files_and_derived_cache_use_separate_private_volumes(self):
+        compose = (HERE / "compose.yaml").read_text()
+        dockerfile = (HERE / "Dockerfile").read_text()
+
+        self.assertIn("PRICE_COMPARISON_LOCAL_ROOT: /price-data", compose)
+        self.assertIn("PRICE_COMPARISON_CACHE_DIR: /price-cache", compose)
+        self.assertIn("- price_comparison_data:/price-data", compose)
+        self.assertIn("- price_comparison_cache:/price-cache", compose)
+        self.assertIn("  price_comparison_data:\n", compose)
+        self.assertIn("  price_comparison_cache:\n", compose)
+        self.assertNotIn("external:", compose)
+        self.assertNotIn("PRICE_COMPARISON_CACHE_DIR: /price-data", compose)
+        self.assertIn("mkdir -p /price-data /price-cache", dockerfile)
+        self.assertIn("chown tester:tester /price-data /price-cache", dockerfile)
+
     def test_shell_keeps_app_viewport_separate_and_never_inserts_credentials(self):
         html = (HERE / "index.html").read_text()
         css = (HERE / "assets/shell.css").read_text()

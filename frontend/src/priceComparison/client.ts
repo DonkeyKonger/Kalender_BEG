@@ -119,9 +119,42 @@ export class PriceComparisonError extends Error {
 }
 
 type NamedDownload = { blob: Blob; filename: string | null };
+const GATEWAY_RETRY_LIMIT = 2;
+const GATEWAY_RETRY_DELAY_MS = 1_000;
 
 async function send(path: string, options: RequestInit, retry = true): Promise<Response> {
   return authenticatedFetch(path, options, retry);
+}
+
+function mayRetryGatewayTimeout(path: string, options: RequestInit): boolean {
+  const method = (options.method ?? "GET").toUpperCase();
+  if (method === "GET") return true;
+  return method === "POST" && path.split("?", 1)[0] === "/price-comparison/suggestions/preview";
+}
+
+function waitForGatewayRetry(signal?: AbortSignal | null): Promise<void> {
+  if (signal?.aborted) return Promise.reject(signal.reason ?? new DOMException("Abgebrochen", "AbortError"));
+  return new Promise((resolve, reject) => {
+    const timeout = globalThis.setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, GATEWAY_RETRY_DELAY_MS);
+    const onAbort = () => {
+      globalThis.clearTimeout(timeout);
+      reject(signal?.reason ?? new DOMException("Abgebrochen", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function sendJsonWithGatewayRetry(path: string, options: RequestInit): Promise<Response> {
+  const retryGatewayTimeout = mayRetryGatewayTimeout(path, options);
+  let response = await send(path, options);
+  for (let attempt = 0; retryGatewayTimeout && response.status === 504 && attempt < GATEWAY_RETRY_LIMIT; attempt += 1) {
+    await waitForGatewayRetry(options.signal);
+    response = await send(path, options);
+  }
+  return response;
 }
 
 async function errorFrom(response: Response): Promise<PriceComparisonError> {
@@ -157,7 +190,7 @@ export async function priceRequest<T>(path: string, options: RequestInit = {}): 
   if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const response = await send(path, { ...options, headers });
+  const response = await sendJsonWithGatewayRetry(path, { ...options, headers });
   if (!response.ok) throw await errorFrom(response);
   return response.status === 204 ? (undefined as T) : response.json() as Promise<T>;
 }

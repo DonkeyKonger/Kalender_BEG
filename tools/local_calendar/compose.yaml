@@ -39,6 +39,7 @@ services:
       MS_GRAPH_CREATE_TEST_FOLDERS_ENABLED: 'false'
       MS_GRAPH_CREATE_PROJECT_FOLDERS_ENABLED: 'false'
       PRICE_COMPARISON_LOCAL_ROOT: /price-data
+      PRICE_COMPARISON_CACHE_DIR: /price-cache
       MPLCONFIGDIR: /tmp/price-comparison-matplotlib
       CTRACK_SYNC_ENABLED: 'false'
       FCM_ENABLED: 'false'
@@ -54,6 +55,7 @@ services:
     volumes:
       - ../../.local-calendar/metadata.json:/local-metadata.json:ro
       - price_comparison_data:/price-data
+      - price_comparison_cache:/price-cache
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     healthcheck:
@@ -94,3 +96,4 @@ networks:
 volumes:
   test_database:
   price_comparison_data:
+  price_comparison_cache:
