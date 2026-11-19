@@ -15,7 +15,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from urllib.parse import quote
+from urllib.parse import SplitResult, quote, unquote, urlsplit
 
 from fastapi import HTTPException
 from sqlalchemy import text
@@ -37,6 +37,79 @@ LEGACY_SETTINGS = {
     "manual_prices.json": "manual_prices",
     "tab1_net_price_reference_presets.json": "reference_presets",
 }
+_HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
+
+
+def _url_origin(parts: SplitResult) -> tuple[str, str, int] | None:
+    scheme = parts.scheme.lower()
+    if scheme not in {"http", "https"} or parts.username is not None or parts.password is not None:
+        return None
+    try:
+        hostname = parts.hostname
+        port = parts.port
+    except ValueError:
+        return None
+    if hostname is None:
+        return None
+    return scheme, hostname.lower(), port or (443 if scheme == "https" else 80)
+
+
+def _decoded_url_path(path: str) -> tuple[str, ...] | None:
+    if not path.startswith("/"):
+        return None
+    result = []
+    for segment in path.split("/"):
+        for index, character in enumerate(segment):
+            if character == "%" and (
+                index + 2 >= len(segment)
+                or segment[index + 1] not in _HEX_DIGITS
+                or segment[index + 2] not in _HEX_DIGITS
+            ):
+                return None
+        try:
+            decoded = unquote(segment, encoding="utf-8", errors="strict")
+        except UnicodeDecodeError:
+            return None
+        if (
+            decoded in {".", ".."}
+            or "/" in decoded
+            or "\\" in decoded
+            or any(ord(character) < 32 or ord(character) == 127 for character in decoded)
+        ):
+            return None
+        result.append(decoded)
+    return tuple(result)
+
+
+def _validated_graph_next_path(base_url: str, collection: str, next_link: object) -> str:
+    if not isinstance(next_link, str) or not next_link or any(
+        ord(character) < 33 or ord(character) == 127 for character in next_link
+    ):
+        raise HTTPException(502, "Ungültige OneDrive-Folgeseite.")
+
+    try:
+        base = urlsplit(base_url.rstrip("/"))
+        candidate = urlsplit(next_link)
+    except ValueError as exc:
+        raise HTTPException(502, "Ungültige OneDrive-Folgeseite.") from exc
+    expected_path = base.path.rstrip("/") + collection
+    expected_segments = _decoded_url_path(expected_path)
+    candidate_segments = _decoded_url_path(candidate.path)
+    base_origin = _url_origin(base)
+    if (
+        base_origin is None
+        or _url_origin(candidate) != base_origin
+        or candidate.fragment
+        or not candidate.query
+        or expected_segments is None
+        or candidate_segments != expected_segments
+    ):
+        raise HTTPException(502, "Ungültige OneDrive-Folgeseite.")
+
+    # Keep the opaque Graph query, but rebuild the path from the trusted
+    # collection so equivalent escaping (notably b! versus b%21) cannot alter
+    # the drive or folder being queried.
+    return f"{collection}?{candidate.query}"
 
 
 def safe_name(name: str) -> str:
@@ -236,13 +309,15 @@ class GraphPriceStorage:
                     )
                 items.append(item)
             next_link = data.get("@odata.nextLink")
-            prefix = self.config.ms_graph_base_url.rstrip("/")
-            if next_link and (
-                not isinstance(next_link, str)
-                or not next_link.startswith(prefix + collection + "?")
-            ):
-                raise HTTPException(502, "Ungültige OneDrive-Folgeseite.")
-            path = next_link[len(prefix) :] if next_link else ""
+            path = (
+                _validated_graph_next_path(
+                    self.config.ms_graph_base_url,
+                    collection,
+                    next_link,
+                )
+                if next_link is not None
+                else ""
+            )
         return items
 
     def _child_folder(self, parent_id: str, name: str, create: bool):

@@ -138,10 +138,10 @@ class FakeGraph:
         return item
 
 
-def graph_store(graph):
+def graph_store(graph, *, drive_id="drive"):
     config = SimpleNamespace(
         ms_graph_enabled=True,
-        ms_project_drive_id="drive",
+        ms_project_drive_id=drive_id,
         ms_project_root_folder_id="calendar-root",
         ms_tenant_id="tenant",
         ms_client_id="client",
@@ -179,12 +179,61 @@ def test_graph_rejects_remote_shortcut_and_wrong_parent():
     assert error.value.status_code == 502
 
 
-def test_graph_rejects_pagination_outside_collection():
+@pytest.mark.parametrize(
+    "next_link",
+    [
+        "https://evil.example/v1.0/drives/drive/items/folder/children?$skiptoken=next",
+        "https://graph.microsoft.com.evil.example/v1.0/drives/drive/items/folder/children?$skiptoken=next",
+        "https://graph.microsoft.com/v1.0/drives/other/items/folder/children?$skiptoken=next",
+        "https://graph.microsoft.com/v1.0/drives/drive/items/other/children?$skiptoken=next",
+        "https://graph.microsoft.com/v1.0/drives/drive/items/folder/../other/children?$skiptoken=next",
+        "https://graph.microsoft.com/v1.0/drives/drive/items/%2e%2e/children?$skiptoken=next",
+        "https://graph.microsoft.com/v1.0/drives/drive/items/folder%2F..%2Fother/children?$skiptoken=next",
+        "https://graph.microsoft.com/v1.0/drives/drive/items/folder/children/extra?$skiptoken=next",
+        "https://[graph.microsoft.com/v1.0/drives/drive/items/folder/children?$skiptoken=next",
+    ],
+)
+def test_graph_rejects_pagination_outside_collection(next_link):
     graph = FakeGraph()
-    graph.get = lambda path: {"value": [], "@odata.nextLink": "https://evil.example/collect"}
+    graph.get = lambda path: {"value": [], "@odata.nextLink": next_link}
     with pytest.raises(HTTPException) as error:
-        graph_store(graph).list("offers")
+        graph_store(graph)._children("folder")
     assert error.value.status_code == 502
+
+
+@pytest.mark.parametrize("next_drive_id", ["b!price-drive", "b%21price-drive"])
+def test_graph_accepts_encoded_or_unencoded_drive_id_in_same_collection_next_link(
+    next_drive_id,
+):
+    graph = FakeGraph()
+    calls = []
+    responses = iter(
+        [
+            {
+                "value": [],
+                "@odata.nextLink": (
+                    "https://graph.microsoft.com/v1.0/drives/"
+                    f"{next_drive_id}/items/folder/children"
+                    "?$select=id,name&$skiptoken=opaque-next-page"
+                ),
+            },
+            {"value": []},
+        ]
+    )
+
+    def get(path):
+        calls.append(path)
+        return next(responses)
+
+    graph.get = get
+
+    assert graph_store(graph, drive_id="b!price-drive")._children("folder") == []
+    assert calls == [
+        "/drives/b%21price-drive/items/folder/children"
+        "?$select=id,name,size,eTag,lastModifiedDateTime,folder,file,parentReference,remoteItem",
+        "/drives/b%21price-drive/items/folder/children"
+        "?$select=id,name&$skiptoken=opaque-next-page",
+    ]
 
 
 def test_graph_ambiguous_root_fails_closed():
