@@ -19,6 +19,7 @@ from app.tests.test_payroll_individual_month_download import approved_workers as
 from app.tests.test_payroll_month_absences import PERSON, absence
 from app.tests.test_payroll_month_xlsx_service import NS, cell_text
 from app.tests.test_payroll_print_layout import assert_single_page_per_sheet
+from app.tests.xlsx_assertions import assert_xlsx_bytes_equal
 
 
 def read_sheet(content, index=1):
@@ -116,5 +117,5 @@ def test_retained_approved_downloads_fill_summary_from_stored_days(approved_work
         assert_payroll_cell_preserved(cell, changed)
     assert artifact.content == old
     assert artifact.content_sha256 == hashlib.sha256(old).hexdigest()
-    assert prepare_payroll_workbook_download(downloaded) == downloaded
+    assert_xlsx_bytes_equal(prepare_payroll_workbook_download(downloaded), downloaded)
     assert not case.db.new and not case.db.dirty and not case.db.deleted

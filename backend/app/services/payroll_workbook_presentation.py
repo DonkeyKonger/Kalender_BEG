@@ -12,6 +12,7 @@ from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile, is_zipfile
 
 from app.services.payroll_month_xlsx_service import (
     PAYROLL_MONTH_TEMPLATE_LAYOUT,
+    SHEET_NAMESPACES,
     _clear_cell,
     _find_cell,
     _preserve_ignorable_namespaces,
@@ -20,6 +21,7 @@ from app.services.payroll_month_xlsx_service import (
     _set_cell_formula,
     _set_cell_string,
 )
+from app.services.ooxml_serialization import serialize_ooxml
 from app.services.payroll_print_layout import (
     configure_payroll_print_areas,
     configure_payroll_print_sheet,
@@ -97,7 +99,7 @@ def _prepare_download(content: bytes) -> bytes:
             if not re.fullmatch(r"xl/worksheets/sheet\d+\.xml", path):
                 continue
             sheet = ET.fromstring(source.read(path))
-            original_sheet = ET.tostring(sheet)
+            original_sheet = _serialized_element(sheet)
             opening = _find_cell(sheet, "K50")
             closing = _find_cell(sheet, "K51")
             if (
@@ -147,7 +149,7 @@ def _prepare_download(content: bytes) -> bytes:
             _correct_vacation_travel_expenses(sheet, text)
             if _format_payroll_fields(sheet, styles):
                 styles_changed = True
-            if ET.tostring(sheet) != original_sheet:
+            if _serialized_element(sheet) != original_sheet:
                 replacements[path] = _xml(sheet)
         printed_workbook = configure_payroll_print_areas(workbook_xml, payroll_indices)
         if printed_workbook != workbook_xml:
@@ -229,16 +231,16 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
     fills = styles.find(_qname("fills"))
     if cell_xfs is None or fills is None:
         return False
-    original_styles = ET.tostring(styles)
+    original_styles = _serialized_element(styles)
     gray_fill = ET.Element(_qname("fill"))
     pattern = ET.SubElement(gray_fill, _qname("patternFill"), patternType="solid")
     ET.SubElement(pattern, _qname("fgColor"), rgb="FFF2F2F2")
     ET.SubElement(pattern, _qname("bgColor"), indexed="64")
 
     def reuse_or_append(collection: ET.Element, element: ET.Element) -> int:
-        serialized = ET.tostring(element)
+        serialized = _serialized_element(element)
         for index, existing in enumerate(collection):
-            if ET.tostring(existing) == serialized:
+            if _serialized_element(existing) == serialized:
                 return index
         collection.append(element)
         collection.set("count", str(len(collection)))
@@ -337,7 +339,7 @@ def _format_payroll_fields(sheet: ET.Element, styles: ET.Element) -> bool:
         if _decimal_account_balance(sheet, styles, ref):
             format_cell(ref, horizontal="right", number_format="0.00")
     format_cell("G48", horizontal="right", number_format='[h]:mm" h"')
-    return ET.tostring(styles) != original_styles
+    return _serialized_element(styles) != original_styles
 
 
 def _decimal_total_hours(sheet: ET.Element, styles: ET.Element) -> bool:
@@ -517,4 +519,24 @@ def _decimal_account_balance(sheet: ET.Element, styles: ET.Element, ref: str) ->
 
 
 def _xml(root: ET.Element) -> bytes:
-    return _preserve_ignorable_namespaces(ET.tostring(root, encoding="UTF-8", xml_declaration=True))
+    serialized = serialize_ooxml(
+        root,
+        encoding="UTF-8",
+        xml_declaration=True,
+        namespaces=SHEET_NAMESPACES,
+    )
+    if not isinstance(serialized, bytes):
+        raise TypeError("Byte XML serialization returned text")
+    return _preserve_ignorable_namespaces(serialized)
+
+
+def _serialized_element(root: ET.Element) -> bytes:
+    serialized = serialize_ooxml(
+        root,
+        encoding="utf-8",
+        xml_declaration=False,
+        namespaces=SHEET_NAMESPACES,
+    )
+    if not isinstance(serialized, bytes):
+        raise TypeError("Byte XML serialization returned text")
+    return serialized

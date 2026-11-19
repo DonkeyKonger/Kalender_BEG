@@ -21,6 +21,7 @@ from app.models.person_work_day import PersonWorkDay
 from app.models.site import Site
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.absence_service import absence_weekdays
+from app.services.ooxml_serialization import serialize_ooxml
 from app.services.person_hours_account_service import (
     OFFICE_ONLY_TIME_ENTRY_NOTE,
     effective_corrected_work_minutes,
@@ -52,8 +53,6 @@ SHEET_NAMESPACES = {
     "xr2": "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2",
     "xr3": "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3",
 }
-for prefix, uri in SHEET_NAMESPACES.items():
-    ET.register_namespace(prefix, uri)
 
 FOUR_DAY_MINIMUM_WEEK_MINUTES = 36 * 60
 DISTRIBUTED_WORK_DAYS = 5
@@ -251,14 +250,20 @@ def build_payroll_month_xlsx(
             remarks=remarks,
         )
         configure_payroll_print_sheet(sheet_root)
-        filled_sheet = ET.tostring(
+        filled_sheet = serialize_ooxml(
             sheet_root,
             encoding="UTF-8",
             xml_declaration=True,
+            namespaces=SHEET_NAMESPACES,
         )
         filled_sheet = _preserve_ignorable_namespaces(filled_sheet)
         filled_styles = _preserve_ignorable_namespaces(
-            ET.tostring(styles_root, encoding="UTF-8", xml_declaration=True)
+            serialize_ooxml(
+                styles_root,
+                encoding="UTF-8",
+                xml_declaration=True,
+                namespaces=SHEET_NAMESPACES,
+            )
         )
         for item in source.infolist():
             if item.filename == PAYROLL_MONTH_TEMPLATE_LAYOUT.worksheet_path:
@@ -340,7 +345,12 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
         archive.writestr(
             PAYROLL_MONTH_TEMPLATE_LAYOUT.styles_path,
             _preserve_ignorable_namespaces(
-                ET.tostring(styles_root, encoding="UTF-8", xml_declaration=True)
+                serialize_ooxml(
+                    styles_root,
+                    encoding="UTF-8",
+                    xml_declaration=True,
+                    namespaces=SHEET_NAMESPACES,
+                )
             ),
         )
 
@@ -371,7 +381,12 @@ def build_payroll_months_xlsx(sheets: Sequence[PayrollMonthSheet]) -> PayrollMon
                 )
             )
             filled_sheet = _preserve_ignorable_namespaces(
-                ET.tostring(sheet_root, encoding="UTF-8", xml_declaration=True)
+                serialize_ooxml(
+                    sheet_root,
+                    encoding="UTF-8",
+                    xml_declaration=True,
+                    namespaces=SHEET_NAMESPACES,
+                )
             )
             archive.writestr(f"xl/worksheets/sheet{index}.xml", filled_sheet)
             archive.writestr(
@@ -1651,12 +1666,20 @@ def _payroll_month_app_properties(app_xml: bytes, sheet_names: Sequence[str]) ->
 
 def _payroll_month_workbook_xml(workbook_xml: bytes, sheet_names: Sequence[str]) -> bytes:
     text = workbook_xml.decode("utf-8")
-    sheets_xml = "<sheets>" + "".join(
-        f"<sheet name={quoteattr(sheet_name)} sheetId=\"{index}\" "
-        f"r:id=\"rIdSheet{index}\"/>"
-        for index, sheet_name in enumerate(sheet_names, start=1)
-    ) + "</sheets>"
-    renamed = re.sub(r"<sheets>.*?</sheets>", sheets_xml, text, count=1, flags=re.DOTALL)
+    pattern = (
+        r"(?P<opening><(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)sheets\b[^>]*>)"
+        r".*?(?P<closing></(?P=prefix)sheets\s*>)"
+    )
+
+    def replace_sheets(match: re.Match[str]) -> str:
+        prefix = match.group("prefix")
+        return match.group("opening") + "".join(
+            f"<{prefix}sheet name={quoteattr(sheet_name)} sheetId=\"{index}\" "
+            f"r:id=\"rIdSheet{index}\"/>"
+            for index, sheet_name in enumerate(sheet_names, start=1)
+        ) + match.group("closing")
+
+    renamed = re.sub(pattern, replace_sheets, text, count=1, flags=re.DOTALL)
     return configure_payroll_print_areas(renamed.encode("utf-8"))
 
 

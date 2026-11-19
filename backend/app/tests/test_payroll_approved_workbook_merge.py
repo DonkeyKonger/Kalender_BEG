@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import posixpath
+import re
 import xml.etree.ElementTree as ET
 from datetime import date
 from io import BytesIO
@@ -16,13 +17,17 @@ from app.services.payroll_approved_workbook_merge import (
 )
 from app.services.payroll_month_xlsx_service import (
     PayrollMonthSheet,
+    _payroll_month_workbook_xml,
     build_payroll_months_xlsx,
 )
+from app.services.payroll_print_layout import configure_payroll_print_areas
+from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
 from app.tests.test_payroll_month_xlsx_service import (
     cell_text,
     long_week_entries,
     make_entry,
 )
+from app.tests.xlsx_assertions import assert_xlsx_bytes_equal
 
 
 _SPREADSHEET_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -188,13 +193,110 @@ def test_merge_rejects_raw_or_incompatible_workbooks_without_partial_fallback():
     changed_styles = _rewrite_zip(
         normal,
         replace={
-            "xl/styles.xml": _zip_part(normal, "xl/styles.xml").replace(
-                b"</styleSheet>", b"<!-- incompatible -->\n</styleSheet>"
+            "xl/styles.xml": re.sub(
+                rb"</(?:[A-Za-z_][\w.-]*:)?styleSheet\s*>",
+                lambda match: b"<!-- incompatible -->\n" + match.group(0),
+                _zip_part(normal, "xl/styles.xml"),
+                count=1,
             )
         },
     )
     with pytest.raises(ValueError, match="Styles unterscheiden sich"):
         merge_approved_payroll_workbooks([("Original", normal), ("Fremde Styles", changed_styles)])
+
+
+def test_openpyxl_namespace_registration_does_not_change_payroll_xml(monkeypatch):
+    monkeypatch.setitem(ET._namespace_map, _SPREADSHEET_NS, "")
+    default_export = _empty_normal_export("Erika Bau", person_id=1)
+
+    monkeypatch.setitem(ET._namespace_map, _SPREADSHEET_NS, "s")
+    polluted_namespace_map = dict(ET._namespace_map)
+    prefixed_export = _empty_normal_export("Erika Bau", person_id=1)
+
+    for path in ("xl/workbook.xml", "xl/worksheets/sheet1.xml", "xl/styles.xml"):
+        assert_xlsx_bytes_equal(
+            _zip_part(prefixed_export, path),
+            _zip_part(default_export, path),
+            context=path,
+        )
+    assert dict(ET._namespace_map) == polluted_namespace_map
+    corrected = prepare_payroll_workbook_download(prefixed_export)
+    assert_xlsx_bytes_equal(
+        prepare_payroll_workbook_download(corrected),
+        corrected,
+        context="wiederholt aufbereiteter Download",
+    )
+    assert dict(ET._namespace_map) == polluted_namespace_map
+
+
+def test_print_areas_consolidate_repeated_legacy_defined_names_idempotently():
+    workbook_xml = _zip_part(
+        _empty_normal_export("Erika Bau", person_id=1),
+        "xl/workbook.xml",
+    )
+    text = workbook_xml.decode("utf-8")
+    match = re.search(r"<definedNames\b[^>]*>.*?</definedNames>", text, flags=re.DOTALL)
+    assert match is not None
+    legacy_prefixed = re.sub(
+        r"<definedNames\b[^>]*>",
+        f'<s:definedNames xmlns:s="{_SPREADSHEET_NS}">',
+        match.group(0),
+        count=1,
+    )
+    legacy_prefixed = legacy_prefixed.replace(
+        "<definedName ", "<s:definedName ",
+    ).replace("</definedName>", "</s:definedName>")
+    legacy_prefixed = legacy_prefixed.replace("</definedNames>", "</s:definedNames>")
+    legacy_prefixed = legacy_prefixed.replace(
+        "</s:definedNames>",
+        '<s:definedName name="CustomRate">42</s:definedName></s:definedNames>',
+    )
+    legacy_unprefixed = match.group(0).replace(
+        "</definedNames>",
+        '<definedName name="CustomRate">42</definedName></definedNames>',
+    )
+    repeated_definitions = f"{match.group(0)}{legacy_prefixed}{legacy_unprefixed}"
+    legacy_workbook = (
+        f"{text[:match.start()]}{repeated_definitions}{text[match.end():]}".encode()
+    )
+
+    corrected = configure_payroll_print_areas(legacy_workbook)
+
+    assert_xlsx_bytes_equal(
+        configure_payroll_print_areas(corrected),
+        corrected,
+        context="normalisierte definedNames",
+    )
+    assert b"<s:definedNames" not in corrected
+    root = ET.fromstring(corrected)
+    definitions = root.findall(f"{{{_SPREADSHEET_NS}}}definedNames")
+    assert len(definitions) == 1
+    names = definitions[0].findall(f"{{{_SPREADSHEET_NS}}}definedName")
+    print_areas = [name for name in names if name.get("name") == "_xlnm.Print_Area"]
+    assert len(print_areas) == 1
+    assert print_areas[0].text == "'Bau'!$A$1:$L$52"
+    custom_names = [name for name in names if name.get("name") == "CustomRate"]
+    assert len(custom_names) == 1
+    assert custom_names[0].text == "42"
+
+
+def test_workbook_rewrite_preserves_prefixed_sheets_container_metadata():
+    workbook_xml = (
+        f'<w:workbook xmlns:w="{_SPREADSHEET_NS}" '
+        f'xmlns:r="{_DOCUMENT_RELATIONSHIPS_NS}">'
+        f'<s:sheets xmlns:s="{_SPREADSHEET_NS}" data-kept="yes">'
+        '<s:sheet name="Alt" sheetId="1" r:id="rIdSheet1"/>'
+        '</s:sheets></w:workbook>'
+    ).encode()
+
+    rewritten = _payroll_month_workbook_xml(workbook_xml, ["Neu"])
+
+    root = ET.fromstring(rewritten)
+    sheets = root.find(f"{{{_SPREADSHEET_NS}}}sheets")
+    assert sheets is not None
+    assert sheets.get("data-kept") == "yes"
+    assert [sheet.get("name") for sheet in sheets] == ["Neu"]
+    assert len(root.findall(f"{{{_SPREADSHEET_NS}}}definedNames")) == 1
 
 
 def _empty_normal_export(name: str, *, person_id: int) -> bytes:

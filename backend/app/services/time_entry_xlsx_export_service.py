@@ -21,6 +21,7 @@ from app.models.person import Person
 from app.models.user import User
 from app.models.work_time_entry import WorkTimeEntry
 from app.services.gps_service import NOTICE_GPS_NOT_CHECKABLE, GpsPresenceEvaluation, GpsPresenceService
+from app.services.ooxml_serialization import serialize_ooxml
 from app.services.time_entry_rounding import round_minutes_to_quarter_hour
 from app.services.time_entry_service import GPS_TIME_REVIEW_TOLERANCE_MINUTES, TimeEntryService
 from app.services.person_hours_account_service import DailyAbsenceCredit, calculate_weekly_hours_breakdown
@@ -94,8 +95,6 @@ SHEET_NAMESPACES = {
     "xr2": "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2",
     "xr3": "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3",
 }
-for prefix, uri in SHEET_NAMESPACES.items():
-    ET.register_namespace(prefix, uri)
 
 
 @dataclass(frozen=True)
@@ -497,7 +496,12 @@ def fill_weekly_worker_template_sheet(
     update_sheet_dimension(root, 32 + extra_rows)
     remove_page_breaks(root)
     return preserve_weekly_worker_sheet_namespaces(
-        ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        serialize_ooxml(
+            root,
+            encoding="utf-8",
+            xml_declaration=True,
+            namespaces=SHEET_NAMESPACES,
+        )
     )
 
 

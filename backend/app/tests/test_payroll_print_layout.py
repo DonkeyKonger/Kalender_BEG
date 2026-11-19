@@ -14,6 +14,7 @@ from app.services.payroll_month_xlsx_service import (
 )
 from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
 from app.tests.test_payroll_month_xlsx_service import NS, PERSON
+from app.tests.xlsx_assertions import assert_xlsx_bytes_equal
 
 
 def assert_single_page_per_sheet(content):
@@ -94,7 +95,7 @@ def test_retained_print_layout_changes_without_changing_payroll_or_other_parts()
     ).content, custom_name=True)
     corrected = prepare_payroll_workbook_download(original)
     assert_single_page_per_sheet(corrected)
-    assert prepare_payroll_workbook_download(corrected) == corrected
+    assert_xlsx_bytes_equal(prepare_payroll_workbook_download(corrected), corrected)
     with ZipFile(BytesIO(original)) as before, ZipFile(BytesIO(corrected)) as after:
         old_sheet = ET.fromstring(before.read("xl/worksheets/sheet1.xml"))
         new_sheet = ET.fromstring(after.read("xl/worksheets/sheet1.xml"))

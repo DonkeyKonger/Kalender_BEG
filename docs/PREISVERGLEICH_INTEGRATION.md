@@ -167,3 +167,45 @@ Datenträger erhält diese Daten über Neubauten hinweg.
 
 Kein Push und kein Cloud-Deploy. Die jeweils aktuelle ausgelieferte Kennung ist
 unter `/__local-test__/metadata` kontrollierbar.
+
+## Nachprüfung der Backend-CI am 19.11.2026
+
+Der vollständige Backend-Testlauf nach dem Push von `de5881b` deckte eine
+Wechselwirkung mit bestehenden Lohnexporten auf: `openpyxl` registriert globale
+ElementTree-Präfixe und ändert SpreadsheetML von einem Standardnamespace auf
+`s:`. Die bisherige Bearbeitung der Druckbereiche erkannte daraufhin ihre eigenen
+XML-Blöcke nicht mehr. Wiederholte Download-Aufbereitung fügte weitere
+`definedNames`-Blöcke ein und verletzte die Byte-Idempotenz. Die sehr lange
+CI-Laufzeit entstand beim anschließenden Binärvergleich der XLSX-Dateien durch
+pytest/difflib; sie war keine lange Preisdatei-Indizierung.
+
+Die Kalender-XLSX-Ausgabe verwendet deshalb eine lokale Namespace-Zuordnung,
+ohne die globale ElementTree-Registrierung zu lesen oder zu verändern. Der
+Helper kapselt den XML-Serializer der Python-Standardbibliothek, damit Escaping,
+Attributreihenfolge und die bisherigen Namespace-Präfixe erhalten bleiben.
+Vorhandene wiederholte Druckbereichsblöcke werden konsolidiert; andere benannte
+Bereiche bleiben erhalten. Die Preisviewer-Parser und -Exportfunktionen bleiben
+unverändert.
+
+XLSX-Idempotenztests vergleichen weiterhin die vollständigen Bytes. Fehler
+melden kompakt Länge und SHA-256, statt einen mehrmegabytegroßen Binär-Diff zu
+berechnen. Der GitHub-Build protokolliert jeden Test, gibt nach 60 Sekunden einen
+Stacktrace aus und endet spätestens nach 30 Minuten.
+
+Zusätzlicher Rückwärtsvergleich mit dem unveränderten Ausgangsstand:
+vier synthetische Einzel-/Sammel-Lohnexporte einschließlich aufbereiteter
+Downloads; alle 64 ZIP-Bestandteile bytegleich, auch nach `openpyxl`-Import.
+
+Abschlussprüfung der Korrektur:
+
+- Vollständige Backend-Suite unter Linux/Python 3.12: **2.636 bestanden**, keine
+  übersprungenen Tests, 265,54 Sekunden. Die zusätzlichen PostgreSQL-Tests liefen
+  gegen neu angelegte, isolierte Datenbanken mit allen aktuellen Migrationen.
+- Backend-Ruff, Paketkonsistenz, Abgleich der Laufzeitabhängigkeiten und API-Import
+  erfolgreich. Workflow-YAML und `git diff --check` gültig.
+- 1.097 Frontendtests und der Produktionsbuild erfolgreich; 17 Prüfungen des
+  lokalen Testkalenders erfolgreich.
+- Ein zusätzlich ausgeführter globaler Frontend-Lint meldet sechs bereits im
+  Ausgangsstand vorhandene Fehler (Dateinamen-RegEx und ungenutzte Symbole).
+  Frontend-Dateien sind in dieser Korrektur unverändert; der betroffene
+  Backend-Deployment-Workflow enthält diesen Frontend-Lint nicht.

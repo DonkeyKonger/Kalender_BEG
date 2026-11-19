@@ -5,10 +5,14 @@ from __future__ import annotations
 import re
 import xml.etree.ElementTree as ET
 from collections.abc import Collection
+from copy import deepcopy
+
+from app.services.ooxml_serialization import serialize_ooxml
 
 
 _NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 PAYROLL_PRINT_AREA = "$A$1:$L$52"
+_OPTIONAL_PREFIX = r"(?:[A-Za-z_][\w.-]*:)?"
 
 
 def _tag(name: str) -> str:
@@ -57,27 +61,60 @@ def configure_payroll_print_areas(
     selected = set(range(len(sheets))) if sheet_indices is None else set(sheet_indices)
     if not selected:
         return workbook_xml
-    definitions = workbook.find(_tag("definedNames"))
-    if definitions is None:
-        definitions = ET.Element(_tag("definedNames"))
+    definition_blocks = workbook.findall(_tag("definedNames"))
+    definitions = ET.Element(_tag("definedNames"))
     selected_ids = {str(index) for index in selected}
-    for definition in list(definitions):
-        if (
-            definition.get("name") == "_xlnm.Print_Area"
-            and definition.get("localSheetId") in selected_ids
-        ):
-            definitions.remove(definition)
+    preserved_signatures: set[tuple[str, tuple[tuple[str, str], ...], str | None]] = set()
+    for block in definition_blocks:
+        for definition in block:
+            if (
+                definition.get("name") == "_xlnm.Print_Area"
+                and definition.get("localSheetId") in selected_ids
+            ):
+                continue
+            signature = (
+                definition.tag,
+                tuple(sorted(definition.attrib.items())),
+                definition.text,
+            )
+            if signature in preserved_signatures:
+                continue
+            preserved_signatures.add(signature)
+            definitions.append(deepcopy(definition))
     for index in sorted(selected):
         name = sheets[index].get("name", "").replace("'", "''")
         definition = ET.SubElement(
             definitions, _tag("definedName"), name="_xlnm.Print_Area", localSheetId=str(index),
         )
         definition.text = f"'{name}'!{PAYROLL_PRINT_AREA}"
-    serialized = ET.tostring(definitions, encoding="unicode")
+    serialized = serialize_ooxml(
+        definitions,
+        encoding="unicode",
+        xml_declaration=False,
+        namespaces={"": _NS},
+    )
+    if not isinstance(serialized, str):
+        raise TypeError("Unicode XML serialization returned bytes")
     text = workbook_xml.decode("utf-8")
-    pattern = r"<definedNames(?:\s[^>]*)?>.*?</definedNames>|<definedNames(?:\s[^>]*)?/>"
+    pattern = (
+        rf"<(?P<prefix>{_OPTIONAL_PREFIX})definedNames\b[^>]*"
+        rf"(?:>.*?</(?P=prefix)definedNames\s*>|\s*/>)"
+    )
     if re.search(pattern, text, flags=re.DOTALL):
-        text = re.sub(pattern, lambda _match: serialized, text, count=1, flags=re.DOTALL)
+        replacement_count = 0
+
+        def replace_definitions(_match: re.Match[str]) -> str:
+            nonlocal replacement_count
+            replacement_count += 1
+            return serialized if replacement_count == 1 else ""
+
+        text = re.sub(pattern, replace_definitions, text, flags=re.DOTALL)
     else:
-        text = text.replace("</sheets>", f"</sheets>{serialized}", 1)
+        sheets_end = rf"</{_OPTIONAL_PREFIX}sheets\s*>"
+        text = re.sub(
+            sheets_end,
+            lambda match: f"{match.group(0)}{serialized}",
+            text,
+            count=1,
+        )
     return text.encode("utf-8")

@@ -10,6 +10,7 @@ from app.services.payroll_month_xlsx_service import (
 )
 from app.services.payroll_workbook_presentation import prepare_payroll_workbook_download
 from app.tests.test_payroll_month_xlsx_service import NS, cell_text, cell_number_format
+from app.tests.xlsx_assertions import assert_xlsx_bytes_equal
 
 
 @pytest.fixture
@@ -47,7 +48,7 @@ def test_daily_hours_and_breaks_are_numeric_quarters_with_consistent_sum(
 ):
     original = with_day_values(daily_workbook, work, rest)
     corrected = prepare_payroll_workbook_download(original)
-    assert prepare_payroll_workbook_download(corrected) == corrected
+    assert_xlsx_bytes_equal(prepare_payroll_workbook_download(corrected), corrected)
     with ZipFile(BytesIO(corrected)) as package:
         sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
         styles = ET.fromstring(package.read("xl/styles.xml"))
@@ -73,7 +74,7 @@ def test_generated_overtime_uses_the_sum_of_rounded_days(minutes, expected_total
         year=2026, month=10, entries=[],
     ).content
     corrected = prepare_payroll_workbook_download(with_day_values(original, minutes, 30))
-    assert prepare_payroll_workbook_download(corrected) == corrected
+    assert_xlsx_bytes_equal(prepare_payroll_workbook_download(corrected), corrected)
     with ZipFile(BytesIO(corrected)) as package:
         sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
     assert float(cell_text(sheet, "E41")) == expected_total

@@ -12,6 +12,7 @@ from app.services.payroll_workbook_presentation import (
     prepare_payroll_workbook_download, _decimal_overtime_hours,
 )
 from app.tests.test_payroll_month_xlsx_service import NS, cell_number_format, cell_text
+from app.tests.xlsx_assertions import assert_xlsx_bytes_equal
 
 
 @pytest.mark.parametrize("minutes,expected", [
@@ -31,7 +32,7 @@ def test_retained_payouts_become_right_aligned_decimal_quarters(minutes, expecte
     ]).content
     for content, indices in ((original, (1,)), (combined, (1, 2))):
         corrected = prepare_payroll_workbook_download(content)
-        assert prepare_payroll_workbook_download(corrected) == corrected
+        assert_xlsx_bytes_equal(prepare_payroll_workbook_download(corrected), corrected)
         with ZipFile(BytesIO(corrected)) as package:
             styles = ET.fromstring(package.read("xl/styles.xml"))
             for index in indices:

@@ -18,6 +18,7 @@ from app.tests.test_payroll_travel_expenses import (
     BEG, SELF, HOME, EMPTY, HOME_MARK, SELF_ARRIVAL, SELF_MIDDLE,
     NS, cell_text, entry, worker, work_day,
 )
+from app.tests.xlsx_assertions import assert_xlsx_bytes_equal
 
 
 def read_sheet(content, index=1):
@@ -161,7 +162,7 @@ def test_retained_vacation_ends_and_restarts_travel_despite_stale_hotel_selectio
     assert markings(sheet, 5) == markings(sheet, 6) == ("", "", "", "")
     assert markings(sheet, 7) == ("", "x", "", "x")
     assert markings(sheet, 8) == ("", "x", "", "")
-    assert prepare_payroll_workbook_download(corrected) == corrected
+    assert_xlsx_bytes_equal(prepare_payroll_workbook_download(corrected), corrected)
 
 
 def assert_corrected_retained_trip(content, index=1):
@@ -180,7 +181,7 @@ def test_retained_download_corrects_vacation_and_is_idempotent(retained_vacation
     assert markings(read_sheet(old), 6) == ("", "x", "", "")
     corrected = prepare_payroll_workbook_download(old)
     assert_corrected_retained_trip(corrected)
-    assert prepare_payroll_workbook_download(corrected) == corrected
+    assert_xlsx_bytes_equal(prepare_payroll_workbook_download(corrected), corrected)
 
 
 @pytest.mark.parametrize("ref", ["J14", "E49"])

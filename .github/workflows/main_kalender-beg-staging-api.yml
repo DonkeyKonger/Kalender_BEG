@@ -22,6 +22,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       tool_source_sha256: ${{ steps.verify-tool-import.outputs.source_sha256 }}
       previous_revision: ${{ steps.rollback-package.outputs.previous_revision }}
@@ -51,7 +52,7 @@ jobs:
           python -c "from app.main import app; assert app.title == 'Baustellenplaner API'"
           python -m pip install -e ".[dev]"
           python -m ruff check app
-          python -m pytest
+          python -m pytest -v --durations=20 -o faulthandler_timeout=60
 
       - name: Create deployment package
         run: |

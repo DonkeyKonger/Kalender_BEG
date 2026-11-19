@@ -17,6 +17,7 @@ from app.services.payroll_workbook_presentation import (
 )
 from app.tests.test_payroll_individual_month_download import approved_workers as approved_workers
 from app.tests.test_payroll_month_xlsx_service import NS, cell_number_format, cell_text
+from app.tests.xlsx_assertions import assert_xlsx_bytes_equal
 
 
 def legacy_presentation(content, *, manual_remark=None):
@@ -100,9 +101,9 @@ def test_retained_and_new_approvals_download_together_without_changing_stored_da
                 cell.attrib.pop("s", None)
                 corrected.attrib.pop("s", None)
                 assert_payroll_cell_preserved(cell, corrected)
-    assert prepare_payroll_workbook_download(single) == single
+    assert_xlsx_bytes_equal(prepare_payroll_workbook_download(single), single)
     current = prepare_payroll_workbook_download(case.workbooks[1])
-    assert prepare_payroll_workbook_download(current) == current
+    assert_xlsx_bytes_equal(prepare_payroll_workbook_download(current), current)
     assert artifact.content == old
     assert artifact.content_sha256 == hashlib.sha256(old).hexdigest()
     assert [(row.status, row.approval_version) for row in case.approvals] == [("APPROVED", 1)] * 2
@@ -205,7 +206,7 @@ def test_download_layout_preserves_calculations_and_unrelated_styles(approved_wo
         old_cell.attrib.pop("s", None)
         new_cell.attrib.pop("s", None)
         assert_payroll_cell_preserved(old_cell, new_cell)
-    assert prepare_payroll_workbook_download(corrected) == corrected
+    assert_xlsx_bytes_equal(prepare_payroll_workbook_download(corrected), corrected)
 
 
 @pytest.mark.parametrize("previous_merge", ["C2:E2", "C2:F2"])
