@@ -189,7 +189,13 @@ def test_graph_rejects_remote_shortcut_and_wrong_parent():
         "https://graph.microsoft.com/v1.0/drives/drive/items/folder/../other/children?$skiptoken=next",
         "https://graph.microsoft.com/v1.0/drives/drive/items/%2e%2e/children?$skiptoken=next",
         "https://graph.microsoft.com/v1.0/drives/drive/items/folder%2F..%2Fother/children?$skiptoken=next",
+        "https://graph.microsoft.com/v1.0/drives/drive/items/folder%5C..%5Cother/children?$skiptoken=next",
         "https://graph.microsoft.com/v1.0/drives/drive/items/folder/children/extra?$skiptoken=next",
+        "https://user@graph.microsoft.com/v1.0/drives/drive/items/folder/children?$skiptoken=next",
+        "https://graph.microsoft.com:444/v1.0/drives/drive/items/folder/children?$skiptoken=next",
+        "https://graph.microsoft.com:0/v1.0/drives/drive/items/folder/children?$skiptoken=next",
+        "http://graph.microsoft.com/v1.0/drives/drive/items/folder/children?$skiptoken=next",
+        "https://graph.microsoft.com/v1.0/drives/drive/items/folder/children?$skiptoken=next#fragment",
         "https://[graph.microsoft.com/v1.0/drives/drive/items/folder/children?$skiptoken=next",
     ],
 )
@@ -234,6 +240,37 @@ def test_graph_accepts_encoded_or_unencoded_drive_id_in_same_collection_next_lin
         "/drives/b%21price-drive/items/folder/children"
         "?$select=id,name&$skiptoken=opaque-next-page",
     ]
+
+
+def test_graph_pagination_collects_validated_items_from_every_page():
+    graph = FakeGraph()
+    drive_id = "b!price-drive"
+
+    def item(item_id):
+        return {
+            "id": item_id,
+            "name": f"{item_id}.pdf",
+            "file": {},
+            "parentReference": {"id": "folder", "driveId": drive_id},
+        }
+
+    responses = iter(
+        [
+            {
+                "value": [item("first-page")],
+                "@odata.nextLink": (
+                    "https://graph.microsoft.com/v1.0/drives/b!price-drive/"
+                    "items/folder/children?$select=id,name&$skiptoken=second"
+                ),
+            },
+            {"value": [item("second-page")]},
+        ]
+    )
+    graph.get = lambda path: next(responses)
+
+    result = graph_store(graph, drive_id=drive_id)._children("folder")
+
+    assert [entry["id"] for entry in result] == ["first-page", "second-page"]
 
 
 def test_graph_ambiguous_root_fails_closed():

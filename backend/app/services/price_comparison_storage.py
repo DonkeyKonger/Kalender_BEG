@@ -51,7 +51,11 @@ def _url_origin(parts: SplitResult) -> tuple[str, str, int] | None:
         return None
     if hostname is None:
         return None
-    return scheme, hostname.lower(), port or (443 if scheme == "https" else 80)
+    return (
+        scheme,
+        hostname.lower(),
+        port if port is not None else (443 if scheme == "https" else 80),
+    )
 
 
 def _decoded_url_path(path: str) -> tuple[str, ...] | None:
