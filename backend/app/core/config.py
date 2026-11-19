@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     ms_graph_base_url: str = Field(
         default="https://graph.microsoft.com/v1.0", alias="MS_GRAPH_BASE_URL"
     )
+    price_comparison_local_root: str | None = Field(
+        default=None, alias="PRICE_COMPARISON_LOCAL_ROOT"
+    )
+    price_comparison_cache_dir: str = Field(
+        default="/tmp/kalender_beg_price_comparison", alias="PRICE_COMPARISON_CACHE_DIR"
+    )
     document_thumbnail_cache_dir: str = Field(
         default="/tmp/kalender_beg_document_thumbnails",
         alias="DOCUMENT_THUMBNAIL_CACHE_DIR",

@@ -1,0 +1,2 @@
+# Preserve the verified upstream parser byte-for-byte, including its whitespace.
+backend/app/services/price_comparison_pdf_parser.py -whitespace

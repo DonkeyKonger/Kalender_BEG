@@ -8,7 +8,11 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from app.services.microsoft_graph_client import GRAPH_SCOPE, MicrosoftGraphClient, MicrosoftGraphRequestError
+from app.services.microsoft_graph_client import (
+    GRAPH_SCOPE,
+    MicrosoftGraphClient,
+    MicrosoftGraphRequestError,
+)
 
 
 def graph_config(**overrides):
@@ -62,8 +66,13 @@ def test_graph_client_uses_graph_default_scope_and_bearer_header(monkeypatch):
     assert client.token_audience == "https://graph.microsoft.com"
     assert client.last_request_diagnostics["authorization_header_present"] is True
     assert client.last_request_diagnostics["authorization_header_scheme"] == "Bearer"
-    assert client.last_request_diagnostics["graph_base_url_used"] == "https://graph.microsoft.com/v1.0"
-    assert client.last_request_diagnostics["drive_url_shape"] == "GET https://graph.microsoft.com/v1.0/drives/{drive_id}"
+    assert (
+        client.last_request_diagnostics["graph_base_url_used"] == "https://graph.microsoft.com/v1.0"
+    )
+    assert (
+        client.last_request_diagnostics["drive_url_shape"]
+        == "GET https://graph.microsoft.com/v1.0/drives/{drive_id}"
+    )
     assert result == {"id": "drive-1", "name": "Dokumente"}
     assert access_token not in str(result)
     assert "super-secret-value" not in str(result)
@@ -78,7 +87,9 @@ def test_graph_client_safely_reports_www_authenticate_error_without_token(monkey
     def fake_request(method, url, json, headers, timeout):
         return httpx.Response(
             401,
-            json={"error": {"code": "generalException", "message": "Drive request was unauthorized."}},
+            json={
+                "error": {"code": "generalException", "message": "Drive request was unauthorized."}
+            },
             headers={
                 "WWW-Authenticate": 'Bearer error="invalid_token", error_description="token detail must stay hidden"'
             },
@@ -95,7 +106,10 @@ def test_graph_client_safely_reports_www_authenticate_error_without_token(monkey
     assert error.value.error_message_short == "Drive request was unauthorized."
     assert error.value.diagnostics["authorization_header_present"] is True
     assert error.value.diagnostics["authorization_header_scheme"] == "Bearer"
-    assert error.value.diagnostics["drive_url_shape"] == "GET https://graph.microsoft.com/v1.0/drives/{drive_id}"
+    assert (
+        error.value.diagnostics["drive_url_shape"]
+        == "GET https://graph.microsoft.com/v1.0/drives/{drive_id}"
+    )
     assert access_token not in str(error.value)
     assert "super-secret-value" not in str(error.value)
     assert "token detail must stay hidden" not in str(error.value)
@@ -143,3 +157,40 @@ def test_injected_http_client_handles_both_token_and_graph_requests():
 
     assert result == {"id": "drive-1"}
     assert requested_hosts == ["login.microsoftonline.com", "graph.microsoft.com"]
+
+
+def test_conditional_content_write_and_delete_forward_etag_headers():
+    requests = []
+    access_token = fake_jwt({"aud": "https://graph.microsoft.com"})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "login.microsoftonline.com":
+            return httpx.Response(
+                200,
+                json={"access_token": access_token, "expires_in": 3600},
+            )
+        requests.append(request)
+        if request.method == "PUT":
+            return httpx.Response(
+                200,
+                json={"id": "item-1", "name": "offer.pdf", "eTag": '"new"'},
+            )
+        return httpx.Response(204)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
+        client = MicrosoftGraphClient(
+            config=graph_config(),
+            http_client=http_client,
+        )
+        client.put_content(
+            "/drives/drive/items/item-1/content",
+            b"payload",
+            if_match='"old"',
+            if_none_match="*",
+        )
+        client.delete("/drives/drive/items/item-1", if_match='"new"')
+
+    assert [request.method for request in requests] == ["PUT", "DELETE"]
+    assert requests[0].headers["if-match"] == '"old"'
+    assert requests[0].headers["if-none-match"] == "*"
+    assert requests[1].headers["if-match"] == '"new"'

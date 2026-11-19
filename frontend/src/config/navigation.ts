@@ -8,6 +8,7 @@ import {
   Home,
   MapPinned,
   MoreHorizontal,
+  Scale,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -90,5 +91,11 @@ export const navigationItems: NavigationItem[] = [
     path: "/me/assignments",
     icon: FolderKanban,
     roles: ["monteur"],
+  },
+  {
+    label: "Preisvergleich",
+    path: "/price-comparison",
+    icon: Scale,
+    roles: ["admin", "project_manager"],
   },
 ];

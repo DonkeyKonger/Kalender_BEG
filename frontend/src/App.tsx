@@ -37,6 +37,9 @@ const TimeEntriesPage = lazy(() =>
 const MobileAssignmentDetailPage = lazy(() =>
   import("./pages/MobileAssignmentDetailPage").then((module) => ({ default: module.MobileAssignmentDetailPage })),
 );
+const PriceComparisonPage = lazy(() =>
+  import("./pages/PriceComparisonPage").then((module) => ({ default: module.PriceComparisonPage })),
+);
 
 export function App() {
   return (
@@ -108,6 +111,16 @@ export function App() {
           </Route>
           <Route element={<ProtectedRoute roles={["admin", "project_manager", "office"]} officePermission="employees" />}>
             <Route path="persons" element={<PersonsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["admin", "project_manager"]} />}>
+            <Route
+              path="price-comparison"
+              element={
+                <Suspense fallback={<div className="empty-state">Preisvergleich wird geladen...</div>}>
+                  <PriceComparisonPage />
+                </Suspense>
+              }
+            />
           </Route>
           <Route element={<ProtectedRoute roles={["office"]} />}>
             <Route path="no-office-pages" element={<NoOfficePages />} />

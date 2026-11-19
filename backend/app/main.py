@@ -20,6 +20,7 @@ from app.api.routes import (
     payroll_months,
     persons,
     project_folders,
+    price_comparison,
     sites,
     time_entries,
     tool_material_items,
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
     app.include_router(warehouse.router, prefix="/api")
     app.include_router(vehicle_database.router, prefix="/api")
     app.include_router(project_folders.router, prefix="/api")
+    app.include_router(price_comparison.router, prefix="/api")
     app.include_router(assignments.router, prefix="/api")
     app.include_router(absences.router, prefix="/api")
     app.include_router(operational_absences.router, prefix="/api")

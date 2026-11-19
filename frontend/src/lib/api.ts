@@ -436,7 +436,7 @@ async function request<T>(path: string, options: RequestInit = {}, retryOnUnauth
   return payload as T;
 }
 
-function authenticatedFetch(path: string, options: RequestInit, retryOnUnauthorized = true): Promise<Response> {
+export function authenticatedFetch(path: string, options: RequestInit, retryOnUnauthorized = true): Promise<Response> {
   return fetchWithAuthRefresh(`${API_BASE_URL}${path}`, options, {
     getToken: getAccessToken,
     refreshToken: refreshAccessToken,

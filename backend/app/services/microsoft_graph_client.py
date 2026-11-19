@@ -199,8 +199,8 @@ class MicrosoftGraphClient:
     def patch(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("PATCH", path, payload=payload)
 
-    def delete(self, path: str) -> dict[str, Any]:
-        return self._request("DELETE", path)
+    def delete(self, path: str, *, if_match: str | None = None) -> dict[str, Any]:
+        return self._request("DELETE", path, if_match=if_match)
 
     def get_content(self, path: str) -> tuple[bytes, str | None]:
         token = self.get_access_token()
@@ -247,12 +247,19 @@ class MicrosoftGraphClient:
             )
         return response.content, response.headers.get("content-type")
 
-    def put_content(self, path: str, content: bytes, content_type: str | None = None) -> dict[str, Any]:
+    def put_content(
+        self, path: str, content: bytes, content_type: str | None = None,
+        *, if_match: str | None = None, if_none_match: str | None = None,
+    ) -> dict[str, Any]:
         token = self.get_access_token()
         url = f"{self.config.ms_graph_base_url.rstrip('/')}/{path.lstrip('/')}"
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         if content_type:
             headers["Content-Type"] = content_type
+        if if_match is not None:
+            headers["If-Match"] = if_match
+        if if_none_match is not None:
+            headers["If-None-Match"] = if_none_match
         diagnostics = _request_diagnostics(
             method="PUT",
             url=url,
@@ -299,10 +306,13 @@ class MicrosoftGraphClient:
         method: str,
         path: str,
         payload: dict[str, Any] | None = None,
+        *, if_match: str | None = None,
     ) -> dict[str, Any]:
         token = self.get_access_token()
         url = f"{self.config.ms_graph_base_url.rstrip('/')}/{path.lstrip('/')}"
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        if if_match is not None:
+            headers["If-Match"] = if_match
         if payload is not None:
             headers["Content-Type"] = "application/json"
         diagnostics = _request_diagnostics(
