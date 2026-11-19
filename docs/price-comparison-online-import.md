@@ -42,8 +42,10 @@ ohne Original-PDF lässt sich weiterhin vergleichen und exportieren. Die
 Oberfläche kennzeichnet den fehlenden Originaldownload.
 
 Ein ausdrücklich ausgelöster Angebots-Neuaufbau liest die physischen PDFs neu
-ein und setzt deren bisherigen Positionslöschungen wie bisher zurück. Quellen
-ohne Original-PDF bleiben erhalten. Die vorhandene Bestätigung für das Löschen
+ein und setzt sämtliche bisherigen Positionslöschungen wie bisher zurück.
+Für Quellen ohne Original-PDF verwendet er weiterhin die übernommenen
+Basispositionen; auch dort erscheinen zuvor entfernte Artikel wieder.
+Die vorhandene Bestätigung für das Löschen
 doppelter Angebotsdateien gilt weiterhin. Ein DATANORM-Neueinlesen beendet nur
 die Übernahme des bisherigen DATANORM-Frames.
 
