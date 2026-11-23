@@ -26,7 +26,7 @@ test("price comparison route stays lazy and protected without an office permissi
 test("all four native workspaces and guarded duplicate workflows remain present", () => {
   const page = read("pages/PriceComparisonPage.tsx");
 
-  for (const label of ["Datanorm ↔ Angebot", "Angebote (alle)", "Artikelvergleich", "Dateien"]) {
+  for (const label of ["Artikelvergleich", "Angebote OBO", "Nettopreisabgleich", "Dateien"]) {
     assert.match(page, new RegExp(label.replace(/[()]/g, "\\$&")));
   }
   assert.match(page, /24 Monate/);

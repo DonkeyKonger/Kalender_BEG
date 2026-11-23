@@ -67,9 +67,9 @@ type UploadDuplicatePreview = {
 };
 
 const views: Array<{ key: ViewKey; label: string }> = [
-  { key: "datanorm", label: "Datanorm ↔ Angebot" },
-  { key: "offers", label: "Angebote (alle)" },
   { key: "articles", label: "Artikelvergleich" },
+  { key: "offers", label: "Angebote OBO" },
+  { key: "datanorm", label: "Nettopreisabgleich" },
   { key: "files", label: "Dateien" },
 ];
 
@@ -85,7 +85,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium"
 export function PriceComparisonPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedView = searchParams.get("view") as ViewKey | null;
-  const activeView = views.some((view) => view.key === requestedView) ? requestedView! : "datanorm";
+  const activeView = views.some((view) => view.key === requestedView) ? requestedView! : "articles";
   const [status, setStatus] = useState<PriceComparisonStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(true);
@@ -137,7 +137,7 @@ export function PriceComparisonPage() {
 
   function selectView(view: ViewKey) {
     const next = new URLSearchParams(searchParams);
-    if (view === "datanorm") next.delete("view");
+    if (view === "articles") next.delete("view");
     else next.set("view", view);
     setSearchParams(next);
   }
@@ -274,7 +274,7 @@ function DatanormView() {
     <div className="price-workspace">
       <ViewHeading
         icon={<FileSpreadsheet size={19} />}
-        title="Datanorm ↔ Angebot"
+        title="Nettopreisabgleich"
         description="Aktuelle Nettopreise mit den gespeicherten Angebotspreisen vergleichen."
         actions={(
           <>
@@ -666,7 +666,7 @@ function OffersView() {
 
   return (
     <div className="price-workspace">
-      <ViewHeading icon={<FileArchive size={19} />} title="Angebote (alle)" description="Projektangebote prüfen, korrigieren und in Bestellformate exportieren." />
+      <ViewHeading icon={<FileArchive size={19} />} title="Angebote OBO" description="Projektangebote prüfen, korrigieren und in Bestellformate exportieren." />
       <form className="price-filter-bar" onSubmit={(event) => {
         event.preventDefault(); setOffset(0); setSearch(queryInput.trim());
       }}>
