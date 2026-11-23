@@ -737,6 +737,8 @@
 .article-result-list button > span:last-child { color: #405c76; font-size: 0.69rem; font-variant-numeric: tabular-nums; }
 
 .article-detail { overflow: hidden; }
+.article-detail.is-loading { display: grid; align-items: center; min-height: 220px; }
+.article-detail.is-loading > .price-loading { min-height: 0; }
 .article-detail-placeholder { border: 1px solid var(--price-border); background: #fff; }
 .article-detail-header h3 { max-width: 780px; }
 
@@ -758,6 +760,7 @@
 .offer-type-filter { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0; border: 0; }
 .offer-type-filter label { display: flex; align-items: center; gap: 5px; color: #486077; font-size: 0.69rem; font-weight: 640; }
 .article-metrics { border-bottom: 1px solid var(--price-border); }
+.article-metrics .price-metric { min-height: 76px; align-content: start; }
 
 .price-chart-shell { padding: 12px 14px 8px; border-bottom: 1px solid var(--price-border); background: #fff; }
 .price-chart { display: block; width: 100%; min-width: 560px; max-height: 340px; }
@@ -774,6 +777,31 @@
 .chart-point { fill: #fff; stroke: #5d85ad; stroke-width: 3; }
 .chart-point.is-follow { stroke: #a58a55; }
 .chart-point.is-negotiated { stroke: #786496; }
+.chart-bar,
+.chart-point { cursor: pointer; }
+.chart-bar:is(:hover, :focus-visible) { filter: brightness(0.9); stroke: #183b61; stroke-width: 1; outline: none; }
+.chart-point:is(:hover, :focus-visible) { stroke-width: 4; outline: none; }
+.chart-empty-label { fill: #66768a; font-size: 13px; }
+.price-chart-tooltip {
+  position: fixed;
+  z-index: 1600;
+  display: grid;
+  gap: 4px;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 1px solid #bdcad7;
+  border-radius: 2px;
+  background: #fff;
+  color: #29445f;
+  box-shadow: 0 5px 18px rgb(24 59 97 / 16%);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.price-chart-tooltip strong { color: #183b61; font-size: 0.86rem; }
+.price-chart-tooltip time { color: #66768a; }
 .chart-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; color: #5e7084; font-size: 0.65rem; }
 .chart-legend span::before { display: inline-block; width: 9px; height: 9px; margin-right: 5px; background: #5d85ad; content: ""; }
 .chart-legend .is-follow::before { background: #a58a55; }
@@ -781,7 +809,16 @@
 .chart-legend .is-net::before { height: 2px; vertical-align: middle; background: #9d7a35; }
 .chart-legend .is-median::before { height: 2px; vertical-align: middle; background: #43739f; }
 .chart-empty { min-height: 240px; border-bottom: 1px solid var(--price-border); }
-.article-history-table-wrap { max-height: 420px; }
+.article-history-table-wrap {
+  height: clamp(240px, 38vh, 420px);
+  height: clamp(240px, 38dvh, 420px);
+  scrollbar-gutter: stable;
+}
+.article-history-table-wrap > .compact-empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+}
 .price-table-wrap.is-datanorm,
 .price-table-wrap.is-suggestions { max-height: min(64vh, 720px); }
 
@@ -943,6 +980,10 @@
   .article-detail-header { flex-direction: column; }
   .article-export-actions { width: 100%; }
   .price-chart-shell { overflow-x: auto; }
+  .article-history-table-wrap {
+    height: clamp(220px, 34vh, 300px);
+    height: clamp(220px, 34dvh, 300px);
+  }
   .file-upload-row { grid-template-columns: 1fr auto; }
   .file-upload-row > label { grid-column: 1; }
   .file-upload-row > span { grid-column: 1; grid-row: 2; }

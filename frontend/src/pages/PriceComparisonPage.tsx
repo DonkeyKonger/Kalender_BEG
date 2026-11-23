@@ -23,16 +23,19 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { MapFilterSelect } from "../components/MapFilterSelect";
+import { getPriceChartDomain } from "../priceComparison/chartDomain";
 import {
   PriceComparisonError,
   type ArticleDetailResult,
@@ -82,6 +85,7 @@ const offerTypeFilterOptions = [
 const currencyFormatter = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const percentFormatter = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 2, signDisplay: "exceptZero" });
 const integerFormatter = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
+const chartPriceFormatters = Array.from({ length: 7 }, (_, digits) => new Intl.NumberFormat("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits }));
 const decimalFormatter = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 3 });
 const dateFormatter = new Intl.DateTimeFormat("de-DE");
 const shortDateFormatter = new Intl.DateTimeFormat("de-DE", { month: "2-digit", year: "2-digit" });
@@ -1021,11 +1025,14 @@ function ArticlesView() {
 
 function ArticleDetail({ articleNumber }: { articleNumber: string }) {
   const [data, setData] = useState<ArticleDetailResult | null>(null);
+  const [dataArticleNumber, setDataArticleNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chartMode, setChartMode] = useState<"bars" | "line">("bars");
   const [enabledTypes, setEnabledTypes] = useState<Set<OfferType>>(new Set(offerTypes));
   const [exporting, setExporting] = useState(false);
+  const [retainedDetailHeight, setRetainedDetailHeight] = useState<number | null>(null);
+  const detailRef = useRef<HTMLElement | null>(null);
   const loadRequest = useRef(0);
   const loadController = useRef<AbortController | null>(null);
 
@@ -1034,6 +1041,7 @@ function ArticleDetail({ articleNumber }: { articleNumber: string }) {
     const controller = new AbortController();
     loadController.current = controller;
     const requestId = ++loadRequest.current;
+    setDataArticleNumber(articleNumber);
     setLoading(true);
     setError(null);
     try {
@@ -1054,6 +1062,17 @@ function ArticleDetail({ articleNumber }: { articleNumber: string }) {
       loadRequest.current += 1;
     };
   }, [load]);
+
+  useLayoutEffect(() => {
+    const detail = detailRef.current;
+    if (!detail || loading || !data || dataArticleNumber !== articleNumber) return;
+    const retainHeight = () => setRetainedDetailHeight(Math.ceil(detail.getBoundingClientRect().height));
+    retainHeight();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(retainHeight);
+    observer.observe(detail);
+    return () => observer.disconnect();
+  }, [articleNumber, data, dataArticleNumber, loading]);
 
   const filteredRows = useMemo(() => (data?.rows ?? []).filter((row) => enabledTypes.has(String(row.Angebotsart ?? "Erstangebot") as OfferType)), [data?.rows, enabledTypes]);
   const prices = filteredRows.map((row) => toNumber(row.Preis)).filter((value): value is number => value !== null);
@@ -1094,15 +1113,16 @@ function ArticleDetail({ articleNumber }: { articleNumber: string }) {
     }
   }
 
-  if (loading) return <section className="article-detail"><LoadingState label="Preisverlauf wird geladen" /></section>;
-  if (error && !data) return <section className="article-detail"><InlineNotice tone="error" action={<RetryButton onClick={load} />}>{error}</InlineNotice></section>;
+  const detailStyle = retainedDetailHeight === null ? undefined : { minHeight: `${retainedDetailHeight}px` };
+  if (loading || dataArticleNumber !== articleNumber) return <section className="article-detail is-loading" style={detailStyle}><LoadingState label="Preisverlauf wird geladen" /></section>;
+  if (error && !data) return <section className="article-detail" style={detailStyle}><InlineNotice tone="error" action={<RetryButton onClick={load} />}>{error}</InlineNotice></section>;
   if (!data) return null;
   const historyColumns = articleHistoryColumns(data.columns);
 
   return (
-    <section className="article-detail">
+    <section ref={detailRef} className="article-detail">
       <header className="article-detail-header">
-        <div><span className="price-kicker">Artikel {articleNumber}</span><h3>{String(data.article.Bezeichnung ?? data.article.description ?? "Ohne Bezeichnung")}</h3><p>Datanorm-Netto {formatCurrency(netPrice)}</p></div>
+        <div><span className="price-kicker">Artikel {articleNumber}</span><h3>{String(data.article.Bezeichnung ?? data.article.description ?? "Ohne Bezeichnung")}</h3></div>
         <div className="article-export-actions">
           <button className="price-button" type="button" disabled={exporting} onClick={() => void exportArticle("article")}><Download size={16} /> CSV</button>
           <button className="price-button" type="button" disabled={exporting} onClick={() => void exportArticle("article_pdf")}><Download size={16} /> PDF</button>
@@ -1127,23 +1147,58 @@ function ArticleDetail({ articleNumber }: { articleNumber: string }) {
       </div>
       <PriceHistoryChart rows={filteredRows} netPrice={netPrice} medianDelta={medianDelta} mode={chartMode} />
       <div className="article-history-table-wrap">
-        <table className="price-table article-history-table"><thead><tr>{historyColumns.map((column) => <th key={column}>{columnLabel(column, "article")}</th>)}</tr></thead><tbody>{filteredRows.map((row, index) => <tr key={`${String(row.Quelle)}-${index}`}>{historyColumns.map((column) => <td key={column} className={cellClass(column, row[column])}>{column === "Quelle" && row[column] ? (
+        {filteredRows.length ? <table className="price-table article-history-table"><thead><tr>{historyColumns.map((column) => <th key={column}>{columnLabel(column, "article")}</th>)}</tr></thead><tbody>{filteredRows.map((row, index) => <tr key={`${String(row.Quelle)}-${index}`}>{historyColumns.map((column) => <td key={column} className={cellClass(column, row[column])}>{column === "Quelle" && row[column] ? (
           data.unavailable_sources?.includes(String(row[column]))
             ? <span title="Die Original-PDF ist nicht vorhanden.">{String(row[column])} · Original-PDF fehlt</span>
             : <button className="source-download-button" type="button" onClick={() => void downloadSource(String(row[column]))}>{String(row[column])}<Download size={13} /></button>
-        ) : formatCell(column, row[column])}</td>)}</tr>)}</tbody></table>
-        {!filteredRows.length ? <p className="compact-empty">Für die ausgewählten Angebotsarten sind keine Preise vorhanden.</p> : null}
+        ) : formatCell(column, row[column])}</td>)}</tr>)}</tbody></table> : <p className="compact-empty">Für die ausgewählten Angebotsarten sind keine Preise vorhanden.</p>}
       </div>
     </section>
   );
 }
 
+type PriceChartPoint = { price: number; date: string; type: OfferType; offerName: string };
+type PriceChartTooltipState = { index: number; anchor: DOMRect; points: PriceChartPoint[]; mode: "bars" | "line" };
+
 function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<Record<string, unknown>>; netPrice: number | null; medianDelta: number | null; mode: "bars" | "line" }) {
-  const points = rows
-    .map((row) => ({ price: toNumber(row.Preis), date: String(row.Datum ?? ""), type: String(row.Angebotsart ?? "Erstangebot") as OfferType }))
-    .filter((point): point is { price: number; date: string; type: OfferType } => point.price !== null)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  if (!points.length) return <div className="chart-empty">Keine Angebotspreise für das Diagramm.</div>;
+  const points = useMemo(() => rows
+    .map((row) => ({
+      price: toNumber(row.Preis),
+      date: String(row.Datum ?? ""),
+      type: String(row.Angebotsart ?? "Erstangebot") as OfferType,
+      offerName: [row.Projekt, row.Angebot, row.Quelle]
+        .map((value) => String(value ?? "").trim())
+        .find((value) => value && value !== "—") ?? "Ohne Angebotsname",
+    }))
+    .filter((point): point is PriceChartPoint => point.price !== null)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [rows]);
+  const chartRef = useRef<SVGSVGElement>(null);
+  const tooltipId = useId();
+  const [tooltip, setTooltip] = useState<PriceChartTooltipState | null>(null);
+  const activeTooltip = tooltip?.points === points && tooltip.mode === mode ? tooltip : null;
+
+  useEffect(() => {
+    if (!activeTooltip) return;
+    const close = () => setTooltip(null);
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !chartRef.current?.contains(event.target)) close();
+    };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [activeTooltip]);
+
+  function showTooltip(index: number, target: SVGElement) {
+    setTooltip({ index, anchor: target.getBoundingClientRect(), points, mode });
+  }
 
   const median24Prices = points.filter((point) => isWithinLastMonths(point.date, 24)).map((point) => point.price);
   const median24 = median24Prices.length ? median(median24Prices) : null;
@@ -1151,40 +1206,80 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
   const width = 900;
   const height = 310;
   const padding = { top: 24, right: 24, bottom: 50, left: 66 };
-  const values = [
-    ...points.map((point) => point.price),
+  const references = [
     ...(netPrice === null ? [] : [netPrice]),
     ...(median24 === null ? [] : [median24]),
   ];
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
-  const range = Math.max(maximum - minimum, Math.max(maximum * 0.12, 1));
-  const floor = Math.max(0, minimum - range * 0.16);
-  const ceiling = maximum + range * 0.16;
+  const { floor, ceiling } = getPriceChartDomain(points.map((point) => point.price), references);
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   const x = (index: number) => padding.left + (points.length === 1 ? plotWidth / 2 : (index / (points.length - 1)) * plotWidth);
-  const y = (value: number) => padding.top + (1 - (value - floor) / (ceiling - floor)) * plotHeight;
+  const y = (value: number) => padding.top + (1 - (value / 2 - floor / 2) / (ceiling / 2 - floor / 2)) * plotHeight;
   const linePath = points.map((point, index) => `${index ? "L" : "M"}${x(index)},${y(point.price)}`).join(" ");
-  const ticks = Array.from({ length: 5 }, (_, index) => floor + ((ceiling - floor) * index) / 4).reverse();
+  const ticks = Array.from({ length: 5 }, (_, index) => floor * (1 - index / 4) + ceiling * (index / 4)).reverse();
   const barWidth = Math.max(8, Math.min(42, plotWidth / Math.max(points.length, 1) * 0.56));
 
   return (
     <div className="price-chart-shell">
-      <svg className="price-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Preisverlauf mit ${points.length} Angebotspreisen`}>
-        {ticks.map((tick) => <g key={tick}><line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} className="chart-grid-line" /><text x={padding.left - 10} y={y(tick) + 4} textAnchor="end" className="chart-axis-label">{formatChartPrice(tick)}</text></g>)}
+      <svg ref={chartRef} className="price-chart" viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`Preisverlauf mit ${points.length} Angebotspreisen`}>
+        {points.length ? <>
+        {ticks.map((tick) => <g key={tick}><line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} className="chart-grid-line" /><text x={padding.left - 10} y={y(tick) + 4} textAnchor="end" className="chart-axis-label">{formatChartPrice(tick, ceiling / 4 - floor / 4)}</text></g>)}
         {netPrice !== null ? <g><line x1={padding.left} x2={width - padding.right} y1={y(netPrice)} y2={y(netPrice)} className="chart-net-line" /><text x={width - padding.right} y={Math.max(12, y(netPrice) - 7)} textAnchor="end" className="chart-net-label">Datanorm {formatCurrency(netPrice)}</text></g> : null}
         {mode === "line" && median24 !== null ? <g><line x1={padding.left} x2={width - padding.right} y1={y(median24)} y2={y(median24)} className="chart-median-line" /><text x={padding.left + 7} y={Math.max(12, y(median24) - 7)} className="chart-median-label">Median 24 Monate {formatCurrency(median24)}{medianDelta === null ? "" : ` (${formatPercent(medianDelta)})`}</text></g> : null}
         {mode === "line" ? <path d={linePath} className="chart-history-line" /> : null}
-        {points.map((point, index) => mode === "bars" ? (
-          <g key={`${point.date}-${index}`}><rect x={x(index) - barWidth / 2} y={y(point.price)} width={barWidth} height={padding.top + plotHeight - y(point.price)} rx="2" className={`chart-bar is-${offerTypeClass(point.type)}`}><title>{formatDate(point.date)} · {point.type} · {formatCurrency(point.price)}</title></rect></g>
-        ) : (
-          <circle key={`${point.date}-${index}`} cx={x(index)} cy={y(point.price)} r="5" className={`chart-point is-${offerTypeClass(point.type)}`}><title>{formatDate(point.date)} · {point.type} · {formatCurrency(point.price)}</title></circle>
-        ))}
+        {points.map((point, index) => {
+          const interaction = {
+            tabIndex: 0,
+            role: "button",
+            "aria-label": `${formatCurrency(point.price)} · ${point.offerName} · ${formatDate(point.date)}`,
+            onPointerEnter: (event: React.PointerEvent<SVGElement>) => showTooltip(index, event.currentTarget),
+            onPointerLeave: (event: React.PointerEvent<SVGElement>) => {
+              if (event.pointerType !== "touch" && document.activeElement !== event.currentTarget) setTooltip(null);
+            },
+            onFocus: (event: React.FocusEvent<SVGElement>) => showTooltip(index, event.currentTarget),
+            onBlur: (event: React.FocusEvent<SVGElement>) => { if (!event.currentTarget.matches(":hover")) setTooltip(null); },
+            onClick: (event: React.MouseEvent<SVGElement>) => showTooltip(index, event.currentTarget),
+            onKeyDown: (event: React.KeyboardEvent<SVGElement>) => {
+              if (event.key === "Escape") setTooltip(null);
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                showTooltip(index, event.currentTarget);
+              }
+            },
+          };
+          return mode === "bars"
+            ? <rect key={`${point.date}-${index}`} {...interaction} x={x(index) - barWidth / 2} y={y(point.price)} width={barWidth} height={padding.top + plotHeight - y(point.price)} rx="2" className={`chart-bar is-${offerTypeClass(point.type)}`} />
+            : <circle key={`${point.date}-${index}`} {...interaction} cx={x(index)} cy={y(point.price)} r="5" className={`chart-point is-${offerTypeClass(point.type)}`} />;
+        })}
         {points.map((point, index) => (index === 0 || index === points.length - 1 || index % Math.max(1, Math.ceil(points.length / 6)) === 0) ? <text key={`label-${point.date}-${index}`} x={x(index)} y={height - 18} textAnchor="middle" className="chart-axis-label">{shortDate(point.date)}</text> : null)}
+        </> : <text x={width / 2} y={height / 2} textAnchor="middle" className="chart-empty-label">Keine Angebotspreise für das Diagramm.</text>}
       </svg>
       <div className="chart-legend"><span className="is-first">Erstangebot</span><span className="is-follow">Folgeangebot</span><span className="is-negotiated">Verhandelt</span><span className="is-net">Datanorm-Netto</span>{mode === "line" && median24 !== null ? <span className="is-median">Median 24 Monate</span> : null}</div>
+      {activeTooltip ? <PriceChartTooltip id={tooltipId} point={points[activeTooltip.index]} anchor={activeTooltip.anchor} /> : null}
     </div>
+  );
+}
+
+function PriceChartTooltip({ id, point, anchor }: { id: string; point: PriceChartPoint; anchor: DOMRect }) {
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = tooltipRef.current;
+    if (!element) return;
+    const bounds = element.getBoundingClientRect();
+    const preferredLeft = anchor.right + 10;
+    const left = preferredLeft + bounds.width <= window.innerWidth - 12
+      ? preferredLeft : anchor.left - bounds.width - 10;
+    element.style.left = `${Math.max(12, Math.min(left, window.innerWidth - bounds.width - 12))}px`;
+    element.style.top = `${Math.max(12, Math.min(anchor.top, window.innerHeight - bounds.height - 12))}px`;
+  }, [anchor]);
+
+  return createPortal(
+    <div ref={tooltipRef} id={id} role="tooltip" className="price-chart-tooltip">
+      <strong>{formatCurrency(point.price)}</strong>
+      <span>{point.offerName}</span>
+      <time dateTime={point.date}>{formatDate(point.date)}</time>
+    </div>,
+    document.body,
   );
 }
 
@@ -1756,6 +1851,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / 1024 ** 2).toLocaleString("de-DE", { maximumFractionDigits: 1 })} MB`;
 }
 
-function formatChartPrice(value: number): string {
-  return `${integerFormatter.format(value)} €`;
+function formatChartPrice(value: number, step: number): string {
+  const digits = step > 0 && step < 1 ? Math.min(6, Math.ceil(-Math.log10(step))) : 0;
+  return `${chartPriceFormatters[digits].format(value)} €`;
 }
