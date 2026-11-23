@@ -6,6 +6,8 @@ with the calendar's Graph client. Local storage exists only in isolated tests.
 
 from __future__ import annotations
 
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -15,6 +17,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from threading import Lock
 from urllib.parse import SplitResult, quote, unquote, urlsplit
 
 from fastapi import HTTPException
@@ -39,6 +42,10 @@ LEGACY_SETTINGS = {
     "tab1_net_price_reference_presets.json": "reference_presets",
 }
 _HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
+_SETTINGS_CACHE_BYTES = 8 * 1024 * 1024
+_SETTINGS_CACHE_ENTRIES = 16
+_settings_cache: OrderedDict[tuple, bytes] = OrderedDict()
+_settings_cache_lock = Lock()
 
 
 def _url_origin(parts: SplitResult) -> tuple[str, str, int] | None:
@@ -387,16 +394,21 @@ class GraphPriceStorage:
             )
         return items
 
-    def _child_folder(self, parent_id: str, name: str, create: bool):
+    @staticmethod
+    def _matching_folder(items: list[dict], name: str):
         matches = [
             item
-            for item in self._children(parent_id)
+            for item in items
             if str(item.get("name", "")).casefold() == name.casefold()
         ]
         if len(matches) > 1 or (matches and not isinstance(matches[0].get("folder"), dict)):
             raise HTTPException(409, f"OneDrive-Ordner {name} ist nicht eindeutig.")
-        if matches:
-            return matches[0]["id"]
+        return matches[0]["id"] if matches else None
+
+    def _child_folder(self, parent_id: str, name: str, create: bool):
+        folder = self._matching_folder(self._children(parent_id), name)
+        if folder:
+            return folder
         if not create:
             return None
         try:
@@ -477,6 +489,81 @@ class GraphPriceStorage:
             for item in self._children(folder_id)
             if isinstance(item.get("file"), dict)
         ]
+
+    def snapshot_files(self) -> dict[str, list[StoredFile]]:
+        """Discover the shared ancestry once, then list independent folders.
+
+        Every snapshot still obtains current Graph versions. Discovery is never
+        cached between snapshots, and item reads/writes retain their existing
+        ancestry and version checks. Only the three independent directory reads
+        run concurrently; pagination remains sequential within each directory.
+        """
+        self._check()
+        self._folder_cache.clear()
+        self._validated_folder_cache.clear()
+        root = self._child_folder(self.config.ms_project_root_folder_id, FOLDER_NAME, False)
+        result: dict[str, list[StoredFile]] = {kind: [] for kind in FOLDERS}
+        if root is None:
+            return result
+        children = self._children(root)
+        folders = {
+            kind: self._matching_folder(children, name) for kind, name in FOLDERS.items()
+        }
+        for kind, folder in folders.items():
+            if folder is not None:
+                self._folder_cache[kind] = (root, folder)
+
+        def listing(entry):
+            kind, folder = entry
+            return kind, [
+                self._file(kind, item)
+                for item in self._children(folder)
+                if isinstance(item.get("file"), dict)
+            ]
+
+        present = [(kind, folder) for kind, folder in folders.items() if folder is not None]
+        if present:
+            with ThreadPoolExecutor(
+                max_workers=min(3, len(present)), thread_name_prefix="price-list"
+            ) as executor:
+                result.update(executor.map(listing, present))
+        return result
+
+    def read_settings(self, item: StoredFile) -> bytes:
+        """Reuse immutable settings bytes only after fresh Graph inventory.
+
+        This is deliberately not a snapshot/TTL cache. Changed or removed files
+        are seen on the very next request. JSON decoding creates a fresh mutable
+        state for each caller, and writes still use the original Graph CAS path.
+        """
+        if item.kind != "cache" or item.name not in {STATE_NAME, *LEGACY_SETTINGS}:
+            return self.read(item)
+        key = (
+            self.config.ms_graph_base_url,
+            self.config.ms_tenant_id,
+            self.config.ms_client_id,
+            self.identity,
+            self._folder_cache.get("cache"),
+            item.name,
+            item.item_id,
+            item.version,
+            item.size,
+        )
+        # A miss is single-flight, including the validation around the original
+        # content read. The cache contains at most 16 small settings versions.
+        with _settings_cache_lock:
+            if key in _settings_cache:
+                _settings_cache.move_to_end(key)
+                return _settings_cache[key]
+            raw = self.read(item)
+            if len(raw) <= _SETTINGS_CACHE_BYTES:
+                _settings_cache[key] = raw
+                while (
+                    len(_settings_cache) > _SETTINGS_CACHE_ENTRIES
+                    or sum(map(len, _settings_cache.values())) > _SETTINGS_CACHE_BYTES
+                ):
+                    _settings_cache.popitem(last=False)
+            return raw
 
     def _file(self, kind, item):
         if not item.get("eTag") or not item.get("id"):
@@ -569,14 +656,20 @@ def get_price_storage(config=settings):
 
 
 def snapshot(store) -> Snapshot:
+    inventory = (
+        store.snapshot_files()
+        if isinstance(store, GraphPriceStorage)
+        else {kind: store.list(kind) for kind in FOLDERS}
+    )
     files = [
         f
         for kind in ("offers", "datanorm")
-        for f in store.list(kind)
+        for f in inventory[kind]
         if (kind == "offers" and f.name.lower().endswith(".pdf"))
         or (kind == "datanorm" and f.name.lower().endswith((".txt", ".dat")))
     ]
-    cache_files = store.list("cache")
+    cache_files = inventory["cache"]
+    read_settings = store.read_settings if isinstance(store, GraphPriceStorage) else store.read
     state_file = next((f for f in cache_files if f.name == STATE_NAME), None)
     state = {
         "version": 1,
@@ -592,7 +685,7 @@ def snapshot(store) -> Snapshot:
     }
     if state_file:
         try:
-            saved = json.loads(store.read(state_file))
+            saved = json.loads(read_settings(state_file))
             if not isinstance(saved, dict) or saved.get("version") != 1:
                 raise ValueError("invalid state")
             state.update(saved)
@@ -605,7 +698,7 @@ def snapshot(store) -> Snapshot:
         for item in cache_files:
             if item.name in LEGACY_SETTINGS:
                 try:
-                    value = json.loads(store.read(item))
+                    value = json.loads(read_settings(item))
                     if not isinstance(value, dict):
                         raise ValueError("invalid legacy state")
                     state[LEGACY_SETTINGS[item.name]] = value

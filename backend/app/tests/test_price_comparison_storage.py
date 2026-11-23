@@ -1,8 +1,11 @@
 from types import SimpleNamespace
+import json
+from threading import Barrier
 
 from fastapi import HTTPException
 import pytest
 
+from app.services import price_comparison_storage as storage
 from app.services.price_comparison_storage import (
     GraphPriceStorage,
     LocalPriceStorage,
@@ -305,3 +308,133 @@ def test_graph_revalidates_cached_folder_ancestry_before_item_operations(moved_f
     with pytest.raises(HTTPException) as error:
         store.list("offers")
     assert error.value.status_code == 409
+
+
+class SnapshotGraph(FakeGraph):
+    def __init__(self):
+        super().__init__()
+        self.contents = {}
+        store = graph_store(self)
+        for kind in ("offers", "datanorm", "cache"):
+            store._folder(kind, create=True)
+        self.calls.clear()
+
+    def add_file(self, kind, name, raw, version="v1"):
+        folder = "id-" + storage.FOLDERS[kind]
+        item = {
+            "id": "file-" + name,
+            "name": name,
+            "file": {},
+            "size": len(raw),
+            "eTag": version,
+            "lastModifiedDateTime": "2026-11-23T00:00:00Z",
+            "parentReference": {"id": folder, "driveId": "drive"},
+        }
+        self.children[folder] = [
+            old for old in self.children[folder] if old["id"] != item["id"]
+        ] + [item]
+        self.contents[item["id"]] = raw
+        return item
+
+    def get_content(self, path):
+        self.calls.append(("CONTENT", path))
+        return self.contents[path.split("/items/")[1].split("/")[0]], "application/json"
+
+
+@pytest.fixture
+def snapshot_graph():
+    # Test doubles intentionally reuse Graph IDs across independent test data.
+    with storage._settings_cache_lock:
+        storage._settings_cache.clear()
+    yield SnapshotGraph()
+    with storage._settings_cache_lock:
+        storage._settings_cache.clear()
+
+
+def test_graph_snapshot_reads_current_versions_without_repeating_shared_discovery(snapshot_graph):
+    graph = snapshot_graph
+    graph.add_file("offers", "offer.pdf", b"pdf")
+    graph.add_file("cache", STATE_NAME, b'{"version":1,"discounts":{"offer.pdf":5}}')
+    first = snapshot(graph_store(graph))
+    assert first.state["discounts"] == {"offer.pdf": 5}
+    assert sum(call[0] == "CONTENT" for call in graph.calls) == 1
+    graph.calls.clear()
+    first.state["discounts"]["offer.pdf"] = 99
+    second = snapshot(graph_store(graph))
+    assert second.state["discounts"] == {"offer.pdf": 5}
+    assert second.revision == first.revision
+    # The five fresh directory listings remain. All redundant shared ancestry
+    # discovery and unchanged settings downloads disappear on a warm request.
+    assert len(graph.calls) == 5
+    assert all(call[0] == "GET" and "/children?" in call[1] for call in graph.calls)
+    assert sum("/calendar-root/children?" in call[1] for call in graph.calls) == 1
+    assert sum("/id-Preisvergleich/children?" in call[1] for call in graph.calls) == 1
+
+
+def test_graph_snapshot_independent_directories_load_concurrently(snapshot_graph):
+    graph = snapshot_graph
+    get = graph.get
+    gate = Barrier(3, timeout=5)
+
+    def synchronized_get(path):
+        if any(f"/id-{name}/children?" in path for name in storage.FOLDERS.values()):
+            gate.wait()
+        return get(path)
+
+    graph.get = synchronized_get
+    assert snapshot(graph_store(graph)).files == []
+
+
+def test_graph_settings_cache_observes_external_edits_and_deletion_immediately(snapshot_graph):
+    graph = snapshot_graph
+    graph.add_file("cache", STATE_NAME, b'{"version":1,"discounts":{"offer.pdf":5}}')
+    original = snapshot(graph_store(graph))
+    graph.add_file("cache", STATE_NAME, b'{"version":1,"discounts":{"offer.pdf":7}}', "v2")
+    changed = snapshot(graph_store(graph))
+    assert changed.revision != original.revision
+    assert changed.state["discounts"] == {"offer.pdf": 7}
+    graph.children["id-cache"].clear()
+    removed = snapshot(graph_store(graph))
+    assert removed.state["discounts"] == {}
+    assert removed.revision != changed.revision
+
+
+def test_graph_settings_cache_respects_client_identity(snapshot_graph):
+    graph = snapshot_graph
+    graph.add_file("cache", STATE_NAME, b'{"version":1,"discounts":{"offer.pdf":5}}')
+    snapshot(graph_store(graph))
+    graph.calls.clear()
+    store = graph_store(graph)
+    store.config.ms_client_id = "another-client"
+    snapshot(store)
+    assert any(call[0] == "CONTENT" for call in graph.calls)
+
+
+@pytest.mark.parametrize("moved_folder", ["root", "leaf"])
+def test_graph_snapshot_rechecks_ancestry_with_warm_settings(snapshot_graph, moved_folder):
+    graph = snapshot_graph
+    graph.add_file("cache", STATE_NAME, b'{"version":1}')
+    snapshot(graph_store(graph))
+    parent = "calendar-root" if moved_folder == "root" else "id-Preisvergleich"
+    target_name = "Preisvergleich" if moved_folder == "root" else "cache"
+    target = next(item for item in graph.children[parent] if item["name"] == target_name)
+    target["parentReference"]["id"] = "outside"
+    with pytest.raises(HTTPException) as error:
+        snapshot(graph_store(graph))
+    assert error.value.status_code == 502
+
+
+def test_graph_settings_cache_is_bounded_and_does_not_hide_corrupt_new_state(snapshot_graph, monkeypatch):
+    graph = snapshot_graph
+    monkeypatch.setattr(storage, "_SETTINGS_CACHE_ENTRIES", 2)
+    monkeypatch.setattr(storage, "_SETTINGS_CACHE_BYTES", 200)
+    for index in range(5):
+        raw = json.dumps({"version": 1, "discounts": {"offer.pdf": index}}).encode()
+        graph.add_file("cache", STATE_NAME, raw, f"v{index}")
+        assert snapshot(graph_store(graph)).state["discounts"]["offer.pdf"] == index
+    assert len(storage._settings_cache) <= 2
+    assert sum(map(len, storage._settings_cache.values())) <= 200
+    graph.add_file("cache", STATE_NAME, b"broken", "bad")
+    with pytest.raises(HTTPException) as error:
+        snapshot(graph_store(graph))
+    assert error.value.status_code == 422

@@ -74,6 +74,13 @@ const views: Array<{ key: ViewKey; label: string }> = [
 ];
 
 const offerTypes: OfferType[] = ["Erstangebot", "Folgeangebot", "Verhandeltes Angebot"];
+const currencyFormatter = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
+const percentFormatter = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 2, signDisplay: "exceptZero" });
+const integerFormatter = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
+const decimalFormatter = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 3 });
+const dateFormatter = new Intl.DateTimeFormat("de-DE");
+const shortDateFormatter = new Intl.DateTimeFormat("de-DE", { month: "2-digit", year: "2-digit" });
+const dateTimeFormatter = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" });
 
 export function PriceComparisonPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -82,22 +89,51 @@ export function PriceComparisonPage() {
   const [status, setStatus] = useState<PriceComparisonStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(true);
+  const statusRequest = useRef(0);
+  const statusController = useRef<AbortController | null>(null);
 
   const loadStatus = useCallback(async () => {
+    statusController.current?.abort();
+    const controller = new AbortController();
+    statusController.current = controller;
+    const requestId = ++statusRequest.current;
     setIsStatusLoading(true);
     setStatusError(null);
     try {
-      setStatus(await priceRequest<PriceComparisonStatus>("/price-comparison/status"));
+      const loaded = await priceRequest<PriceComparisonStatus>("/price-comparison/status", { signal: controller.signal });
+      if (requestId === statusRequest.current) setStatus(loaded);
     } catch (error) {
-      setStatusError(errorMessage(error));
+      if (requestId === statusRequest.current && !isAbortError(error)) setStatusError(errorMessage(error));
     } finally {
-      setIsStatusLoading(false);
+      if (requestId === statusRequest.current) setIsStatusLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void loadStatus();
+    return () => {
+      statusController.current?.abort();
+      statusRequest.current += 1;
+    };
   }, [loadStatus]);
+
+  const syncStatusFromFiles = useCallback((files: FilesResult) => {
+    statusController.current?.abort();
+    statusRequest.current += 1;
+    if (!status) {
+      void loadStatus();
+      return;
+    }
+    setIsStatusLoading(false);
+    setStatusError(null);
+    setStatus({
+      ...status,
+      offer_count: files.files.filter((file) => file.kind === "offers" && file.included_in_comparison !== false).length,
+      datanorm_count: files.files.filter((file) => file.kind === "datanorm").length,
+      active_datanorm: files.files.find((file) => file.kind === "datanorm" && file.active)?.name ?? null,
+      revision: files.revision,
+    });
+  }, [loadStatus, status]);
 
   function selectView(view: ViewKey) {
     const next = new URLSearchParams(searchParams);
@@ -158,16 +194,16 @@ export function PriceComparisonPage() {
       </div>
 
       <div className="price-view-content" role="tabpanel">
-        {activeView === "datanorm" ? <DatanormView onMutation={loadStatus} /> : null}
-        {activeView === "offers" ? <OffersView onMutation={loadStatus} /> : null}
+        {activeView === "datanorm" ? <DatanormView /> : null}
+        {activeView === "offers" ? <OffersView /> : null}
         {activeView === "articles" ? <ArticlesView /> : null}
-        {activeView === "files" ? <FilesView status={status} onMutation={loadStatus} /> : null}
+        {activeView === "files" ? <FilesView status={status} onMutation={syncStatusFromFiles} /> : null}
       </div>
     </section>
   );
 }
 
-function DatanormView({ onMutation }: { onMutation: () => Promise<void> }) {
+function DatanormView() {
   const [, setSearchParams] = useSearchParams();
   const [queryInput, setQueryInput] = useState("");
   const [search, setSearch] = useState("");
@@ -283,7 +319,6 @@ function DatanormView({ onMutation }: { onMutation: () => Promise<void> }) {
           initialCluster={cluster}
           availableClusters={data?.clusters ?? []}
           currentRevision={data?.revision ?? ""}
-          onMutation={async () => { await load(); await onMutation(); }}
           onArticle={openArticle}
           onSource={downloadOfferSource}
         />
@@ -298,7 +333,7 @@ function DatanormView({ onMutation }: { onMutation: () => Promise<void> }) {
       >
         <TableCaption count={data?.total ?? 0} suffix={data?.active_file ? `Aktiv: ${data.active_file}` : undefined} />
         <DataTable variant="datanorm" columns={data?.columns ?? []} rows={data?.rows ?? []} onArticle={openArticle} onSource={downloadOfferSource} unavailableSources={data?.unavailable_sources} />
-        <Pagination offset={offset} limit={limit} total={data?.total ?? 0} onChange={setOffset} />
+        <Pagination offset={offset} limit={limit} total={data?.total ?? 0} disabled={loading} onChange={setOffset} />
       </DataPanel>
     </div>
   );
@@ -309,7 +344,6 @@ function NetPriceCalculator({
   initialCluster,
   availableClusters,
   currentRevision,
-  onMutation,
   onArticle,
   onSource,
 }: {
@@ -317,7 +351,6 @@ function NetPriceCalculator({
   initialCluster: string;
   availableClusters: string[];
   currentRevision: string;
-  onMutation: () => Promise<void>;
   onArticle: (articleNumber: string) => void;
   onSource: (source: string) => Promise<void>;
 }) {
@@ -334,7 +367,10 @@ function NetPriceCalculator({
   const [error, setError] = useState<string | null>(null);
   const presetsRequest = useRef(0);
   const suggestionRequest = useRef(0);
+  const presetsController = useRef<AbortController | null>(null);
+  const suggestionController = useRef<AbortController | null>(null);
   const referencesInitialized = useRef(false);
+  const mounted = useRef(true);
   const suggestionLimit = 100;
   const clusterOptions = useMemo(
     () => [...new Set([...availableClusters, ...(result?.clusters ?? [])])].sort((left, right) => left.localeCompare(right, "de")),
@@ -342,9 +378,12 @@ function NetPriceCalculator({
   );
 
   const loadPresets = useCallback(async () => {
+    presetsController.current?.abort();
+    const controller = new AbortController();
+    presetsController.current = controller;
     const requestId = ++presetsRequest.current;
     try {
-      const loaded = await priceRequest<ReferencePresets>("/price-comparison/reference-presets");
+      const loaded = await priceRequest<ReferencePresets>("/price-comparison/reference-presets", { signal: controller.signal });
       if (requestId !== presetsRequest.current) return;
       setPresets(loaded);
       if (!referencesInitialized.current) {
@@ -352,13 +391,17 @@ function NetPriceCalculator({
         setReferences(normalizeReferences(loaded.defaults));
       }
     } catch (loadError) {
-      if (requestId === presetsRequest.current) setError(errorMessage(loadError));
+      if (requestId === presetsRequest.current && !isAbortError(loadError)) setError(errorMessage(loadError));
     }
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     void loadPresets();
     return () => {
+      mounted.current = false;
+      presetsController.current?.abort();
+      suggestionController.current?.abort();
       presetsRequest.current += 1;
       suggestionRequest.current += 1;
     };
@@ -376,6 +419,9 @@ function NetPriceCalculator({
       setError("Bitte mindestens einen Referenzartikel mit einem Gewicht größer 0 angeben.");
       return;
     }
+    suggestionController.current?.abort();
+    const controller = new AbortController();
+    suggestionController.current = controller;
     const requestId = ++suggestionRequest.current;
     setLoading(true);
     setError(null);
@@ -383,12 +429,13 @@ function NetPriceCalculator({
       const nextResult = await priceRequest<SuggestionResult>("/price-comparison/suggestions/preview", {
         method: "POST",
         body: JSON.stringify({ references: validReferences, search: search.trim(), cluster, offset: nextOffset, limit: suggestionLimit }),
+        signal: controller.signal,
       });
       if (requestId !== suggestionRequest.current) return;
       setSuggestionOffset(nextOffset);
       setResult(nextResult);
     } catch (calculateError) {
-      if (requestId === suggestionRequest.current) setError(errorMessage(calculateError));
+      if (requestId === suggestionRequest.current && !isAbortError(calculateError)) setError(errorMessage(calculateError));
     } finally {
       if (requestId === suggestionRequest.current) setLoading(false);
     }
@@ -407,14 +454,14 @@ function NetPriceCalculator({
         method: "PUT",
         body: JSON.stringify({ references: validReferences, expected_revision: presets?.revision || currentRevision }),
       });
+      if (!mounted.current) return;
       setSelectedPreset(name);
       setPresetName("");
       await loadPresets();
-      await onMutation();
     } catch (saveError) {
-      setError(mutationErrorMessage(saveError));
+      if (mounted.current) setError(mutationErrorMessage(saveError));
     } finally {
-      setSaving(false);
+      if (mounted.current) setSaving(false);
     }
   }
 
@@ -426,13 +473,13 @@ function NetPriceCalculator({
       await priceRequest(queryPath(`/price-comparison/reference-presets/${encodeURIComponent(selectedPreset)}`, {
         expected_revision: presets?.revision || currentRevision,
       }), { method: "DELETE" });
+      if (!mounted.current) return;
       setSelectedPreset("");
       await loadPresets();
-      await onMutation();
     } catch (deleteError) {
-      setError(mutationErrorMessage(deleteError));
+      if (mounted.current) setError(mutationErrorMessage(deleteError));
     } finally {
-      setSaving(false);
+      if (mounted.current) setSaving(false);
     }
   }
 
@@ -564,7 +611,7 @@ function NetPriceCalculator({
             <button className="price-button" type="button" disabled={!result.total} onClick={() => void exportSuggestions()}><Download size={16} /> Excel</button>
           </div>
           <DataTable variant="suggestions" columns={result.columns} rows={result.rows} onArticle={onArticle} onSource={onSource} unavailableSources={result.unavailable_sources} />
-          <Pagination offset={suggestionOffset} limit={suggestionLimit} total={result.total} onChange={(nextOffset) => void calculate(nextOffset)} />
+          <Pagination offset={suggestionOffset} limit={suggestionLimit} total={result.total} disabled={loading} onChange={(nextOffset) => void calculate(nextOffset)} />
         </div>
       ) : (
         <p className="calculator-empty">Referenzen prüfen und „Vorschläge berechnen“ wählen. Es werden noch keine Daten verändert.</p>
@@ -573,7 +620,7 @@ function NetPriceCalculator({
   );
 }
 
-function OffersView({ onMutation }: { onMutation: () => Promise<void> }) {
+function OffersView() {
   const [queryInput, setQueryInput] = useState("");
   const [search, setSearch] = useState("");
   const [offerType, setOfferType] = useState("");
@@ -645,6 +692,7 @@ function OffersView({ onMutation }: { onMutation: () => Promise<void> }) {
                 key={offer.source}
                 type="button"
                 role="listitem"
+                disabled={loading}
                 className={`offer-list-item${selectedSource === offer.source ? " is-selected" : ""}`}
                 onClick={() => setSelectedSource(offer.source)}
               >
@@ -659,7 +707,7 @@ function OffersView({ onMutation }: { onMutation: () => Promise<void> }) {
               </button>
             ))}
           </div>
-          <Pagination offset={offset} limit={limit} total={data?.total ?? 0} onChange={setOffset} />
+          <Pagination offset={offset} limit={limit} total={data?.total ?? 0} disabled={loading} onChange={setOffset} />
         </DataPanel>
 
         {selectedSource ? (
@@ -668,7 +716,7 @@ function OffersView({ onMutation }: { onMutation: () => Promise<void> }) {
             detailRef={offerDetailRef}
             source={selectedSource}
             onClose={() => setSelectedSource(null)}
-            onMutation={async () => { await load(); await onMutation(); }}
+            onMutation={load}
           />
         ) : null}
       </div>
@@ -684,30 +732,40 @@ function OfferDetails({ detailRef, source, onClose, onMutation }: { detailRef: R
   const [discount, setDiscount] = useState("0");
   const [offerType, setOfferType] = useState<OfferType>("Erstangebot");
   const [alignNetto, setAlignNetto] = useState(false);
+  const [initialDiscount, setInitialDiscount] = useState(0);
+  const [initialOfferType, setInitialOfferType] = useState<OfferType>("Erstangebot");
+  const [initialAlignNetto, setInitialAlignNetto] = useState(false);
   const [manualPrices, setManualPrices] = useState<Record<string, string>>({});
   const [initialManualPrices, setInitialManualPrices] = useState<Record<string, string>>({});
   const [selectedArticles, setSelectedArticles] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState<string | null>(null);
   const loadRequest = useRef(0);
+  const loadController = useRef<AbortController | null>(null);
   const initialDetailScrollDone = useRef(false);
 
   const load = useCallback(async () => {
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
     const requestId = ++loadRequest.current;
     setLoading(true);
     setError(null);
     try {
-      const loaded = await priceRequest<OfferPositionsResult>(`/price-comparison/offers/${encodeURIComponent(source)}/positions`);
+      const loaded = await priceRequest<OfferPositionsResult>(`/price-comparison/offers/${encodeURIComponent(source)}/positions`, { signal: controller.signal });
       if (requestId !== loadRequest.current) return;
       setData(loaded);
       setDiscount(String(loaded.offer.discount ?? 0));
       setOfferType(loaded.offer.offer_type);
       setAlignNetto(Boolean(loaded.offer.align_netto));
+      setInitialDiscount(loaded.offer.discount ?? 0);
+      setInitialOfferType(loaded.offer.offer_type);
+      setInitialAlignNetto(Boolean(loaded.offer.align_netto));
       const manual = manualPriceValues(loaded.rows);
       setManualPrices(manual);
       setInitialManualPrices(manual);
       setSelectedArticles(new Set());
     } catch (loadError) {
-      if (requestId === loadRequest.current) setError(errorMessage(loadError));
+      if (requestId === loadRequest.current && !isAbortError(loadError)) setError(errorMessage(loadError));
     } finally {
       if (requestId === loadRequest.current) setLoading(false);
     }
@@ -716,7 +774,10 @@ function OfferDetails({ detailRef, source, onClose, onMutation }: { detailRef: R
   useEffect(() => {
     setData(null);
     void load();
-    return () => { loadRequest.current += 1; };
+    return () => {
+      loadController.current?.abort();
+      loadRequest.current += 1;
+    };
   }, [load]);
 
   useEffect(() => {
@@ -729,6 +790,8 @@ function OfferDetails({ detailRef, source, onClose, onMutation }: { detailRef: R
     return () => window.cancelAnimationFrame(frame);
   }, [data, detailRef]);
 
+  const offerColumns = useMemo(() => visibleColumns(data?.columns ?? []), [data?.columns]);
+
   async function patchOffer(payload: Record<string, unknown>) {
     if (!data) return;
     setSaving(true);
@@ -738,8 +801,7 @@ function OfferDetails({ detailRef, source, onClose, onMutation }: { detailRef: R
         method: "PATCH",
         body: JSON.stringify({ expected_revision: data.revision, ...payload }),
       });
-      await load();
-      await onMutation();
+      await Promise.all([load(), onMutation()]);
     } catch (saveError) {
       setError(mutationErrorMessage(saveError));
     } finally {
@@ -763,12 +825,12 @@ function OfferDetails({ detailRef, source, onClose, onMutation }: { detailRef: R
       setError("Bitte einen gültigen Rabatt eingeben.");
       return;
     }
-    await patchOffer({
-      discount: parsedDiscount,
-      offer_type: offerType,
-      align_netto: alignNetto,
-      ...(Object.keys(manualChanges).length ? { manual_prices: manualChanges } : {}),
-    });
+    const changes: Record<string, unknown> = {};
+    if (parsedDiscount !== initialDiscount) changes.discount = parsedDiscount;
+    if (offerType !== initialOfferType) changes.offer_type = offerType;
+    if (alignNetto !== initialAlignNetto) changes.align_netto = alignNetto;
+    if (Object.keys(manualChanges).length) changes.manual_prices = manualChanges;
+    if (Object.keys(changes).length) await patchOffer(changes);
   }
 
   async function exportOffer(kind: "offer" | "offer_pdf" | "offer_ugl") {
@@ -809,31 +871,32 @@ function OfferDetails({ detailRef, source, onClose, onMutation }: { detailRef: R
           <p>{data?.offer.offer_number || source}</p>
           {data ? <div className="offer-detail-comparison"><span>Projektwert <strong>{formatPercent(data.offer.price_change)}</strong></span><span>Positionen <strong>{formatPercent(data.offer.price_change_positions)}</strong></span></div> : null}
         </div>
-        <button className="price-icon-button" type="button" aria-label="Angebotsdetails schließen" title="Schließen" onClick={onClose}><X size={18} /></button>
+        <button className="price-icon-button" type="button" aria-label="Angebotsdetails schließen" title="Schließen" disabled={saving} onClick={onClose}><X size={18} /></button>
       </header>
-      {error ? <InlineNotice tone="error" action={<RetryButton onClick={load} />}>{error}</InlineNotice> : null}
-      {loading ? <LoadingState label="Angebotspositionen werden geladen" /> : data ? (
+      {error ? <InlineNotice tone="error" action={<RetryButton onClick={() => { void load(); }} />}>{error}</InlineNotice> : null}
+      {loading && !data ? <LoadingState label="Angebotspositionen werden geladen" /> : data ? (
         <>
+          {loading ? <LoadingState label="Angebotspositionen werden aktualisiert" compact /> : null}
           <WarningList warnings={data.warnings} />
           <div className="offer-settings-grid">
-            <label><span>Angebotsart</span><select value={offerType} disabled={saving} onChange={(event) => setOfferType(event.target.value as OfferType)}>{offerTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
-            <label><span>Rabatt in %</span><input inputMode="decimal" value={discount} disabled={saving} onChange={(event) => setDiscount(event.target.value)} /></label>
-            <label className="price-check"><input type="checkbox" checked={alignNetto} disabled={saving} onChange={(event) => setAlignNetto(event.target.checked)} /><span><strong>Nettoabgleich</strong><small>Höhere Preise auf Datanorm-Netto begrenzen</small></span></label>
-            <button className="price-button is-primary" type="button" disabled={saving} onClick={() => void saveChanges()}>{saving ? <LoaderCircle className="is-spinning" size={16} /> : <Save size={16} />} Änderungen speichern</button>
+            <label><span>Angebotsart</span><select value={offerType} disabled={saving || loading} onChange={(event) => setOfferType(event.target.value as OfferType)}>{offerTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
+            <label><span>Rabatt in %</span><input inputMode="decimal" value={discount} disabled={saving || loading} onChange={(event) => setDiscount(event.target.value)} /></label>
+            <label className="price-check"><input type="checkbox" checked={alignNetto} disabled={saving || loading} onChange={(event) => setAlignNetto(event.target.checked)} /><span><strong>Nettoabgleich</strong><small>Höhere Preise auf Datanorm-Netto begrenzen</small></span></label>
+            <button className="price-button is-primary" type="button" disabled={saving || loading} onClick={() => void saveChanges()}>{saving ? <LoaderCircle className="is-spinning" size={16} /> : <Save size={16} />} Änderungen speichern</button>
           </div>
 
           <div className="offer-position-table-wrap">
             <table className="price-table offer-position-table">
-              <thead><tr><th className="price-select-cell"><span className="sr-only">Auswahl</span></th>{visibleColumns(data.columns).map((column) => <th key={column}>{columnLabel(column, "offer")}</th>)}<th>Manueller Preis</th></tr></thead>
+              <thead><tr><th className="price-select-cell"><span className="sr-only">Auswahl</span></th>{offerColumns.map((column) => <th key={column}>{columnLabel(column, "offer")}</th>)}<th>Manueller Preis</th></tr></thead>
               <tbody>{data.rows.map((row, index) => {
                 const articleNumber = String(row.Artikelnummer ?? row.article_number ?? "");
                 return (
                   <tr key={`${articleNumber}-${index}`}>
-                    <td className="price-select-cell"><input type="checkbox" aria-label={`${articleNumber || `Position ${index + 1}`} zum Löschen auswählen`} checked={selectedArticles.has(articleNumber)} disabled={saving || !articleNumber} onChange={(event) => setSelectedArticles((current) => {
+                    <td className="price-select-cell"><input type="checkbox" aria-label={`${articleNumber || `Position ${index + 1}`} zum Löschen auswählen`} checked={selectedArticles.has(articleNumber)} disabled={saving || loading || !articleNumber} onChange={(event) => setSelectedArticles((current) => {
                       const next = new Set(current); if (event.target.checked) next.add(articleNumber); else next.delete(articleNumber); return next;
                     })} /></td>
-                    {visibleColumns(data.columns).map((column) => <td key={column} className={cellClass(column, row[column])}>{formatCell(column, row[column])}</td>)}
-                    <td className="manual-price-cell"><input aria-label={`Manueller Preis ${articleNumber}`} inputMode="decimal" placeholder="unverändert" value={manualPrices[articleNumber] ?? ""} disabled={saving || !articleNumber} onChange={(event) => setManualPrices((current) => ({ ...current, [articleNumber]: event.target.value }))} /></td>
+                    {offerColumns.map((column) => <td key={column} className={cellClass(column, row[column])}>{formatCell(column, row[column])}</td>)}
+                    <td className="manual-price-cell"><input aria-label={`Manueller Preis ${articleNumber}`} inputMode="decimal" placeholder="unverändert" value={manualPrices[articleNumber] ?? ""} disabled={saving || loading || !articleNumber} onChange={(event) => setManualPrices((current) => ({ ...current, [articleNumber]: event.target.value }))} /></td>
                   </tr>
                 );
               })}</tbody>
@@ -851,8 +914,8 @@ function OfferDetails({ detailRef, source, onClose, onMutation }: { detailRef: R
               <button className="price-button" type="button" disabled={saving || Boolean(exporting)} onClick={() => void exportOffer("offer_ugl")}><Download size={16} /> UGL</button>
             </div>
             <div>
-              <button className="price-button" type="button" disabled={saving || data.rows.length === 0} onClick={() => void patchOffer({ reset_manual_prices: true })}><RotateCcw size={16} /> Manuelle Preise zurücksetzen</button>
-              <button className="price-button is-danger" type="button" disabled={saving || selectedArticles.size === 0} onClick={() => {
+              <button className="price-button" type="button" disabled={saving || loading || data.rows.length === 0} onClick={() => void patchOffer({ reset_manual_prices: true })}><RotateCcw size={16} /> Manuelle Preise zurücksetzen</button>
+              <button className="price-button is-danger" type="button" disabled={saving || loading || selectedArticles.size === 0} onClick={() => {
                 if (window.confirm(`${selectedArticles.size} ausgewählte Artikel aus diesem Angebot entfernen?`)) void patchOffer({ delete_articles: [...selectedArticles] });
               }}><Trash2 size={16} /> Auswahl entfernen</button>
             </div>
@@ -869,28 +932,36 @@ function ArticlesView() {
   const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(searchParams.get("article"));
   const [searching, setSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(!searchParams.get("article"));
   const [error, setError] = useState<string | null>(null);
   const debounceTimer = useRef<number | null>(null);
   const searchRequest = useRef(0);
+  const searchController = useRef<AbortController | null>(null);
+  const initialRouteArticle = useRef(searchParams.get("article"));
   const routeArticle = searchParams.get("article");
 
   const searchArticles = useCallback(async (value: string) => {
+    searchController.current?.abort();
+    const controller = new AbortController();
+    searchController.current = controller;
     const requestId = ++searchRequest.current;
+    setHasSearched(true);
     setSearching(true);
     setError(null);
     try {
-      const result = await priceRequest<ArticlesResult>(queryPath("/price-comparison/articles", { search: value.trim(), limit: 50 }));
+      const result = await priceRequest<ArticlesResult>(queryPath("/price-comparison/articles", { search: value.trim(), limit: 50 }), { signal: controller.signal });
       if (requestId === searchRequest.current) setArticles(result.articles);
     } catch (searchError) {
-      if (requestId === searchRequest.current) setError(errorMessage(searchError));
+      if (requestId === searchRequest.current && !isAbortError(searchError)) setError(errorMessage(searchError));
     } finally {
       if (requestId === searchRequest.current) setSearching(false);
     }
   }, []);
 
   useEffect(() => {
-    void searchArticles("");
+    if (!initialRouteArticle.current) void searchArticles("");
     return () => {
+      searchController.current?.abort();
       searchRequest.current += 1;
       if (debounceTimer.current !== null) window.clearTimeout(debounceTimer.current);
     };
@@ -927,7 +998,7 @@ function ArticlesView() {
                 <span>{article.net_price === null ? "—" : formatCurrency(article.net_price)}</span>
               </button>
             ))}
-            {!searching && !articles.length ? <p className="compact-empty">Keine Artikel gefunden.</p> : null}
+            {!searching && !articles.length ? <p className="compact-empty">{hasSearched ? "Keine Artikel gefunden." : "Suchbegriff eingeben, um weitere Artikel anzuzeigen."}</p> : null}
           </div>
         </section>
         {selectedArticle ? <ArticleDetail articleNumber={selectedArticle} /> : (
@@ -946,16 +1017,20 @@ function ArticleDetail({ articleNumber }: { articleNumber: string }) {
   const [enabledTypes, setEnabledTypes] = useState<Set<OfferType>>(new Set(offerTypes));
   const [exporting, setExporting] = useState(false);
   const loadRequest = useRef(0);
+  const loadController = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
     const requestId = ++loadRequest.current;
     setLoading(true);
     setError(null);
     try {
-      const loaded = await priceRequest<ArticleDetailResult>(`/price-comparison/articles/${encodeURIComponent(articleNumber)}`);
+      const loaded = await priceRequest<ArticleDetailResult>(`/price-comparison/articles/${encodeURIComponent(articleNumber)}`, { signal: controller.signal });
       if (requestId === loadRequest.current) setData(loaded);
     } catch (loadError) {
-      if (requestId === loadRequest.current) setError(errorMessage(loadError));
+      if (requestId === loadRequest.current && !isAbortError(loadError)) setError(errorMessage(loadError));
     } finally {
       if (requestId === loadRequest.current) setLoading(false);
     }
@@ -964,7 +1039,10 @@ function ArticleDetail({ articleNumber }: { articleNumber: string }) {
   useEffect(() => {
     setData(null);
     void load();
-    return () => { loadRequest.current += 1; };
+    return () => {
+      loadController.current?.abort();
+      loadRequest.current += 1;
+    };
   }, [load]);
 
   const filteredRows = useMemo(() => (data?.rows ?? []).filter((row) => enabledTypes.has(String(row.Angebotsart ?? "Erstangebot") as OfferType)), [data?.rows, enabledTypes]);
@@ -1100,7 +1178,7 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
   );
 }
 
-function FilesView({ status, onMutation }: { status: PriceComparisonStatus | null; onMutation: () => Promise<void> }) {
+function FilesView({ status, onMutation }: { status: PriceComparisonStatus | null; onMutation: (files: FilesResult) => void }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [data, setData] = useState<FilesResult | null>(null);
@@ -1117,16 +1195,23 @@ function FilesView({ status, onMutation }: { status: PriceComparisonStatus | nul
   const rebuildDialogRef = useRef<HTMLElement | null>(null);
   const uploadDialogRef = useRef<HTMLElement | null>(null);
   const loadRequest = useRef(0);
+  const loadController = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
     const requestId = ++loadRequest.current;
     setLoading(true);
     setError(null);
     try {
-      const loaded = await priceRequest<FilesResult>("/price-comparison/files");
-      if (requestId === loadRequest.current) setData(loaded);
+      const loaded = await priceRequest<FilesResult>("/price-comparison/files", { signal: controller.signal });
+      if (requestId !== loadRequest.current) return null;
+      setData(loaded);
+      return loaded;
     } catch (loadError) {
-      if (requestId === loadRequest.current) setError(errorMessage(loadError));
+      if (requestId === loadRequest.current && !isAbortError(loadError)) setError(errorMessage(loadError));
+      return null;
     } finally {
       if (requestId === loadRequest.current) setLoading(false);
     }
@@ -1134,7 +1219,10 @@ function FilesView({ status, onMutation }: { status: PriceComparisonStatus | nul
 
   useEffect(() => {
     void load();
-    return () => { loadRequest.current += 1; };
+    return () => {
+      loadController.current?.abort();
+      loadRequest.current += 1;
+    };
   }, [load]);
 
   useEffect(() => {
@@ -1160,8 +1248,8 @@ function FilesView({ status, onMutation }: { status: PriceComparisonStatus | nul
       await priceRequest("/price-comparison/files", { method: "POST", body });
       if (kind === "offers") setOfferFiles([]); else setDatanormFiles([]);
       setUploadDuplicatePreview(null);
-      await load();
-      await onMutation();
+      const refreshed = await load();
+      if (refreshed) onMutation(refreshed);
     } catch (uploadError) {
       const duplicateDetail = duplicateUploadDetail(uploadError);
       if (duplicateDetail) {
@@ -1188,8 +1276,8 @@ function FilesView({ status, onMutation }: { status: PriceComparisonStatus | nul
       await priceRequest(queryPath(`/price-comparison/files/${file.kind}/${encodeURIComponent(file.name)}`, {
         expected_revision: data?.revision ?? status?.revision,
       }), { method: "DELETE" });
-      await load();
-      await onMutation();
+      const refreshed = await load();
+      if (refreshed) onMutation(refreshed);
     } catch (deleteError) {
       setError(mutationErrorMessage(deleteError));
     } finally {
@@ -1222,8 +1310,8 @@ function FilesView({ status, onMutation }: { status: PriceComparisonStatus | nul
         method: "POST",
         body: JSON.stringify({ action, expected_revision: data?.revision ?? status?.revision }),
       });
-      await load();
-      await onMutation();
+      const refreshed = await load();
+      if (refreshed) onMutation(refreshed);
     } catch (maintenanceError) {
       setError(mutationErrorMessage(maintenanceError));
     } finally {
@@ -1264,8 +1352,8 @@ function FilesView({ status, onMutation }: { status: PriceComparisonStatus | nul
         }),
       });
       setRebuildPreview(null);
-      await load();
-      await onMutation();
+      const refreshed = await load();
+      if (refreshed) onMutation(refreshed);
     } catch (rebuildError) {
       setRebuildPreview(null);
       setError(mutationErrorMessage(rebuildError));
@@ -1288,7 +1376,7 @@ function FilesView({ status, onMutation }: { status: PriceComparisonStatus | nul
     <div className="price-workspace">
       <ViewHeading icon={<FolderSync size={19} />} title="Dateien" description="Angebots-PDFs und Datanorm-Dateien verwalten und den Datenbestand warten." actions={<button className="price-button" type="button" disabled={loading} onClick={() => void load()}><RefreshCw size={16} /> Aktualisieren</button>} />
       <label className="price-search-field files-search"><Search size={17} /><span className="sr-only">Dateien suchen</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Dateiname filtern" /></label>
-      {error ? <InlineNotice tone="error" action={<RetryButton onClick={load} />}>{error}</InlineNotice> : null}
+      {error ? <InlineNotice tone="error" action={<RetryButton onClick={() => { void load(); }} />}>{error}</InlineNotice> : null}
 
       <div className="file-sections">
         <FileSection title="Angebote (PDF)" description="Mehrere Projektangebote können gemeinsam hochgeladen werden." files={offers} loading={loading} busy={busy} inputId={offerInputId} selectedFiles={offerFiles} accept="application/pdf,.pdf" multiple onFiles={setOfferFiles} onUpload={() => upload("offers", offerFiles)} onDownload={downloadFile} onDelete={deleteFile} />
@@ -1299,9 +1387,9 @@ function FilesView({ status, onMutation }: { status: PriceComparisonStatus | nul
         <section className="maintenance-panel">
           <div><span className="price-kicker">Nur Administration</span><h3>Datenbestand warten</h3><p>Parser- und Vergleichscaches gezielt aus den gespeicherten Quelldateien erneuern.</p></div>
           <div className="maintenance-actions">
-            <button className="price-button" type="button" disabled={Boolean(busy)} onClick={() => void runMaintenance("rebuild_offers")}><RefreshCw size={16} /> Angebote neu aufbauen</button>
-            <button className="price-button" type="button" disabled={Boolean(busy)} onClick={() => void runMaintenance("reparse_datanorm")}><RefreshCw size={16} /> Datanorm neu einlesen</button>
-            <button className="price-button" type="button" disabled={Boolean(busy)} onClick={() => void runMaintenance("refresh_percentages")}><RefreshCw size={16} /> Prozentwerte aktualisieren</button>
+            <button className="price-button" type="button" disabled={loading || Boolean(busy)} onClick={() => void runMaintenance("rebuild_offers")}><RefreshCw size={16} /> Angebote neu aufbauen</button>
+            <button className="price-button" type="button" disabled={loading || Boolean(busy)} onClick={() => void runMaintenance("reparse_datanorm")}><RefreshCw size={16} /> Datanorm neu einlesen</button>
+            <button className="price-button" type="button" disabled={loading || Boolean(busy)} onClick={() => void runMaintenance("refresh_percentages")}><RefreshCw size={16} /> Prozentwerte aktualisieren</button>
           </div>
         </section>
       ) : null}
@@ -1361,18 +1449,19 @@ function FileSection({ title, description, files, loading, busy, inputId, select
         <input key={selectedFiles.map((file) => `${file.name}-${file.size}-${file.lastModified}`).join("|") || "empty"} id={inputId} className="sr-only" type="file" accept={accept} multiple={multiple} onChange={(event) => onFiles(Array.from(event.target.files ?? []))} />
         <label className="price-button" htmlFor={inputId}><Plus size={16} /> Dateien auswählen</label>
         <span title={selectedFiles.map((file) => file.name).join(", ")}>{selectedFiles.length ? `${selectedFiles.length} ausgewählt` : "Keine Auswahl"}</span>
-        <button className="price-button is-primary" type="button" disabled={!selectedFiles.length || Boolean(busy)} onClick={onUpload}>{busy?.startsWith("upload-") ? <LoaderCircle className="is-spinning" size={16} /> : <Upload size={16} />} Hochladen</button>
+        <button className="price-button is-primary" type="button" disabled={loading || !selectedFiles.length || Boolean(busy)} onClick={onUpload}>{busy?.startsWith("upload-") ? <LoaderCircle className="is-spinning" size={16} /> : <Upload size={16} />} Hochladen</button>
       </div>
-      {loading ? <LoadingState label={`${title} werden geladen`} compact /> : files.length ? (
+      {loading ? <LoadingState label={`${title} werden geladen`} compact /> : null}
+      {files.length ? (
         <div className="file-list">{files.map((file) => {
           return <div className="file-list-item" key={`${file.kind}-${file.name}`}>
             <FileText size={18} aria-hidden="true" />
             <div><strong>{file.name}</strong><span>{file.original_available === false ? "Positionen erhalten · Original-PDF fehlt" : `${formatFileSize(file.size)} · ${formatDateTime(file.modified)}`}</span>{file.included_in_comparison === false ? <span>Im übernommenen Online-Vergleich nicht enthalten</span> : null}</div>
             {file.active ? <span className="active-file-badge"><Check size={13} /> Aktiv</span> : null}
-            <div className="file-actions"><button className="price-icon-button" type="button" title={file.original_available === false ? "Die Original-PDF ist nicht vorhanden." : "Herunterladen"} aria-label={`${file.name} herunterladen`} disabled={Boolean(busy) || file.original_available === false} onClick={() => onDownload(file)}><Download size={16} /></button><button className="price-icon-button is-danger" type="button" title="Löschen" aria-label={`${file.name} löschen`} disabled={Boolean(busy)} onClick={() => onDelete(file)}><Trash2 size={16} /></button></div>
+            <div className="file-actions"><button className="price-icon-button" type="button" title={file.original_available === false ? "Die Original-PDF ist nicht vorhanden." : "Herunterladen"} aria-label={`${file.name} herunterladen`} disabled={loading || Boolean(busy) || file.original_available === false} onClick={() => onDownload(file)}><Download size={16} /></button><button className="price-icon-button is-danger" type="button" title="Löschen" aria-label={`${file.name} löschen`} disabled={loading || Boolean(busy)} onClick={() => onDelete(file)}><Trash2 size={16} /></button></div>
           </div>;
         })}</div>
-      ) : <p className="compact-empty">Keine Dateien vorhanden.</p>}
+      ) : loading ? null : <p className="compact-empty">Keine Dateien vorhanden.</p>}
     </section>
   );
 }
@@ -1395,9 +1484,9 @@ function RetryButton({ onClick }: { onClick: () => void | Promise<void> }) {
 }
 
 function DataPanel({ loading, empty, emptyText, children }: { loading: boolean; empty: boolean; emptyText: string; children: ReactNode }) {
-  if (loading) return <div className="price-data-panel"><LoadingState label="Daten werden geladen" /></div>;
+  if (loading && empty) return <div className="price-data-panel"><LoadingState label="Daten werden geladen" /></div>;
   if (empty) return <div className="price-data-panel"><div className="price-empty-state"><FileSpreadsheet size={26} /><strong>Keine Daten</strong><span>{emptyText}</span></div></div>;
-  return <div className="price-data-panel">{children}</div>;
+  return <div className="price-data-panel" aria-busy={loading}>{loading ? <LoadingState label="Daten werden aktualisiert" compact /> : null}{children}</div>;
 }
 
 function LoadingState({ label, compact = false }: { label: string; compact?: boolean }) {
@@ -1416,7 +1505,8 @@ function DataTable({ columns, rows, onArticle, onSource, unavailableSources = []
   unavailableSources?: string[];
   variant?: PriceTableVariant;
 }) {
-  const renderedColumns = tableColumns(columns, variant);
+  const renderedColumns = useMemo(() => tableColumns(columns, variant), [columns, variant]);
+  const unavailableSourceSet = useMemo(() => new Set(unavailableSources), [unavailableSources]);
   return <div className={`price-table-wrap is-${variant}`}><table className="price-table"><thead><tr>{renderedColumns.map((column) => <th key={column}>{columnLabel(column, variant)}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{renderedColumns.map((column) => {
     const value = row[column];
     const offerPriceMatch = column.match(/^Angebotspreis\s+(\d+)$/i);
@@ -1424,7 +1514,7 @@ function DataTable({ columns, rows, onArticle, onSource, unavailableSources = []
     const content = column === "Artikelnummer" && value && onArticle
       ? <button className="table-link-button" type="button" onClick={() => onArticle(String(value))}>{String(value)}</button>
       : offerPriceMatch && value !== null && value !== undefined && source && onSource
-        ? unavailableSources.includes(source)
+        ? unavailableSourceSet.has(source)
           ? <span title={`${source}: Die Original-PDF ist nicht vorhanden.`}>{formatCell(column, value)}</span>
           : <button className="table-link-button is-price" type="button" title={`${source} herunterladen`} onClick={() => void onSource(source)}>{formatCell(column, value)}<Download size={12} /></button>
         : formatCell(column, value);
@@ -1433,10 +1523,10 @@ function DataTable({ columns, rows, onArticle, onSource, unavailableSources = []
   })}</tr>)}</tbody></table></div>;
 }
 
-function Pagination({ offset, limit, total, onChange }: { offset: number; limit: number; total: number; onChange: (offset: number) => void }) {
+function Pagination({ offset, limit, total, disabled = false, onChange }: { offset: number; limit: number; total: number; disabled?: boolean; onChange: (offset: number) => void }) {
   const start = total ? offset + 1 : 0;
   const end = Math.min(offset + limit, total);
-  return <div className="price-pagination" aria-label="Seitennavigation"><span>{formatInteger(start)}–{formatInteger(end)} von {formatInteger(total)}</span><div><button className="price-icon-button" type="button" aria-label="Vorherige Seite" disabled={offset <= 0} onClick={() => onChange(Math.max(0, offset - limit))}><ChevronLeft size={17} /></button><button className="price-icon-button" type="button" aria-label="Nächste Seite" disabled={offset + limit >= total} onClick={() => onChange(offset + limit)}><ChevronRight size={17} /></button></div></div>;
+  return <div className="price-pagination" aria-label="Seitennavigation"><span>{formatInteger(start)}–{formatInteger(end)} von {formatInteger(total)}</span><div><button className="price-icon-button" type="button" aria-label="Vorherige Seite" disabled={disabled || offset <= 0} onClick={() => onChange(Math.max(0, offset - limit))}><ChevronLeft size={17} /></button><button className="price-icon-button" type="button" aria-label="Nächste Seite" disabled={disabled || offset + limit >= total} onClick={() => onChange(offset + limit)}><ChevronRight size={17} /></button></div></div>;
 }
 
 function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -1523,7 +1613,7 @@ function formatCell(column: string, value: unknown): ReactNode {
   if (typeof value === "number") {
     if (/%|prozent|abweichung/i.test(column)) return formatPercent(value);
     if (/preis|netto|summe|gesamt|median/i.test(column)) return formatCurrency(value);
-    return new Intl.NumberFormat("de-DE", { maximumFractionDigits: 3 }).format(value);
+    return decimalFormatter.format(value);
   }
   if (typeof value === "string" && /datum|date/i.test(column)) return formatDate(value);
   return String(value);
@@ -1617,11 +1707,11 @@ function isWithinLastMonths(value: unknown, months: number): boolean {
 }
 
 function formatCurrency(value: number | null): string {
-  return value === null || !Number.isFinite(value) ? "—" : new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value);
+  return value === null || !Number.isFinite(value) ? "—" : currencyFormatter.format(value);
 }
 
 function formatPercent(value: number | null): string {
-  return value === null || !Number.isFinite(value) ? "—" : `${new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 2, signDisplay: "exceptZero" }).format(value)} %`;
+  return value === null || !Number.isFinite(value) ? "—" : `${percentFormatter.format(value)} %`;
 }
 
 function formatDecimal(value: number | null, digits: number): string {
@@ -1629,24 +1719,24 @@ function formatDecimal(value: number | null, digits: number): string {
 }
 
 function formatInteger(value: number): string {
-  return new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(value);
+  return integerFormatter.format(value);
 }
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("de-DE").format(date);
+  return Number.isNaN(date.getTime()) ? value : dateFormatter.format(date);
 }
 
 function shortDate(value: string): string {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value.slice(0, 10) : new Intl.DateTimeFormat("de-DE", { month: "2-digit", year: "2-digit" }).format(date);
+  return Number.isNaN(date.getTime()) ? value.slice(0, 10) : shortDateFormatter.format(date);
 }
 
 function formatDateTime(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(date);
+  return Number.isNaN(date.getTime()) ? value : dateTimeFormatter.format(date);
 }
 
 function formatFileSize(bytes: number): string {
@@ -1657,5 +1747,5 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatChartPrice(value: number): string {
-  return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(value)} €`;
+  return `${integerFormatter.format(value)} €`;
 }

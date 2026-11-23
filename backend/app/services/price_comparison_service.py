@@ -24,6 +24,11 @@ from app.services.price_comparison_online_import import (
     OnlineImportFrames,
     load_online_import,
 )
+from app.services.price_comparison_performance_cache import (
+    calendar_day_key,
+    price_comparison_cache,
+    store_cache_scope,
+)
 from app.services.price_comparison_storage import (
     MAX_FILE_BYTES,
     Snapshot,
@@ -129,12 +134,33 @@ class PriceData:
     warnings: list[str]
     offer_sources: list[OfferSource]
     unavailable_sources: list[str]
+    cacheable: bool = False
 
 
 class PriceComparisonService:
     def __init__(self, store, *, cache_dir=None):
         self.store = store
         self.cache_dir = Path(cache_dir or settings.price_comparison_cache_dir)
+        self._cache_scope = store_cache_scope(store, self.cache_dir)
+
+    def _derived(
+        self,
+        data: PriceData,
+        operation: str,
+        factory,
+        *parts,
+        daily: bool = False,
+    ):
+        """Reuse derived values only after this request obtained a fresh revision."""
+
+        if not data.cacheable:
+            return factory()
+        day = (calendar_day_key(),) if daily else ()
+        key = (*self._cache_scope, operation, data.snap.revision, *day, *parts)
+        canonical = price_comparison_cache.get_or_compute(key, factory)
+        # Cache entries are process-global across request-scoped services.
+        # Never expose their mutable frames, mappings or lists to a caller.
+        return deepcopy(canonical)
 
     def import_frames(self, snap: Snapshot) -> OnlineImportFrames | None:
         return load_online_import(self.store, snap, self.cache_dir)
@@ -324,7 +350,22 @@ class PriceComparisonService:
         return frame
 
     def load(self, snap=None, *, force=False) -> PriceData:
-        snap = snap or snapshot(self.store)
+        # Explicit snapshots are used by mutations.  Their state can change in
+        # memory while their persisted revision remains unchanged, so neither
+        # explicit snapshots nor forced parses may read or populate this cache.
+        if snap is not None or force:
+            current = snap if snap is not None else snapshot(self.store)
+            return self._load_snapshot(current, force=force, cacheable=False)
+
+        current = snapshot(self.store)
+        key = (*self._cache_scope, "price-data", current.revision)
+        canonical = price_comparison_cache.get_or_compute(
+            key,
+            lambda: self._load_snapshot(current, force=False, cacheable=True),
+        )
+        return deepcopy(canonical)
+
+    def _load_snapshot(self, snap: Snapshot, *, force: bool, cacheable: bool) -> PriceData:
         imported = self.import_frames(snap)
         datanorm = pd.DataFrame()
         if snap.state["active_datanorm"]:
@@ -424,6 +465,7 @@ class PriceComparisonService:
             warnings,
             offer_sources,
             unavailable,
+            cacheable,
         )
 
     def clusters(self, data):
@@ -433,8 +475,15 @@ class PriceComparisonService:
 
     def datanorm(self, **query):
         data = self.load()
-        frame = core.datanorm_comparison(
-            data.datanorm, data.prices, data.snap.state["discounts"], data.snap.state["align_netto"]
+        frame = self._derived(
+            data,
+            "datanorm-comparison",
+            lambda: core.datanorm_comparison(
+                data.datanorm,
+                data.prices,
+                data.snap.state["discounts"],
+                data.snap.state["align_netto"],
+            ),
         )
         return table(
             frame,
@@ -448,7 +497,21 @@ class PriceComparisonService:
 
     def suggestions(self, references, **query):
         data = self.load()
-        frame, meta = core.suggestions(data.datanorm, data.prices, references_to_core(references))
+        normalized = references_to_core(references)
+        reference_key = json.dumps(
+            normalized,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        frame, meta = self._derived(
+            data,
+            "suggestions",
+            lambda: core.suggestions(data.datanorm, data.prices, normalized),
+            reference_key,
+            daily=True,
+        )
         return table(
             frame,
             data.snap,
@@ -459,7 +522,7 @@ class PriceComparisonService:
             unavailable_sources=data.unavailable_sources,
         )
 
-    def offers_list(self, data):
+    def _offers_list_uncached(self, data):
         raw = data.raw_prices
         if raw.empty:
             return []
@@ -471,6 +534,7 @@ class PriceComparisonService:
             if not isinstance(frozen_metrics.get(source), dict)
             or not {"PV_avg_pct_pos", "PV_avg_pct_wert"}.issubset(frozen_metrics[source])
         ]
+        missing_source_set = set(missing_sources)
         # Legacy installations do not have calendar_state frozen metrics yet.
         # Calculate only those missing values from the already prepared prices
         # for this response; ordinary reads must not write shared state.
@@ -493,16 +557,20 @@ class PriceComparisonService:
                 key=lambda source: (source.item.modified, source.name),
                 reverse=True,
             )
+        frames_by_source = {
+            str(name): frame
+            for name, frame in raw.groupby(raw["Quelle"].astype(str), sort=False)
+        }
         for source in offer_sources:
-            frame = raw[raw["Quelle"].astype(str).eq(source.name)]
-            if frame.empty:
+            frame = frames_by_source.get(source.name)
+            if frame is None or frame.empty:
                 continue
             row = frame.iloc[0]
             date = pd.to_datetime(frame["Datum"], errors="coerce").max()
             totals = pd.to_numeric(frame.get("Gesamt (netto)"), errors="coerce")
             net = totals.max() if isinstance(totals, pd.Series) else None
             frozen = frozen_metrics.get(source.name)
-            if source.name in missing_sources:
+            if source.name in missing_source_set:
                 frozen = fallback_metrics[source.name]
             if not isinstance(frozen, dict):
                 frozen = {}
@@ -523,6 +591,17 @@ class PriceComparisonService:
                 }
             )
         return result
+
+    def offers_list(self, data):
+        # Legacy fallback percentages use a rolling 12-month window.  Frozen
+        # metrics are stable, but the day key also keeps old installations
+        # correct when metadata is missing.
+        return self._derived(
+            data,
+            "offers-list",
+            lambda: self._offers_list_uncached(data),
+            daily=True,
+        )
 
     def offers(self, *, search="", offer_type="", offset=0, limit=20):
         data = self.load()
@@ -548,7 +627,18 @@ class PriceComparisonService:
         offer = next((o for o in self.offers_list(data) if o["source"] == source), None)
         if offer is None:
             raise HTTPException(422, "Das Angebot enthält keine lesbaren Positionen.")
-        frame = core.offer_positions(source, data.datanorm, data.raw_prices, data.snap.state)
+        frame = self._derived(
+            data,
+            "offer-positions",
+            lambda: core.offer_positions(
+                source,
+                data.datanorm,
+                data.raw_prices,
+                data.snap.state,
+            ),
+            source,
+            daily=True,
+        )
         return table(
             frame,
             data.snap,
@@ -574,27 +664,49 @@ class PriceComparisonService:
     def article(self, article_number, *, offer_types=None):
         data = self.load()
         art = core.clean_artnr(article_number)
-        frame = data.datanorm
-        matching = frame[frame["Artikelnummer"].astype(str).eq(art)] if not frame.empty else frame
-        history = core.article_history(art, data.prices, offer_types)
-        if matching.empty and history.empty:
+        selected_types = None if offer_types is None else tuple(str(value) for value in offer_types)
+
+        def build_article():
+            frame = data.datanorm
+            matching = (
+                frame[frame["Artikelnummer"].astype(str).eq(art)]
+                if not frame.empty
+                else frame
+            )
+            history = core.article_history(art, data.prices, selected_types)
+            article = records(matching)[0] if not matching.empty else {"Artikelnummer": art}
+            stats = core.article_statistics(
+                art,
+                data.datanorm,
+                data.prices,
+                selected_types,
+            )
+            values = (
+                pd.to_numeric(history["Preis"], errors="coerce").dropna()
+                if "Preis" in history.columns
+                else pd.Series(dtype=float)
+            )
+            # Retain the original detailed keys (median_24m, datanorm_price, ...)
+            # and provide the generic aliases consumed by the calendar client.
+            stats.update(
+                {
+                    "minimum": float(values.min()) if not values.empty else None,
+                    "maximum": float(values.max()) if not values.empty else None,
+                    "median": float(values.median()) if not values.empty else None,
+                }
+            )
+            return matching.empty and history.empty, history, article, stats
+
+        missing, history, article, stats = self._derived(
+            data,
+            "article",
+            build_article,
+            art,
+            selected_types,
+            daily=True,
+        )
+        if missing:
             raise HTTPException(404, "Artikel nicht gefunden.")
-        article = records(matching)[0] if not matching.empty else {"Artikelnummer": art}
-        stats = core.article_statistics(art, data.datanorm, data.prices, offer_types)
-        values = (
-            pd.to_numeric(history["Preis"], errors="coerce").dropna()
-            if "Preis" in history.columns
-            else pd.Series(dtype=float)
-        )
-        # Retain the original detailed keys (median_24m, datanorm_price, ...)
-        # and provide the generic aliases consumed by the calendar client.
-        stats.update(
-            {
-                "minimum": float(values.min()) if not values.empty else None,
-                "maximum": float(values.max()) if not values.empty else None,
-                "median": float(values.median()) if not values.empty else None,
-            }
-        )
         return table(
             history,
             data.snap,
