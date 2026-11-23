@@ -255,6 +255,57 @@
 
 .price-filter-bar select { min-width: 185px; padding: 0 30px 0 10px; }
 
+.price-offer-type-filter {
+  flex: 0 0 220px;
+  min-width: 0;
+}
+
+.price-offer-type-filter .site-map-filter > label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.price-offer-type-filter .site-map-select-trigger {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-color: var(--price-border-strong);
+  color: #29445f;
+  font-weight: 680;
+}
+
+.price-offer-type-filter .site-map-select-trigger:is(:hover, :focus-visible, [aria-expanded="true"]) {
+  border-color: #6e92b5;
+  background: var(--price-surface-muted);
+  outline: none;
+}
+
+.price-offer-type-filter .site-map-select-trigger:focus-visible {
+  box-shadow: 0 0 0 2px rgb(49 95 145 / 12%);
+}
+
+.price-offer-type-filter .site-map-select-options {
+  border-color: #6e92b5;
+}
+
+.price-offer-type-filter .site-map-select-options > button {
+  min-height: 36px;
+  color: #29445f;
+  font-weight: 600;
+}
+
+.price-offer-type-filter .site-map-select-options > button[aria-selected="true"] {
+  color: var(--price-navy);
+  font-weight: 750;
+}
+
+.price-offer-filters .price-search-field input { min-height: 34px; }
+
 .price-search-field {
   display: flex;
   align-items: center;
@@ -835,6 +886,8 @@
   .price-search-field { flex-basis: calc(100% - 210px); }
   .price-filter-bar select { min-width: 180px; }
   .price-filter-bar .price-button { flex: 0 0 auto; }
+  .price-offer-filters .price-search-field { flex-basis: 100%; }
+  .price-offer-type-filter { flex: 1 1 220px; }
   .article-layout { grid-template-columns: 1fr; }
   .article-picker { position: static; }
   .article-result-list { max-height: 300px; }
@@ -865,7 +918,8 @@
   .price-view-actions { width: 100%; flex-wrap: wrap; }
   .price-filter-bar { display: grid; grid-template-columns: 1fr 1fr; }
   .price-filter-bar .price-search-field,
-  .price-filter-bar label:has(select) { grid-column: 1 / -1; width: 100%; }
+  .price-filter-bar label:has(select),
+  .price-offer-type-filter { grid-column: 1 / -1; width: 100%; }
   .price-filter-bar select { width: 100%; }
   .price-table-caption { align-items: flex-start; flex-wrap: wrap; padding-block: 8px; }
   .price-table-caption span { flex: 1 1 180px; }

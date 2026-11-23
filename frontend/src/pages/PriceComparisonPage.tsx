@@ -32,6 +32,7 @@ import {
 import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { MapFilterSelect } from "../components/MapFilterSelect";
 import {
   PriceComparisonError,
   type ArticleDetailResult,
@@ -74,6 +75,10 @@ const views: Array<{ key: ViewKey; label: string }> = [
 ];
 
 const offerTypes: OfferType[] = ["Erstangebot", "Folgeangebot", "Verhandeltes Angebot"];
+const offerTypeFilterOptions = [
+  { value: "", label: "Alle Angebotsarten" },
+  ...offerTypes.map((type) => ({ value: type, label: type })),
+];
 const currencyFormatter = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const percentFormatter = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 2, signDisplay: "exceptZero" });
 const integerFormatter = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
@@ -667,16 +672,21 @@ function OffersView() {
   return (
     <div className="price-workspace">
       <ViewHeading icon={<FileArchive size={19} />} title="Angebote OBO" description="Projektangebote prüfen, korrigieren und in Bestellformate exportieren." />
-      <form className="price-filter-bar" onSubmit={(event) => {
+      <form className="price-filter-bar price-offer-filters" onSubmit={(event) => {
         event.preventDefault(); setOffset(0); setSearch(queryInput.trim());
       }}>
         <label className="price-search-field">
           <span className="sr-only">Angebote durchsuchen</span><Search size={17} />
           <input value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder="Projekt, Angebotsnummer oder Datei" />
         </label>
-        <label><span className="sr-only">Angebotsart</span><select value={offerType} onChange={(event) => { setOfferType(event.target.value); setOffset(0); }}>
-          <option value="">Alle Angebotsarten</option>{offerTypes.map((type) => <option key={type}>{type}</option>)}
-        </select></label>
+        <div className="price-offer-type-filter">
+          <MapFilterSelect
+            label="Angebotsart"
+            value={offerType}
+            options={offerTypeFilterOptions}
+            onChange={(value) => { setOfferType(value); setOffset(0); }}
+          />
+        </div>
         <button className="price-button is-primary" type="submit"><Search size={16} /> Suchen</button>
         {(search || offerType) ? <button className="price-button is-quiet" type="button" onClick={() => { setQueryInput(""); setSearch(""); setOfferType(""); setOffset(0); }}><X size={16} /> Filter löschen</button> : null}
       </form>
