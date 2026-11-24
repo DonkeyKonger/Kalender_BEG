@@ -653,13 +653,100 @@
 
 @media (min-width: 1181px) {
   .offers-layout.has-detail > .price-data-panel,
-  .offers-layout.has-detail .offer-list { min-width: 0; overflow: hidden; }
+  .offers-layout.has-detail .offer-list { min-width: 0; }
   .offers-layout.has-detail .offer-list-item { grid-template-columns: minmax(0, 1fr) 18px; gap: 6px 8px; }
   .offers-layout.has-detail .offer-list-primary,
   .offers-layout.has-detail .offer-list-meta,
   .offers-layout.has-detail .offer-list-price { grid-column: 1; }
   .offers-layout.has-detail .offer-list-price { align-items: flex-start; }
   .offers-layout.has-detail .offer-list-item > svg { grid-column: 2; grid-row: 1 / span 3; }
+}
+
+/* Keep the offer workspace stable while rows, selection and loading change. */
+.offers-layout > .price-data-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: clamp(280px, 50vh, 640px);
+  height: clamp(280px, 50dvh, 640px);
+  overflow: hidden;
+}
+.offers-layout > .price-data-panel > .price-table-caption,
+.offers-layout > .price-data-panel > .price-pagination,
+.offers-layout > .price-data-panel > .price-loading.is-compact { flex: 0 0 auto; }
+.offers-layout .offer-list {
+  flex: 1 1 0;
+  min-height: 0;
+  grid-auto-rows: max-content;
+  align-content: start;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.offers-layout > .price-data-panel > .price-loading:not(.is-compact),
+.offers-layout > .price-data-panel > .price-empty-state { flex: 1 1 0; min-height: 0; }
+.offers-layout > .offer-detail {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  height: calc(100vh - 28px);
+  height: calc(100dvh - 28px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.offers-layout > .offer-detail > * { flex: 0 0 auto; }
+.offers-layout > .offer-detail > .offer-position-table-wrap {
+  flex: 1 1 0;
+  min-height: 100px;
+  max-height: none;
+  scrollbar-gutter: stable;
+}
+
+@media (min-width: 1181px) {
+  .app-main:has(> .content-area > .price-comparison-page.is-offers-view) {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 560px;
+  }
+  .content-area:has(> .price-comparison-page.is-offers-view) {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    padding: 0;
+  }
+  .price-comparison-page.is-offers-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+  }
+  .price-comparison-page.is-offers-view > * { flex: 0 0 auto; }
+  .price-comparison-page.is-offers-view > .price-view-content {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .price-workspace.is-offers {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    padding-bottom: 16px;
+  }
+  .price-workspace.is-offers > * { flex: 0 0 auto; }
+  .price-workspace.is-offers > .offers-layout {
+    flex: 1 1 0;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+  .offers-layout > .price-data-panel,
+  .offers-layout > .offer-detail { height: 100%; min-height: 0; }
 }
 
 .offer-type-badge { padding: 3px 6px; border: 1px solid #bdcddd; color: #526a81; font-size: 0.62rem; font-weight: 720; }

@@ -160,7 +160,7 @@ export function PriceComparisonPage() {
   }
 
   return (
-    <section className="price-comparison-page page-stack">
+    <section className={`price-comparison-page page-stack${activeView === "offers" ? " is-offers-view" : ""}`}>
       <header className="price-comparison-header">
         <div>
           <p className="eyebrow">Einkauf & Kalkulation</p>
@@ -811,7 +811,7 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
   }, [selectedSource]);
 
   return (
-    <div className="price-workspace">
+    <div className="price-workspace is-offers">
       <ViewHeading icon={<FileArchive size={19} />} title="Angebote OBO" description="Projektangebote prüfen, korrigieren und in Bestellformate exportieren." />
       <form className="price-filter-bar price-offer-filters" onSubmit={(event) => {
         event.preventDefault(); setOffset(0); setSearch(queryInput.trim());
