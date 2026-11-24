@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  memo,
   useCallback,
   useEffect,
   useId,
@@ -41,8 +42,6 @@ import { getPriceChartLayout, getPriceChartWindow } from "../priceComparison/cha
 import {
   PriceComparisonError,
   type ArticleDetailResult,
-  type ArticleSummary,
-  type ArticlesResult,
   type FilesResult,
   type OfferPositionsResult,
   type OffersResult,
@@ -59,6 +58,11 @@ import {
   queryPath,
   triggerDownload,
 } from "../priceComparison/client";
+import {
+  type ArticleSearchIndex,
+  searchArticleIndex,
+  useArticleSearchIndex,
+} from "../priceComparison/articleSearch";
 import "../priceComparison/priceComparison.css";
 
 type ViewKey = "datanorm" | "offers" | "articles" | "files";
@@ -94,6 +98,7 @@ const shortDateFormatter = new Intl.DateTimeFormat("de-DE", { month: "2-digit", 
 const dateTimeFormatter = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" });
 
 export function PriceComparisonPage() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedView = searchParams.get("view") as ViewKey | null;
   const activeView = views.some((view) => view.key === requestedView) ? requestedView! : "articles";
@@ -107,6 +112,7 @@ export function PriceComparisonPage() {
     setPendingOperations((count) => Math.max(0, count + (started ? 1 : -1)));
   }, []);
   const [uploadRevision, setUploadRevision] = useState<string | null>(null);
+  const articleSearch = useArticleSearchIndex(user?.id ?? null);
   const statusRequest = useRef(0);
   const statusController = useRef<AbortController | null>(null);
 
@@ -203,7 +209,7 @@ export function PriceComparisonPage() {
       <div className="price-view-content" role="tabpanel">
         {activeView === "datanorm" ? <DatanormView onOperation={onOperation} uploadRevision={uploadRevision} uploading={uploading} /> : null}
         {activeView === "offers" ? <OffersView onOperation={onOperation} uploadRevision={uploadRevision} uploading={uploading} onUploadBlock={setUploadBlockReason} /> : null}
-        {activeView === "articles" ? <ArticlesView uploadRevision={uploadRevision} /> : null}
+        {activeView === "articles" ? <ArticlesView articleSearch={articleSearch} uploadRevision={uploadRevision} /> : null}
         {activeView === "files" ? <FilesView onOperation={onOperation} uploading={uploading} uploadRevision={uploadRevision} status={status} onMutation={syncStatusFromFiles} /> : null}
       </div>
     </section>
@@ -1113,65 +1119,34 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
   );
 }
 
-function ArticlesView({ uploadRevision }: { uploadRevision: string | null }) {
+function ArticlesView({ articleSearch, uploadRevision }: { articleSearch: ArticleSearchIndex; uploadRevision: string | null }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState("");
-  const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(searchParams.get("article"));
-  const [searching, setSearching] = useState(false);
-  const [hasSearched, setHasSearched] = useState(!searchParams.get("article"));
-  const [error, setError] = useState<string | null>(null);
-  const debounceTimer = useRef<number | null>(null);
-  const searchRequest = useRef(0);
-  const searchController = useRef<AbortController | null>(null);
-  const initialRouteArticle = useRef(searchParams.get("article"));
   const routeArticle = searchParams.get("article");
-
-  const searchArticles = useCallback(async (value: string) => {
-    searchController.current?.abort();
-    const controller = new AbortController();
-    searchController.current = controller;
-    const requestId = ++searchRequest.current;
-    setHasSearched(true);
-    setSearching(true);
-    setError(null);
-    try {
-      const result = await priceRequest<ArticlesResult>(queryPath("/price-comparison/articles", { search: value.trim(), limit: 50 }), { signal: controller.signal });
-      if (requestId === searchRequest.current) setArticles(result.articles);
-    } catch (searchError) {
-      if (requestId === searchRequest.current && !isAbortError(searchError)) setError(errorMessage(searchError));
-    } finally {
-      if (requestId === searchRequest.current) setSearching(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!initialRouteArticle.current) void searchArticles("");
-    return () => {
-      searchController.current?.abort();
-      searchRequest.current += 1;
-      if (debounceTimer.current !== null) window.clearTimeout(debounceTimer.current);
-    };
-  }, [searchArticles]);
+  const articles = useMemo(() => articleSearch.snapshot
+    ? searchArticleIndex(articleSearch.snapshot, query)
+    : [], [articleSearch.snapshot, query]);
 
   useEffect(() => {
     setSelectedArticle(routeArticle);
   }, [routeArticle]);
 
-  function updateQuery(value: string) {
-    setQuery(value);
-    if (debounceTimer.current !== null) window.clearTimeout(debounceTimer.current);
-    debounceTimer.current = window.setTimeout(() => void searchArticles(value), 250);
-  }
-
   return (
     <div className="price-workspace">
       <div className="article-layout">
         <section className="article-picker" aria-label="Artikelsuche">
-          <label className="price-search-field"><Search size={17} /><span className="sr-only">Artikel suchen</span><input value={query} onChange={(event) => updateQuery(event.target.value)} placeholder="Artikelnummer oder Text" /></label>
-          {searching ? <LoadingState label="Artikel werden gesucht" compact /> : null}
-          {error ? <InlineNotice tone="error">{error}</InlineNotice> : null}
-          <div className="article-result-list" role="listbox" aria-label="Gefundene Artikel">
+          <label className="price-search-field"><Search size={17} /><span className="sr-only">Artikel suchen</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Artikelnummer oder Text" /></label>
+          {articleSearch.loading && !articleSearch.snapshot ? <LoadingState label="Artikelindex wird geladen" compact /> : null}
+          {articleSearch.error && !articleSearch.snapshot ? <InlineNotice tone="error" action={<RetryButton onClick={articleSearch.retry} />}>{articleSearch.error}</InlineNotice> : null}
+          {articleSearch.stale && articleSearch.snapshot ? (
+            <InlineNotice tone="info" action={articleSearch.error ? <RetryButton onClick={articleSearch.retry} /> : undefined}>
+              {articleSearch.error
+                ? "Der Artikelindex konnte nicht aktualisiert werden. Die Treffer stammen aus dem zuletzt geladenen Datenstand."
+                : "Der Artikelindex wird aktualisiert. Die Treffer können bis zum Abschluss noch dem vorherigen Datenstand entsprechen."}
+            </InlineNotice>
+          ) : null}
+          <div className="article-result-list" role="listbox" aria-label="Gefundene Artikel" aria-busy={articleSearch.loading && !articleSearch.snapshot}>
             {articles.map((article) => (
               <button key={article.article_number} type="button" role="option" aria-selected={selectedArticle === article.article_number} className={selectedArticle === article.article_number ? "is-selected" : undefined} onClick={() => {
                 setSelectedArticle(article.article_number);
@@ -1184,7 +1159,7 @@ function ArticlesView({ uploadRevision }: { uploadRevision: string | null }) {
                 <span>{article.net_price === null ? "—" : formatCurrency(article.net_price)}</span>
               </button>
             ))}
-            {!searching && !articles.length ? <p className="compact-empty">{hasSearched ? "Keine Artikel gefunden." : "Suchbegriff eingeben, um weitere Artikel anzuzeigen."}</p> : null}
+            {articleSearch.snapshot && !articles.length ? <p className="compact-empty">Keine Artikel gefunden.</p> : null}
           </div>
         </section>
         {selectedArticle ? <ArticleDetail articleNumber={selectedArticle} uploadRevision={uploadRevision} /> : (
@@ -1195,7 +1170,7 @@ function ArticlesView({ uploadRevision }: { uploadRevision: string | null }) {
   );
 }
 
-function ArticleDetail({ articleNumber, uploadRevision }: { articleNumber: string; uploadRevision: string | null }) {
+const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevision }: { articleNumber: string; uploadRevision: string | null }) {
   const [data, setData] = useState<ArticleDetailResult | null>(null);
   const [dataArticleNumber, setDataArticleNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1246,19 +1221,27 @@ function ArticleDetail({ articleNumber, uploadRevision }: { articleNumber: strin
     return () => observer.disconnect();
   }, [articleNumber, data, dataArticleNumber, loading]);
 
-  const filteredRows = useMemo(() => (data?.rows ?? []).filter((row) => enabledTypes.has(String(row.Angebotsart ?? "Erstangebot") as OfferType)), [data?.rows, enabledTypes]);
-  const prices = filteredRows.map((row) => toNumber(row.Preis)).filter((value): value is number => value !== null);
-  const recentPrices = filteredRows
-    .filter((row) => isWithinLastMonths(row.Datum, 24))
-    .map((row) => toNumber(row.Preis))
-    .filter((value): value is number => value !== null);
-  const filteredStats = prices.length
-    ? { minimum: Math.min(...prices), maximum: Math.max(...prices), median24: recentPrices.length ? median(recentPrices) : null }
-    : { minimum: null, maximum: null, median24: null };
-  const netPrice = toNumber(data?.article.Nettopreis);
-  const medianDelta = filteredStats.median24 !== null && netPrice !== null && netPrice !== 0
-    ? ((filteredStats.median24 - netPrice) / netPrice) * 100
-    : (filteredStats.median24 !== null ? data?.statistics.median_delta_pct ?? null : null);
+  const { filteredRows, filteredStats, netPrice, medianDelta } = useMemo(() => {
+    const nextFilteredRows = (data?.rows ?? []).filter((row) => enabledTypes.has(String(row.Angebotsart ?? "Erstangebot") as OfferType));
+    const prices = nextFilteredRows.map((row) => toNumber(row.Preis)).filter((value): value is number => value !== null);
+    const recentPrices = nextFilteredRows
+      .filter((row) => isWithinLastMonths(row.Datum, 24))
+      .map((row) => toNumber(row.Preis))
+      .filter((value): value is number => value !== null);
+    const nextFilteredStats = prices.length
+      ? { minimum: Math.min(...prices), maximum: Math.max(...prices), median24: recentPrices.length ? median(recentPrices) : null }
+      : { minimum: null, maximum: null, median24: null };
+    const nextNetPrice = toNumber(data?.article.Nettopreis);
+    const nextMedianDelta = nextFilteredStats.median24 !== null && nextNetPrice !== null && nextNetPrice !== 0
+      ? ((nextFilteredStats.median24 - nextNetPrice) / nextNetPrice) * 100
+      : (nextFilteredStats.median24 !== null ? data?.statistics.median_delta_pct ?? null : null);
+    return {
+      filteredRows: nextFilteredRows,
+      filteredStats: nextFilteredStats,
+      netPrice: nextNetPrice,
+      medianDelta: nextMedianDelta,
+    };
+  }, [data, enabledTypes]);
 
   async function exportArticle(kind: "article" | "article_pdf") {
     setExporting(true);
@@ -1327,7 +1310,7 @@ function ArticleDetail({ articleNumber, uploadRevision }: { articleNumber: strin
       </div>
     </section>
   );
-}
+});
 
 type PriceChartPoint = { price: number; date: string; type: OfferType; offerName: string };
 type PriceChartTooltipState = { index: number; anchor: DOMRect; points: PriceChartPoint[]; mode: "bars" | "line" };

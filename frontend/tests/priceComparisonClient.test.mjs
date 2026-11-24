@@ -95,3 +95,32 @@ test("persistent gateway timeouts stop after two retries", async (t) => {
   );
   assert.equal(calls, 3);
 });
+
+test("successful data writes notify the in-memory article index but previews and exports do not", async (t) => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const windowTarget = new EventTarget();
+  Object.defineProperty(globalThis, "window", { configurable: true, value: windowTarget });
+  t.after(() => originalWindow
+    ? Object.defineProperty(globalThis, "window", originalWindow)
+    : delete globalThis.window);
+  const { PRICE_COMPARISON_DATA_CHANGED_EVENT, priceRequest } = await fixture(t, async () => Response.json({ revision: "rev-2" }));
+  const changes = [];
+  windowTarget.addEventListener(PRICE_COMPARISON_DATA_CHANGED_EVENT, (event) => changes.push(event.detail));
+
+  await priceRequest("/price-comparison/offers/offer.pdf", { method: "PATCH", body: "{}" });
+  await priceRequest("/price-comparison/files", { method: "POST", body: "{}" });
+  await priceRequest("/price-comparison/maintenance", { method: "POST", body: "{}" });
+  await priceRequest("/price-comparison/reference-presets/name", { method: "PUT", body: "{}" });
+  await priceRequest("/price-comparison/reference-presets/name?expected_revision=old", { method: "DELETE" });
+  await priceRequest("/price-comparison/suggestions/preview", { method: "POST", body: "{}" });
+  await priceRequest("/price-comparison/maintenance/preview", { method: "POST", body: "{}" });
+  await priceRequest("/price-comparison/exports", { method: "POST", body: "{}" });
+
+  assert.deepEqual(changes.map(({ method, path, revision }) => [method, path, revision]), [
+    ["PATCH", "/price-comparison/offers/offer.pdf", "rev-2"],
+    ["POST", "/price-comparison/files", "rev-2"],
+    ["POST", "/price-comparison/maintenance", "rev-2"],
+    ["PUT", "/price-comparison/reference-presets/name", "rev-2"],
+    ["DELETE", "/price-comparison/reference-presets/name?expected_revision=old", "rev-2"],
+  ]);
+});

@@ -9,6 +9,7 @@ const pagePath = fileURLToPath(new URL("../src/pages/PriceComparisonPage.tsx", i
 const pageSource = readFileSync(pagePath, "utf8");
 const stubModules = new Map([
   ["react", `
+    export const memo = component => component;
     export const useRef = value => globalThis.__priceHeaderHooks.useRef(value);
     export const useState = value => globalThis.__priceHeaderHooks.useState(value);
     export const useId = () => globalThis.__priceHeaderHooks.useId();
@@ -50,6 +51,7 @@ const stubModules = new Map([
     export const X = icon;
   `],
   ["price-client", `
+    export const PRICE_COMPARISON_DATA_CHANGED_EVENT = "price-comparison:data-changed";
     export class PriceComparisonError extends Error {
       constructor(status, message, detail) {
         super(message);

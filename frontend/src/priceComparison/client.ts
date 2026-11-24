@@ -124,6 +124,7 @@ export class PriceComparisonError extends Error {
 }
 
 type NamedDownload = { blob: Blob; filename: string | null };
+export const PRICE_COMPARISON_DATA_CHANGED_EVENT = "price-comparison:data-changed";
 const GATEWAY_RETRY_LIMIT = 2;
 const GATEWAY_RETRY_DELAY_MS = 1_000;
 
@@ -197,7 +198,29 @@ export async function priceRequest<T>(path: string, options: RequestInit = {}): 
   }
   const response = await sendJsonWithGatewayRetry(path, { ...options, headers });
   if (!response.ok) throw await errorFrom(response);
-  return response.status === 204 ? (undefined as T) : response.json() as Promise<T>;
+  const result = response.status === 204 ? undefined : await response.json() as unknown;
+  if (isPriceComparisonDataMutation(path, options.method)) {
+    notifyPriceComparisonDataChanged(path, options.method, result);
+  }
+  return result as T;
+}
+
+function isPriceComparisonDataMutation(path: string, rawMethod?: string): boolean {
+  const method = (rawMethod ?? "GET").toUpperCase();
+  const pathname = path.split("?", 1)[0];
+  if (!pathname.startsWith("/price-comparison/")) return false;
+  if (method === "PUT" || method === "DELETE" || method === "PATCH") return true;
+  return method === "POST" && (pathname === "/price-comparison/files" || pathname === "/price-comparison/maintenance");
+}
+
+function notifyPriceComparisonDataChanged(path: string, rawMethod: string | undefined, result: unknown): void {
+  if (typeof window === "undefined") return;
+  const revision = result && typeof result === "object" && typeof (result as { revision?: unknown }).revision === "string"
+    ? String((result as { revision: string }).revision)
+    : null;
+  window.dispatchEvent(new CustomEvent(PRICE_COMPARISON_DATA_CHANGED_EVENT, {
+    detail: { path, method: (rawMethod ?? "GET").toUpperCase(), revision },
+  }));
 }
 
 export async function priceDownload(path: string, options: RequestInit = {}): Promise<NamedDownload> {

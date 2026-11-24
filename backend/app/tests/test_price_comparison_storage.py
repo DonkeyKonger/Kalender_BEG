@@ -239,7 +239,7 @@ def test_graph_accepts_encoded_or_unencoded_drive_id_in_same_collection_next_lin
     assert graph_store(graph, drive_id="b!price-drive")._children("folder") == []
     assert calls == [
         "/drives/b%21price-drive/items/folder/children"
-        "?$select=id,name,size,eTag,lastModifiedDateTime,folder,file,parentReference,remoteItem",
+        "?$top=999&$select=id,name,size,eTag,lastModifiedDateTime,folder,file,parentReference,remoteItem",
         "/drives/b%21price-drive/items/folder/children"
         "?$select=id,name&$skiptoken=opaque-next-page",
     ]

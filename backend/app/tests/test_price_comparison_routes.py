@@ -309,14 +309,17 @@ def test_page_and_file_endpoints_enforce_roles(context, role, expected):
     user.role = role
     assert client.get("/api/price-comparison/status").status_code == expected
     assert client.get("/api/price-comparison/files").status_code == expected
+    assert client.get("/api/price-comparison/article-search-index").status_code == expected
 
 
 def test_anonymous_and_password_change_cannot_bypass_access(context):
     client, _, user = context
     user.must_change_password = True
     assert client.get("/api/price-comparison/status").status_code == 403
+    assert client.get("/api/price-comparison/article-search-index").status_code == 403
     client.app.dependency_overrides.pop(get_current_user)
     assert client.get("/api/price-comparison/status").status_code == 401
+    assert client.get("/api/price-comparison/article-search-index").status_code == 401
 
 
 def test_real_parsers_upload_views_and_original_download(context):

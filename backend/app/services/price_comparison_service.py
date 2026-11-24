@@ -29,7 +29,12 @@ from app.services.price_comparison_performance_cache import (
     price_comparison_cache,
     store_cache_scope,
 )
+from app.services.price_comparison_search import (
+    build_article_search_index, search_article_index, unicode_casefold_items,
+)
+from app.services.price_comparison_snapshot_cache import read_snapshot, invalidate_read_snapshots
 from app.services.price_comparison_storage import (
+    GraphPriceStorage,
     MAX_FILE_BYTES,
     Snapshot,
     StoredFile,
@@ -143,6 +148,20 @@ class PriceComparisonService:
         self.cache_dir = Path(cache_dir or settings.price_comparison_cache_dir)
         self._cache_scope = store_cache_scope(store, self.cache_dir)
 
+    def _read_snapshot(self):
+        if isinstance(self.store, GraphPriceStorage):
+            return read_snapshot(self.store, self.cache_dir)
+        return snapshot(self.store)
+
+    @contextmanager
+    def _mutation_lock(self, db):
+        with self.store.lock(db):
+            invalidate_read_snapshots(self.store, self.cache_dir)
+            try:
+                yield
+            finally:
+                invalidate_read_snapshots(self.store, self.cache_dir)
+
     def _derived(
         self,
         data: PriceData,
@@ -245,7 +264,7 @@ class PriceComparisonService:
                 "active_datanorm": None,
                 "revision": "",
             }
-        snap = snapshot(self.store)
+        snap = self._read_snapshot()
         physical_names = {item.name for item in snap.files if item.kind == "offers"}
         virtual = set()
         config = snap.state.get("online_import")
@@ -357,7 +376,7 @@ class PriceComparisonService:
             current = snap if snap is not None else snapshot(self.store)
             return self._load_snapshot(current, force=force, cacheable=False)
 
-        current = snapshot(self.store)
+        current = self._read_snapshot()
         key = (*self._cache_scope, "price-data", current.revision)
         canonical = price_comparison_cache.get_or_compute(
             key,
@@ -365,8 +384,7 @@ class PriceComparisonService:
         )
         return deepcopy(canonical)
 
-    def _load_snapshot(self, snap: Snapshot, *, force: bool, cacheable: bool) -> PriceData:
-        imported = self.import_frames(snap)
+    def _datanorm_frame(self, snap, imported, *, force=False):
         datanorm = pd.DataFrame()
         if snap.state["active_datanorm"]:
             active = snap.find("datanorm", snap.state["active_datanorm"])
@@ -381,6 +399,11 @@ class PriceComparisonService:
                 and imported.active_datanorm == active.name
             )
             datanorm = imported.datanorm.copy() if use_import else self.parsed(active, force=force)
+        return datanorm
+
+    def _load_snapshot(self, snap: Snapshot, *, force: bool, cacheable: bool) -> PriceData:
+        imported = self.import_frames(snap)
+        datanorm = self._datanorm_frame(snap, imported, force=force)
         frames, warnings = [], []
         offer_sources = self._offer_sources(snap, imported)
         imported_names = {
@@ -649,17 +672,27 @@ class PriceComparisonService:
         )
 
     def articles(self, *, search="", limit=50):
-        data = self.load()
-        frame = filter_frame(data.datanorm, search)
-        articles = [
-            {
-                "article_number": str(r["Artikelnummer"]),
-                "description": str(r.get("Bezeichnung", "")),
-                "net_price": r.get("Nettopreis"),
-            }
-            for r in records(frame.head(limit))
-        ]
-        return {"articles": articles, "revision": data.snap.revision}
+        snap = self._read_snapshot()
+        index = self._article_index(snap)
+        return {"articles": search_article_index(index, search, limit), "revision": snap.revision}
+
+    def _article_index(self, snap):
+        def build():
+            imported = self.import_frames(snap) if snap.state["active_datanorm"] else None
+            return build_article_search_index(self._datanorm_frame(snap, imported))
+        # Every retained element is immutable; no large PriceData deepcopy or
+        # offer parsing is necessary for a DATANORM-only article search.
+        return price_comparison_cache.get_or_compute(
+            (*self._cache_scope, "article-search", snap.revision), build,
+        )
+
+    def article_search_index(self, known_revision=""):
+        snap = self._read_snapshot()
+        if known_revision == snap.revision:
+            return {"revision": snap.revision, "unchanged": True}
+        return {"revision": snap.revision,
+                "rows": [row.browser_row() for row in self._article_index(snap)],
+                "casefold": dict(unicode_casefold_items())}
 
     def article(self, article_number, *, offer_types=None):
         data = self.load()
@@ -717,7 +750,7 @@ class PriceComparisonService:
         )
 
     def files(self):
-        snap = snapshot(self.store)
+        snap = self._read_snapshot()
         physical_names = {file.name for file in snap.files if file.kind == "offers"}
         config = snap.state.get("online_import")
         virtual_files = []
@@ -752,7 +785,7 @@ class PriceComparisonService:
         }
 
     def presets(self):
-        snap = snapshot(self.store)
+        snap = self._read_snapshot()
         defaults = core.default_reference_rows()
         presets = snap.state["reference_presets"] or {"Standard": defaults}
         return {
@@ -762,7 +795,7 @@ class PriceComparisonService:
         }
 
     def mutate(self, expected_revision, callback, db=None):
-        with self.store.lock(db):
+        with self._mutation_lock(db):
             snap = snapshot(self.store)
             require_revision(snap, expected_revision)
             callback(snap)
@@ -990,7 +1023,7 @@ class PriceComparisonService:
             parsed_uploads[name] = self.parsed(temporary_item, raw=raw)
         if len({name.casefold() for name, _ in uploads}) != len(uploads):
             raise HTTPException(422, "Ein Upload darf jeden Dateinamen nur einmal enthalten.")
-        with self.store.lock(db):
+        with self._mutation_lock(db):
             snap = snapshot(self.store)
             require_revision(snap, expected_revision)
             original_state = deepcopy(snap.state)
@@ -1182,7 +1215,7 @@ class PriceComparisonService:
             return {"revision": snapshot(self.store).revision}
 
     def delete_file(self, kind, name, expected_revision, db=None):
-        with self.store.lock(db):
+        with self._mutation_lock(db):
             snap = snapshot(self.store)
             require_revision(snap, expected_revision)
             original_state = deepcopy(snap.state)
@@ -1275,7 +1308,7 @@ class PriceComparisonService:
         return duplicates, warnings
 
     def rebuild(self, expected_revision, confirmed_duplicates, db=None):
-        with self.store.lock(db):
+        with self._mutation_lock(db):
             snap = snapshot(self.store)
             require_revision(snap, expected_revision)
             duplicates, _ = self._duplicates(snap)

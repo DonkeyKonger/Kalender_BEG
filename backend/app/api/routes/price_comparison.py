@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import gzip
 import math
 from pathlib import Path
 import re
@@ -8,7 +9,7 @@ from threading import Lock
 from typing import Annotated, Literal
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
@@ -150,6 +151,26 @@ def update_offer(source: str, payload: OfferPatch, service: Service, db: Databas
 @router.get("/articles")
 def articles(service: Service, search: Search = "", limit: Limit = 50):
     return service.articles(search=search, limit=limit)
+
+
+@router.get("/article-search-index")
+def article_search_index(service: Service, request: Request, known_revision: Search = ""):
+    payload = json.dumps(service.article_search_index(known_revision), ensure_ascii=False,
+                         allow_nan=False, separators=(",", ":")).encode("utf-8")
+    headers = {"Cache-Control": "private, no-store", "Vary": "Accept-Encoding"}
+    # Avoid FastAPI recursively copying thousands of already JSON-safe rows.
+    # Compression is scoped to this large index, not unrelated calendar APIs.
+    encodings = {}
+    for encoding in request.headers.get("accept-encoding", "").split(","):
+        name, *parameters = encoding.strip().lower().split(";")
+        try:
+            encodings[name] = next((float(p.strip()[2:]) for p in parameters if p.strip().startswith("q=")), 1.0)
+        except ValueError:
+            encodings[name] = 0.0
+    if len(payload) >= 1024 and encodings.get("gzip", encodings.get("*", 0)) > 0:
+        payload = gzip.compress(payload, compresslevel=1, mtime=0)
+        headers["Content-Encoding"] = "gzip"
+    return Response(payload, media_type="application/json", headers=headers)
 
 
 @router.get("/articles/{article_number}")

@@ -359,7 +359,7 @@ class GraphPriceStorage:
         collection = self._collection(folder_id)
         path = (
             collection
-            + "?$select=id,name,size,eTag,lastModifiedDateTime,folder,file,parentReference,remoteItem"
+            + "?$top=999&$select=id,name,size,eTag,lastModifiedDateTime,folder,file,parentReference,remoteItem"
         )
         seen, items = set(), []
         while path:
