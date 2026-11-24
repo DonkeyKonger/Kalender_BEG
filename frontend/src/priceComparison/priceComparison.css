@@ -821,8 +821,19 @@
 .article-result-list button.is-selected { box-shadow: inset 2px 0 var(--price-blue); }
 .article-result-list button > span:first-child { display: grid; min-width: 0; gap: 3px; }
 .article-result-list strong { color: #193d61; font-size: 0.74rem; }
-.article-result-list small { display: -webkit-box; overflow: hidden; color: var(--price-muted); font-size: 0.66rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.article-result-heading { line-height: 1.35; overflow-wrap: anywhere; }
+.article-result-short-name { white-space: pre-wrap; }
+.article-result-list small { display: -webkit-box; overflow: hidden; color: var(--price-muted); font-size: 0.66rem; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.article-result-list .article-result-quality {
+  display: block;
+  overflow: visible;
+  color: #49677f;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: unset;
+}
 .article-result-list button > span:last-child { color: #405c76; font-size: 0.69rem; font-variant-numeric: tabular-nums; }
+.article-result-price { white-space: nowrap; }
 
 .article-detail { overflow: hidden; }
 .article-detail.is-loading { display: grid; align-items: center; min-height: 220px; }

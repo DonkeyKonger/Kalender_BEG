@@ -63,6 +63,7 @@ import {
   searchArticleIndex,
   useArticleSearchIndex,
 } from "../priceComparison/articleSearch";
+import { summarizeArticleDescription } from "../priceComparison/articleSummary";
 import "../priceComparison/priceComparison.css";
 
 type ViewKey = "datanorm" | "offers" | "articles" | "files";
@@ -1147,18 +1148,38 @@ function ArticlesView({ articleSearch, uploadRevision }: { articleSearch: Articl
             </InlineNotice>
           ) : null}
           <div className="article-result-list" role="listbox" aria-label="Gefundene Artikel" aria-busy={articleSearch.loading && !articleSearch.snapshot}>
-            {articles.map((article) => (
-              <button key={article.article_number} type="button" role="option" aria-selected={selectedArticle === article.article_number} className={selectedArticle === article.article_number ? "is-selected" : undefined} onClick={() => {
-                setSelectedArticle(article.article_number);
-                const next = new URLSearchParams(searchParams);
-                next.set("view", "articles");
-                next.set("article", article.article_number);
-                setSearchParams(next);
-              }}>
-                <span><strong>{article.article_number}</strong><small>{article.description || "Ohne Bezeichnung"}</small></span>
-                <span>{article.net_price === null ? "—" : formatCurrency(article.net_price)}</span>
-              </button>
-            ))}
+            {articles.map((article) => {
+              const summary = summarizeArticleDescription(article.description);
+              const price = article.net_price === null ? "—" : formatCurrency(article.net_price);
+              const compactSummary = [summary.description, summary.quality].filter(Boolean).join(" · ");
+              return (
+                <button
+                  key={article.article_number}
+                  type="button"
+                  role="option"
+                  aria-label={`${article.article_number} | ${summary.shortName}. ${compactSummary}. Preis ${price}`}
+                  aria-selected={selectedArticle === article.article_number}
+                  className={selectedArticle === article.article_number ? "is-selected" : undefined}
+                  title={`${article.article_number} | ${summary.shortName}\n${compactSummary}`}
+                  onClick={() => {
+                    setSelectedArticle(article.article_number);
+                    const next = new URLSearchParams(searchParams);
+                    next.set("view", "articles");
+                    next.set("article", article.article_number);
+                    setSearchParams(next);
+                  }}
+                >
+                  <span className="article-result-copy">
+                    <strong className="article-result-heading">
+                      <span>{article.article_number}</span><span aria-hidden="true"> | </span><span className="article-result-short-name">{summary.shortName}</span>
+                    </strong>
+                    <small className="article-result-description">{summary.description}</small>
+                    {summary.quality ? <small className="article-result-quality">{summary.quality}</small> : null}
+                  </span>
+                  <span className="article-result-price">{price}</span>
+                </button>
+              );
+            })}
             {articleSearch.snapshot && !articles.length ? <p className="compact-empty">Keine Artikel gefunden.</p> : null}
           </div>
         </section>
