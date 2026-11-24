@@ -1165,7 +1165,6 @@ function ArticlesView({ uploadRevision }: { uploadRevision: string | null }) {
 
   return (
     <div className="price-workspace">
-      <ViewHeading icon={<ChartNoAxesCombined size={19} />} title="Artikelvergleich" description="Preisverlauf eines Datanorm-Artikels über alle gespeicherten Angebote auswerten." />
       <div className="article-layout">
         <section className="article-picker" aria-label="Artikelsuche">
           <label className="price-search-field"><Search size={17} /><span className="sr-only">Artikel suchen</span><input value={query} onChange={(event) => updateQuery(event.target.value)} placeholder="Artikelnummer oder Text" /></label>
