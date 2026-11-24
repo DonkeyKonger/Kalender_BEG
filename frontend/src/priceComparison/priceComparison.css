@@ -851,7 +851,29 @@
 .article-metrics .price-metric { min-height: 76px; align-content: start; }
 
 .price-chart-shell { padding: 12px 14px 8px; border-bottom: 1px solid var(--price-border); background: #fff; }
-.price-chart { display: block; width: 100%; min-width: 560px; max-height: 340px; }
+.price-chart-layout { position: relative; display: grid; grid-template-columns: 66px minmax(0, 1fr); }
+.price-chart-y-axis { display: block; width: 66px; height: 260px; }
+.price-chart-scroll { min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.price-chart-scroll::-webkit-scrollbar { display: none; }
+.price-chart-scroll:focus-visible { outline: 2px solid var(--price-blue); outline-offset: -2px; }
+.price-chart { display: block; max-width: none; }
+.price-chart-reference-labels { position: absolute; top: 0; left: 66px; pointer-events: none; }
+.price-chart-navigation { grid-column: 2; display: flex; align-items: center; height: 24px; }
+.price-chart-navigation input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  min-height: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--price-blue);
+  cursor: ew-resize;
+}
+.price-chart-navigation input[type="range"]:focus-visible { outline: 2px solid var(--price-blue); outline-offset: 1px; }
+.price-chart-dates { grid-column: 2; min-width: 0; overflow: hidden; }
+.price-chart-dates svg { display: block; max-width: none; }
 .chart-grid-line { stroke: #e4eaf0; stroke-width: 1; }
 .chart-axis-label { fill: #718195; font-size: 11px; }
 .chart-net-line { stroke: #9d7a35; stroke-width: 1.5; stroke-dasharray: 7 5; }
@@ -1067,7 +1089,6 @@
   .article-controls { align-items: flex-start; flex-direction: column; }
   .article-detail-header { flex-direction: column; }
   .article-export-actions { width: 100%; }
-  .price-chart-shell { overflow-x: auto; }
   .article-history-table-wrap {
     height: clamp(220px, 34vh, 300px);
     height: clamp(220px, 34dvh, 300px);

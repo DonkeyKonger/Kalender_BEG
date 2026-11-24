@@ -37,6 +37,7 @@ import { useAuth } from "../auth/AuthContext";
 import { MapFilterSelect } from "../components/MapFilterSelect";
 import { uploadPriceFiles, validateOfferFiles } from "../priceComparison/uploads";
 import { getPriceChartDomain } from "../priceComparison/chartDomain";
+import { getPriceChartLayout, getPriceChartWindow } from "../priceComparison/chartLayout";
 import {
   PriceComparisonError,
   type ArticleDetailResult,
@@ -1316,7 +1317,7 @@ function ArticleDetail({ articleNumber, uploadRevision }: { articleNumber: strin
         <Metric label="Maximum" value={formatCurrency(filteredStats.maximum)} />
         <Metric label="Angebotspreise" value={formatInteger(filteredRows.length)} />
       </div>
-      <PriceHistoryChart rows={filteredRows} netPrice={netPrice} medianDelta={medianDelta} mode={chartMode} />
+      <PriceHistoryChart key={articleNumber} rows={filteredRows} netPrice={netPrice} medianDelta={medianDelta} mode={chartMode} />
       <div className="article-history-table-wrap">
         {filteredRows.length ? <table className="price-table article-history-table"><thead><tr>{historyColumns.map((column) => <th key={column}>{columnLabel(column, "article")}</th>)}</tr></thead><tbody>{filteredRows.map((row, index) => <tr key={`${String(row.Quelle)}-${index}`}>{historyColumns.map((column) => <td key={column} className={cellClass(column, row[column])}>{column === "Quelle" && row[column] ? (
           data.unavailable_sources?.includes(String(row[column]))
@@ -1344,9 +1345,50 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
     .filter((point): point is PriceChartPoint => point.price !== null)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [rows]);
   const chartRef = useRef<SVGSVGElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const rangeRef = useRef<HTMLInputElement>(null);
+  const datesRef = useRef<SVGSVGElement>(null);
+  const scrollPoints = useRef(points);
+  const [viewportWidth, setViewportWidth] = useState(720);
+  const viewportId = useId();
   const tooltipId = useId();
   const [tooltip, setTooltip] = useState<PriceChartTooltipState | null>(null);
   const activeTooltip = tooltip?.points === points && tooltip.mode === mode ? tooltip : null;
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const measure = () => { if (viewport.clientWidth > 0) setViewportWidth(viewport.clientWidth); };
+    measure();
+    window.addEventListener("resize", measure);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(viewport);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
+  }, []);
+
+  const layout = getPriceChartLayout(points.length, viewportWidth);
+  const maxScroll = layout.maxScroll;
+  // Scroll updates only the range and date strip, never the entire SVG tree.
+  const syncScroll = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const visible = getPriceChartWindow(getPriceChartLayout(points.length, viewportWidth), points.length, viewport.scrollLeft);
+    if (datesRef.current) datesRef.current.style.transform = `translateX(${-visible.scrollLeft}px)`;
+    if (rangeRef.current) {
+      rangeRef.current.value = String(visible.scrollLeft);
+      rangeRef.current.setAttribute("aria-valuetext", `Angebote ${visible.first} bis ${visible.last} von ${points.length}`);
+    }
+  }, [points.length, viewportWidth]);
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    viewport.scrollLeft = scrollPoints.current === points ? Math.min(viewport.scrollLeft, maxScroll) : 0;
+    scrollPoints.current = points;
+    syncScroll();
+  }, [points, maxScroll, syncScroll]);
 
   useEffect(() => {
     if (!activeTooltip) return;
@@ -1374,29 +1416,44 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
   const median24Prices = points.filter((point) => isWithinLastMonths(point.date, 24)).map((point) => point.price);
   const median24 = median24Prices.length ? median(median24Prices) : null;
 
-  const width = 900;
-  const height = 310;
-  const padding = { top: 24, right: 24, bottom: 50, left: 66 };
+  const width = layout.contentWidth;
+  const height = 260;
+  const padding = { top: 24, bottom: 1 };
   const references = [
     ...(netPrice === null ? [] : [netPrice]),
     ...(median24 === null ? [] : [median24]),
   ];
   const { floor, ceiling } = getPriceChartDomain(points.map((point) => point.price), references);
-  const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
-  const x = (index: number) => padding.left + (points.length === 1 ? plotWidth / 2 : (index / (points.length - 1)) * plotWidth);
+  const x = (index: number) => (index + 0.5) * layout.slotWidth;
   const y = (value: number) => padding.top + (1 - (value / 2 - floor / 2) / (ceiling / 2 - floor / 2)) * plotHeight;
   const linePath = points.map((point, index) => `${index ? "L" : "M"}${x(index)},${y(point.price)}`).join(" ");
   const ticks = Array.from({ length: 5 }, (_, index) => floor * (1 - index / 4) + ceiling * (index / 4)).reverse();
-  const barWidth = Math.max(8, Math.min(42, plotWidth / Math.max(points.length, 1) * 0.56));
+  const barWidth = layout.barWidth;
+  const netLabelY = netPrice === null ? 12 : Math.max(12, y(netPrice) - 7);
+  let medianLabelY = median24 === null ? 12 : Math.max(12, y(median24) - 7);
+  if (netPrice !== null && Math.abs(netLabelY - medianLabelY) < 14) {
+    medianLabelY = netLabelY + 22 < height - 4 ? netLabelY + 22 : netLabelY - 14;
+  }
+
+  function moveViewport(left: number) {
+    if (viewportRef.current) viewportRef.current.scrollLeft = Math.max(0, Math.min(left, maxScroll));
+    syncScroll();
+    setTooltip(null);
+  }
 
   return (
     <div className="price-chart-shell">
-      <svg ref={chartRef} className="price-chart" viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`Preisverlauf mit ${points.length} Angebotspreisen`}>
+      <div className="price-chart-layout">
+      <svg className="price-chart-y-axis" viewBox={`0 0 66 ${height}`} aria-hidden="true">
+        {points.length ? ticks.map((tick) => <text key={tick} x="56" y={Math.min(height - 3, y(tick) + 4)} textAnchor="end" className="chart-axis-label">{formatChartPrice(tick, ceiling / 4 - floor / 4)}</text>) : null}
+      </svg>
+      <div ref={viewportRef} id={viewportId} className="price-chart-scroll" tabIndex={maxScroll > 0 ? 0 : undefined} role="group" aria-label={maxScroll > 0 ? "Preisdiagramm, horizontal scrollbar" : "Preisdiagramm"} onScroll={syncScroll}>
+      <svg ref={chartRef} className="price-chart" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`Preisverlauf mit ${points.length} Angebotspreisen`}>
         {points.length ? <>
-        {ticks.map((tick) => <g key={tick}><line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} className="chart-grid-line" /><text x={padding.left - 10} y={y(tick) + 4} textAnchor="end" className="chart-axis-label">{formatChartPrice(tick, ceiling / 4 - floor / 4)}</text></g>)}
-        {netPrice !== null ? <g><line x1={padding.left} x2={width - padding.right} y1={y(netPrice)} y2={y(netPrice)} className="chart-net-line" /><text x={width - padding.right} y={Math.max(12, y(netPrice) - 7)} textAnchor="end" className="chart-net-label">Datanorm {formatCurrency(netPrice)}</text></g> : null}
-        {mode === "line" && median24 !== null ? <g><line x1={padding.left} x2={width - padding.right} y1={y(median24)} y2={y(median24)} className="chart-median-line" /><text x={padding.left + 7} y={Math.max(12, y(median24) - 7)} className="chart-median-label">Median 24 Monate {formatCurrency(median24)}{medianDelta === null ? "" : ` (${formatPercent(medianDelta)})`}</text></g> : null}
+        {ticks.map((tick) => <line key={tick} x1="0" x2={width} y1={y(tick)} y2={y(tick)} className="chart-grid-line" />)}
+        {netPrice !== null ? <line x1="0" x2={width} y1={y(netPrice)} y2={y(netPrice)} className="chart-net-line" /> : null}
+        {mode === "line" && median24 !== null ? <line x1="0" x2={width} y1={y(median24)} y2={y(median24)} className="chart-median-line" /> : null}
         {mode === "line" ? <path d={linePath} className="chart-history-line" /> : null}
         {points.map((point, index) => {
           const interaction = {
@@ -1422,9 +1479,36 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
             ? <rect key={`${point.date}-${index}`} {...interaction} x={x(index) - barWidth / 2} y={y(point.price)} width={barWidth} height={padding.top + plotHeight - y(point.price)} rx="2" className={`chart-bar is-${offerTypeClass(point.type)}`} />
             : <circle key={`${point.date}-${index}`} {...interaction} cx={x(index)} cy={y(point.price)} r="5" className={`chart-point is-${offerTypeClass(point.type)}`} />;
         })}
-        {points.map((point, index) => (index === 0 || index === points.length - 1 || index % Math.max(1, Math.ceil(points.length / 6)) === 0) ? <text key={`label-${point.date}-${index}`} x={x(index)} y={height - 18} textAnchor="middle" className="chart-axis-label">{shortDate(point.date)}</text> : null)}
-        </> : <text x={width / 2} y={height / 2} textAnchor="middle" className="chart-empty-label">Keine Angebotspreise für das Diagramm.</text>}
+        </> : <text x={width / 2} y={height / 2} textAnchor="middle" className="chart-empty-label"><tspan x={width / 2}>Keine Angebotspreise</tspan><tspan x={width / 2} dy="18">für das Diagramm.</tspan></text>}
       </svg>
+      </div>
+      <svg className="price-chart-reference-labels" width={layout.viewportWidth} height={height} viewBox={`0 0 ${layout.viewportWidth} ${height}`} aria-hidden="true">
+        {points.length && netPrice !== null ? <text x={layout.viewportWidth - 7} y={netLabelY} textAnchor="end" className="chart-net-label">Datanorm {formatCurrency(netPrice)}</text> : null}
+        {points.length && mode === "line" && median24 !== null ? <text x="7" y={medianLabelY} className="chart-median-label">Median 24 Monate {formatCurrency(median24)}{medianDelta === null ? "" : ` (${formatPercent(medianDelta)})`}</text> : null}
+      </svg>
+      <div className="price-chart-navigation">
+        {maxScroll > 0 ? <input ref={rangeRef} type="range" min="0" max={maxScroll} step="1" defaultValue="0" aria-label="Preisverlauf horizontal verschieben" aria-controls={viewportId} onChange={(event) => moveViewport(Number(event.target.value))} onKeyDown={(event) => {
+          const current = viewportRef.current?.scrollLeft ?? 0;
+          const targets: Record<string, number> = {
+            ArrowLeft: current - layout.slotWidth,
+            ArrowRight: current + layout.slotWidth,
+            PageUp: current - layout.viewportWidth,
+            PageDown: current + layout.viewportWidth,
+            Home: 0,
+            End: maxScroll,
+          };
+          if (event.key in targets) {
+            event.preventDefault();
+            moveViewport(targets[event.key]);
+          }
+        }} /> : null}
+      </div>
+      <div className="price-chart-dates" aria-hidden="true">
+        <svg ref={datesRef} width={width} height="28" viewBox={`0 0 ${width} 28`}>
+          {points.map((point, index) => (index % layout.labelStep === 0 && (index === 0 || index < points.length - layout.labelStep) || index === points.length - 1) ? <text key={`label-${point.date}-${index}`} x={points.length === 1 ? x(index) : index === 0 ? 4 : index === points.length - 1 ? width - 4 : x(index)} y="17" textAnchor={points.length === 1 ? "middle" : index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"} className="chart-axis-label">{shortDate(point.date)}</text> : null)}
+        </svg>
+      </div>
+      </div>
       <div className="chart-legend"><span className="is-first">Erstangebot</span><span className="is-follow">Folgeangebot</span><span className="is-negotiated">Verhandelt</span><span className="is-net">Datanorm-Netto</span>{mode === "line" && median24 !== null ? <span className="is-median">Median 24 Monate</span> : null}</div>
       {activeTooltip ? <PriceChartTooltip id={tooltipId} point={points[activeTooltip.index]} anchor={activeTooltip.anchor} /> : null}
     </div>
