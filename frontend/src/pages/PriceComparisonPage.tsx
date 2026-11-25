@@ -84,6 +84,15 @@ const views: Array<{ key: ViewKey; label: string }> = [
   { key: "files", label: "Dateien" },
 ];
 
+const articleHistoryColumnWidths: Record<string, string> = {
+  Datum: "88px",
+  Preis: "105px",
+  Menge: "75px",
+  Angebot: "120px",
+  Angebotsart: "160px",
+  "Gesamt (netto)": "120px",
+};
+
 const offerTypes: OfferType[] = ["Erstangebot", "Folgeangebot", "Verhandeltes Angebot"];
 const offerTypeFilterOptions = [
   { value: "", label: "Alle Angebotsarten" },
@@ -1323,11 +1332,29 @@ const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevisio
       </div>
       <PriceHistoryChart key={articleNumber} rows={filteredRows} netPrice={netPrice} medianDelta={medianDelta} mode={chartMode} />
       <div className="article-history-table-wrap">
-        {filteredRows.length ? <table className="price-table article-history-table"><thead><tr>{historyColumns.map((column) => <th key={column}>{columnLabel(column, "article")}</th>)}</tr></thead><tbody>{filteredRows.map((row, index) => <tr key={`${String(row.Quelle)}-${index}`}>{historyColumns.map((column) => <td key={column} className={cellClass(column, row[column])}>{column === "Quelle" && row[column] ? (
-          data.unavailable_sources?.includes(String(row[column]))
-            ? <span title="Die Original-PDF ist nicht vorhanden.">{String(row[column])} · Original-PDF fehlt</span>
-            : <button className="source-download-button" type="button" onClick={() => void downloadSource(String(row[column]))}>{String(row[column])}<Download size={13} /></button>
-        ) : formatCell(column, row[column])}</td>)}</tr>)}</tbody></table> : <p className="compact-empty">Für die ausgewählten Angebotsarten sind keine Preise vorhanden.</p>}
+        {filteredRows.length ? (
+          <table className="price-table article-history-table">
+            <colgroup>{historyColumns.map((column) => <col key={column} style={{ width: articleHistoryColumnWidths[column] }} />)}</colgroup>
+            <thead><tr>{historyColumns.map((column) => <th key={column}>{columnLabel(column, "article")}</th>)}</tr></thead>
+            <tbody>{filteredRows.map((row, index) => (
+              <tr key={`${String(row.Quelle)}-${index}`}>
+                {historyColumns.map((column) => {
+                  const value = row[column];
+                  const text = value === null || value === undefined ? undefined : String(value);
+                  return (
+                    <td key={column} className={cellClass(column, value)} title={text}>
+                      {column === "Quelle" && value ? (
+                        data.unavailable_sources?.includes(String(value))
+                          ? <span className="article-history-cell" title={`${text}: Die Original-PDF ist nicht vorhanden.`}>{text} · Original-PDF fehlt</span>
+                          : <button className="source-download-button" type="button" title={`${text} herunterladen`} onClick={() => void downloadSource(String(value))}><span className="article-history-cell">{text}</span><Download size={13} /></button>
+                      ) : <span className="article-history-cell">{formatCell(column, value)}</span>}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}</tbody>
+          </table>
+        ) : <p className="compact-empty">Für die ausgewählten Angebotsarten sind keine Preise vorhanden.</p>}
       </div>
     </section>
   );

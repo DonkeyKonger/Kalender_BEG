@@ -940,6 +940,22 @@
   height: 100%;
   place-items: center;
 }
+.article-history-table { table-layout: fixed; min-width: 1060px; }
+.article-history-table th,
+.article-history-table td { white-space: nowrap; overflow-wrap: normal; vertical-align: middle; }
+.article-history-table td { line-height: 18px; }
+.article-history-cell,
+.article-history-table .price-description-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.article-history-table .source-download-button { display: flex; max-width: 100%; color: inherit; }
+.article-history-table .source-download-button > svg { flex: none; }
+.article-history-table .source-download-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
 .price-table-wrap.is-datanorm,
 .price-table-wrap.is-suggestions { max-height: min(64vh, 720px); }
 
