@@ -178,7 +178,7 @@ export function PriceComparisonPage() {
   }
 
   return (
-    <section className={`price-comparison-page page-stack${activeView === "offers" ? " is-offers-view" : ""}`}>
+    <section className={`price-comparison-page page-stack${activeView === "offers" ? " is-offers-view" : activeView === "articles" ? " is-articles-view" : ""}`}>
       <header className="price-comparison-header">
         <div>
           <p className="eyebrow">Einkauf & Kalkulation</p>
@@ -1144,7 +1144,7 @@ function ArticlesView({ articleSearch, uploadRevision }: { articleSearch: Articl
   }, [routeArticle]);
 
   return (
-    <div className="price-workspace">
+    <div className="price-workspace is-articles">
       <div className="article-layout">
         <section className="article-picker" aria-label="Artikelsuche">
           <label className="price-search-field"><Search size={17} /><span className="sr-only">Artikel suchen</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Artikelnummer oder Text" /></label>
@@ -1299,7 +1299,7 @@ const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevisio
     }
   }
 
-  const detailStyle = retainedDetailHeight === null ? undefined : { minHeight: `${retainedDetailHeight}px` };
+  const detailStyle = retainedDetailHeight === null ? undefined : { "--article-retained-height": `${retainedDetailHeight}px` } as React.CSSProperties;
   if (loading || dataArticleNumber !== articleNumber) return <section className="article-detail is-loading" style={detailStyle}><LoadingState label="Preisverlauf wird geladen" /></section>;
   if (error && !data) return <section className="article-detail" style={detailStyle}><InlineNotice tone="error" action={<RetryButton onClick={load} />}>{error}</InlineNotice></section>;
   if (!data) return null;
@@ -1459,6 +1459,7 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
   const datesRef = useRef<SVGSVGElement>(null);
   const scrollPoints = useRef(points);
   const [viewportWidth, setViewportWidth] = useState(720);
+  const [viewportHeight, setViewportHeight] = useState(260);
   const viewportId = useId();
   const tooltipId = useId();
   const [tooltip, setTooltip] = useState<PriceChartTooltipState | null>(null);
@@ -1467,7 +1468,10 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const measure = () => { if (viewport.clientWidth > 0) setViewportWidth(viewport.clientWidth); };
+    const measure = () => {
+      if (viewport.clientWidth > 0) setViewportWidth(viewport.clientWidth);
+      if (viewport.clientHeight > 0) setViewportHeight(viewport.clientHeight);
+    };
     measure();
     window.addEventListener("resize", measure);
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
@@ -1499,7 +1503,7 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
     viewport.scrollLeft = scrollPoints.current === points ? Math.min(viewport.scrollLeft, maxScroll) : 0;
     scrollPoints.current = points;
     syncScroll();
-  }, [points, maxScroll, syncScroll]);
+  }, [points, maxScroll, syncScroll, viewportHeight]);
 
   useEffect(() => {
     if (!activeTooltip) return;
@@ -1528,7 +1532,7 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
   const median24 = median24Prices.length ? median(median24Prices) : null;
 
   const width = layout.contentWidth;
-  const height = 260;
+  const height = viewportHeight;
   const padding = { top: 24, bottom: 1 };
   const references = [
     ...(netPrice === null ? [] : [netPrice]),

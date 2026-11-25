@@ -835,6 +835,7 @@
 .article-result-price { white-space: nowrap; }
 
 .article-detail { overflow: hidden; container-type: inline-size; }
+.article-detail[style] { min-height: var(--article-retained-height, 0); }
 .article-detail.is-loading { display: grid; align-items: center; min-height: 220px; }
 .article-detail.is-loading > .price-loading { min-height: 0; }
 .article-detail-placeholder { border: 1px solid var(--price-border); background: #fff; }
@@ -906,7 +907,7 @@
 .price-chart-shell { padding: 12px 14px 8px; border-bottom: 1px solid var(--price-border); background: #fff; }
 .price-chart-layout { position: relative; display: grid; grid-template-columns: 66px minmax(0, 1fr); }
 .price-chart-y-axis { display: block; width: 66px; height: 260px; }
-.price-chart-scroll { min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.price-chart-scroll { min-width: 0; height: 260px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .price-chart-scroll::-webkit-scrollbar { display: none; }
 .price-chart-scroll:focus-visible { outline: 2px solid var(--price-blue); outline-offset: -2px; }
 .price-chart { display: block; max-width: none; }
@@ -982,6 +983,95 @@
   height: 100%;
   place-items: center;
 }
+
+/* The two article panes share the space below the header and tabs. */
+@media (min-width: 901px) {
+  .app-main:has(> .content-area > .price-comparison-page.is-articles-view) {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .content-area:has(> .price-comparison-page.is-articles-view) {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    padding: 0;
+  }
+  .price-comparison-page.is-articles-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+  }
+  .price-comparison-page.is-articles-view > * { flex: 0 0 auto; }
+  .price-comparison-page.is-articles-view > .price-view-content,
+  .price-workspace.is-articles {
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+  }
+  .price-workspace.is-articles { padding-bottom: 0; }
+  .is-articles > .article-layout {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+  .is-articles .article-picker {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .is-articles .article-picker > * { flex: 0 0 auto; }
+  .is-articles .article-result-list {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: none;
+    align-content: start;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  .is-articles .article-detail {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .is-articles .article-detail > * { flex: 0 0 auto; }
+  .is-articles .article-detail > .price-chart-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 0 1 342px;
+    min-height: 162px;
+  }
+  .is-articles .price-chart-layout {
+    flex: 1 1 0;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr) 24px 28px;
+  }
+  .is-articles .price-chart-y-axis { height: 100%; min-height: 0; }
+  .is-articles .price-chart-scroll { height: auto; min-height: 0; }
+  .is-articles .chart-legend { flex: 0 0 auto; }
+  .is-articles .article-history-table-wrap {
+    flex: 1 1 180px;
+    min-height: 80px;
+    height: auto;
+    overscroll-behavior: contain;
+  }
+  .is-articles .article-detail.is-loading { display: grid; }
+  .is-articles .article-detail-placeholder { min-height: 0; }
+}
+
 .article-history-table { table-layout: fixed; min-width: 940px; }
 .article-history-table th,
 .article-history-table td { white-space: nowrap; overflow-wrap: normal; vertical-align: middle; }
