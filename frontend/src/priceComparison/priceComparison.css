@@ -141,7 +141,6 @@
 .price-view-actions,
 .offer-detail-actions,
 .offer-detail-actions > div,
-.article-export-actions,
 .maintenance-actions {
   display: flex;
   align-items: center;
@@ -835,17 +834,20 @@
 .article-result-list button > span:last-child { color: #405c76; font-size: 0.69rem; font-variant-numeric: tabular-nums; }
 .article-result-price { white-space: nowrap; }
 
-.article-detail { overflow: hidden; }
+.article-detail { overflow: hidden; container-type: inline-size; }
 .article-detail.is-loading { display: grid; align-items: center; min-height: 220px; }
 .article-detail.is-loading > .price-loading { min-height: 0; }
 .article-detail-placeholder { border: 1px solid var(--price-border); background: #fff; }
-.article-detail-header h3 { max-width: 780px; }
+.article-detail-header { padding: 12px 14px; }
+.article-detail-header h3 { margin: 0; line-height: 1.4; overflow-wrap: anywhere; }
+.article-short-name { white-space: pre-wrap; }
 
 .article-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
   padding: 10px 14px;
   border-bottom: 1px solid var(--price-border);
   background: #f8fafc;
@@ -858,8 +860,48 @@
 
 .offer-type-filter { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0; border: 0; }
 .offer-type-filter label { display: flex; align-items: center; gap: 5px; color: #486077; font-size: 0.69rem; font-weight: 640; }
-.article-metrics { border-bottom: 1px solid var(--price-border); }
-.article-metrics .price-metric { min-height: 76px; align-content: start; }
+.article-controls-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-left: auto; min-width: 0; }
+.article-export-menu { position: relative; flex: none; }
+.article-export-trigger { width: 34px; min-height: 32px; }
+.article-export-options {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  width: 184px;
+  padding: 4px;
+  border: 1px solid var(--price-border-strong);
+  background: #fff;
+  box-shadow: 0 6px 18px rgb(20 43 65 / 14%);
+}
+.article-export-options button { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 10px; border: 0; background: #fff; color: #263a4e; text-align: left; font-size: 0.74rem; }
+.article-export-options button:hover,
+.article-export-options button:focus-visible { background: #edf3f8; outline: 2px solid var(--price-blue); outline-offset: -2px; }
+.article-metrics { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.7fr) minmax(0, 0.85fr); border-bottom: 1px solid var(--price-border); }
+.article-metrics .price-metric { min-height: 53px; padding: 7px 14px; gap: 2px; align-content: center; }
+.article-metrics .price-metric > span { line-height: 14px; }
+.article-metrics .price-metric strong { line-height: 22px; }
+.article-median-value { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.article-median-value strong,
+.article-median-value small { white-space: nowrap; }
+.article-median-value small span { font-size: inherit; }
+.article-median-value .is-positive { color: #28744a; }
+.article-median-value .is-negative { color: #b13b3b; }
+
+@container (max-width: 690px) {
+  .article-metrics { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .article-metrics .price-metric { grid-column: span 6; }
+  .article-metrics .price-metric:nth-child(2) { border-right: 0; }
+  .article-metrics .price-metric:nth-child(-n + 2) { border-bottom: 1px solid var(--price-border); }
+  .article-metrics .article-median { grid-column: span 8; }
+  .article-metrics .price-metric:last-child { grid-column: span 4; padding-inline: 8px; }
+}
+
+@container (max-width: 330px) {
+  .article-metrics .price-metric { padding-inline: 8px; }
+  .article-median-value { gap: 4px; flex-wrap: wrap; }
+}
 
 .price-chart-shell { padding: 12px 14px 8px; border-bottom: 1px solid var(--price-border); background: #fff; }
 .price-chart-layout { position: relative; display: grid; grid-template-columns: 66px minmax(0, 1fr); }
@@ -940,7 +982,7 @@
   height: 100%;
   place-items: center;
 }
-.article-history-table { table-layout: fixed; min-width: 1060px; }
+.article-history-table { table-layout: fixed; min-width: 940px; }
 .article-history-table th,
 .article-history-table td { white-space: nowrap; overflow-wrap: normal; vertical-align: middle; }
 .article-history-table td { line-height: 18px; }
@@ -955,6 +997,9 @@
 .article-history-table .source-download-button { display: flex; max-width: 100%; color: inherit; }
 .article-history-table .source-download-button > svg { flex: none; }
 .article-history-table .source-download-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.article-history-table .article-download-cell { padding: 0 6px; }
+.article-download-cell .source-download-button { align-items: center; justify-content: center; width: 30px; height: 30px; }
+.article-download-cell .source-download-button:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .price-table-wrap.is-datanorm,
 .price-table-wrap.is-suggestions { max-height: min(64vh, 720px); }
@@ -1098,7 +1143,7 @@
   .price-table-caption { align-items: flex-start; flex-wrap: wrap; padding-block: 8px; }
   .price-table-caption span { flex: 1 1 180px; }
   .price-notice { align-items: flex-start; flex-direction: column; margin: 10px 12px 0; }
-  .price-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .price-metrics:not(.article-metrics) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .price-metric:nth-child(2) { border-right: 0; }
   .price-metric:nth-child(-n + 2) { border-bottom: 1px solid var(--price-border); }
   .calculator-heading { flex-direction: column; }
@@ -1115,7 +1160,8 @@
   .offer-detail-actions { flex-direction: column; }
   .article-controls { align-items: flex-start; flex-direction: column; }
   .article-detail-header { flex-direction: column; }
-  .article-export-actions { width: 100%; }
+  .article-controls-actions { width: 100%; justify-content: space-between; gap: 8px; }
+  .article-controls .offer-type-filter { gap: 8px; }
   .article-history-table-wrap {
     height: clamp(220px, 34vh, 300px);
     height: clamp(220px, 34dvh, 300px);

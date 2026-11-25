@@ -36,6 +36,7 @@ const stubModules = new Map([
     export const ChevronLeft = icon;
     export const ChevronRight = icon;
     export const Download = icon;
+    export const Ellipsis = icon;
     export const FileArchive = icon;
     export const FileSpreadsheet = icon;
     export const FileText = icon;

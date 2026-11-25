@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Ellipsis,
   FileArchive,
   FileSpreadsheet,
   FileText,
@@ -1303,15 +1304,13 @@ const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevisio
   if (error && !data) return <section className="article-detail" style={detailStyle}><InlineNotice tone="error" action={<RetryButton onClick={load} />}>{error}</InlineNotice></section>;
   if (!data) return null;
   const historyColumns = articleHistoryColumns(data.columns);
+  const shortName = String(data.article.Kurzbezeichnung ?? "").trim()
+    || summarizeArticleDescription(data.article.Bezeichnung ?? data.article.description).shortName;
 
   return (
     <section ref={detailRef} className="article-detail">
       <header className="article-detail-header">
-        <div><span className="price-kicker">Artikel {articleNumber}</span><h3>{String(data.article.Bezeichnung ?? data.article.description ?? "Ohne Bezeichnung")}</h3></div>
-        <div className="article-export-actions">
-          <button className="price-button" type="button" disabled={exporting} onClick={() => void exportArticle("article")}><Download size={16} /> CSV</button>
-          <button className="price-button" type="button" disabled={exporting} onClick={() => void exportArticle("article_pdf")}><Download size={16} /> PDF</button>
-        </div>
+        <h3><span aria-hidden="true">| </span>{articleNumber}<span aria-hidden="true"> | </span><span className="article-short-name">{shortName}</span><span aria-hidden="true"> |</span></h3>
       </header>
       {error ? <InlineNotice tone="error">{error}</InlineNotice> : null}
       <WarningList warnings={data.warnings} />
@@ -1320,22 +1319,31 @@ const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevisio
           <button type="button" className={chartMode === "bars" ? "is-active" : undefined} onClick={() => setChartMode("bars")}>Balken</button>
           <button type="button" className={chartMode === "line" ? "is-active" : undefined} onClick={() => setChartMode("line")}>Linie</button>
         </div>
-        <fieldset className="offer-type-filter"><legend className="sr-only">Angebotsarten</legend>{offerTypes.map((type) => <label key={type}><input type="checkbox" checked={enabledTypes.has(type)} onChange={(event) => setEnabledTypes((current) => {
-          const next = new Set(current); if (event.target.checked) next.add(type); else next.delete(type); return next;
-        })} /><span>{shortOfferType(type)}</span></label>)}</fieldset>
+        <div className="article-controls-actions">
+          <fieldset className="offer-type-filter"><legend className="sr-only">Angebotsarten</legend>{offerTypes.map((type) => <label key={type}><input type="checkbox" checked={enabledTypes.has(type)} onChange={(event) => setEnabledTypes((current) => {
+            const next = new Set(current); if (event.target.checked) next.add(type); else next.delete(type); return next;
+          })} /><span>{shortOfferType(type)}</span></label>)}</fieldset>
+          <ArticleExportMenu key={articleNumber} exporting={exporting} onExport={(kind) => void exportArticle(kind)} />
+        </div>
       </div>
       <div className="price-metrics article-metrics">
         <Metric label="Minimum" value={formatCurrency(filteredStats.minimum)} />
-        <Metric label="Median 24 Monate" value={formatCurrency(filteredStats.median24)} hint={medianDelta === null ? undefined : `Zur Datanorm ${formatPercent(medianDelta)}`} />
         <Metric label="Maximum" value={formatCurrency(filteredStats.maximum)} />
+        <div className="price-metric article-median">
+          <span>Median 24 Monate</span>
+          <div className="article-median-value">
+            <strong>{formatCurrency(filteredStats.median24)}</strong>
+            {medianDelta === null ? null : <small>Zur Datanorm <span className={medianDelta > 0 ? "is-positive" : medianDelta < 0 ? "is-negative" : undefined}>{formatPercent(medianDelta)}</span></small>}
+          </div>
+        </div>
         <Metric label="Angebotspreise" value={formatInteger(filteredRows.length)} />
       </div>
       <PriceHistoryChart key={articleNumber} rows={filteredRows} netPrice={netPrice} medianDelta={medianDelta} mode={chartMode} />
       <div className="article-history-table-wrap">
         {filteredRows.length ? (
           <table className="price-table article-history-table">
-            <colgroup>{historyColumns.map((column) => <col key={column} style={{ width: articleHistoryColumnWidths[column] }} />)}</colgroup>
-            <thead><tr>{historyColumns.map((column) => <th key={column}>{columnLabel(column, "article")}</th>)}</tr></thead>
+            <colgroup>{historyColumns.map((column) => <col key={column} style={{ width: articleHistoryColumnWidths[column] }} />)}<col style={{ width: "44px" }} /></colgroup>
+            <thead><tr>{historyColumns.map((column) => <th key={column}>{columnLabel(column, "article")}</th>)}<th><span className="sr-only">Angebot herunterladen</span></th></tr></thead>
             <tbody>{filteredRows.map((row, index) => (
               <tr key={`${String(row.Quelle)}-${index}`}>
                 {historyColumns.map((column) => {
@@ -1343,14 +1351,20 @@ const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevisio
                   const text = value === null || value === undefined ? undefined : String(value);
                   return (
                     <td key={column} className={cellClass(column, value)} title={text}>
-                      {column === "Quelle" && value ? (
-                        data.unavailable_sources?.includes(String(value))
-                          ? <span className="article-history-cell" title={`${text}: Die Original-PDF ist nicht vorhanden.`}>{text} · Original-PDF fehlt</span>
-                          : <button className="source-download-button" type="button" title={`${text} herunterladen`} onClick={() => void downloadSource(String(value))}><span className="article-history-cell">{text}</span><Download size={13} /></button>
-                      ) : <span className="article-history-cell">{formatCell(column, value)}</span>}
+                      <span className="article-history-cell">{formatCell(column, value)}</span>
                     </td>
                   );
                 })}
+                <td className="article-download-cell">
+                  <button
+                    className="source-download-button"
+                    type="button"
+                    disabled={!row.Quelle || data.unavailable_sources?.includes(String(row.Quelle))}
+                    aria-label={!row.Quelle || data.unavailable_sources?.includes(String(row.Quelle)) ? "Original-PDF nicht vorhanden" : `${String(row.Quelle)} herunterladen`}
+                    title={!row.Quelle || data.unavailable_sources?.includes(String(row.Quelle)) ? "Die Original-PDF ist nicht vorhanden." : `${String(row.Quelle)} herunterladen`}
+                    onClick={() => void downloadSource(String(row.Quelle))}
+                  ><Download size={15} aria-hidden="true" /></button>
+                </td>
               </tr>
             ))}</tbody>
           </table>
@@ -1359,6 +1373,69 @@ const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevisio
     </section>
   );
 });
+
+function ArticleExportMenu({ exporting, onExport }: { exporting: boolean; onExport: (kind: "article" | "article_pdf") => void }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const initialItem = useRef(0);
+  const menuId = useId();
+
+  useLayoutEffect(() => {
+    if (open) itemRefs.current[initialItem.current]?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="article-export-menu" onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+    }} onKeyDown={(event) => {
+      if (event.key === "Escape" && open) {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    }}>
+      <button ref={triggerRef} type="button" className="price-icon-button article-export-trigger"
+        aria-label="Artikelvergleich herunterladen" title="Artikelvergleich herunterladen"
+        aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menuId : undefined} disabled={exporting}
+        onClick={() => { initialItem.current = 0; setOpen((current) => !current); }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            initialItem.current = event.key === "ArrowUp" ? 1 : 0;
+            setOpen(true);
+          }
+        }}>
+        {exporting ? <LoaderCircle size={18} className="is-spinning" aria-hidden="true" /> : <Ellipsis size={20} aria-hidden="true" />}
+      </button>
+      {open ? <div id={menuId} role="menu" aria-label="Dokumententyp" className="article-export-options" onKeyDown={(event) => {
+        const current = itemRefs.current.indexOf(document.activeElement as HTMLButtonElement);
+        const next = event.key === "ArrowDown" ? (current + 1) % 2
+          : event.key === "ArrowUp" ? (current + 1) % 2
+            : event.key === "Home" ? 0 : event.key === "End" ? 1 : null;
+        if (next !== null) { event.preventDefault(); itemRefs.current[next]?.focus(); }
+      }}>
+        {(["article", "article_pdf"] as const).map((kind, index) => (
+          <button key={kind} ref={(element) => { itemRefs.current[index] = element; }} type="button" role="menuitem"
+            onClick={() => { setOpen(false); triggerRef.current?.focus(); onExport(kind); }}>
+            <Download size={15} aria-hidden="true" /> {kind === "article" ? "CSV herunterladen" : "PDF herunterladen"}
+          </button>
+        ))}
+      </div> : null}
+    </div>
+  );
+}
 
 type PriceChartPoint = { price: number; date: string; type: OfferType; offerName: string };
 type PriceChartTooltipState = { index: number; anchor: DOMRect; points: PriceChartPoint[]; mode: "bars" | "line" };
@@ -1954,9 +2031,9 @@ function columnLabel(column: string, variant: PriceTableVariant): string {
 }
 
 function articleHistoryColumns(columns: string[]): string[] {
-  const preferred = ["Datum", "Preis", "Menge", "Quelle", "Projekt", "Angebot", "Angebotsart", "Gesamt (netto)"];
+  const preferred = ["Datum", "Preis", "Menge", "Projekt", "Angebot", "Angebotsart", "Gesamt (netto)"];
   const selected = preferred.filter((column) => columns.includes(column));
-  return selected.length ? selected : visibleColumns(columns).slice(0, 10);
+  return selected.length ? selected : visibleColumns(columns).filter((column) => column !== "Quelle").slice(0, 10);
 }
 
 function cellClass(column: string, value: unknown): string | undefined {
