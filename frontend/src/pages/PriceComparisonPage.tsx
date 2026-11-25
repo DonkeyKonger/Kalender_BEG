@@ -39,7 +39,7 @@ import { useAuth } from "../auth/AuthContext";
 import { MapFilterSelect } from "../components/MapFilterSelect";
 import { uploadPriceFiles, validateOfferFiles } from "../priceComparison/uploads";
 import { getPriceChartDomain } from "../priceComparison/chartDomain";
-import { getPriceChartLayout, getPriceChartWindow } from "../priceComparison/chartLayout";
+import { getPriceChartDateLabels, getPriceChartLayout, getPriceChartWindow } from "../priceComparison/chartLayout";
 import {
   PriceComparisonError,
   type ArticleDetailResult,
@@ -64,7 +64,7 @@ import {
   searchArticleIndex,
   useArticleSearchIndex,
 } from "../priceComparison/articleSearch";
-import { summarizeArticleDescription } from "../priceComparison/articleSummary";
+import { articleWeightLabel, summarizeArticleDescription } from "../priceComparison/articleSummary";
 import "../priceComparison/priceComparison.css";
 
 type ViewKey = "datanorm" | "offers" | "articles" | "files";
@@ -1306,11 +1306,12 @@ const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevisio
   const historyColumns = articleHistoryColumns(data.columns);
   const shortName = String(data.article.Kurzbezeichnung ?? "").trim()
     || summarizeArticleDescription(data.article.Bezeichnung ?? data.article.description).shortName;
+  const weight = articleWeightLabel(data.article.Bezeichnung ?? data.article.description);
 
   return (
     <section ref={detailRef} className="article-detail">
       <header className="article-detail-header">
-        <h3><span aria-hidden="true">| </span>{articleNumber}<span aria-hidden="true"> | </span><span className="article-short-name">{shortName}</span><span aria-hidden="true"> |</span></h3>
+        <h3>{articleNumber}<span aria-hidden="true"> | </span><span className="article-short-name">{shortName}</span><span aria-hidden="true"> | </span><span className="article-weight">{weight ?? "Gewicht: —"}</span></h3>
       </header>
       {error ? <InlineNotice tone="error">{error}</InlineNotice> : null}
       <WarningList warnings={data.warnings} />
@@ -1477,22 +1478,24 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
     };
   }, []);
 
-  const layout = getPriceChartLayout(points.length, viewportWidth);
+  const layout = getPriceChartLayout(points.length, viewportWidth, mode);
   const maxScroll = layout.maxScroll;
   // Scroll updates only the range and date strip, never the entire SVG tree.
   const syncScroll = useCallback(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const visible = getPriceChartWindow(getPriceChartLayout(points.length, viewportWidth), points.length, viewport.scrollLeft);
+    const visible = getPriceChartWindow(getPriceChartLayout(points.length, viewportWidth, mode), points.length, viewport.scrollLeft);
     if (datesRef.current) datesRef.current.style.transform = `translateX(${-visible.scrollLeft}px)`;
     if (rangeRef.current) {
       rangeRef.current.value = String(visible.scrollLeft);
       rangeRef.current.setAttribute("aria-valuetext", `Angebote ${visible.first} bis ${visible.last} von ${points.length}`);
     }
-  }, [points.length, viewportWidth]);
+  }, [points.length, viewportWidth, mode]);
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
+    // A changed layout invalidates the tooltip's saved screen coordinates.
+    setTooltip(null);
     viewport.scrollLeft = scrollPoints.current === points ? Math.min(viewport.scrollLeft, maxScroll) : 0;
     scrollPoints.current = points;
     syncScroll();
@@ -1613,7 +1616,7 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
       </div>
       <div className="price-chart-dates" aria-hidden="true">
         <svg ref={datesRef} width={width} height="28" viewBox={`0 0 ${width} 28`}>
-          {points.map((point, index) => (index % layout.labelStep === 0 && (index === 0 || index < points.length - layout.labelStep) || index === points.length - 1) ? <text key={`label-${point.date}-${index}`} x={points.length === 1 ? x(index) : index === 0 ? 4 : index === points.length - 1 ? width - 4 : x(index)} y="17" textAnchor={points.length === 1 ? "middle" : index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"} className="chart-axis-label">{shortDate(point.date)}</text> : null)}
+          {getPriceChartDateLabels(layout, points.length).map(({ index, x: labelX }) => <text key={`label-${points[index].date}-${index}`} x={labelX} y="17" textAnchor="middle" className="chart-axis-label">{shortDate(points[index].date)}</text>)}
         </svg>
       </div>
       </div>

@@ -1,7 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { summarizeArticleDescription } from "../src/priceComparison/articleSummary.ts";
+import { articleWeightLabel, summarizeArticleDescription } from "../src/priceComparison/articleSummary.ts";
+
+test("header weight uses kg and one decimal while preserving the quantity basis", () => {
+  for (const [source, expected] of [
+    ["Gewicht: 233,803 per 100", "Gewicht: 233,8 kg pro 100"],
+    ["Gewicht: 356,295 per 100", "Gewicht: 356,3 kg pro 100"],
+    ["Gewicht:0,000 per 100", "Gewicht: 0,0 kg pro 100"],
+    ["Gewicht: 1,5 kg", "Gewicht: 1,5 kg"],
+    ["Gewicht: 233.803 kg pro 100", "Gewicht: 233,8 kg pro 100"],
+  ]) {
+    assert.equal(articleWeightLabel(`Kabelrinne\r\nRKSM 630 FS\r\n  ${source}  \r\nFarbe: zink`), expected);
+  }
+});
+
+test("missing weight stays missing and is never inferred from other technical values", () => {
+  for (const value of [null, 12, "", "Gewicht: ", "Gewicht: unbekannt", "Gewicht: 2 lb", "Gewicht: \nFarbe: zink", "Dimension: 60x300\nEinheit: MTR\nLeichtgewicht"]) {
+    assert.equal(articleWeightLabel(value), null);
+  }
+});
 
 test("the real RKSM description becomes a concise title, repaired description and explicit quality", () => {
   const summary = summarizeArticleDescription([

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getPriceChartLayout, getPriceChartWindow } from "../src/priceComparison/chartLayout.ts";
+import { getPriceChartDateLabels, getPriceChartLayout, getPriceChartWindow } from "../src/priceComparison/chartLayout.ts";
 
 test("the last fitting bar needs no scrolling, the next one does", () => {
   const fitting = getPriceChartLayout(25, 800);
@@ -33,16 +33,39 @@ test("capacity follows the available width, including fractional CSS pixels", ()
   }
 });
 
-test("small histories fill their viewport without oversized bars", () => {
-  for (const count of [0, 1, 5]) {
+test("filtering to short histories retains the same bar width and left-aligned positions", () => {
+  for (const count of [0, 1, 2, 5, 9, 25]) {
     const layout = getPriceChartLayout(count, 800);
     assert.equal(layout.contentWidth, 800);
     assert.equal(layout.maxScroll, 0);
-    assert.ok(layout.barWidth <= 42);
+    assert.equal(layout.barWidth, 20);
+    assert.equal(layout.slotWidth, 32);
+    assert.equal(layout.slotWidth / 2 - layout.barWidth / 2, 6);
   }
   assert.deepEqual(getPriceChartWindow(getPriceChartLayout(0, 800), 0, 0), {
     scrollLeft: 0, first: 0, last: 0,
   });
+});
+
+test("short bar histories keep dates under the bars without overlapping or jumping to the right edge", () => {
+  for (const count of [1, 2, 3, 5, 9, 30, 126]) {
+    const layout = getPriceChartLayout(count, 800);
+    const labels = getPriceChartDateLabels(layout, count);
+    assert.equal(labels[0].index, 0);
+    for (const [index, label] of labels.entries()) {
+      assert.ok(label.x >= 24 && label.x <= layout.contentWidth - 24);
+      assert.ok(label.x < count * layout.slotWidth);
+      if (index > 0) assert.ok(label.x - labels[index - 1].x >= 72);
+    }
+  }
+  assert.deepEqual(getPriceChartDateLabels(getPriceChartLayout(0, 800), 0), []);
+});
+
+test("line charts retain the spread of points across the available width", () => {
+  const layout = getPriceChartLayout(5, 800, "line");
+  assert.equal(layout.slotWidth, 160);
+  assert.equal(layout.maxScroll, 0);
+  assert.deepEqual(getPriceChartDateLabels(layout, 5).map(({ x }) => x), [80, 240, 400, 560, 720]);
 });
 
 test("the last scroll position reaches the last offer without blank space", () => {

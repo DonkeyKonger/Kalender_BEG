@@ -53,6 +53,20 @@ const HIDDEN_METADATA_LABELS = new Set([
   "wandstärke",
 ]);
 
+const weightFormatter = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** Display the agreed kg unit without changing the source's quantity basis. */
+export function articleWeightLabel(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const line = value.split(/\r?\n|\r/).map((item) => item.trim())
+    .find((item) => /^Gewicht\s*:/i.test(item));
+  const match = line?.match(/^Gewicht\s*:\s*(\d+(?:[.,]\d+)?)\s*(?:kg\s*)?(?:(?:per|pro)\s+(\d+))?\s*$/i);
+  if (!match) return null;
+  const weight = Number(match[1].replace(",", "."));
+  if (!Number.isFinite(weight)) return null;
+  return `Gewicht: ${weightFormatter.format(weight)} kg${match[2] ? ` pro ${match[2]}` : ""}`;
+}
+
 /**
  * Reduces a multi-line Datanorm description to the three text fragments used
  * by the article picker. Labeled technical details remain in the search index,
