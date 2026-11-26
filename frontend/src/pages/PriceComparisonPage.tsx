@@ -246,7 +246,7 @@ export function PriceComparisonPage() {
 
       <div className="price-view-content" role="tabpanel">
         {activeView === "datanorm" ? <DatanormView onOperation={onOperation} uploadRevision={uploadRevision} /> : null}
-        {activeView === "offers" ? <OffersView onOperation={onOperation} uploadRevision={uploadRevision} onUploadBlock={setUploadBlockReason} /> : null}
+        {activeView === "offers" ? <OffersView onOperation={onOperation} uploadRevision={uploadRevision} onUploadBlock={setUploadBlockReason} onBackgroundMutation={setUploadRevision} /> : null}
         {activeView === "articles" ? <ArticlesView articleSearch={articleSearch} uploadRevision={uploadRevision} /> : null}
         {activeView === "files" ? <FilesView onOperation={onOperation} uploadRevision={uploadRevision} status={status} onMutation={syncStatusFromFiles} /> : null}
       </div>
@@ -877,7 +877,7 @@ function NetPriceCalculator({
   );
 }
 
-function OffersView({ uploadRevision, onUploadBlock, onOperation }: { uploadRevision: string | null; onUploadBlock: (reason: string | null) => void; onOperation: (started: boolean) => void }) {
+function OffersView({ uploadRevision, onUploadBlock, onOperation, onBackgroundMutation }: { uploadRevision: string | null; onUploadBlock: (reason: string | null) => void; onOperation: (started: boolean) => void; onBackgroundMutation: (revision: string) => void }) {
   const [queryInput, setQueryInput] = useState("");
   const [search, setSearch] = useState("");
   const [offerType, setOfferType] = useState("");
@@ -890,6 +890,10 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation }: { uploadRevi
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const offerDetailRef = useRef<HTMLElement>(null);
+  const [savingTypeSource, setSavingTypeSource] = useState<string | null>(null);
+  const typeSavePending = useRef(false);
+  const offersMounted = useRef(false);
+  const typeFocusAfterSave = useRef<string | null>(null);
   const offerListRef = useRef<HTMLDivElement>(null);
   const overviewReturnRef = useRef<{ button: HTMLButtonElement; listScroll: number; pageX: number; pageY: number } | null>(null);
   const offerInfoRef = useRef<HTMLDivElement>(null);
@@ -939,6 +943,51 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation }: { uploadRevi
     void load();
     return () => offerListRequests.current?.invalidate();
   }, [load, offerQuery, uploadRevision]);
+
+  useEffect(() => {
+    offersMounted.current = true;
+    return () => { offersMounted.current = false; };
+  }, []);
+
+  useLayoutEffect(() => {
+    const source = typeFocusAfterSave.current;
+    if (!source || savingTypeSource || loading) return;
+    typeFocusAfterSave.current = null;
+    // A disabled native select loses focus while saving. Restore it unless the
+    // user has already moved to another control, or the refresh failed.
+    if (error || (document.activeElement !== document.body && document.activeElement?.getAttribute("data-offer-source") !== source)) return;
+    const selects = Array.from(offerListRef.current?.querySelectorAll<HTMLSelectElement>("select[data-offer-source]") ?? []);
+    const target = selects.find((select) => select.dataset.offerSource === source) ?? selects[0];
+    (target ?? offerInfoButtonRef.current)?.focus({ preventScroll: true });
+  }, [savingTypeSource, loading, error]);
+
+  async function changeOfferType(source: string, nextType: OfferType) {
+    const offer = data?.offers.find((item) => item.source === source);
+    if (!data || !offer || loading || error || typeSavePending.current || offer.offer_type === nextType) return;
+    typeSavePending.current = true;
+    typeFocusAfterSave.current = source;
+    setSavingTypeSource(source);
+    onOperation(true);
+    try {
+      const result = await priceRequest<{ revision: string }>(`/price-comparison/offers/${encodeURIComponent(source)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ expected_revision: data.revision, offer_type: nextType }),
+      });
+      // Changing a reference offer can affect every price level and active filter.
+      if (offersMounted.current) await load();
+      else onBackgroundMutation(result.revision);
+    } catch (saveError) {
+      if (offersMounted.current) {
+        setError(saveError instanceof PriceComparisonError && saveError.status === 409
+          ? mutationErrorMessage(saveError)
+          : `${mutationErrorMessage(saveError)} Bitte laden Sie die Übersicht neu, um den gespeicherten Stand zu prüfen.`);
+      }
+    } finally {
+      typeSavePending.current = false;
+      onOperation(false);
+      if (offersMounted.current) setSavingTypeSource(null);
+    }
+  }
 
   useLayoutEffect(() => {
     if (selectedSource) {
@@ -1063,29 +1112,42 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation }: { uploadRevi
               <span />
             </div>
             {(data?.offers ?? []).map((offer) => (
-              <div key={offer.source} role="listitem">
+              <div key={offer.source} role="listitem" className={`offer-list-item${selectedSource === offer.source ? " is-selected" : ""}`} aria-busy={savingTypeSource === offer.source}>
                 <button
                   type="button"
-                  disabled={loading}
+                  disabled={loading || savingTypeSource !== null}
                   aria-pressed={selectedSource === offer.source}
-                  className={`offer-list-item${selectedSource === offer.source ? " is-selected" : ""}`}
+                  aria-label={`Angebot ${offer.project || "Ohne Projekt"} (${offer.offer_number || offer.source}) öffnen`}
+                  title={offer.project || "Ohne Projekt"}
+                  className="offer-list-open"
                   onClick={(event) => {
                     overviewReturnRef.current = { button: event.currentTarget, listScroll: offerListRef.current?.scrollTop ?? 0, pageX: window.scrollX, pageY: window.scrollY };
                     setInfoOpen(false);
                     setSelectedSource(offer.source);
                   }}
-                >
-                  <span className="offer-list-primary">
-                    <strong title={offer.project || "Ohne Projekt"}>{offer.project || "Ohne Projekt"}</strong>
-                    <span className="offer-list-meta"><span title={offer.offer_number || offer.source}>{offer.offer_number || offer.source}</span><span aria-hidden="true">·</span><span>{offer.date ? formatGermanDateKey(offer.date, "numeric") : "—"}</span><OfferTypeBadge type={offer.offer_type} /></span>
+                />
+                <span className="offer-list-primary">
+                  <strong title={offer.project || "Ohne Projekt"}>{offer.project || "Ohne Projekt"}</strong>
+                  <span className="offer-list-meta">
+                    <span title={offer.offer_number || offer.source}>{offer.offer_number || offer.source}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{offer.date ? formatGermanDateKey(offer.date, "numeric") : "—"}</span>
+                    <OfferTypeSelect
+                      source={offer.source}
+                      type={offer.offer_type}
+                      label={`Angebotsart für ${offer.project || "Ohne Projekt"} (${offer.offer_number || offer.source})`}
+                      disabled={loading || savingTypeSource !== null || Boolean(error)}
+                      saving={savingTypeSource === offer.source}
+                      onChange={(value) => void changeOfferType(offer.source, value)}
+                    />
                   </span>
-                  <span className="offer-list-price">
-                    <strong>{formatCurrency(offer.total_net)}</strong>
-                    <small>{formatInteger(offer.position_count)} Positionen</small>
-                  </span>
-                  <OfferPriceLevel value={offer.price_change} />
-                  <ChevronRight className="offer-list-arrow" size={17} aria-hidden="true" />
-                </button>
+                </span>
+                <span className="offer-list-price">
+                  <strong>{formatCurrency(offer.total_net)}</strong>
+                  <small>{formatInteger(offer.position_count)} Positionen</small>
+                </span>
+                <OfferPriceLevel value={offer.price_change} />
+                <ChevronRight className="offer-list-arrow" size={17} aria-hidden="true" />
               </div>
             ))}
           </div>
@@ -2266,8 +2328,16 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
   return <div className="price-metric"><span>{label}</span><strong>{value}</strong>{hint ? <small>{hint}</small> : null}</div>;
 }
 
-function OfferTypeBadge({ type }: { type: OfferType }) {
-  return <span className={`offer-type-badge is-${offerTypeClass(type)}`}>{shortOfferType(type)}</span>;
+function OfferTypeSelect({ source, type, label, disabled, saving, onChange }: { source: string; type: OfferType; label: string; disabled: boolean; saving: boolean; onChange: (type: OfferType) => void }) {
+  return (
+    <span className={`offer-type-badge offer-type-picker is-${offerTypeClass(type)}${saving ? " is-saving" : ""}`}>
+      <select data-offer-source={source} aria-label={label} value={type} disabled={disabled} onChange={(event) => onChange(event.target.value as OfferType)}>
+        {offerTypes.map((value) => <option key={value} value={value}>{shortOfferType(value)}</option>)}
+      </select>
+      {saving ? <LoaderCircle size={11} className="is-spinning" aria-hidden="true" /> : null}
+      {saving ? <span className="sr-only" role="status">Angebotsart wird gespeichert …</span> : null}
+    </span>
+  );
 }
 
 function OfferPriceLevel({ value }: { value: number | null }) {

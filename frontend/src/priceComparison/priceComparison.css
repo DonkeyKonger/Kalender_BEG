@@ -730,6 +730,8 @@
 .offer-list-header > :nth-child(2) { text-align: right; }
 .offer-list-header > :nth-child(3) { text-align: right; }
 .offer-list-item {
+  position: relative;
+  isolation: isolate;
   width: 100%;
   min-height: 64px;
   padding: 11px 12px;
@@ -741,7 +743,11 @@
 }
 .offer-list-item:hover,
 .offer-list-item.is-selected { background: #edf3f8; }
-.offer-list-item:focus-visible { position: relative; outline: 2px solid var(--price-blue); outline-offset: -2px; background: #edf3f8; }
+.offer-list-item:has(.offer-list-open:focus-visible) { outline: 2px solid var(--price-blue); outline-offset: -2px; background: #edf3f8; }
+.offer-list-open { position: absolute; inset: 0; width: 100%; border: 0; padding: 0; background: transparent; cursor: pointer; }
+.offer-list-open:focus-visible { outline: none; }
+.offer-list-open:disabled { cursor: wait; }
+.offer-list-item > :not(.offer-list-open) { position: relative; pointer-events: none; }
 .offer-list-primary,
 .offer-list-meta,
 .offer-list-price { display: flex; min-width: 0; }
@@ -751,7 +757,7 @@
 .offer-list-primary strong { color: #173b60; font-size: 0.79rem; }
 .offer-list-meta { align-items: center; flex-wrap: wrap; gap: 5px 8px; color: var(--price-muted); font-size: 0.69rem; }
 .offer-list-meta > span:not(.offer-type-badge) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.offer-list-meta .offer-type-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 5.5rem; width: 5.5rem; white-space: nowrap; padding: 1px 5px; }
+.offer-list-meta .offer-type-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 6.5rem; width: 6.5rem; white-space: nowrap; padding: 0; }
 .offer-list-price { flex-direction: column; align-items: flex-end; gap: 4px; font-variant-numeric: tabular-nums; }
 .offer-list-price strong { color: #183b61; font-size: 0.79rem; }
 .offer-list-price small { color: var(--price-muted); font-size: 0.69rem; }
@@ -856,6 +862,14 @@
 .offer-type-badge { padding: 3px 6px; border: 1px solid #bdcddd; color: #526a81; font-size: 0.62rem; font-weight: 720; }
 .offer-type-badge.is-follow { border-color: #d4c5a4; background: #faf6ea; color: #776135; }
 .offer-type-badge.is-negotiated { border-color: #c5bada; background: #f3eff8; color: #66517e; }
+.offer-type-picker { position: relative; pointer-events: auto; border-radius: 1px; }
+.offer-type-picker::after { content: ""; position: absolute; right: 7px; top: 6px; width: 5px; height: 5px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg); pointer-events: none; }
+.offer-type-picker.is-saving::after { display: none; }
+.offer-type-picker > select { appearance: none; width: 100%; min-width: 0; height: 22px; min-height: 22px; margin: 0; padding: 1px 19px 1px 6px; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; line-height: 18px; cursor: pointer; }
+.offer-type-picker > select:focus-visible { outline: 2px solid var(--price-blue); outline-offset: 2px; }
+.offer-type-picker > select:disabled { opacity: .65; cursor: wait; }
+.offer-type-picker > svg { position: absolute; right: 5px; pointer-events: none; }
+@media (pointer: coarse) { .offer-type-picker > select { height: 30px; min-height: 30px; } .offer-type-picker::after { top: 10px; } }
 
 .offer-detail { position: sticky; top: 14px; overflow: hidden; }
 .offer-detail:focus { outline: none; }
