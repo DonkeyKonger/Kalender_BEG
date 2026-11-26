@@ -17,9 +17,9 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 
-METRICS_VERSION = "matched-basket-v2"
+METRICS_VERSION = "matched-basket-v3"
 MIN_REFERENCE_OFFERS = 3
-MIN_VALUE_COVERAGE_PCT = 60.0
+MIN_VALUE_COVERAGE_PCT = 50.0
 MAX_LINE_TO_OFFER_TOTAL_RATIO = 10.0
 _BERLIN = ZoneInfo("Europe/Berlin")
 

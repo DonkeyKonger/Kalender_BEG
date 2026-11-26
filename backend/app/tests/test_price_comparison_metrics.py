@@ -155,9 +155,15 @@ def test_leap_day_and_aware_datetime_use_berlin_calendar_date() -> None:
 
 @pytest.mark.parametrize(
     ("matched_value", "status", "reason"),
-    [(60.0, "reliable", None), (59.0, "unavailable", "insufficient_coverage")],
+    [
+        (49.99, "unavailable", "insufficient_coverage"),
+        (50.0, "reliable", None),
+        (50.01, "reliable", None),
+        (55.0, "reliable", None),
+        (60.0, "reliable", None),
+    ],
 )
-def test_sixty_percent_value_coverage_boundary(matched_value, status, reason) -> None:
+def test_fifty_percent_value_coverage_boundary(matched_value, status, reason) -> None:
     other_value = 100.0 - matched_value
     rows = [
         row("target.pdf", "A", matched_value, 1, "2026-06-01", "TARGET"),
@@ -171,6 +177,30 @@ def test_sixty_percent_value_coverage_boundary(matched_value, status, reason) ->
     assert result["comparison_quality"]["reason"] == reason
     assert result["comparison_quality"]["value_coverage_pct"] == pytest.approx(matched_value)
     assert (result["PV_avg_pct_wert"] is not None) is (status == "reliable")
+
+
+def test_fifty_percent_value_coverage_is_reliable_with_many_unmatched_positions() -> None:
+    edge_articles = tuple(f"EDGE-{index:03d}" for index in range(50))
+    rows = [
+        row("target.pdf", "CORE", 50, 1, "2026-06-01", "TARGET"),
+        *(
+            row("target.pdf", article, 1, 1, "2026-06-01", "TARGET")
+            for article in edge_articles
+        ),
+        *refs("CORE", (50, 50, 50)),
+    ]
+
+    result = metric(rows, dn("CORE", *edge_articles))
+
+    quality = result["comparison_quality"]
+    assert quality["status"] == "reliable"
+    assert quality["reason"] is None
+    assert quality["eligible_positions"] == 51
+    assert quality["matched_positions"] == 1
+    assert quality["value_coverage_pct"] == pytest.approx(50.0)
+    assert quality["position_coverage_pct"] == pytest.approx(100 / 51)
+    assert result["PV_avg_pct_wert"] == pytest.approx(0.0)
+    assert result["PV_avg_pct_pos"] == pytest.approx(0.0)
 
 
 def test_corrupt_and_unverified_rows_do_not_inflate_coverage_denominator() -> None:

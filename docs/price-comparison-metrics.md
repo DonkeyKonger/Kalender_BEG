@@ -1,4 +1,4 @@
-# Historisches Preisniveau (Version matched-basket-v2)
+# Historisches Preisniveau (Version matched-basket-v3)
 
 ## Verbindliche Regeln
 
@@ -28,7 +28,7 @@ ungewichtete Mittel der Abweichungen dieser vergleichbaren Artikel.
 Rabatt, Nettoabgleich und manuelle Korrektur werden in der bisherigen Reihenfolge
 aufbereitet. Manuelle Korrekturen verändern auch spätere historische Bewertungen.
 
-Verglichene Artikel müssen mindestens **60 % des prüfbaren aktuellen
+Verglichene Artikel müssen mindestens **50 % des prüfbaren aktuellen
 Positionswerts** abdecken. Der Nenner enthält nur verifizierbare Artikel mit
 positivem endlichem Preis und positiver endlicher Menge. Artikelidentität und
 Einheiten müssen zur aktiven DATANORM passen. Unbekannte Sonderleistungen werden
@@ -39,7 +39,7 @@ Abweichung auf ±25 % begrenzt. Auch die frühere einseitig wirkende Ausfilterun
 von Abweichungen über ±100 % entfällt.
 
 Bei unzureichender Basis sind beide Prozentkennzahlen `null`; die Oberfläche zeigt
-„Keine belastbare Vergleichsbasis“ mit Grund. Die API liefert Artikel-/Wertabdeckung,
+in der Angebotsübersicht ausschließlich das Kreis-mit-Strich-Symbol. Die API liefert Artikel-/Wertabdeckung,
 Referenzanzahl, ausgeschlossene Positionen, Berechnungsdatum und Methodenversion.
 
 ## Parserkorrektur und Erhaltungsgrenze
@@ -71,11 +71,21 @@ maßgeblich. Ein Lesen schreibt keine gemeinsamen Dateien. Jede Quellen- oder
 Einstellungsrevision und jeder Tageswechsel führt zu einer neuen Bewertung.
 
 Regressionen decken insbesondere Datumsgrenzen/Schaltjahre, Erstangebotsfilter,
-Duplikate, drei Referenzen, exakt 60 % Abdeckung, Mengen, Einheiten, manuelle
+Duplikate, drei Referenzen, exakt 50 % Abdeckung, Mengen, Einheiten, manuelle
 Korrekturen, beschädigte Preise, extreme reale Abweichungen, unveränderte Inputs,
 Cachewechsel sowie reale PDF-/Import-/API-/Exportwege ab.
 
-## Prüfstand vom 26.11.2026
+## Anpassung vom 26.11.2026: 50 % Wertabdeckung
+
+Die Freigabeschwelle beträgt einschließlich Grenzwert **50 %** statt bisher 60 %.
+Damit dürfen auch Angebote mit vielen geringwertigen Randartikeln bewertet werden,
+sobald vergleichbare Artikel mindestens die Hälfte des prüfbaren Angebotswerts
+abdecken. Maßgeblich bleibt der Wertanteil, nicht die Zahl der gefundenen Artikel.
+Die drei früheren Erstangebote je Artikel und das historische 36-Monats-Fenster
+bleiben bestehen. Die Methodenversion `matched-basket-v3` trennt die neuen
+Berechnungen von zwischengespeicherten Ergebnissen der bisherigen Schwelle.
+
+## Vorheriger Prüfstand vom 26.11.2026
 
 - Gesamtes Backend: 2.825 Tests bestanden, 16 umgebungsabhängige Tests
   übersprungen. Alle 283 Preisvergleichstests auch separat erfolgreich; Ruff

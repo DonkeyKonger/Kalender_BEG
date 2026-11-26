@@ -43,7 +43,7 @@ test("all four native workspaces and guarded duplicate workflows remain present"
   assert.match(page, /Ø Positionsabweichung/);
   assert.match(page, /36 Kalendermonate/);
   assert.match(page, /drei unterschiedlichen Erstangeboten/);
-  assert.match(page, /mindestens 60 % Abdeckung des prüfbaren Positionswerts/);
+  assert.match(page, /mindestens 50 % Abdeckung des prüfbaren Positionswerts/);
   assert.doesNotMatch(page, /365-Tage-Fenster/);
   assert.match(page, /offer\.comparison_quality/);
   assert.doesNotMatch(page, /offer-price-quality/);

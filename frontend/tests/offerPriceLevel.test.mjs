@@ -94,7 +94,7 @@ test("reliable quality summarizes articles and value coverage with method detail
 test("unavailable quality has a clear label and a specific compact reason", () => {
   const reasons = [
     ["insufficient_references", "Zu wenige historische Erstangebote"],
-    ["insufficient_coverage", "Wertabdeckung unter 60 %"],
+    ["insufficient_coverage", "Wertabdeckung unter 50 %"],
     ["invalid_prices", "Fehlende oder ungültige Preise"],
     ["invalid_date", "Ungültiges Angebotsdatum"],
     ["no_comparable_positions", "Keine vergleichbaren Positionen"],

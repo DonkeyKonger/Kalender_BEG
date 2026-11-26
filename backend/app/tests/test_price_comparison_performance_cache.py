@@ -398,16 +398,19 @@ def test_offer_metrics_cache_is_version_day_revision_bound_and_defensive(monkeyp
     first["offer.pdf"]["comparison_quality"]["status"] = "corrupted"
     assert service.offer_metrics(data)["offer.pdf"]["comparison_quality"]["status"] == "reliable"
     assert len(calls) == 1
-    day = "2026-11-27"
+    monkeypatch.setattr(service_module.metrics, "METRICS_VERSION", "next-metrics-version")
     service.offer_metrics(data)
     assert len(calls) == 2
-    data.snap.revision = "r2"
+    day = "2026-11-27"
     service.offer_metrics(data)
     assert len(calls) == 3
+    data.snap.revision = "r2"
+    service.offer_metrics(data)
+    assert len(calls) == 4
     data.cacheable = False
     service.offer_metrics(data)
     service.offer_metrics(data)
-    assert len(calls) == 5
+    assert len(calls) == 6
 
 
 def test_legacy_corrupt_price_guard_preserves_sources_and_manual_corrections():

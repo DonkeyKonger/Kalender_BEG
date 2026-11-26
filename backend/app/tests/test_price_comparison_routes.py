@@ -1947,7 +1947,7 @@ def test_quality_metadata_is_not_part_of_offer_text_search(context):
     client, _, _ = context
     seed(client)
     assert client.get("/api/price-comparison/offers", params={"search": "Testprojekt"}).json()["total"] == 1
-    for term in ("matched-basket-v2", "unavailable", "invalid_prices", "value_coverage_pct"):
+    for term in ("matched-basket-v3", "unavailable", "invalid_prices", "value_coverage_pct"):
         result = client.get("/api/price-comparison/offers", params={"search": term})
         assert result.status_code == 200
         assert result.json()["total"] == 0

@@ -1006,7 +1006,7 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation }: { uploadRevi
         {infoOpen ? (
           <div className="offer-overview-info" id={infoId}>
             <p><strong>Was bedeutet das Preisniveau?</strong> Es bewertet denselben Warenkorb zweimal: einmal mit den aktuellen Angebotsmengen und Angebotspreisen, einmal mit denselben Mengen und dem Median der gültigen Referenzpreise je Artikel. Die prozentuale Differenz zeigt, ob das Angebot insgesamt günstiger oder teurer liegt.</p>
-            <p>Als Referenzen zählen ausschließlich Erstangebote mit Datum vor dem Zielangebot, die im heutigen Fenster der letzten 36 Kalendermonate liegen. Ein Artikel wird erst ab drei unterschiedlichen Erstangeboten berücksichtigt. Ein Angebot erhält nur bei mindestens 60 % Abdeckung des prüfbaren Positionswerts ein Preisniveau. Die Netto-Gesamtsumme allein ist keine Preisbewertung; Angebote mit exakt 0 % bleiben unter „Alle Angebote“.</p>
+            <p>Als Referenzen zählen ausschließlich Erstangebote mit Datum vor dem Zielangebot, die im heutigen Fenster der letzten 36 Kalendermonate liegen. Ein Artikel wird erst ab drei unterschiedlichen Erstangeboten berücksichtigt. Ein Angebot erhält nur bei mindestens 50 % Abdeckung des prüfbaren Positionswerts ein Preisniveau. Die Netto-Gesamtsumme allein ist keine Preisbewertung; Angebote mit exakt 0 % bleiben unter „Alle Angebote“.</p>
           </div>
         ) : null}
       </div>

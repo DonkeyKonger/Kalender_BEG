@@ -43,7 +43,7 @@ const qualityNumberFormatter = new Intl.NumberFormat("de-DE", { maximumFractionD
 const qualityIntegerFormatter = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
 const unavailableReasonLabels: Record<OfferComparisonUnavailableReason, string> = {
   insufficient_references: "Zu wenige historische Erstangebote",
-  insufficient_coverage: "Wertabdeckung unter 60 %",
+  insufficient_coverage: "Wertabdeckung unter 50 %",
   invalid_prices: "Fehlende oder ungültige Preise",
   invalid_date: "Ungültiges Angebotsdatum",
   no_comparable_positions: "Keine vergleichbaren Positionen",
