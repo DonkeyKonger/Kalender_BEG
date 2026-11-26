@@ -44,7 +44,7 @@ import { MapFilterSelect } from "../components/MapFilterSelect";
 import { acquireMobileModalLock } from "../lib/mobileModalScrollLock";
 import { uploadPriceFiles, validateOfferFiles } from "../priceComparison/uploads";
 import { getPriceChartDomain } from "../priceComparison/chartDomain";
-import { getPriceChartDateLabels, getPriceChartLayout, getPriceChartWindow } from "../priceComparison/chartLayout";
+import { getPriceChartDateLabels, getPriceChartLayout, getPriceChartOfferScroll, getPriceChartWindow } from "../priceComparison/chartLayout";
 import {
   PriceComparisonError,
   type ArticleDetailResult,
@@ -1269,12 +1269,12 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
           </div>
         </>
       ) : null}
-      {comparisonArticle ? <OfferArticleDialog articleNumber={comparisonArticle} uploadRevision={uploadRevision} onClose={() => setComparisonArticle(null)} /> : null}
+      {comparisonArticle ? <OfferArticleDialog articleNumber={comparisonArticle} source={source} uploadRevision={uploadRevision} onClose={() => setComparisonArticle(null)} /> : null}
     </section>
   );
 }
 
-function OfferArticleDialog({ articleNumber, uploadRevision, onClose }: { articleNumber: string; uploadRevision: string | null; onClose: () => void }) {
+function OfferArticleDialog({ articleNumber, source, uploadRevision, onClose }: { articleNumber: string; source: string; uploadRevision: string | null; onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -1303,7 +1303,7 @@ function OfferArticleDialog({ articleNumber, uploadRevision, onClose }: { articl
         <h2 id={titleId}>Artikelvergleich <span>{articleNumber}</span></h2>
         <button type="button" className="price-icon-button" aria-label="Artikelvergleich schließen" onClick={close}><X size={18} /></button>
       </header>
-      <ArticleDetail articleNumber={articleNumber} uploadRevision={uploadRevision} />
+      <ArticleDetail articleNumber={articleNumber} highlightSource={source} uploadRevision={uploadRevision} />
     </dialog>
   );
 }
@@ -1379,7 +1379,7 @@ function ArticlesView({ articleSearch, uploadRevision }: { articleSearch: Articl
   );
 }
 
-const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevision }: { articleNumber: string; uploadRevision: string | null }) {
+const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevision, highlightSource }: { articleNumber: string; uploadRevision: string | null; highlightSource?: string }) {
   const [data, setData] = useState<ArticleDetailResult | null>(null);
   const [dataArticleNumber, setDataArticleNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1517,7 +1517,7 @@ const ArticleDetail = memo(function ArticleDetail({ articleNumber, uploadRevisio
         </div>
         <Metric label="Angebotspreise" value={formatInteger(filteredRows.length)} />
       </div>
-      <PriceHistoryChart key={articleNumber} rows={filteredRows} netPrice={netPrice} medianDelta={medianDelta} mode={chartMode} />
+      <PriceHistoryChart key={articleNumber} rows={filteredRows} netPrice={netPrice} medianDelta={medianDelta} mode={chartMode} highlightSource={highlightSource} />
       <div className="article-history-table-wrap">
         {filteredRows.length ? (
           <table className="price-table article-history-table">
@@ -1616,14 +1616,15 @@ function ArticleExportMenu({ exporting, onExport }: { exporting: boolean; onExpo
   );
 }
 
-type PriceChartPoint = { price: number; date: string; type: OfferType; offerName: string };
+type PriceChartPoint = { price: number; date: string; type: OfferType; offerName: string; source: string };
 type PriceChartTooltipState = { index: number; anchor: DOMRect; points: PriceChartPoint[]; mode: "bars" | "line" };
 
-function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<Record<string, unknown>>; netPrice: number | null; medianDelta: number | null; mode: "bars" | "line" }) {
+function PriceHistoryChart({ rows, netPrice, medianDelta, mode, highlightSource }: { rows: Array<Record<string, unknown>>; netPrice: number | null; medianDelta: number | null; mode: "bars" | "line"; highlightSource?: string }) {
   const points = useMemo(() => rows
     .map((row) => ({
       price: toNumber(row.Preis),
       date: String(row.Datum ?? ""),
+      source: String(row.Quelle ?? ""),
       type: String(row.Angebotsart ?? "Erstangebot") as OfferType,
       offerName: [row.Projekt, row.Angebot, row.Quelle]
         .map((value) => String(value ?? "").trim())
@@ -1635,7 +1636,9 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
   const viewportRef = useRef<HTMLDivElement>(null);
   const rangeRef = useRef<HTMLInputElement>(null);
   const datesRef = useRef<SVGSVGElement>(null);
-  const scrollPoints = useRef(points);
+  const scrollPoints = useRef<typeof points | null>(null);
+  const scrollSource = useRef(highlightSource);
+  const highlightedIndex = highlightSource ? points.findIndex((point) => point.source === highlightSource) : -1;
   const [viewportWidth, setViewportWidth] = useState(720);
   const [viewportHeight, setViewportHeight] = useState(260);
   const viewportId = useId();
@@ -1678,10 +1681,16 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
     if (!viewport) return;
     // A changed layout invalidates the tooltip's saved screen coordinates.
     setTooltip(null);
-    viewport.scrollLeft = scrollPoints.current === points ? Math.min(viewport.scrollLeft, maxScroll) : 0;
+    const changedSelection = scrollPoints.current !== points || scrollSource.current !== highlightSource;
+    // Read the actual viewport on mount, before ResizeObserver's first render.
+    const measuredLayout = getPriceChartLayout(points.length, viewport.clientWidth || viewportWidth, mode);
+    viewport.scrollLeft = changedSelection
+      ? getPriceChartOfferScroll(measuredLayout, highlightedIndex)
+      : Math.min(viewport.scrollLeft, maxScroll);
     scrollPoints.current = points;
+    scrollSource.current = highlightSource;
     syncScroll();
-  }, [points, maxScroll, syncScroll, viewportHeight]);
+  }, [points, highlightSource, highlightedIndex, maxScroll, syncScroll, viewportHeight, viewportWidth, mode]);
 
   useEffect(() => {
     if (!activeTooltip) return;
@@ -1749,10 +1758,12 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
         {mode === "line" && median24 !== null ? <line x1="0" x2={width} y1={y(median24)} y2={y(median24)} className="chart-median-line" /> : null}
         {mode === "line" ? <path d={linePath} className="chart-history-line" /> : null}
         {points.map((point, index) => {
+          const highlighted = Boolean(highlightSource && point.source === highlightSource);
           const interaction = {
             tabIndex: 0,
             role: "button",
-            "aria-label": `${formatCurrency(point.price)} · ${point.offerName} · ${formatDate(point.date)}`,
+            "aria-label": `${highlighted ? "Aus geöffnetem Angebot: " : ""}${formatCurrency(point.price)} · ${point.offerName} · ${formatDate(point.date)}`,
+            "data-highlighted-offer": highlighted || undefined,
             onPointerEnter: (event: React.PointerEvent<SVGElement>) => showTooltip(index, event.currentTarget),
             onPointerLeave: (event: React.PointerEvent<SVGElement>) => {
               if (event.pointerType !== "touch" && document.activeElement !== event.currentTarget) setTooltip(null);
@@ -1773,8 +1784,8 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
             },
           };
           return mode === "bars"
-            ? <rect key={`${point.date}-${index}`} {...interaction} x={x(index) - barWidth / 2} y={y(point.price)} width={barWidth} height={padding.top + plotHeight - y(point.price)} rx="2" className={`chart-bar is-${offerTypeClass(point.type)}`} />
-            : <circle key={`${point.date}-${index}`} {...interaction} cx={x(index)} cy={y(point.price)} r="5" className={`chart-point is-${offerTypeClass(point.type)}`} />;
+            ? <rect key={`${point.date}-${index}`} {...interaction} x={x(index) - barWidth / 2} y={y(point.price)} width={barWidth} height={padding.top + plotHeight - y(point.price)} rx="2" className={`chart-bar is-${offerTypeClass(point.type)}${highlighted ? " is-highlighted" : ""}`} />
+            : <circle key={`${point.date}-${index}`} {...interaction} cx={x(index)} cy={y(point.price)} r="5" className={`chart-point is-${offerTypeClass(point.type)}${highlighted ? " is-highlighted" : ""}`} />;
         })}
         </> : <text x={width / 2} y={height / 2} textAnchor="middle" className="chart-empty-label"><tspan x={width / 2}>Keine Angebotspreise</tspan><tspan x={width / 2} dy="18">für das Diagramm.</tspan></text>}
       </svg>
@@ -1806,7 +1817,7 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
         </svg>
       </div>
       </div>
-      <div className="chart-legend"><span className="is-first">Erstangebot</span><span className="is-follow">Folgeangebot</span><span className="is-negotiated">Verhandelt</span><span className="is-net">Datanorm-Netto</span>{mode === "line" && median24 !== null ? <span className="is-median">Median 24 Monate</span> : null}</div>
+      <div className="chart-legend"><span className="is-first">Erstangebot</span><span className="is-follow">Folgeangebot</span><span className="is-negotiated">Verhandelt</span><span className="is-net">Datanorm-Netto</span>{highlightedIndex >= 0 ? <span className="is-highlighted-offer">Geöffnetes Angebot</span> : null}{mode === "line" && median24 !== null ? <span className="is-median">Median 24 Monate</span> : null}</div>
       {activeTooltip ? <PriceChartTooltip id={tooltipId} point={points[activeTooltip.index]} anchor={activeTooltip.anchor} container={viewportRef.current?.closest("dialog") ?? document.body} /> : null}
     </div>
   );

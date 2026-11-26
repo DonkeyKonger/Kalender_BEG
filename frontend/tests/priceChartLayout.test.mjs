@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getPriceChartDateLabels, getPriceChartLayout, getPriceChartWindow } from "../src/priceComparison/chartLayout.ts";
+import { getPriceChartDateLabels, getPriceChartLayout, getPriceChartOfferScroll, getPriceChartWindow } from "../src/priceComparison/chartLayout.ts";
 
 test("the last fitting bar needs no scrolling, the next one does", () => {
   const fitting = getPriceChartLayout(25, 800);
@@ -91,5 +91,26 @@ test("date labels retain enough spacing across long histories", () => {
   for (const count of [1, 10, 30, 126, 1000]) {
     const layout = getPriceChartLayout(count, 800);
     assert.ok(layout.labelStep * layout.slotWidth >= 72);
+  }
+});
+
+test("opening a selected offer reveals its bar in long desktop and mobile histories", () => {
+  for (const width of [250, 720, 1600]) {
+    const layout = getPriceChartLayout(126, width);
+    for (const index of [0, 23, 75, 125]) {
+      const scroll = getPriceChartOfferScroll(layout, index);
+      const visible = getPriceChartWindow(layout, 126, scroll);
+      assert.ok(visible.first <= index + 1 && visible.last >= index + 1);
+      assert.ok(scroll >= 0 && scroll <= layout.maxScroll);
+      const left = (index + .5) * layout.slotWidth - layout.barWidth / 2;
+      assert.ok(left >= scroll && left + layout.barWidth <= scroll + width);
+    }
+  }
+});
+
+test("absent, filtered-out, and short-history selections do not create a scroll offset", () => {
+  assert.equal(getPriceChartOfferScroll(getPriceChartLayout(126, 720), -1), 0);
+  for (const index of [0, 4, 8]) {
+    assert.equal(getPriceChartOfferScroll(getPriceChartLayout(9, 720), index), 0);
   }
 });

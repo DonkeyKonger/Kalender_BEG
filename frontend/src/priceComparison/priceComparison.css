@@ -1046,6 +1046,8 @@
 .chart-point { cursor: pointer; }
 .chart-bar:is(:hover, :focus-visible) { filter: brightness(0.9); stroke: #183b61; stroke-width: 1; outline: none; }
 .chart-point:is(:hover, :focus-visible) { stroke-width: 4; outline: none; }
+.chart-bar.is-highlighted,
+.chart-point.is-highlighted { stroke: #bd3535; stroke-width: 2; stroke-dasharray: 4 3; }
 .chart-empty-label { fill: #66768a; font-size: 13px; }
 .price-chart-tooltip {
   position: fixed;
@@ -1073,6 +1075,7 @@
 .chart-legend .is-negotiated::before { background: #786496; }
 .chart-legend .is-net::before { height: 2px; vertical-align: middle; background: #9d7a35; }
 .chart-legend .is-median::before { height: 2px; vertical-align: middle; background: #43739f; }
+.chart-legend .is-highlighted-offer::before { box-sizing: border-box; border: 1.5px dashed #bd3535; background: transparent; }
 .chart-empty { min-height: 240px; border-bottom: 1px solid var(--price-border); }
 .article-history-table-wrap {
   height: clamp(240px, 38vh, 420px);

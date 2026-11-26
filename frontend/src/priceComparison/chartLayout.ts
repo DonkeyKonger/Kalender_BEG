@@ -46,3 +46,15 @@ export function getPriceChartWindow(
     last: Math.min(pointCount, Math.ceil((scrollLeft + layout.viewportWidth) / layout.slotWidth)),
   };
 }
+
+/** Reveal the selected offer once, without scrolling past the chart edges. */
+export function getPriceChartOfferScroll(
+  layout: ReturnType<typeof getPriceChartLayout>,
+  pointIndex: number,
+) {
+  if (pointIndex < 0) return 0;
+  return Math.max(0, Math.min(
+    (pointIndex + 0.5) * layout.slotWidth - layout.viewportWidth / 2,
+    layout.maxScroll,
+  ));
+}
