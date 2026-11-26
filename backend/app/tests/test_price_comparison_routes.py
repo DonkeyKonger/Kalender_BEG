@@ -1476,6 +1476,55 @@ def test_empty_existing_offer_is_cached_as_warning_and_does_not_block_upload(
     assert service.store.read(snapshot(service.store).find("offers", "empty.pdf")) == empty_source
 
 
+def test_parser_version_bump_ignores_old_empty_parse_cache(tmp_path, monkeypatch):
+    store = LocalPriceStorage(tmp_path / "files")
+    cache_dir = tmp_path / "parse-cache"
+    service = PriceComparisonService(store, cache_dir=cache_dir)
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer)
+    pdf.drawString(35, 800, "Angebot: TOTAL-CACHE-1")
+    pdf.drawString(
+        35,
+        780,
+        "6047611 RKSM 610 FS 300,00 Meter 4,27 1 1.281,00 EUR",
+    )
+    pdf.save()
+    raw = buffer.getvalue()
+    item = store.write("offers", "total.pdf", raw, None)
+    old_key = hashlib.sha256(
+        json.dumps(
+            [
+                "4ed988f-validated-pdf-v2",
+                store.identity,
+                item.kind,
+                item.name,
+                item.version,
+            ],
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    cache_dir.mkdir(parents=True)
+    pd.DataFrame().to_pickle(cache_dir / f"{old_key}.pkl")
+    parse_calls = 0
+    original_extract = core.extract_prices_from_pdf
+
+    def counted_extract(content, **kwargs):
+        nonlocal parse_calls
+        parse_calls += 1
+        return original_extract(content, **kwargs)
+
+    monkeypatch.setattr(core, "extract_prices_from_pdf", counted_extract)
+
+    parsed = service.parsed(item)
+
+    assert parse_calls == 1
+    assert len(parsed) == 1
+    assert parsed.iloc[0]["Artikelnummer"] == "6047611"
+    _, current_path = service._parsed_cache_location(item)
+    assert current_path.exists()
+    assert current_path.name != f"{old_key}.pkl"
+
+
 def test_same_filename_with_different_case_uses_confirmed_canonical_target(context):
     client, service, _ = context
     original = seed(client)

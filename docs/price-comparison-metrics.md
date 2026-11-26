@@ -53,6 +53,11 @@ oder einem eindeutigen Mengen-/Einheitenkontext übernommen. Typziffern wie
 Schreibweisen ohne Leerzeichen (`16,00MTR`) bleiben unterstützt. Der abgeleitete
 Parsercache wird versioniert.
 
+OBO-Angebote mit einer zusätzlichen Positionssumme zwischen `Material per` und
+der Währung werden ebenfalls erkannt. Der Einzelpreis stammt weiterhin aus
+`Material / per`; die Positionssumme wird nicht als Einzelpreis übernommen.
+Fehlende Materialpreise oder ungültige Preiseinheiten bleiben ausgeschlossen.
+
 Bereits übernommene Online-Snapshots werden nicht neu importiert oder überschrieben.
 Der bekannte Fehler (sehr großer Preis beginnt mit der Artikelnummer) wird nur
 in einer Laufzeitkopie als ungültiger Preis markiert. Explizite gültige manuelle

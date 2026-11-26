@@ -49,7 +49,7 @@ from app.services.price_comparison_storage import (
 
 SOURCE_VERSION = "4ed988f"
 OFFER_TYPES = ("Erstangebot", "Folgeangebot", "Verhandeltes Angebot")
-CACHE_VERSION = "4ed988f-validated-pdf-v2"
+CACHE_VERSION = "4ed988f-validated-pdf-v3"
 MAX_PARSE_WORKERS = 4
 
 

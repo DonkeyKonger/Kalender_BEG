@@ -107,6 +107,86 @@ def test_compact_material_and_per_are_anchored_and_auditable(
     assert parsed["price_validated"] is True
 
 
+@pytest.mark.parametrize(
+    ("line", "per", "price"),
+    [
+        (
+            "6047611 RKSM 610 FS 300,00 Meter 4,27 1 1.281,00 EUR",
+            1,
+            4.27,
+        ),
+        (
+            "3498683 BZ3 8x75/0-20 453,00 Stück 300,00 100 1.359,00 EUR",
+            100,
+            3.0,
+        ),
+        (
+            "6047611 RKSM 610 FS 300,00 Meter EUR 4,27 1 1.281,00 €",
+            1,
+            4.27,
+        ),
+    ],
+)
+def test_position_total_after_per_is_not_used_as_unit_price(
+    line: str,
+    per: int,
+    price: float,
+) -> None:
+    parsed = _parse_obo_compact_line(line)
+
+    assert parsed is not None
+    assert parsed["per"] == per
+    assert parsed["price"] == pytest.approx(price)
+    assert parsed["price_validated"] is True
+
+
+@pytest.mark.parametrize(
+    ("material_and_per", "expected_per"),
+    [
+        ("1", 1),
+        ("- 100", 100),
+        ("ungültig 1", 1),
+        ("4,27 0", None),
+    ],
+)
+def test_position_total_never_substitutes_for_missing_or_invalid_material(
+    material_and_per: str,
+    expected_per: int | None,
+) -> None:
+    parsed = _parse_obo_compact_line(
+        f"6000016 Montageaufwand 95,00 Stück {material_and_per} 9.025,00 EUR"
+    )
+
+    assert parsed is not None
+    assert parsed["qty"] == pytest.approx(95.0)
+    assert parsed["material"] is None
+    assert parsed["per"] == expected_per
+    assert parsed["price"] is None
+    assert parsed["price_validated"] is False
+
+
+def test_synthetic_pdf_reads_position_totals_without_changing_price_basis() -> None:
+    parsed = extract_prices_from_pdf(
+        _synthetic_offer_pdf(
+            [
+                "01.05.2026",
+                "Angebot: TOTAL-1",
+                "6047611 RKSM 610 FS 300,00 Meter 4,27 1 1.281,00 EUR",
+                "3498683 BZ3 8x75/0-20 453,00 Stück 300,00 100 1.359,00 EUR",
+                "6000016 Montageaufwand 95,00 Stück 1 9.025,00 EUR",
+            ]
+        ),
+        source_name="position-total.pdf",
+    ).set_index("Artikelnummer")
+
+    assert parsed.loc["6047611", "Preis"] == pytest.approx(4.27)
+    assert parsed.loc["6047611", "Preiseinheit (PDF)"] == 1
+    assert parsed.loc["3498683", "Preis"] == pytest.approx(3.0)
+    assert parsed.loc["3498683", "Preiseinheit (PDF)"] == 100
+    assert pd.isna(parsed.loc["6000016", "Preis"])
+    assert bool(parsed.loc["6000016", "Preis_validiert"]) is False
+
+
 def test_empty_material_and_per_after_quantity_remain_an_unpriced_position() -> None:
     parsed = _parse_obo_compact_line("6338941 HILF.KON. 10,00 Kilogram EUR")
 
@@ -318,6 +398,30 @@ def test_exact_text_match_is_resolved_before_same_identity_unpriced_text(
     assert parsed.loc[validity, "Preis"].iloc[0] == pytest.approx(10.0)
     assert pd.isna(parsed.loc[~validity, "Preis"].iloc[0])
     assert parsed["Menge"].tolist() == [5.0, 5.0]
+
+
+@pytest.mark.parametrize("position_count", [1, 2])
+def test_position_total_table_and_text_are_deduplicated_by_occurrence(
+    monkeypatch,
+    position_count: int,
+) -> None:
+    line = "6047611 RKSM 610 FS 300,00 Meter 4,27 1 1.281,00 EUR"
+    table = [
+        ["Art.Nr. Typ Menge ME Material per Gesamt"],
+        *[[line] for _ in range(position_count)],
+    ]
+    text = "\n".join([line] * position_count)
+    monkeypatch.setattr(
+        parser.pdfplumber,
+        "open",
+        lambda _source: _TablePdf(table, text),
+    )
+
+    parsed = extract_prices_from_pdf(b"synthetic", source_name="total-dedup.pdf")
+
+    assert len(parsed) == 1
+    assert parsed.iloc[0]["Menge"] == pytest.approx(300.0 * position_count)
+    assert parsed["Preis"].eq(4.27).all()
 
 
 def test_priced_and_unpriced_rows_of_same_article_remain_separate() -> None:

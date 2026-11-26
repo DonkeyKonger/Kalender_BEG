@@ -102,18 +102,23 @@ _PDF_NUMBER_DE = r"(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?"
 _PDF_COMPACT_QTY_DE = r"(?:\d{1,3}(?:\.\d{3})+|\d+),\d+"
 _PDF_MONEY_DE = r"(?:\d{1,3}(?:\.\d{3})+|\d+)[.,]\d{2}"
 _PDF_UNIT = r"(?:Stück|Stueck|Stk\.?|STCK|Meter|Kilogramm?|Paar|VPE|lfm|mtr|MTR|kg|m)"
+_PDF_TOTAL_CURRENCY = rf"{_PDF_MONEY_DE}\s+(?:EUR\b|€(?=\s|$))"
 _PDF_QTY_UNIT_RE = re.compile(
     rf"(?<![\w.,+−-])(?P<qty>{_PDF_COMPACT_QTY_DE})\s*(?P<unit>{_PDF_UNIT})(?=\s|$)",
     flags=re.IGNORECASE,
 )
 _PDF_MATERIAL_PER_RE = re.compile(
     rf"^\s*(?P<material>{_PDF_MONEY_DE})\s+(?P<per>\d{{1,5}})"
-    r"(?=\s+(?:EUR\b|[A-Za-zÄÖÜäöüß])|\s*$)",
+    rf"(?=\s+(?:EUR\b|[A-Za-zÄÖÜäöüß]|{_PDF_TOTAL_CURRENCY})|\s*$)",
     flags=re.IGNORECASE,
 )
 _PDF_CURRENCY_MATERIAL_PER_RE = re.compile(
     rf"^\s*(?:EUR|€)\s*(?P<material>{_PDF_MONEY_DE})\s+(?P<per>\d{{1,5}})"
-    r"(?=\s+(?:[A-Za-zÄÖÜäöüß])|\s*$)",
+    rf"(?=\s+(?:[A-Za-zÄÖÜäöüß]|{_PDF_TOTAL_CURRENCY})|\s*$)",
+    flags=re.IGNORECASE,
+)
+_PDF_UNPRICED_TOTAL_RE = re.compile(
+    rf"^\s*(?:\S+\s+)?(?P<per>\d{{1,5}})\s+{_PDF_TOTAL_CURRENCY}",
     flags=re.IGNORECASE,
 )
 _PDF_PER_ONLY_RE = re.compile(
@@ -219,6 +224,16 @@ def _parse_obo_compact_line(line: object) -> dict | None:
                     "unit": unit,
                     "material": None,
                     "per": _validated_per(per_only.group("per")),
+                    "price": None,
+                    "price_validated": False,
+                }
+            elif unpriced_total := _PDF_UNPRICED_TOTAL_RE.match(remainder):
+                incomplete = {
+                    "art": article,
+                    "qty": quantity,
+                    "unit": unit,
+                    "material": None,
+                    "per": _validated_per(unpriced_total.group("per")),
                     "price": None,
                     "price_validated": False,
                 }
