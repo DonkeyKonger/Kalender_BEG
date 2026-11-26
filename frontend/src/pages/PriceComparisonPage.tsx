@@ -41,6 +41,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { MapFilterSelect } from "../components/MapFilterSelect";
+import { acquireMobileModalLock } from "../lib/mobileModalScrollLock";
 import { uploadPriceFiles, validateOfferFiles } from "../priceComparison/uploads";
 import { getPriceChartDomain } from "../priceComparison/chartDomain";
 import { getPriceChartDateLabels, getPriceChartLayout, getPriceChartWindow } from "../priceComparison/chartLayout";
@@ -1045,6 +1046,7 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
   const [manualPrices, setManualPrices] = useState<Record<string, string>>({});
   const [initialManualPrices, setInitialManualPrices] = useState<Record<string, string>>({});
   const [selectedArticles, setSelectedArticles] = useState<Set<string>>(new Set());
+  const [comparisonArticle, setComparisonArticle] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const loadRequest = useRef(0);
   const loadController = useRef<AbortController | null>(null);
@@ -1235,7 +1237,9 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
                     <td className="price-select-cell"><input type="checkbox" aria-label={`${articleNumber || `Position ${index + 1}`} zum Löschen auswählen`} checked={selectedArticles.has(articleNumber)} disabled={saving || loading || uploading || !articleNumber} onChange={(event) => setSelectedArticles((current) => {
                       const next = new Set(current); if (event.target.checked) next.add(articleNumber); else next.delete(articleNumber); return next;
                     })} /></td>
-                    {offerColumns.map((column) => <td key={column} className={[cellClass(column, row[column]), offerColumnClass(column)].filter(Boolean).join(" ")}>{column === "Bezeichnung" ? <OfferDescription row={row} /> : formatCell(column, row[column])}</td>)}
+                    {offerColumns.map((column) => <td key={column} className={[cellClass(column, row[column]), offerColumnClass(column)].filter(Boolean).join(" ")}>{column === "Bezeichnung" ? <OfferDescription row={row} /> : column === "Artikelnummer" && articleNumber ? (
+                      <button type="button" className="offer-article-link" aria-label={`Preisvergleich für Artikel ${articleNumber} öffnen`} aria-haspopup="dialog" disabled={saving || loading || uploading} onClick={() => setComparisonArticle(articleNumber)}>{articleNumber}</button>
+                    ) : formatCell(column, row[column])}</td>)}
                     <td className="manual-price-cell"><input aria-label={`Manueller Preis ${articleNumber}`} inputMode="decimal" placeholder="unverändert" value={manualPrices[articleNumber] ?? ""} disabled={saving || loading || uploading || !articleNumber} onChange={(event) => setManualPrices((current) => ({ ...current, [articleNumber]: event.target.value }))} /></td>
                   </tr>
                 );
@@ -1262,7 +1266,42 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
           </div>
         </>
       ) : null}
+      {comparisonArticle ? <OfferArticleDialog articleNumber={comparisonArticle} uploadRevision={uploadRevision} onClose={() => setComparisonArticle(null)} /> : null}
     </section>
+  );
+}
+
+function OfferArticleDialog({ articleNumber, uploadRevision, onClose }: { articleNumber: string; uploadRevision: string | null; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement;
+    const scrollLock = acquireMobileModalLock();
+    dialog.showModal();
+    return () => {
+      dialog.close();
+      scrollLock.release();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, []);
+
+  function close() {
+    // Close before unmounting to restore native focus without replacing the offer.
+    dialogRef.current?.close();
+    onClose();
+  }
+
+  return (
+    <dialog ref={dialogRef} className="offer-article-dialog" aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); close(); }}>
+      <header className="offer-article-dialog-header">
+        <h2 id={titleId}>Artikelvergleich <span>{articleNumber}</span></h2>
+        <button type="button" className="price-icon-button" aria-label="Artikelvergleich schließen" onClick={close}><X size={18} /></button>
+      </header>
+      <ArticleDetail articleNumber={articleNumber} uploadRevision={uploadRevision} />
+    </dialog>
   );
 }
 
@@ -1719,7 +1758,11 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
             onBlur: (event: React.FocusEvent<SVGElement>) => { if (!event.currentTarget.matches(":hover")) setTooltip(null); },
             onClick: (event: React.MouseEvent<SVGElement>) => showTooltip(index, event.currentTarget),
             onKeyDown: (event: React.KeyboardEvent<SVGElement>) => {
-              if (event.key === "Escape") setTooltip(null);
+              if (event.key === "Escape" && activeTooltip?.index === index) {
+                event.preventDefault();
+                event.stopPropagation();
+                setTooltip(null);
+              }
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 showTooltip(index, event.currentTarget);
@@ -1761,12 +1804,12 @@ function PriceHistoryChart({ rows, netPrice, medianDelta, mode }: { rows: Array<
       </div>
       </div>
       <div className="chart-legend"><span className="is-first">Erstangebot</span><span className="is-follow">Folgeangebot</span><span className="is-negotiated">Verhandelt</span><span className="is-net">Datanorm-Netto</span>{mode === "line" && median24 !== null ? <span className="is-median">Median 24 Monate</span> : null}</div>
-      {activeTooltip ? <PriceChartTooltip id={tooltipId} point={points[activeTooltip.index]} anchor={activeTooltip.anchor} /> : null}
+      {activeTooltip ? <PriceChartTooltip id={tooltipId} point={points[activeTooltip.index]} anchor={activeTooltip.anchor} container={viewportRef.current?.closest("dialog") ?? document.body} /> : null}
     </div>
   );
 }
 
-function PriceChartTooltip({ id, point, anchor }: { id: string; point: PriceChartPoint; anchor: DOMRect }) {
+function PriceChartTooltip({ id, point, anchor, container }: { id: string; point: PriceChartPoint; anchor: DOMRect; container: HTMLElement }) {
   const tooltipRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const element = tooltipRef.current;
@@ -1785,7 +1828,7 @@ function PriceChartTooltip({ id, point, anchor }: { id: string; point: PriceChar
       <span>{point.offerName}</span>
       <time dateTime={point.date}>{formatDate(point.date)}</time>
     </div>,
-    document.body,
+    container,
   );
 }
 
