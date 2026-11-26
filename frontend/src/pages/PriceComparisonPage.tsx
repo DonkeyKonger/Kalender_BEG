@@ -49,7 +49,6 @@ import {
   PriceComparisonError,
   type ArticleDetailResult,
   type FilesResult,
-  type OfferComparisonQuality,
   type OfferPositionsResult,
   type OfferPriceLevel,
   type OfferSort,
@@ -1083,7 +1082,7 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation }: { uploadRevi
                     <strong>{formatCurrency(offer.total_net)}</strong>
                     <small>{formatInteger(offer.position_count)} Positionen</small>
                   </span>
-                  <OfferPriceLevel value={offer.price_change} quality={offer.comparison_quality} />
+                  <OfferPriceLevel value={offer.price_change} />
                   <ChevronRight className="offer-list-arrow" size={17} aria-hidden="true" />
                 </button>
               </div>
@@ -2270,25 +2269,20 @@ function OfferTypeBadge({ type }: { type: OfferType }) {
   return <span className={`offer-type-badge is-${offerTypeClass(type)}`}>{shortOfferType(type)}</span>;
 }
 
-function OfferPriceLevel({ value, quality }: { value: number | null; quality?: OfferComparisonQuality | null }) {
+function OfferPriceLevel({ value }: { value: number | null }) {
   const presentation = offerPriceLevelPresentation(value);
-  const qualityPresentation = offerComparisonQualityPresentation(quality);
   const displayValue = offerPriceLevelDisplayValue(value, formatPercent(value));
-  const title = presentation.tone === "none"
-    ? qualityPresentation.tooltip ?? "Keine gültige historische Vergleichsbasis"
-    : [`Preisniveau ${displayValue} gegenüber früheren Erstangeboten`, qualityPresentation.tooltip].filter(Boolean).join(" · ");
+  const accessibleLabel = presentation.tone === "none"
+    ? "Kein Vergleich"
+    : `Preisniveau ${displayValue} gegenüber früheren Erstangeboten (${presentation.label})`;
 
   return (
-    <span className={`offer-price-level is-${presentation.tone}`} title={title}>
+    <span className={`offer-price-level is-${presentation.tone}`} role="img" aria-label={accessibleLabel}>
       {presentation.tone === "none" ? (
-        <span className="offer-price-level-top"><CircleMinus size={16} aria-hidden="true" /><span className="offer-price-level-label">{qualityPresentation.unavailableLabel}</span></span>
+        <CircleMinus size={16} aria-hidden="true" />
       ) : (
-        <span className="offer-price-level-top">
-          <strong className="offer-price-level-value">{displayValue}</strong>
-          <span className="offer-price-level-label">{presentation.label}</span>
-        </span>
+        <strong className="offer-price-level-value">{displayValue}</strong>
       )}
-      {qualityPresentation.summary ? <small className="offer-price-quality" title={qualityPresentation.tooltip ?? undefined} aria-label={qualityPresentation.tooltip ?? undefined}>{qualityPresentation.summary}</small> : null}
     </span>
   );
 }

@@ -46,7 +46,7 @@ test("all four native workspaces and guarded duplicate workflows remain present"
   assert.match(page, /mindestens 60 % Abdeckung des prüfbaren Positionswerts/);
   assert.doesNotMatch(page, /365-Tage-Fenster/);
   assert.match(page, /offer\.comparison_quality/);
-  assert.match(page, /offer-price-quality/);
+  assert.doesNotMatch(page, /offer-price-quality/);
   assert.match(page, /offer-detail-quality/);
   assert.match(page, /price_level: query\.priceLevel/);
   assert.match(page, /sort: query\.sort/);

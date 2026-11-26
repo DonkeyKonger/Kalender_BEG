@@ -756,16 +756,11 @@
 .offer-list-price strong { color: #183b61; font-size: 0.79rem; }
 .offer-list-price small { color: var(--price-muted); font-size: 0.69rem; }
 .offer-list-arrow { color: var(--price-muted); }
-.offer-price-level { --offer-level-color: #66768a; display: flex; flex-direction: column; align-items: flex-end; min-width: 0; gap: 7px; color: var(--offer-level-color); text-align: right; }
+.offer-price-level { --offer-level-color: #66768a; display: flex; align-items: center; justify-content: flex-end; min-width: 0; color: var(--offer-level-color); text-align: right; }
 .offer-price-level.is-below { --offer-level-color: #187252; }
 .offer-price-level.is-above { --offer-level-color: #9c5c14; }
 .offer-price-level.is-high { --offer-level-color: #b54838; }
-.offer-price-level-top { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .offer-price-level-value { font-size: 1rem; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.offer-price-level-label { font-size: 0.69rem; }
-.offer-price-quality { max-width: 100%; overflow: hidden; color: var(--price-muted); font-size: .61rem; font-weight: 500; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-.offer-price-level.is-none { align-items: flex-end; justify-content: center; font-size: .75rem; }
-.offer-price-level.is-none .offer-price-level-top { flex-direction: row; align-items: center; gap: 5px; }
 .offer-price-level.is-none svg { flex-shrink: 0; }
 .offer-list-footer { padding: 8px 12px; color: var(--price-muted); border-top: 1px solid var(--price-border); font-size: .69rem; }
 
