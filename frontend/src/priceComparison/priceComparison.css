@@ -56,7 +56,7 @@
 }
 
 .price-comparison-header > div:first-child { min-width: 0; }
-.price-header-upload { flex: 0 0 340px; max-width: 100%; }
+.price-header-upload { position: relative; flex: 0 0 340px; max-width: 100%; }
 .price-offer-dropzone {
   display: flex;
   align-items: center;
@@ -83,6 +83,79 @@
 .price-upload-feedback .is-error { color: #9c3535; }
 .price-upload-feedback .is-success { color: #3e7b68; }
 .price-upload-feedback svg { flex-shrink: 0; margin-top: 1px; }
+
+.offer-upload-queue { position: relative; margin-top: 6px; }
+.offer-upload-queue-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #d3dee9;
+  border-radius: 2px;
+  background: #fff;
+  color: #244b70;
+  font-size: .69rem;
+  text-align: left;
+}
+.offer-upload-queue-trigger > span { font-weight: 720; }
+.offer-upload-queue-trigger > small { margin-left: auto; color: var(--price-muted); font-size: .62rem; }
+.offer-upload-queue-trigger > svg { flex: none; margin-left: auto; transition: transform .15s ease; }
+.offer-upload-queue-trigger[aria-expanded="true"] > svg { transform: rotate(90deg); }
+.offer-upload-queue-trigger:focus-visible { outline: 2px solid var(--price-blue); outline-offset: 2px; }
+.offer-upload-queue-popover {
+  position: absolute;
+  z-index: 35;
+  top: calc(100% + 5px);
+  right: 0;
+  width: min(420px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid #cbd8e5;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 14px 32px rgb(24 55 86 / 16%);
+}
+.offer-upload-queue-popover > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--price-border);
+  background: #f6f9fc;
+}
+.offer-upload-queue-popover > header > div { display: grid; min-width: 0; gap: 2px; }
+.offer-upload-queue-popover > header strong { color: var(--price-navy); font-size: .77rem; }
+.offer-upload-queue-popover > header span { color: var(--price-muted); font-size: .63rem; }
+.offer-upload-queue-list { max-height: min(330px, 52vh); overflow-y: auto; overscroll-behavior: contain; }
+.offer-upload-job { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 9px; min-height: 54px; padding: 8px 10px; border-bottom: 1px solid #e7edf3; }
+.offer-upload-job:last-child { border-bottom: 0; }
+.offer-upload-job-main { min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+.offer-upload-job-main:disabled { opacity: 1; cursor: default; }
+.offer-upload-job-main:not(:disabled):is(:hover, :focus-visible) strong { color: var(--price-blue); text-decoration: underline; text-underline-offset: 2px; }
+.offer-upload-job-main:focus-visible { outline: 2px solid var(--price-blue); outline-offset: 3px; }
+.offer-upload-job-copy { display: grid; min-width: 0; gap: 2px; }
+.offer-upload-job-copy > strong,
+.offer-upload-job-copy > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.offer-upload-job-copy > strong { color: #1b405f; font-size: .7rem; }
+.offer-upload-job-copy > span { color: var(--price-muted); font-size: .61rem; }
+.offer-upload-job-copy > span b { color: #4d647b; font-weight: 720; }
+.offer-upload-job-copy > small { color: #738295; font-size: .6rem; }
+.offer-upload-job.is-processing .offer-upload-job-copy > span b,
+.offer-upload-job.is-submitting .offer-upload-job-copy > span b { color: #285f91; }
+.offer-upload-job.is-awaiting_confirmation .offer-upload-job-copy > span b,
+.offer-upload-job.is-uncertain .offer-upload-job-copy > span b { color: #8a681b; }
+.offer-upload-job.is-completed .offer-upload-job-copy > span b,
+.offer-upload-job.is-completed .offer-upload-job-actions { color: #31715b; }
+.offer-upload-job.is-failed .offer-upload-job-copy > span b,
+.offer-upload-job.is-failed .offer-upload-job-actions { color: #a33a3a; }
+.offer-upload-job.is-cancelled { opacity: .65; }
+.offer-upload-job-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; color: #315f91; }
+.offer-upload-job-actions button,
+.offer-upload-queue-error button { padding: 2px 0; border: 0; background: transparent; color: #315f91; font-size: .62rem; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.offer-upload-job-actions button:disabled { cursor: wait; opacity: .5; }
+.offer-upload-queue-error { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 8px 10px; border-bottom: 1px solid #efd2d2; background: #fff5f5; color: #913838; font-size: .63rem; line-height: 1.4; }
 
 .price-view-tabs {
   display: flex;

@@ -42,7 +42,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { MapFilterSelect } from "../components/MapFilterSelect";
 import { acquireMobileModalLock } from "../lib/mobileModalScrollLock";
-import { uploadPriceFiles, validateOfferFiles } from "../priceComparison/uploads";
+import { uploadPriceFiles, validateOfferFiles, type OfferUploadJob } from "../priceComparison/uploads";
 import { getPriceChartDomain } from "../priceComparison/chartDomain";
 import { getPriceChartDateLabels, getPriceChartLayout, getPriceChartOfferScroll, getPriceChartWindow } from "../priceComparison/chartLayout";
 import {
@@ -62,6 +62,7 @@ import {
   type RebuildPreview,
   type SuggestionResult,
   type TableResult,
+  announcePriceComparisonDataChanged,
   priceDownload,
   priceRequest,
   queryPath,
@@ -75,18 +76,19 @@ import {
 import { articleWeightLabel, offerDescriptionLines, summarizeArticleDescription } from "../priceComparison/articleSummary";
 import { clampPageOffset, LatestRequestGate } from "../priceComparison/latestRequest";
 import { offerComparisonQualityPresentation, offerPriceLevelDisplayValue, offerPriceLevelPresentation } from "../priceComparison/offerPriceLevel";
+import { useOfferUploadJobs, type OfferUploadJobs } from "../priceComparison/offerUploadJobs";
 import "../priceComparison/priceComparison.css";
 
 type ViewKey = "datanorm" | "offers" | "articles" | "files";
 type PriceTableVariant = "datanorm" | "suggestions" | "offer" | "article" | "generic";
 type DuplicateOffer = { offer_number: string; keep: string; remove: string };
-type UploadDuplicatePreview = {
+type UploadDuplicateDetails = {
   kind: PriceFile["kind"];
-  files: File[];
   duplicates: DuplicateOffer[];
   revision: string;
   message?: string;
 };
+type UploadDuplicatePreview = UploadDuplicateDetails & { files: File[] };
 
 const views: Array<{ key: ViewKey; label: string }> = [
   { key: "articles", label: "Artikelvergleich" },
@@ -133,7 +135,6 @@ export function PriceComparisonPage() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(true);
   const [uploadBlockReason, setUploadBlockReason] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [pendingOperations, setPendingOperations] = useState(0);
   const onOperation = useCallback((started: boolean) => {
     setPendingOperations((count) => Math.max(0, count + (started ? 1 : -1)));
@@ -159,6 +160,14 @@ export function PriceComparisonPage() {
       if (requestId === statusRequest.current) setIsStatusLoading(false);
     }
   }, []);
+
+  const onUploadJobCompleted = useCallback((job: OfferUploadJob) => {
+    if (!job.result_revision) return;
+    setUploadRevision(job.result_revision);
+    announcePriceComparisonDataChanged(job.result_revision);
+    void loadStatus();
+  }, [loadStatus]);
+  const offerUploads = useOfferUploadJobs(user?.id ?? null, onUploadJobCompleted);
 
   useEffect(() => {
     void loadStatus();
@@ -203,10 +212,11 @@ export function PriceComparisonPage() {
             Datanorm-Preise, Projektangebote und Preisverläufe in einer gemeinsamen Arbeitsansicht.
           </p>
         </div>
-        <HeaderOfferUpload disabled={isStatusLoading || !status?.configured || Boolean(uploadBlockReason) || pendingOperations > 0} blockReason={pendingOperations ? "Ein Dateivorgang wird abgeschlossen …" : uploadBlockReason} onBusyChange={setUploading} onUploaded={(revision) => {
-          setUploadRevision(revision);
-          void loadStatus();
-        }} />
+        <HeaderOfferUpload
+          disabled={isStatusLoading || !status?.configured || Boolean(uploadBlockReason) || pendingOperations > 0}
+          blockReason={pendingOperations ? "Ein Dateivorgang wird abgeschlossen …" : uploadBlockReason}
+          queue={offerUploads}
+        />
       </header>
 
       {statusError ? <InlineNotice tone="error" action={<RetryButton onClick={loadStatus} />}>{statusError}</InlineNotice> : null}
@@ -234,65 +244,73 @@ export function PriceComparisonPage() {
       </div>
 
       <div className="price-view-content" role="tabpanel">
-        {activeView === "datanorm" ? <DatanormView onOperation={onOperation} uploadRevision={uploadRevision} uploading={uploading} /> : null}
-        {activeView === "offers" ? <OffersView onOperation={onOperation} uploadRevision={uploadRevision} uploading={uploading} onUploadBlock={setUploadBlockReason} /> : null}
+        {activeView === "datanorm" ? <DatanormView onOperation={onOperation} uploadRevision={uploadRevision} /> : null}
+        {activeView === "offers" ? <OffersView onOperation={onOperation} uploadRevision={uploadRevision} onUploadBlock={setUploadBlockReason} /> : null}
         {activeView === "articles" ? <ArticlesView articleSearch={articleSearch} uploadRevision={uploadRevision} /> : null}
-        {activeView === "files" ? <FilesView onOperation={onOperation} uploading={uploading} uploadRevision={uploadRevision} status={status} onMutation={syncStatusFromFiles} /> : null}
+        {activeView === "files" ? <FilesView onOperation={onOperation} uploadRevision={uploadRevision} status={status} onMutation={syncStatusFromFiles} /> : null}
       </div>
     </section>
   );
 }
 
-function HeaderOfferUpload({ disabled, blockReason, onBusyChange, onUploaded }: { disabled: boolean; blockReason: string | null; onBusyChange: (busy: boolean) => void; onUploaded: (revision: string) => void }) {
+function HeaderOfferUpload({ disabled, blockReason, queue }: { disabled: boolean; blockReason: string | null; queue: OfferUploadJobs }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const busyRef = useRef(false);
   const dragDepth = useRef(0);
+  const queueRef = useRef<HTMLDivElement>(null);
+  const queueTriggerRef = useRef<HTMLButtonElement>(null);
+  const promptedConfirmations = useRef(new Set<string>());
   const [dragging, setDragging] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<UploadDuplicatePreview | null>(null);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [confirmationJobId, setConfirmationJobId] = useState<string | null>(null);
   const hintId = useId();
-  const locked = disabled || busy || Boolean(preview);
+  const queueId = useId();
+  const locked = disabled;
+  const activeCount = queue.jobs.filter((job) => job.status === "queued" || job.status === "processing").length
+    + queue.submissions.filter((submission) => submission.status === "submitting" || submission.status === "uncertain").length;
+  const confirmationCount = queue.jobs.filter((job) => job.status === "awaiting_confirmation").length;
+  const itemCount = queue.jobs.length + queue.submissions.length;
+  const confirmationJob = queue.jobs.find((job) => job.id === confirmationJobId && job.status === "awaiting_confirmation") ?? null;
 
-  async function upload(files: File[], confirmation?: UploadDuplicatePreview) {
-    if (busyRef.current || disabled || (!confirmation && preview)) return;
+  function enqueue(files: File[]) {
+    if (disabled) return;
     setError(null);
-    setMessage(null);
     const invalid = validateOfferFiles(files);
     if (invalid) { setError(invalid); return; }
-    busyRef.current = true;
-    setBusy(true);
-    onBusyChange(true);
-    try {
-      // Read a current revision before upload; the server still checks it atomically.
-      const revision = confirmation?.revision ?? (await priceRequest<FilesResult>("/price-comparison/files")).revision;
-      const result = await uploadPriceFiles("offers", files, revision, confirmation?.duplicates.map((duplicate) => duplicate.remove));
-      setPreview(null);
-      setMessage("Angebote erfolgreich hochgeladen.");
-      onUploaded(result.revision);
-    } catch (uploadError) {
-      const duplicateDetail = duplicateUploadDetail(uploadError);
-      if (duplicateDetail) setPreview({ kind: "offers", files, ...duplicateDetail });
-      else {
-        setPreview(null);
-        setError(mutationErrorMessage(uploadError));
-      }
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-      onBusyChange(false);
-    }
+    queue.enqueue(files);
+    setQueueOpen(true);
   }
+
+  useEffect(() => {
+    setConfirmationJobId((current) => nextUploadConfirmationJobId(current, queue.jobs, promptedConfirmations.current));
+  }, [queue.jobs]);
+
+  useEffect(() => {
+    if (!queueOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!queueRef.current?.contains(event.target as Node) && !queueTriggerRef.current?.contains(event.target as Node)) setQueueOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setQueueOpen(false);
+      queueTriggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [queueOpen]);
 
   return (
     <div className="price-header-upload">
       <input ref={inputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple tabIndex={-1} aria-label="Angebots-PDFs auswählen" disabled={locked} onChange={(event) => {
         const files = Array.from(event.currentTarget.files ?? []);
         event.currentTarget.value = "";
-        if (files.length) void upload(files);
+        if (files.length) enqueue(files);
       }} />
-      <button type="button" className={`price-offer-dropzone${dragging ? " is-dragging" : ""}`} aria-disabled={locked} aria-busy={busy} aria-describedby={hintId}
+      <button type="button" className={`price-offer-dropzone${dragging ? " is-dragging" : ""}`} aria-disabled={locked} aria-describedby={hintId}
         onClick={() => { if (!locked) inputRef.current?.click(); }}
         onDragEnter={(event) => {
           if (!event.dataTransfer.types.includes("Files")) return;
@@ -316,21 +334,83 @@ function HeaderOfferUpload({ disabled, blockReason, onBusyChange, onUploaded }: 
           setDragging(false);
           if (!locked) {
             const files = Array.from(event.dataTransfer.files);
-            if (files.length) void upload(files);
+            if (files.length) enqueue(files);
           }
         }}>
-        <span className="price-upload-icon" aria-hidden="true">{busy ? <LoaderCircle className="is-spinning" size={22} /> : <Upload size={22} />}</span>
-        <span><strong>{busy ? "Angebote werden hochgeladen …" : dragging ? "Angebote hier ablegen" : "Angebote hochladen"}</strong><span id={hintId}>{busy ? "Sie können währenddessen den Tab wechseln." : blockReason || "PDFs hierher ziehen oder Dateien auswählen"}</span></span>
+        <span className="price-upload-icon" aria-hidden="true"><Upload size={22} /></span>
+        <span><strong>{dragging ? "Angebote hier ablegen" : activeCount ? "Weitere Angebote hochladen" : "Angebote hochladen"}</strong><span id={hintId}>{blockReason || (activeCount ? "Die Verarbeitung läuft im Hintergrund weiter." : "PDFs hierher ziehen oder Dateien auswählen")}</span></span>
       </button>
       <div className="price-upload-feedback" aria-live="polite" aria-atomic="true">
-        {error ? <p className="is-error">{error}</p> : message ? <p className="is-success"><Check size={14} aria-hidden="true" />{message}</p> : null}
+        {error ? <p className="is-error">{error}</p> : null}
       </div>
-      {preview ? <UploadDuplicateDialog preview={preview} busy={busy} onClose={() => setPreview(null)} onConfirm={() => void upload(preview.files, preview)} /> : null}
+      <div className="offer-upload-queue">
+        <button ref={queueTriggerRef} type="button" className="offer-upload-queue-trigger" aria-expanded={queueOpen} aria-controls={queueOpen ? queueId : undefined} onClick={() => setQueueOpen((open) => !open)}>
+          <span>{activeCount ? `${activeCount} aktiv` : confirmationCount ? `${confirmationCount} Bestätigung${confirmationCount === 1 ? "" : "en"}` : `${itemCount} Upload${itemCount === 1 ? "" : "s"}`}</span>
+          {queue.stale ? <small>Status wird geprüft</small> : null}
+          <ChevronRight size={15} aria-hidden="true" />
+        </button>
+        {queueOpen ? <div ref={queueRef} id={queueId} className="offer-upload-queue-popover" role="region" aria-label="Upload-Warteschlange">
+          <header><div><strong>Upload-Warteschlange</strong><span>{activeCount ? `${activeCount} in Bearbeitung` : "Keine laufende Verarbeitung"}</span></div><button className="price-icon-button" type="button" aria-label="Warteschlange schließen" onClick={() => setQueueOpen(false)}><X size={15} /></button></header>
+          {queue.error ? <div className="offer-upload-queue-error" role="alert"><span>{queue.error}</span><button type="button" onClick={queue.refresh}>Erneut prüfen</button></div> : null}
+          <div className="offer-upload-queue-list" role="list">
+            {queue.submissions.map((submission) => <div key={submission.clientRequestId} className={`offer-upload-job is-${submission.status}`} role="listitem">
+              <UploadJobCopy fileNames={submission.fileNames} status={submission.status === "submitting" ? "Wird eingereiht" : submission.status === "uncertain" ? "Status unklar" : "Nicht eingereiht"} detail={submission.error} />
+              <div className="offer-upload-job-actions">{submission.status === "submitting" ? <LoaderCircle className="is-spinning" size={15} aria-label="Wird eingereiht" /> : <><button type="button" onClick={() => queue.retrySubmission(submission.clientRequestId)}>Erneut senden</button><button type="button" onClick={() => queue.dismissSubmission(submission.clientRequestId)}>Entfernen</button></>}</div>
+            </div>)}
+            {queue.jobs.map((job) => <div key={job.id} className={`offer-upload-job is-${job.status}`} role="listitem">
+              <button type="button" className="offer-upload-job-main" disabled={job.status !== "awaiting_confirmation"} onClick={() => setConfirmationJobId(job.id)}>
+                <UploadJobCopy fileNames={job.file_names} status={uploadJobStatusLabel(job.status)} detail={job.error || job.message} date={job.updated_at} />
+              </button>
+              <div className="offer-upload-job-actions">
+                {job.status === "processing" ? <LoaderCircle className="is-spinning" size={15} aria-label="Wird verarbeitet" /> : null}
+                {job.status === "completed" ? <Check size={15} aria-label="Abgeschlossen" /> : null}
+                {job.status === "awaiting_confirmation" ? <button type="button" disabled={queue.isActing(job.id)} onClick={() => setConfirmationJobId(job.id)}>Prüfen</button> : null}
+                {job.status === "failed" ? <button type="button" onClick={() => inputRef.current?.click()}>Neu auswählen</button> : null}
+                {job.status === "queued" || job.status === "awaiting_confirmation" ? <button type="button" disabled={queue.isActing(job.id)} onClick={() => queue.cancel(job)}>Abbrechen</button> : null}
+              </div>
+            </div>)}
+            {!itemCount && !queue.loading ? <p className="compact-empty">Noch keine Uploads.</p> : null}
+            {queue.loading && !itemCount ? <LoadingState label="Warteschlange wird geladen" compact /> : null}
+          </div>
+        </div> : null}
+      </div>
+      {confirmationJob?.duplicates?.length && confirmationJob.confirmation_revision ? <UploadDuplicateDialog preview={{
+        kind: "offers",
+        duplicates: confirmationJob.duplicates,
+        revision: confirmationJob.confirmation_revision,
+        message: confirmationJob.message ?? undefined,
+      }} busy={queue.isActing(confirmationJob.id)} error={queue.error} onClose={() => setConfirmationJobId(null)} onConfirm={() => queue.confirm(confirmationJob)} /> : null}
     </div>
   );
 }
 
-function UploadDuplicateDialog({ preview, busy, onClose, onConfirm }: { preview: UploadDuplicatePreview; busy: boolean; onClose: () => void; onConfirm: () => void }) {
+function nextUploadConfirmationJobId(
+  current: string | null,
+  jobs: readonly OfferUploadJob[],
+  prompted: Set<string>,
+): string | null {
+  if (current && jobs.some((job) => job.id === current && job.status === "awaiting_confirmation")) return current;
+  const next = jobs.find((job) => job.status === "awaiting_confirmation" && !prompted.has(job.id));
+  if (!next) return null;
+  prompted.add(next.id);
+  return next.id;
+}
+
+function UploadJobCopy({ fileNames, status, detail, date }: { fileNames: string[]; status: string; detail?: string | null; date?: string }) {
+  const label = fileNames.length > 1 ? `${fileNames[0]} +${fileNames.length - 1}` : fileNames[0] || "Angebots-PDF";
+  return <span className="offer-upload-job-copy"><strong title={fileNames.join(", ")}>{label}</strong><span><b>{status}</b>{date ? ` · ${formatDateTime(date)}` : ""}</span>{detail ? <small title={detail}>{detail}</small> : null}</span>;
+}
+
+function uploadJobStatusLabel(status: OfferUploadJob["status"]): string {
+  if (status === "queued") return "Wartet";
+  if (status === "processing") return "Wird verarbeitet";
+  if (status === "awaiting_confirmation") return "Bestätigung erforderlich";
+  if (status === "completed") return "Abgeschlossen";
+  if (status === "cancelled") return "Abgebrochen";
+  return "Fehlgeschlagen · Bitte erneut auswählen";
+}
+
+function UploadDuplicateDialog({ preview, busy, error, onClose, onConfirm }: { preview: UploadDuplicateDetails; busy: boolean; error?: string | null; onClose: () => void; onConfirm: () => void }) {
   const dialogRef = useRef<HTMLElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -355,14 +435,15 @@ function UploadDuplicateDialog({ preview, busy, onClose, onConfirm }: { preview:
       }}>
         <header><div><span className="price-kicker">Bestätigung erforderlich</span><h3 id={titleId}>{preview.kind === "offers" ? "Vorhandene Angebote ersetzen" : "Vorhandene Datanorm ersetzen"}</h3></div><button className="price-icon-button" type="button" aria-label="Dialog schließen" disabled={busy} onClick={onClose}><X size={18} /></button></header>
         <p>{preview.message || (preview.kind === "offers" ? "Die hochgeladenen Dateien enthalten bereits vorhandene Angebotsnummern. Die neuen Dateien bleiben erhalten; die aufgeführten älteren Dateien werden nur nach Ihrer Bestätigung gelöscht." : "Eine Datanorm-Datei mit diesem Namen ist bereits vorhanden und wird nur nach Ihrer Bestätigung ersetzt.")}</p>
+        {error ? <InlineNotice tone="error">{error}</InlineNotice> : null}
         <div className="duplicate-preview-list">{preview.duplicates.map((duplicate) => <div key={`${duplicate.offer_number}-${duplicate.remove}`}><strong>{duplicate.offer_number === "DATANORM" ? "Datanorm-Datei" : `Angebot ${duplicate.offer_number || "ohne Nummer"}`}</strong><span><Check size={14} /> Behalten: {duplicate.keep}</span><span className="is-remove"><Trash2 size={14} /> Löschen: {duplicate.remove}</span></div>)}</div>
-        <footer><button className="price-button" type="button" disabled={busy} onClick={onClose}>Abbrechen</button><button className="price-button is-danger" type="button" disabled={busy} onClick={onConfirm}>{busy ? <LoaderCircle className="is-spinning" size={16} /> : <Trash2 size={16} />} Ersetzen und hochladen</button></footer>
+        <footer><button className="price-button" type="button" disabled={busy} onClick={onClose}>{preview.kind === "offers" ? "Später" : "Abbrechen"}</button><button className="price-button is-danger" type="button" disabled={busy} onClick={onConfirm}>{busy ? <LoaderCircle className="is-spinning" size={16} /> : <Trash2 size={16} />} Ersetzen und hochladen</button></footer>
       </section>
     </div>
   );
 }
 
-function DatanormView({ uploadRevision, uploading, onOperation }: { uploadRevision: string | null; uploading: boolean; onOperation: (started: boolean) => void }) {
+function DatanormView({ uploadRevision, onOperation }: { uploadRevision: string | null; onOperation: (started: boolean) => void }) {
   const [, setSearchParams] = useSearchParams();
   const [queryInput, setQueryInput] = useState("");
   const [search, setSearch] = useState("");
@@ -474,7 +555,6 @@ function DatanormView({ uploadRevision, uploading, onOperation }: { uploadRevisi
 
       {calculatorOpen ? (
         <NetPriceCalculator
-          uploading={uploading}
           onOperation={onOperation}
           initialSearch={search}
           initialCluster={cluster}
@@ -503,7 +583,6 @@ function DatanormView({ uploadRevision, uploading, onOperation }: { uploadRevisi
 
 function NetPriceCalculator({
   onOperation,
-  uploading,
   uploadRevision,
   initialSearch,
   initialCluster,
@@ -515,7 +594,6 @@ function NetPriceCalculator({
   initialSearch: string;
   initialCluster: string;
   availableClusters: string[];
-  uploading: boolean;
   onOperation: (started: boolean) => void;
   uploadRevision: string | null;
   currentRevision: string;
@@ -616,7 +694,6 @@ function NetPriceCalculator({
   }
 
   async function savePreset() {
-    if (uploading) return;
     const name = presetName.trim();
     if (!name || !validReferences.length) {
       setError("Für eine Vorlage werden ein Name und mindestens ein gültiger Referenzartikel benötigt.");
@@ -643,7 +720,6 @@ function NetPriceCalculator({
   }
 
   async function deletePreset() {
-    if (uploading) return;
     if (!selectedPreset || !window.confirm(`Vorlage „${selectedPreset}“ wirklich löschen?`)) return;
     onOperation(true);
     setSaving(true);
@@ -706,7 +782,7 @@ function NetPriceCalculator({
               </select>
             </label>
             {selectedPreset ? (
-              <button className="price-icon-button is-danger" type="button" title="Vorlage löschen" aria-label="Vorlage löschen" disabled={uploading || saving} onClick={() => void deletePreset()}>
+              <button className="price-icon-button is-danger" type="button" title="Vorlage löschen" aria-label="Vorlage löschen" disabled={saving} onClick={() => void deletePreset()}>
                 <Trash2 size={16} />
               </button>
             ) : null}
@@ -755,7 +831,7 @@ function NetPriceCalculator({
               <span className="sr-only">Name der neuen Vorlage</span>
               <input value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="Vorlage benennen" />
             </label>
-            <button className="price-button" type="button" disabled={uploading || saving || !presetName.trim()} onClick={() => void savePreset()}>
+            <button className="price-button" type="button" disabled={saving || !presetName.trim()} onClick={() => void savePreset()}>
               <Save size={16} /> Speichern
             </button>
           </div>
@@ -800,7 +876,7 @@ function NetPriceCalculator({
   );
 }
 
-function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: { uploadRevision: string | null; uploading: boolean; onUploadBlock: (reason: string | null) => void; onOperation: (started: boolean) => void }) {
+function OffersView({ uploadRevision, onUploadBlock, onOperation }: { uploadRevision: string | null; onUploadBlock: (reason: string | null) => void; onOperation: (started: boolean) => void }) {
   const [queryInput, setQueryInput] = useState("");
   const [search, setSearch] = useState("");
   const [offerType, setOfferType] = useState("");
@@ -1023,7 +1099,6 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
             onClose={() => setSelectedSource(null)}
             onMutation={load}
             uploadRevision={uploadRevision}
-            uploading={uploading}
             onUploadBlock={onUploadBlock}
             onOperation={onOperation}
           />
@@ -1033,7 +1108,7 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
   );
 }
 
-function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, uploading, onUploadBlock, onOperation }: { detailRef: RefObject<HTMLElement | null>; source: string; onClose: () => void; onMutation: () => Promise<void>; uploadRevision: string | null; uploading: boolean; onUploadBlock: (reason: string | null) => void; onOperation: (started: boolean) => void }) {
+function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, onUploadBlock, onOperation }: { detailRef: RefObject<HTMLElement | null>; source: string; onClose: () => void; onMutation: () => Promise<void>; uploadRevision: string | null; onUploadBlock: (reason: string | null) => void; onOperation: (started: boolean) => void }) {
   const [data, setData] = useState<OfferPositionsResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1129,7 +1204,7 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
   const offerColumns = useMemo(() => visibleColumns(data?.columns ?? []), [data?.columns]);
 
   async function patchOffer(payload: Record<string, unknown>) {
-    if (!data || uploading) return;
+    if (!data) return;
     onOperation(true);
     setSaving(true);
     setError(null);
@@ -1211,11 +1286,11 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
           <p>{data?.offer.offer_number || source}</p>
           {data ? <div className="offer-detail-comparison"><span>Preisniveau <strong className={signedDeviationClass(data.offer.price_change)}>{formatPercent(data.offer.price_change)}</strong></span><span>Ø Positionsabweichung <strong className={signedDeviationClass(data.offer.price_change_positions)}>{formatPercent(data.offer.price_change_positions)}</strong></span>{comparisonQuality.summary ? <small className="offer-detail-quality" tabIndex={0} title={comparisonQuality.tooltip ?? undefined} aria-label={comparisonQuality.tooltip ?? undefined}>{comparisonQuality.summary}</small> : null}</div> : null}
         </div>
-        <button className="price-icon-button" type="button" aria-label="Angebotsdetails schließen" title="Schließen" disabled={saving || uploading} onClick={() => {
+        <button className="price-icon-button" type="button" aria-label="Angebotsdetails schließen" title="Schließen" disabled={saving} onClick={() => {
           if (!hasUnsavedChanges || window.confirm("Ungespeicherte Angebotsänderungen verwerfen und zur Übersicht zurückkehren?")) onClose();
         }}><X size={18} /></button>
       </header>
-      {uploadRevision !== acknowledgedUpload ? <InlineNotice tone="info" action={<button className="price-button" type="button" disabled={saving || loading || uploading} onClick={() => {
+      {uploadRevision !== acknowledgedUpload ? <InlineNotice tone="info" action={<button className="price-button" type="button" disabled={saving || loading} onClick={() => {
         if (!hasUnsavedChanges || window.confirm("Die Angebotsdaten neu laden und Ihre ungespeicherten Änderungen verwerfen?")) void load();
       }}><RefreshCw size={16} /> Angebot neu laden</button>}>Neue Angebote wurden hochgeladen. Ihre offene Bearbeitung bleibt erhalten; Vergleichspreise können sich geändert haben.</InlineNotice> : null}
       {error ? <InlineNotice tone="error" action={<RetryButton onClick={() => { void load(); }} />}>{error}</InlineNotice> : null}
@@ -1223,10 +1298,10 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
         <>
           {loading ? <LoadingState label="Angebotspositionen werden aktualisiert" compact /> : null}
           <div className="offer-settings-grid">
-            <div className="offer-settings-type"><MapFilterSelect label="Angebotsart" value={offerType} options={offerTypeOptions} disabled={saving || loading || uploading} onChange={(value) => setOfferType(value as OfferType)} /></div>
-            <label><span>Rabatt in %</span><input inputMode="decimal" value={discount} disabled={saving || loading || uploading} onChange={(event) => setDiscount(event.target.value)} /></label>
-            <label className="offer-net-align" title="Nettoabgleich: Höhere Preise auf Datanorm-Netto begrenzen"><input type="checkbox" aria-label="Nettoabgleich: Höhere Preise auf Datanorm-Netto begrenzen" checked={alignNetto} disabled={saving || loading || uploading} onChange={(event) => setAlignNetto(event.target.checked)} /></label>
-            <button className="price-button is-primary" type="button" disabled={saving || loading || uploading} onClick={() => void saveChanges()}>{saving ? <LoaderCircle className="is-spinning" size={16} /> : <Save size={16} />} Änderungen speichern</button>
+            <div className="offer-settings-type"><MapFilterSelect label="Angebotsart" value={offerType} options={offerTypeOptions} disabled={saving || loading} onChange={(value) => setOfferType(value as OfferType)} /></div>
+            <label><span>Rabatt in %</span><input inputMode="decimal" value={discount} disabled={saving || loading} onChange={(event) => setDiscount(event.target.value)} /></label>
+            <label className="offer-net-align" title="Nettoabgleich: Höhere Preise auf Datanorm-Netto begrenzen"><input type="checkbox" aria-label="Nettoabgleich: Höhere Preise auf Datanorm-Netto begrenzen" checked={alignNetto} disabled={saving || loading} onChange={(event) => setAlignNetto(event.target.checked)} /></label>
+            <button className="price-button is-primary" type="button" disabled={saving || loading} onClick={() => void saveChanges()}>{saving ? <LoaderCircle className="is-spinning" size={16} /> : <Save size={16} />} Änderungen speichern</button>
           </div>
 
           <div className="offer-position-table-wrap">
@@ -1237,13 +1312,13 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
                 const articleNumber = String(row.Artikelnummer ?? row.article_number ?? "");
                 return (
                   <tr key={`${articleNumber}-${index}`}>
-                    <td className="price-select-cell"><input type="checkbox" aria-label={`${articleNumber || `Position ${index + 1}`} zum Löschen auswählen`} checked={selectedArticles.has(articleNumber)} disabled={saving || loading || uploading || !articleNumber} onChange={(event) => setSelectedArticles((current) => {
+                    <td className="price-select-cell"><input type="checkbox" aria-label={`${articleNumber || `Position ${index + 1}`} zum Löschen auswählen`} checked={selectedArticles.has(articleNumber)} disabled={saving || loading || !articleNumber} onChange={(event) => setSelectedArticles((current) => {
                       const next = new Set(current); if (event.target.checked) next.add(articleNumber); else next.delete(articleNumber); return next;
                     })} /></td>
                     {offerColumns.map((column) => <td key={column} className={[cellClass(column, row[column]), offerColumnClass(column)].filter(Boolean).join(" ")}>{column === "Bezeichnung" ? <OfferDescription row={row} /> : column === "Artikelnummer" && articleNumber ? (
-                      <button type="button" className="offer-article-link" aria-label={`Preisvergleich für Artikel ${articleNumber} öffnen`} aria-haspopup="dialog" disabled={saving || loading || uploading} onClick={() => setComparisonArticle(articleNumber)}>{articleNumber}</button>
+                      <button type="button" className="offer-article-link" aria-label={`Preisvergleich für Artikel ${articleNumber} öffnen`} aria-haspopup="dialog" disabled={saving || loading} onClick={() => setComparisonArticle(articleNumber)}>{articleNumber}</button>
                     ) : formatCell(column, row[column])}</td>)}
-                    <td className="manual-price-cell"><input aria-label={`Manueller Preis ${articleNumber}`} inputMode="decimal" placeholder="unverändert" value={manualPrices[articleNumber] ?? ""} disabled={saving || loading || uploading || !articleNumber} onChange={(event) => setManualPrices((current) => ({ ...current, [articleNumber]: event.target.value }))} /></td>
+                    <td className="manual-price-cell"><input aria-label={`Manueller Preis ${articleNumber}`} inputMode="decimal" placeholder="unverändert" value={manualPrices[articleNumber] ?? ""} disabled={saving || loading || !articleNumber} onChange={(event) => setManualPrices((current) => ({ ...current, [articleNumber]: event.target.value }))} /></td>
                   </tr>
                 );
               })}</tbody>
@@ -1261,8 +1336,8 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
               <button className="price-button" type="button" disabled={saving || Boolean(exporting)} onClick={() => void exportOffer("offer_ugl")}><Download size={16} /> UGL</button>
             </div>
             <div>
-              <button className="price-button" type="button" disabled={uploading || saving || loading || data.rows.length === 0} onClick={() => void patchOffer({ reset_manual_prices: true })}><RotateCcw size={16} /> Manuelle Preise zurücksetzen</button>
-              <button className="price-button is-danger" type="button" disabled={uploading || saving || loading || selectedArticles.size === 0} onClick={() => {
+              <button className="price-button" type="button" disabled={saving || loading || data.rows.length === 0} onClick={() => void patchOffer({ reset_manual_prices: true })}><RotateCcw size={16} /> Manuelle Preise zurücksetzen</button>
+              <button className="price-button is-danger" type="button" disabled={saving || loading || selectedArticles.size === 0} onClick={() => {
                 if (window.confirm(`${selectedArticles.size} ausgewählte Artikel aus diesem Angebot entfernen?`)) void patchOffer({ delete_articles: [...selectedArticles] });
               }}><Trash2 size={16} /> Auswahl entfernen</button>
             </div>
@@ -1846,7 +1921,7 @@ function PriceChartTooltip({ id, point, anchor, container }: { id: string; point
   );
 }
 
-function FilesView({ status, onMutation, uploadRevision, uploading, onOperation }: { status: PriceComparisonStatus | null; onMutation: (files: FilesResult) => void; uploadRevision: string | null; uploading: boolean; onOperation: (started: boolean) => void }) {
+function FilesView({ status, onMutation, uploadRevision, onOperation }: { status: PriceComparisonStatus | null; onMutation: (files: FilesResult) => void; uploadRevision: string | null; onOperation: (started: boolean) => void }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [data, setData] = useState<FilesResult | null>(null);
@@ -2029,7 +2104,7 @@ function FilesView({ status, onMutation, uploadRevision, uploading, onOperation 
     }
   }
 
-  const effectiveBusy = busy || (uploading ? "header-upload" : null);
+  const effectiveBusy = busy;
   const normalizedSearch = search.trim().toLocaleLowerCase("de");
   const visibleFiles = [...(data?.files ?? [])]
     .filter((file) => !normalizedSearch || file.name.toLocaleLowerCase("de").includes(normalizedSearch))

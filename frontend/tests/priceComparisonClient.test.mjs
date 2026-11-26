@@ -103,7 +103,7 @@ test("successful data writes notify the in-memory article index but previews and
   t.after(() => originalWindow
     ? Object.defineProperty(globalThis, "window", originalWindow)
     : delete globalThis.window);
-  const { PRICE_COMPARISON_DATA_CHANGED_EVENT, priceRequest } = await fixture(t, async () => Response.json({ revision: "rev-2" }));
+  const { PRICE_COMPARISON_DATA_CHANGED_EVENT, announcePriceComparisonDataChanged, priceRequest } = await fixture(t, async () => Response.json({ revision: "rev-2" }));
   const changes = [];
   windowTarget.addEventListener(PRICE_COMPARISON_DATA_CHANGED_EVENT, (event) => changes.push(event.detail));
 
@@ -115,6 +115,9 @@ test("successful data writes notify the in-memory article index but previews and
   await priceRequest("/price-comparison/suggestions/preview", { method: "POST", body: "{}" });
   await priceRequest("/price-comparison/maintenance/preview", { method: "POST", body: "{}" });
   await priceRequest("/price-comparison/exports", { method: "POST", body: "{}" });
+  await priceRequest("/price-comparison/upload-jobs", { method: "POST", body: "{}" });
+  await priceRequest("/price-comparison/upload-jobs/job-1", { method: "DELETE" });
+  announcePriceComparisonDataChanged("upload-result-revision");
 
   assert.deepEqual(changes.map(({ method, path, revision }) => [method, path, revision]), [
     ["PATCH", "/price-comparison/offers/offer.pdf", "rev-2"],
@@ -122,5 +125,6 @@ test("successful data writes notify the in-memory article index but previews and
     ["POST", "/price-comparison/maintenance", "rev-2"],
     ["PUT", "/price-comparison/reference-presets/name", "rev-2"],
     ["DELETE", "/price-comparison/reference-presets/name?expected_revision=old", "rev-2"],
+    ["POST", "/price-comparison/upload-jobs", "upload-result-revision"],
   ]);
 });

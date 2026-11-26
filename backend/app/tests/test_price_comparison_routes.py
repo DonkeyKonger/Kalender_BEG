@@ -1302,6 +1302,109 @@ def test_parse_cache_fill_is_serialized_across_service_instances(tmp_path, monke
     assert [frame.iloc[0]["Quelle"] for frame in frames] == ["same.pdf", "same.pdf"]
 
 
+def test_upload_parses_once_and_binds_validated_rows_to_stored_version(context, monkeypatch):
+    client, service, _ = context
+    raw = offer_pdf()
+    calls = []
+    original = core.extract_prices_from_pdf
+
+    def counted(content, **kwargs):
+        calls.append(kwargs["source_name"])
+        return original(content, **kwargs)
+
+    monkeypatch.setattr(core, "extract_prices_from_pdf", counted)
+    response = upload(client, "New.pdf", raw, "offers")
+    assert response.status_code == 200, response.text
+    item = snapshot(service.store).find("offers", "New.pdf")
+    cached = PriceComparisonService(service.store, cache_dir=service.cache_dir).parsed(item)
+    assert calls == ["New.pdf"]
+    assert service.store.read(item) == raw
+    pd.testing.assert_frame_equal(cached, original(raw, source_name="New.pdf"))
+
+
+def test_confirmed_canonical_upload_reuses_parse_without_changing_source_or_rows(context, monkeypatch):
+    client, service, _ = context
+    seed(client)
+    raw = offer_pdf(price="10,00")
+    calls = []
+    original = core.extract_prices_from_pdf
+
+    def counted(content, **kwargs):
+        calls.append(kwargs["source_name"])
+        return original(content, **kwargs)
+
+    monkeypatch.setattr(core, "extract_prices_from_pdf", counted)
+    preview = upload(client, "angebot.pdf", raw, "offers")
+    assert preview.status_code == 409
+    result = service.upload(
+        "offers", [("angebot.pdf", raw)], preview.json()["detail"]["revision"],
+        confirmed_duplicates=["Angebot.pdf"],
+    )
+    assert result["revision"]
+    item = snapshot(service.store).find("offers", "Angebot.pdf")
+    cached = service.parsed(item)
+    assert calls == ["angebot.pdf"]
+    pd.testing.assert_frame_equal(cached, original(raw, source_name="Angebot.pdf"))
+
+
+def test_upload_duplicate_check_does_not_build_full_price_comparison(context, monkeypatch):
+    client, service, _ = context
+    seed(client)
+
+    def unexpected_load(*_args, **_kwargs):
+        pytest.fail("Duplicate checks must not build a full price comparison")
+
+    monkeypatch.setattr(service, "load", unexpected_load)
+    response = upload(client, "Added.pdf", offer_pdf(number="ADDED-1"), "offers")
+    assert response.status_code == 200, response.text
+    duplicate = upload(client, "Duplicate.pdf", offer_pdf(number="ADDED-1"), "offers")
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"]["duplicates"][0]["remove"] == "Added.pdf"
+
+
+def test_failed_upload_cache_promotion_restores_original_file(context, monkeypatch):
+    client, service, _ = context
+    original = seed(client)
+    before = snapshot(service.store)
+
+    def fail_cache(*_args):
+        raise OSError("injected cache promotion failure")
+
+    monkeypatch.setattr(service, "_promote_upload_cache", fail_cache)
+    with pytest.raises(OSError, match="injected cache promotion failure"):
+        service.upload(
+            "offers", [("Angebot.pdf", offer_pdf(price="10,00"))], before.revision,
+            confirmed_duplicates=["Angebot.pdf"],
+        )
+    restored = snapshot(service.store).find("offers", "Angebot.pdf")
+    assert service.store.read(restored) == original
+    assert service.parsed(restored).iloc[0]["Preis"] != 10
+
+
+def test_queued_uploads_use_current_revision_but_replacements_require_fresh_confirmation(context):
+    client, service, _ = context
+    original = seed(client)
+    service.upload_queued("offers", [("Added.pdf", offer_pdf(number="ADDED-1"))])
+    replacement = [("Replacement.pdf", offer_pdf(price="10,00"))]
+    with pytest.raises(HTTPException) as duplicate:
+        service.upload_queued("offers", replacement)
+    assert duplicate.value.status_code == 409
+    preview = duplicate.value.detail
+    assert preview["code"] == "duplicate_offers"
+    assert service.store.read(snapshot(service.store).find("offers", "Angebot.pdf")) == original
+    service.upload_queued("offers", [("Another.pdf", offer_pdf(number="ANOTHER-1"))])
+    with pytest.raises(HTTPException) as stale:
+        service.upload_queued(
+            "offers", replacement, confirmed_revision=preview["revision"],
+            confirmed_duplicates=["Angebot.pdf"],
+        )
+    assert stale.value.status_code == 409
+    assert "Replacement.pdf" not in {item.name for item in snapshot(service.store).files}
+    with pytest.raises(HTTPException) as missing_revision:
+        service.upload_queued("offers", replacement, confirmed_duplicates=["Angebot.pdf"])
+    assert missing_revision.value.status_code == 422
+
+
 def test_initial_offer_load_uses_at_most_four_parallel_parsers(tmp_path, monkeypatch):
     service = PriceComparisonService(
         SimpleNamespace(identity="parallel-test"),

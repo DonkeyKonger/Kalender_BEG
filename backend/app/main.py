@@ -37,6 +37,10 @@ from app.services.ctrack_scheduler import (
 )
 from app.services.material_order_graph_runtime import close_material_order_graph_runtime
 from app.services.price_comparison_snapshot_cache import close_read_snapshot_cache
+from app.services.price_comparison_upload_queue import (
+    start_price_comparison_upload_worker,
+    stop_price_comparison_upload_worker,
+)
 from app.services.push_scheduler import start_push_plan_scheduler, stop_push_plan_scheduler
 
 
@@ -101,9 +105,11 @@ def create_app() -> FastAPI:
                 seed_admin(db)
         start_ctrack_sync_scheduler()
         start_push_plan_scheduler()
+        start_price_comparison_upload_worker()
 
     @app.on_event("shutdown")
     async def stop_background_tasks() -> None:
+        await stop_price_comparison_upload_worker()
         await stop_ctrack_sync_scheduler()
         await stop_push_plan_scheduler()
         close_read_snapshot_cache()

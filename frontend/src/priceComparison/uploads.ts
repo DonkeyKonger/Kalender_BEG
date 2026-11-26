@@ -8,6 +8,37 @@ const INVALID_FILENAME_CHARACTERS = new Set('/\\:*?"<>|');
 
 export type PriceUploadResult = { revision: string };
 
+export type OfferUploadJobStatus =
+  | "queued"
+  | "processing"
+  | "awaiting_confirmation"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type OfferUploadDuplicate = {
+  offer_number: string;
+  keep: string;
+  remove: string;
+};
+
+export type OfferUploadJob = {
+  id: string;
+  client_request_id: string;
+  status: OfferUploadJobStatus;
+  file_names: string[];
+  created_at: string;
+  updated_at: string;
+  message?: string | null;
+  error?: string | null;
+  duplicates?: OfferUploadDuplicate[] | null;
+  confirmation_revision?: string | null;
+  result_revision?: string | null;
+};
+
+export type OfferUploadJobsResult = { jobs: OfferUploadJob[] };
+export type OfferUploadJobResult = { job: OfferUploadJob };
+
 /** Validate the complete header selection; callers must never upload a subset. */
 export function validateOfferFiles(files: readonly File[]): string | null {
   if (!files.length) return "Bitte mindestens eine PDF-Datei auswählen.";
@@ -69,5 +100,43 @@ export function uploadPriceFiles(
   return priceRequest<PriceUploadResult>("/price-comparison/files", {
     method: "POST",
     body,
+  });
+}
+
+export function createOfferUploadJob(
+  files: readonly File[],
+  clientRequestId: string,
+): Promise<OfferUploadJobResult> {
+  const body = new FormData();
+  body.append("kind", "offers");
+  body.append("client_request_id", clientRequestId);
+  files.forEach((file) => body.append("files", file));
+  return priceRequest<OfferUploadJobResult>("/price-comparison/upload-jobs", {
+    method: "POST",
+    body,
+  });
+}
+
+export function listOfferUploadJobs(signal?: AbortSignal): Promise<OfferUploadJobsResult> {
+  return priceRequest<OfferUploadJobsResult>("/price-comparison/upload-jobs", { signal });
+}
+
+export function confirmOfferUploadJob(
+  jobId: string,
+  expectedRevision: string,
+  confirmedDuplicates: readonly string[],
+): Promise<OfferUploadJobResult> {
+  return priceRequest<OfferUploadJobResult>(`/price-comparison/upload-jobs/${encodeURIComponent(jobId)}/confirm`, {
+    method: "POST",
+    body: JSON.stringify({
+      expected_revision: expectedRevision,
+      confirmed_duplicates: confirmedDuplicates,
+    }),
+  });
+}
+
+export function cancelOfferUploadJob(jobId: string): Promise<OfferUploadJobResult> {
+  return priceRequest<OfferUploadJobResult>(`/price-comparison/upload-jobs/${encodeURIComponent(jobId)}`, {
+    method: "DELETE",
   });
 }

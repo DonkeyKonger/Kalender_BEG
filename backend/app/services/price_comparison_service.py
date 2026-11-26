@@ -286,7 +286,7 @@ class PriceComparisonService:
             "revision": snap.revision,
         }
 
-    def parsed(self, item: StoredFile, *, raw=None, force=False):
+    def _parsed_cache_location(self, item: StoredFile):
         key = hashlib.sha256(
             json.dumps(
                 [CACHE_VERSION, self.store.identity, item.kind, item.name, item.version],
@@ -297,6 +297,32 @@ class PriceComparisonService:
         path = self.cache_dir / (key + ".pkl")
         if path.is_symlink():
             raise HTTPException(500, "Ungültiger interner Preisdatei-Cache.")
+        return key, path
+
+    def _write_parsed_cache(self, path: Path, frame: pd.DataFrame):
+        # Caller owns the per-key fill lock. Only trusted parser output is saved.
+        with tempfile.NamedTemporaryFile(
+            dir=self.cache_dir, prefix=".parse-", delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            try:
+                frame.to_pickle(handle)
+                handle.flush()
+                os.replace(temporary, path)
+            finally:
+                temporary.unlink(missing_ok=True)
+
+    def _promote_upload_cache(self, item: StoredFile, frame: pd.DataFrame):
+        """Bind already validated upload rows to the exact stored file version."""
+        _, path = self._parsed_cache_location(item)
+        if item.kind == "offers":
+            frame = frame.copy()
+            frame["Quelle"] = item.name
+        with _cache_fill_lock(path):
+            self._write_parsed_cache(path, frame)
+
+    def parsed(self, item: StoredFile, *, raw=None, force=False):
+        key, path = self._parsed_cache_location(item)
 
         def cached_frame():
             try:
@@ -351,18 +377,7 @@ class PriceComparisonService:
                     422,
                     f"Datei {item.name} enthält keine lesbaren Preispositionen.",
                 )
-            with tempfile.NamedTemporaryFile(
-                dir=self.cache_dir,
-                prefix=".parse-",
-                delete=False,
-            ) as handle:
-                temporary = Path(handle.name)
-                try:
-                    frame.to_pickle(handle)
-                    handle.flush()
-                    os.replace(temporary, path)
-                finally:
-                    temporary.unlink(missing_ok=True)
+            self._write_parsed_cache(path, frame)
 
             if frame.empty:
                 raise HTTPException(
@@ -1083,6 +1098,58 @@ class PriceComparisonService:
             ) from exc
 
     def upload(self, kind, uploads, expected_revision, db=None, *, confirmed_duplicates=None):
+        if expected_revision is None:
+            raise HTTPException(422, "Eine aktuelle Dateirevision ist erforderlich.")
+        return self._upload(
+            kind, uploads, expected_revision, db,
+            confirmed_duplicates=confirmed_duplicates,
+        )
+
+    def upload_queued(
+        self, kind, uploads, db=None, *, confirmed_revision=None, confirmed_duplicates=None,
+    ):
+        # A queued append uses the current snapshot inside the mutation lock.
+        # Any replacement still pauses for explicit, revision-bound confirmation.
+        if confirmed_duplicates and confirmed_revision is None:
+            raise HTTPException(422, "Eine aktuelle Dateibestätigung ist erforderlich.")
+        return self._upload(
+            kind, uploads, confirmed_revision, db,
+            confirmed_duplicates=confirmed_duplicates,
+        )
+
+    def _existing_offer_numbers(self, snap):
+        """Duplicate safety needs source/offer numbers, not the full price comparison."""
+        imported = self.import_frames(snap)
+        sources = self._offer_sources(snap, imported)
+        included = {source.name for source in sources}
+        # Previously excluded physical PDFs still participate in duplicate checks.
+        sources.extend(
+            OfferSource(item.name, item, True, False)
+            for item in snap.files if item.kind == "offers" and item.name not in included
+        )
+        imported_frames = (
+            {str(name): frame for name, frame in imported.offers.groupby("Quelle", sort=False)}
+            if imported is not None else {}
+        )
+
+        def offer_number(source):
+            try:
+                frame = imported_frames.get(source.name, pd.DataFrame()) if source.imported else self.parsed(source.item)
+            except HTTPException as exc:
+                if exc.status_code != 422:
+                    raise
+                return source.name, None
+            deleted = snap.state["deleted_articles"].get(source.name, []) if source.name in included else []
+            if deleted and not frame.empty:
+                frame = frame[~frame["Artikelnummer"].astype(str).map(core.clean_artnr).isin(deleted)]
+            return source.name, self._offer_number(frame)
+
+        if len(sources) > 1:
+            with ThreadPoolExecutor(max_workers=min(MAX_PARSE_WORKERS, len(sources))) as executor:
+                return list(executor.map(offer_number, sources))
+        return [offer_number(source) for source in sources]
+
+    def _upload(self, kind, uploads, expected_revision, db=None, *, confirmed_duplicates=None):
         if kind not in ("offers", "datanorm"):
             raise HTTPException(422, "Unbekannte Dateiart.")
         parsed_uploads = {}
@@ -1102,7 +1169,8 @@ class PriceComparisonService:
             raise HTTPException(422, "Ein Upload darf jeden Dateinamen nur einmal enthalten.")
         with self._mutation_lock(db):
             snap = snapshot(self.store)
-            require_revision(snap, expected_revision)
+            if expected_revision is not None:
+                require_revision(snap, expected_revision)
             original_state = deepcopy(snap.state)
             existing_groups: dict[str, list[StoredFile]] = {}
             for item in snap.files:
@@ -1137,36 +1205,8 @@ class PriceComparisonService:
                         if number in winners:
                             excluded.add(winners[number])
                         winners[number] = name
-                current = self.load(snap)
-                current_names = {source.name for source in current.offer_sources}
-                source_column = current.raw_prices.get(
-                    "Quelle", pd.Series(index=current.raw_prices.index, dtype=object)
-                )
-                existing_frames = [
-                    (
-                        source.name,
-                        current.raw_prices[
-                            source_column.astype(str).eq(source.name)
-                        ],
-                    )
-                    for source in current.offer_sources
-                ]
-                # Bound exclusions are absent from the active imported view.
-                # Parse only those few files for duplicate safety; imported
-                # sources never need their PDFs during an incremental upload.
-                for item in snap.files:
-                    if item.kind != "offers" or item.name in current_names:
-                        continue
-                    try:
-                        frame = self.parsed(item)
-                    except HTTPException as exc:
-                        if exc.status_code != 422:
-                            raise
-                        frame = pd.DataFrame()
-                    existing_frames.append((item.name, frame))
-                for source_name, frame in existing_frames:
+                for source_name, number in self._existing_offer_numbers(snap):
                     matching_upload = uploaded_by_casefold.get(source_name.casefold())
-                    number = self._offer_number(frame)
                     if number in winners or matching_upload is not None:
                         winner_upload = winners.get(number, matching_upload)
                         keep = canonical_names[winner_upload]
@@ -1233,7 +1273,7 @@ class PriceComparisonService:
                     backup = self.store.read(previous) if previous else None
                     updated = self.store.write(kind, target_name, raw, previous)
                     changed.append((updated, backup, previous))
-                    self.parsed(updated, raw=raw)
+                    self._promote_upload_cache(updated, parsed_uploads[name])
                     if kind == "datanorm":
                         snap.state["active_datanorm"] = target_name
                     else:

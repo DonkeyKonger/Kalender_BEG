@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import require_admin, require_roles
 from app.core.database import get_db
 from app.models.enums import UserRole
+from app.models.user import User
 from app.services import price_comparison_core as core
 from app.services import price_comparison_exports as exports
 from app.services.price_comparison_service import (
@@ -24,6 +25,11 @@ from app.services.price_comparison_service import (
 )
 from app.services.price_comparison_storage import (
     MAX_BATCH_BYTES, MAX_FILE_BYTES, get_price_storage, graph_errors, snapshot,
+)
+from app.services.price_comparison_upload_queue import (
+    PriceComparisonUploadQueue,
+    job_to_api,
+    wake_price_comparison_upload_worker,
 )
 
 router = APIRouter(prefix="/price-comparison", tags=["price-comparison"],
@@ -36,8 +42,16 @@ def price_service():
         yield PriceComparisonService(get_price_storage())
 
 
+def price_upload_queue():
+    yield PriceComparisonUploadQueue()
+
+
 Service = Annotated[PriceComparisonService, Depends(price_service)]
 Database = Annotated[Session, Depends(get_db)]
+UploadQueue = Annotated[PriceComparisonUploadQueue, Depends(price_upload_queue)]
+CurrentPriceUser = Annotated[
+    User, Depends(require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER))
+]
 Revision = Annotated[str, Field(min_length=64, max_length=64, pattern=r"^[a-f0-9]+$")]
 Offset = Annotated[int, Query(ge=0, le=1_000_000)]
 Limit = Annotated[int, Query(ge=1, le=500)]
@@ -91,6 +105,11 @@ class Preset(Payload):
 class Maintenance(Payload):
     expected_revision: Revision
     action: Literal["rebuild_offers", "reparse_datanorm", "refresh_percentages"]
+    confirmed_duplicates: list[str] = Field(default_factory=list, max_length=2000)
+
+
+class UploadJobConfirmation(Payload):
+    expected_revision: Revision
     confirmed_duplicates: list[str] = Field(default_factory=list, max_length=2000)
 
 
@@ -194,6 +213,88 @@ def article(article_number: str, service: Service, offer_types: Annotated[list[s
 @router.get("/files")
 def files(service: Service):
     return service.files()
+
+
+@router.post("/upload-jobs", status_code=202)
+def create_upload_job(
+    service: Service,
+    queue: UploadQueue,
+    db: Database,
+    current_user: CurrentPriceUser,
+    kind: Annotated[Literal["offers"], Form()],
+    client_request_id: Annotated[str, Form(min_length=36, max_length=36)],
+    files: Annotated[list[UploadFile], File()],
+):
+    if not files or len(files) > 200:
+        raise HTTPException(422, "Bitte 1 bis 200 Dateien auswählen.")
+    uploads, size = [], 0
+    for file in files:
+        raw = file.file.read(MAX_FILE_BYTES + 1)
+        size += len(raw)
+        if len(raw) > MAX_FILE_BYTES or size > MAX_BATCH_BYTES:
+            raise HTTPException(413, "Maximal 40 MB je Datei und 160 MB je Upload.")
+        uploads.append((file.filename or "", raw))
+    job = queue.enqueue(
+        db,
+        user_id=current_user.id,
+        kind=kind,
+        uploads=uploads,
+        client_request_id=client_request_id,
+        service=service,
+    )
+    wake_price_comparison_upload_worker()
+    return {"job": job_to_api(job)}
+
+
+@router.get("/upload-jobs")
+def list_upload_jobs(
+    service: Service,
+    queue: UploadQueue,
+    db: Database,
+    current_user: CurrentPriceUser,
+):
+    return {
+        "jobs": [
+            job_to_api(job)
+            for job in queue.list_for_user(db, current_user.id, service=service)
+        ]
+    }
+
+
+@router.post("/upload-jobs/{job_id}/confirm", status_code=202)
+def confirm_upload_job(
+    job_id: str,
+    payload: UploadJobConfirmation,
+    queue: UploadQueue,
+    db: Database,
+    current_user: CurrentPriceUser,
+):
+    job = queue.confirm(
+        db,
+        job_id=job_id,
+        user_id=current_user.id,
+        role=current_user.role,
+        expected_revision=payload.expected_revision,
+        confirmed_duplicates=payload.confirmed_duplicates,
+    )
+    wake_price_comparison_upload_worker()
+    return {"job": job_to_api(job)}
+
+
+@router.delete("/upload-jobs/{job_id}")
+def cancel_upload_job(
+    job_id: str,
+    queue: UploadQueue,
+    db: Database,
+    current_user: CurrentPriceUser,
+):
+    job = queue.cancel(
+        db,
+        job_id=job_id,
+        user_id=current_user.id,
+        role=current_user.role,
+    )
+    return {"job": job_to_api(job)}
 
 
 @router.post("/files")

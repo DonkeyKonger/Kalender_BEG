@@ -28,6 +28,10 @@ from app.models.payroll_month import (
     PayrollMonthSnapshot,
 )
 from app.models.planning_cell_mark import PlanningCellMark
+from app.models.price_comparison_upload import (
+    PriceComparisonUploadFile,
+    PriceComparisonUploadJob,
+)
 from app.models.project_folder import ProjectFolder, ProjectFolderDocumentCaption
 from app.models.project_folder_count import ProjectFolderCount
 from app.models.project_manager_folder import ProjectManagerFolder
@@ -87,6 +91,8 @@ __all__ = [
     "PayrollMonthPersonSnapshot",
     "PayrollMonthSnapshot",
     "PlanningCellMark",
+    "PriceComparisonUploadFile",
+    "PriceComparisonUploadJob",
     "PendingPlanPushNotification",
     "ProjectFolder",
     "ProjectFolderCount",

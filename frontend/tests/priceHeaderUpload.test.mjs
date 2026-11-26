@@ -57,6 +57,7 @@ const stubModules = new Map([
   `],
   ["price-client", `
     export const PRICE_COMPARISON_DATA_CHANGED_EVENT = "price-comparison:data-changed";
+    export const announcePriceComparisonDataChanged = () => {};
     export class PriceComparisonError extends Error {
       constructor(status, message, detail) {
         super(message);
@@ -74,7 +75,7 @@ const stubModules = new Map([
 
 const bundled = await build({
   stdin: {
-    contents: `${pageSource}\nexport { HeaderOfferUpload, PriceComparisonError as HeaderPriceComparisonError };`,
+    contents: `${pageSource}\nexport { HeaderOfferUpload, nextUploadConfirmationJobId };`,
     resolveDir: dirname(pagePath),
     sourcefile: "PriceComparisonPage.header-upload.test.tsx",
     loader: "tsx",
@@ -114,7 +115,7 @@ const bundled = await build({
 
 const componentModule = { exports: {} };
 new Function("module", "exports", bundled.outputFiles[0].text)(componentModule, componentModule.exports);
-const { HeaderOfferUpload, HeaderPriceComparisonError } = componentModule.exports;
+const { HeaderOfferUpload, nextUploadConfirmationJobId } = componentModule.exports;
 
 function deferred() {
   let resolvePromise;
@@ -165,13 +166,14 @@ function renderedText(node) {
   return renderedText(node.props?.children);
 }
 
-function mount(t, { priceRequest, ...propertyOverrides }) {
+function mount(t, propertyOverrides = {}) {
   const slots = [];
   let cursor = 0;
   let nextId = 0;
-  const busyChanges = [];
-  const uploaded = [];
-  globalThis.__priceHeaderDependencies = { priceRequest };
+  const enqueued = [];
+  const confirmed = [];
+  const cancelled = [];
+  globalThis.__priceHeaderDependencies = { priceRequest: async () => ({}) };
   globalThis.__priceHeaderHooks = {
     useRef(initialValue) {
       const index = cursor;
@@ -197,20 +199,34 @@ function mount(t, { priceRequest, ...propertyOverrides }) {
       return slots[index];
     },
   };
+  const defaultQueue = {
+    jobs: [],
+    submissions: [],
+    loading: false,
+    stale: false,
+    error: null,
+    enqueue: (files) => enqueued.push(Array.from(files)),
+    retrySubmission() {},
+    dismissSubmission() {},
+    confirm: (job) => confirmed.push(job),
+    cancel: (job) => cancelled.push(job),
+    refresh() {},
+    isActing: () => false,
+  };
   const properties = {
     disabled: false,
     blockReason: null,
-    onBusyChange: (value) => busyChanges.push(value),
-    onUploaded: (revision) => uploaded.push(revision),
     ...propertyOverrides,
+    queue: { ...defaultQueue, ...propertyOverrides.queue },
   };
   t.after(() => {
     delete globalThis.__priceHeaderDependencies;
     delete globalThis.__priceHeaderHooks;
   });
   return {
-    busyChanges,
-    uploaded,
+    enqueued,
+    confirmed,
+    cancelled,
     render() {
       cursor = 0;
       return HeaderOfferUpload(properties);
@@ -237,20 +253,17 @@ function selectedFiles(...names) {
   return names.map((name) => new File([`content:${name}`], name, { type: "application/pdf" }));
 }
 
-test("change and drop both preflight and send every selected file as multipart", async (t) => {
-  const calls = [];
-  let preflights = 0;
-  let uploads = 0;
+test("change and drop enqueue every selected PDF while earlier jobs keep processing", (t) => {
+  const processingJob = {
+    id: "job-1",
+    client_request_id: "request-1",
+    status: "processing",
+    file_names: ["Bereits.pdf"],
+    created_at: "2026-11-26T08:00:00Z",
+    updated_at: "2026-11-26T08:01:00Z",
+  };
   const mounted = mount(t, {
-    priceRequest: async (path, options = {}) => {
-      calls.push([path, options]);
-      if (options.method === "POST") {
-        uploads += 1;
-        return { revision: `after-${uploads}` };
-      }
-      preflights += 1;
-      return { revision: preflights === 1 ? "fresh-change" : "fresh-drop" };
-    },
+    queue: { jobs: [processingJob] },
   });
   const { input } = headerControls(mounted.render());
   const files = selectedFiles("Erstes.pdf", "Zweites.PDF");
@@ -258,136 +271,62 @@ test("change and drop both preflight and send every selected file as multipart",
 
   input.props.onChange({ currentTarget });
   assert.equal(currentTarget.value, "");
-  await eventually(() => mounted.uploaded.length === 1);
-
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0][0], "/price-comparison/files");
-  assert.equal(calls[0][1].method, undefined);
-  const body = calls[1][1].body;
-  assert.equal(calls[1][0], "/price-comparison/files");
-  assert.equal(calls[1][1].method, "POST");
-  assert.equal(body.get("kind"), "offers");
-  assert.equal(body.get("expected_revision"), "fresh-change");
-  assert.deepEqual(body.getAll("files").map((file) => file.name), ["Erstes.pdf", "Zweites.PDF"]);
-  assert.equal(body.has("confirmed_duplicates"), false);
+  assert.deepEqual(mounted.enqueued[0].map((file) => file.name), ["Erstes.pdf", "Zweites.PDF"]);
   const { dropzone } = headerControls(mounted.render());
+  assert.match(renderedText(dropzone), /Weitere Angebote hochladen/);
   let prevented = false;
   dropzone.props.onDrop({
     preventDefault() { prevented = true; },
     dataTransfer: { files: selectedFiles("Drop.pdf") },
   });
-  await eventually(() => mounted.uploaded.length === 2);
 
   assert.equal(prevented, true);
-  assert.equal(calls.length, 4);
-  assert.equal(calls[3][1].body.get("expected_revision"), "fresh-drop");
-  assert.deepEqual(calls[3][1].body.getAll("files").map((file) => file.name), ["Drop.pdf"]);
-  assert.deepEqual(mounted.busyChanges, [true, false, true, false]);
-  assert.deepEqual(mounted.uploaded, ["after-1", "after-2"]);
+  assert.deepEqual(mounted.enqueued[1].map((file) => file.name), ["Drop.pdf"]);
 });
 
-test("the synchronous busy ref prevents a second change or drop from starting", async (t) => {
-  const preflight = deferred();
-  const calls = [];
-  const mounted = mount(t, {
-    priceRequest: async (path, options = {}) => {
-      calls.push([path, options]);
-      if (options.method !== "POST") return preflight.promise;
-      return { revision: "after-first" };
-    },
-  });
-  const { input, dropzone } = headerControls(mounted.render());
-  input.props.onChange({ currentTarget: { files: selectedFiles("First.pdf"), value: "chosen" } });
-  dropzone.props.onDrop({ preventDefault() {}, dataTransfer: { files: selectedFiles("Second.pdf") } });
-
-  assert.equal(calls.length, 1);
-  assert.deepEqual(mounted.busyChanges, [true]);
-  preflight.resolve({ revision: "fresh-first" });
-  await eventually(() => mounted.uploaded.length === 1);
-
-  assert.equal(calls.length, 2);
-  assert.deepEqual(calls[1][1].body.getAll("files").map((file) => file.name), ["First.pdf"]);
-  assert.deepEqual(mounted.busyChanges, [true, false]);
+test("validation rejects a mixed selection before it enters the persistent queue", (t) => {
+  const mounted = mount(t);
+  let { input } = headerControls(mounted.render());
+  input.props.onChange({ currentTarget: { files: [selectedFiles("Gut.pdf")[0], new File(["text"], "Falsch.txt")], value: "chosen" } });
+  const feedback = findNode(mounted.render(), (node) => node.type === "p" && node.props?.className === "is-error");
+  assert.match(renderedText(feedback), /ausschließlich PDF-Dateien/);
+  assert.deepEqual(mounted.enqueued, []);
 });
 
-function duplicateError(revision = "duplicate-revision") {
-  return new HeaderPriceComparisonError(409, "Bestätigung erforderlich", {
-    code: "duplicate_offers",
+test("awaiting duplicate jobs open the existing dialog and confirm by job identity", (t) => {
+  const awaiting = {
+    id: "job-confirm",
+    client_request_id: "request-confirm",
+    status: "awaiting_confirmation",
+    file_names: ["Neu.pdf"],
+    created_at: "2026-11-26T08:00:00Z",
+    updated_at: "2026-11-26T08:01:00Z",
+    confirmation_revision: "revision-preview",
     message: "Vorhandenes Angebot ersetzen?",
-    revision,
     duplicates: [{ offer_number: "A-7", keep: "Neu.pdf", remove: "Alt.pdf" }],
-  });
-}
-
-test("cancelling the duplicate preview performs no replacement request", async (t) => {
-  const calls = [];
-  const mounted = mount(t, {
-    priceRequest: async (path, options = {}) => {
-      calls.push([path, options]);
-      if (options.method === "POST") throw duplicateError();
-      return { revision: "preflight-revision" };
-    },
-  });
-  const { input } = headerControls(mounted.render());
-  input.props.onChange({ currentTarget: { files: selectedFiles("Neu.pdf"), value: "chosen" } });
-  await eventually(() => Boolean(duplicateDialog(mounted.render())));
-
+  };
+  const mounted = mount(t, { queue: { jobs: [awaiting] } });
+  const initial = mounted.render();
+  const trigger = findNode(initial, (node) => node.type === "button" && String(node.props?.className).includes("offer-upload-queue-trigger"));
+  trigger.props.onClick();
+  const opened = mounted.render();
+  findNode(opened, (node) => node.type === "button" && renderedText(node) === "Prüfen").props.onClick();
   const dialog = duplicateDialog(mounted.render());
   assert.ok(dialog);
-  assert.equal(calls.length, 2);
+  assert.equal(dialog.props.preview.revision, "revision-preview");
+  assert.deepEqual(dialog.props.preview.duplicates, awaiting.duplicates);
+  dialog.props.onConfirm();
+  assert.deepEqual(mounted.confirmed, [awaiting]);
   dialog.props.onClose();
   assert.equal(duplicateDialog(mounted.render()), undefined);
-  assert.equal(calls.length, 2);
-  assert.deepEqual(mounted.uploaded, []);
+  assert.deepEqual(mounted.cancelled, [], "closing a confirmation must leave the server job waiting");
 });
 
-test("confirming duplicates uses the server preview revision and exact removal list", async (t) => {
-  const calls = [];
-  const mounted = mount(t, {
-    priceRequest: async (path, options = {}) => {
-      calls.push([path, options]);
-      if (options.method !== "POST") return { revision: "stale-preflight" };
-      if (!options.body.has("confirmed_duplicates")) throw duplicateError("server-preview-revision");
-      return { revision: "after-confirmation" };
-    },
-  });
-  const { input } = headerControls(mounted.render());
-  input.props.onChange({ currentTarget: { files: selectedFiles("Neu.pdf"), value: "chosen" } });
-  await eventually(() => Boolean(duplicateDialog(mounted.render())));
+test("a newly waiting job never replaces the confirmation currently being reviewed", () => {
+  const waiting = (id) => ({ id, status: "awaiting_confirmation" });
+  const prompted = new Set(["job-a"]);
 
-  duplicateDialog(mounted.render()).props.onConfirm();
-  await eventually(() => mounted.uploaded.length === 1);
-
-  assert.equal(calls.length, 3, "confirmation must not perform another revision preflight");
-  const confirmationBody = calls[2][1].body;
-  assert.equal(confirmationBody.get("expected_revision"), "server-preview-revision");
-  assert.equal(confirmationBody.get("confirmed_duplicates"), JSON.stringify(["Alt.pdf"]));
-  assert.deepEqual(confirmationBody.getAll("files").map((file) => file.name), ["Neu.pdf"]);
-  assert.deepEqual(mounted.uploaded, ["after-confirmation"]);
-  assert.equal(duplicateDialog(mounted.render()), undefined);
-});
-
-test("validation and request failures show errors and always release busy state", async (t) => {
-  let requests = 0;
-  const mounted = mount(t, {
-    priceRequest: async (_path, options = {}) => {
-      requests += 1;
-      if (options.method === "POST") throw new Error("Upload nicht erreichbar");
-      return { revision: "fresh-error" };
-    },
-  });
-  let { input } = headerControls(mounted.render());
-  input.props.onChange({ currentTarget: { files: [new File(["text"], "Falsch.txt")], value: "chosen" } });
-  let feedback = findNode(mounted.render(), (node) => node.type === "p" && node.props?.className === "is-error");
-  assert.match(renderedText(feedback), /ausschließlich PDF-Dateien/);
-  assert.equal(requests, 0);
-
-  ({ input } = headerControls(mounted.render()));
-  input.props.onChange({ currentTarget: { files: selectedFiles("Fehler.pdf"), value: "chosen" } });
-  await eventually(() => mounted.busyChanges.at(-1) === false);
-  feedback = findNode(mounted.render(), (node) => node.type === "p" && node.props?.className === "is-error");
-  assert.match(renderedText(feedback), /Upload nicht erreichbar/);
-  assert.equal(requests, 2);
-  assert.deepEqual(mounted.busyChanges, [true, false]);
-  assert.deepEqual(mounted.uploaded, []);
+  assert.equal(nextUploadConfirmationJobId("job-a", [waiting("job-a"), waiting("job-b")], prompted), "job-a");
+  assert.equal(prompted.has("job-b"), false, "the later job remains available for the next prompt");
+  assert.equal(nextUploadConfirmationJobId(null, [waiting("job-a"), waiting("job-b")], prompted), "job-b");
 });

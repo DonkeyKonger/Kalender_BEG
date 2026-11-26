@@ -234,8 +234,19 @@ function isPriceComparisonDataMutation(path: string, rawMethod?: string): boolea
   const method = (rawMethod ?? "GET").toUpperCase();
   const pathname = path.split("?", 1)[0];
   if (!pathname.startsWith("/price-comparison/")) return false;
+  // Queue operations change only the upload job itself. The data revision is
+  // announced when polling observes the completed server-side job.
+  if (pathname.startsWith("/price-comparison/upload-jobs")) return false;
   if (method === "PUT" || method === "DELETE" || method === "PATCH") return true;
   return method === "POST" && (pathname === "/price-comparison/files" || pathname === "/price-comparison/maintenance");
+}
+
+export function announcePriceComparisonDataChanged(revision: string): void {
+  notifyPriceComparisonDataChanged(
+    "/price-comparison/upload-jobs",
+    "POST",
+    { revision },
+  );
 }
 
 function notifyPriceComparisonDataChanged(path: string, rawMethod: string | undefined, result: unknown): void {

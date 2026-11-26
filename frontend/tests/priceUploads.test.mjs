@@ -127,3 +127,49 @@ test("confirmed duplicate names use the existing JSON multipart field", async ()
   assert.equal(body.get("confirmed_duplicates"), JSON.stringify(duplicates));
   assert.equal(body.getAll("files").length, files.length);
 });
+
+test("offer jobs enqueue one persistent multipart job with the supplied idempotency UUID", async () => {
+  const requests = [];
+  const { createOfferUploadJob } = loadModule(async (...args) => {
+    requests.push(args);
+    return { job: { id: "job-1" } };
+  });
+  const files = [
+    new File(["first"], "Erstes.pdf", { type: "application/pdf" }),
+    new File(["second"], "Zweites.pdf", { type: "application/pdf" }),
+  ];
+
+  await createOfferUploadJob(files, "ddc3cb4e-3719-4935-b268-a07f6138b27e");
+
+  const [path, options] = requests[0];
+  assert.equal(path, "/price-comparison/upload-jobs");
+  assert.equal(options.method, "POST");
+  assert.equal(options.body.get("kind"), "offers");
+  assert.equal(options.body.get("client_request_id"), "ddc3cb4e-3719-4935-b268-a07f6138b27e");
+  assert.deepEqual(options.body.getAll("files").map((file) => file.name), ["Erstes.pdf", "Zweites.pdf"]);
+});
+
+test("job polling, duplicate confirmation and cancellation use the queue endpoints without resending PDFs", async () => {
+  const requests = [];
+  const module = loadModule(async (...args) => {
+    requests.push(args);
+    return args[0].endsWith("upload-jobs") ? { jobs: [] } : { job: { id: "job / 7" } };
+  });
+  const controller = new AbortController();
+
+  await module.listOfferUploadJobs(controller.signal);
+  await module.confirmOfferUploadJob("job / 7", "revision-preview", ["Alt.pdf"]);
+  await module.cancelOfferUploadJob("job / 7");
+
+  assert.deepEqual(requests.map(([path, options]) => [path, options.method]), [
+    ["/price-comparison/upload-jobs", undefined],
+    ["/price-comparison/upload-jobs/job%20%2F%207/confirm", "POST"],
+    ["/price-comparison/upload-jobs/job%20%2F%207", "DELETE"],
+  ]);
+  assert.strictEqual(requests[0][1].signal, controller.signal);
+  assert.deepEqual(JSON.parse(requests[1][1].body), {
+    expected_revision: "revision-preview",
+    confirmed_duplicates: ["Alt.pdf"],
+  });
+  assert.equal(requests[1][1].body instanceof FormData, false);
+});

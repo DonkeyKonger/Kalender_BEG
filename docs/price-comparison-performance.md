@@ -1,5 +1,70 @@
 # Ladezeiten im Preisvergleich
 
+## Stand 26.11.2026: Angebotsimport und Warteschlange
+
+Der PDF-Parser bleibt unverändert. Beim Upload wurde dieselbe PDF bisher einmal
+zur Prüfung und nach dem Speichern erneut eingelesen. Der bereits geprüfte Frame
+wird jetzt atomar unter dem Cache-Schlüssel der tatsächlich gespeicherten Version
+abgelegt; dabei wird nur `Quelle` auf den endgültigen Dateinamen gesetzt.
+Die PDF-Bytes und die bestehenden Schreib-, Dubletten- und Rollbackregeln bleiben
+erhalten. Die Dublettenprüfung liest nur die benötigten Angebotsnummern statt
+den gesamten DATANORM-/Preisbestand aufzubereiten. Importierte, virtuelle und
+ausgeschlossene Quellen sowie entfernte Positionen werden weiter berücksichtigt.
+
+### Messung
+
+Vollständige `service.upload`-Läufe gegenüber `78d36f8`, jeweils ein unprofilierter
+Lauf mit identischen Dateien und einem vorgewärmten Bestands-Cache im isolierten
+Linux-Dateisystem. Keine OneDrive- oder Browser-Netzwerklatenz enthalten.
+
+| Testangebot | Vorher | Nachher | Parseraufrufe |
+| --- | ---: | ---: | ---: |
+| 41 Seiten, 126 Positionen | 5,924 s | 3,176 s (−46,4 %) | 2 → 1 |
+| 321 Seiten, 115 Positionen | 66,416 s | 30,371 s (−54,3 %) | 2 → 1 |
+
+Gespeicherte Bytes/SHA, vollständige Frames, Spalten, Datentypen und endgültige
+Quellnamen sind in allen vier Läufen exakt gleich. Die aufwendige
+PDF-Tabellenerkennung bleibt bei großen Dokumenten der wesentliche Zeitanteil;
+diese Messungen sind keine feste Laufzeitzusage für Azure oder andere PDFs.
+
+### Upload-Ablauf
+
+- Der Header nimmt weitere Auswahlen an, während frühere PDFs verarbeitet werden.
+  Eine Mehrfachauswahl bildet einen gemeinsamen Auftrag. Ein defektes PDF lässt
+  den gesamten Auftrag fehlschlagen; spätere Aufträge laufen weiter.
+- `POST /price-comparison/upload-jobs` speichert Dateien und Auftrag zuerst in
+  PostgreSQL und antwortet mit HTTP 202. Die PDF-Erkennung läuft anschließend
+  außerhalb des Requests. Erst nach erfolgreichem Speichern in der Warteschlange
+  ist ein Browser-Neuladen bzw. Schließen ohne Verlust dieses Auftrags möglich.
+- UUID und Inhalts-Hash machen eine Wiederholung einer unklaren Übertragung
+  idempotent. Joblisten enthalten ausschließlich eigene Aufträge des aktuellen
+  Speichers. Rollen und Speicherbindung werden vor Verarbeitung erneut geprüft.
+- Ein PostgreSQL-Advisory-Lock wählt pro Datenbank einen Worker; ein atomarer
+  Claim verhindert gleichzeitige Verarbeitung mehrerer Jobs. Die bestehenden
+  Speichersperren schützen weiterhin Uploads und andere Dateiänderungen.
+- Dubletten wechseln in `awaiting_confirmation`; nachfolgende Aufträge laufen
+  weiter. Die Bestätigung gilt nur für die angezeigte Revision und Dateiliste.
+  Eine inzwischen veränderte Revision löst eine neue Prüfung aus. Wartende oder
+  auf Bestätigung wartende Aufträge können abgebrochen werden.
+- Status wird bei aktiven Jobs etwa sekündlich, sonst alle zehn Sekunden
+  abgefragt. Im Hintergrundtab pausiert das Polling. Nach Abschluss werden
+  Leseansichten aktualisiert; offene Angebotsentwürfe bleiben erhalten und
+  zeigen einen Hinweis zum bewussten Neuladen.
+- Grenzen: 40 MiB pro Datei, 160 MiB pro Auswahl, zehn aktive Aufträge bzw.
+  320 MiB pro Benutzer und insgesamt 1 GiB offene Dateien. Temporäre DB-Payloads
+  werden bei Abschluss, Fehler oder Abbruch geleert. Unbestätigte Dubletten
+  verfallen nach sieben Tagen; terminale Jobmetadaten nach 30 Tagen.
+- Wartende Aufträge überstehen einen Serverneustart. Ein während der Verarbeitung
+  abgebrochener Prozess wird nach fehlendem Heartbeat als Fehler mit Prüfhinweis
+  sichtbar, damit ein möglicherweise bereits geschriebener Dateistand nicht
+  ungeprüft erneut angewendet wird.
+
+Migration `20261126_0134` muss vor dem Backendstart ausgeführt werden. Sie ergänzt
+nur die beiden Warteschlangentabellen. Der lokale Testkalender führt sie beim
+Rebuild aus; Bestandsdaten und Angebotsdateien werden dabei nicht neu importiert.
+Die Queue wird beim App-Start gestartet und beim Herunterfahren beendet.
+DATANORM-Uploads behalten ihren bisherigen synchronen Ablauf.
+
 ## Stand 24.11.2026: Sofortsuche und Hintergrundabgleich
 
 Die vom Nutzer freigegebene Sofortsuche hält den vollständigen Artikelindex nur
