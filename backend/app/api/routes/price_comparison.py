@@ -57,7 +57,7 @@ Offset = Annotated[int, Query(ge=0, le=1_000_000)]
 Limit = Annotated[int, Query(ge=1, le=500)]
 Search = Annotated[str, Query(max_length=300)]
 PriceLevel = Annotated[Literal["all", "below", "above", "none"], Query()]
-OfferSort = Annotated[Literal["date", "price_asc", "price_desc"], Query()]
+OfferSort = Annotated[Literal["uploaded", "date", "price_asc", "price_desc"], Query()]
 
 
 class Payload(BaseModel):
@@ -159,7 +159,7 @@ def offers(
     search: Search = "",
     offer_type: Search = "",
     price_level: PriceLevel = "all",
-    sort: OfferSort = "date",
+    sort: OfferSort = "uploaded",
     offset: Offset = 0,
     limit: Limit = 20,
 ):

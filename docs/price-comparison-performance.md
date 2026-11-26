@@ -2,6 +2,16 @@
 
 ## Stand 26.11.2026: Angebotsimport und Warteschlange
 
+Die Angebotsübersicht startet mit **Zuletzt hochgeladen**. Neue erfolgreiche
+Angebotsuploads erhalten dafür einen an die Dateiversion gebundenen UTC-Zeitpunkt
+in `offer_uploaded_at` der bestehenden `calendar_state.json`; auch ein bestätigtes
+Ersetzen zählt als neuer Upload. Preis-, Rabatt- und Angebotsartänderungen
+verändern diesen Zeitpunkt nicht. Bei Bestandsdateien ohne erfassten
+Upload-Zeitpunkt sowie extern ersetzten Dateien dient der vorhandene
+Dateizeitstempel als Ersatz. Virtuelle Angebote ohne Zeitinformation stehen am
+Ende. Die Sortierung erfolgt vor der Seiteneinteilung; **Neueste zuerst** bleibt
+als gesonderte Auswahl nach dem Angebotsdatum verfügbar.
+
 Der PDF-Parser bleibt unverändert. Beim Upload wurde dieselbe PDF bisher einmal
 zur Prüfung und nach dem Speichern erneut eingelesen. Der bereits geprüfte Frame
 wird jetzt atomar unter dem Cache-Schlüssel der tatsächlich gespeicherten Version

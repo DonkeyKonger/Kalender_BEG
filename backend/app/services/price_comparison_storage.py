@@ -680,6 +680,7 @@ def snapshot(store) -> Snapshot:
         "reference_presets": {},
         "deleted_articles": {},
         "frozen_metrics": {},
+        "offer_uploaded_at": {},
         "active_datanorm": None,
         "online_import": None,
     }
@@ -721,6 +722,7 @@ def snapshot(store) -> Snapshot:
         "reference_presets",
         "deleted_articles",
         "frozen_metrics",
+        "offer_uploaded_at",
     ):
         if not isinstance(state.get(key), dict):
             raise HTTPException(422, "Gespeicherte Preisvergleich-Einstellungen sind ungültig.")

@@ -414,7 +414,9 @@ def test_offer_overview_filters_counts_sorts_before_pagination_without_mutation(
     original_order = [item["source"] for item in cached_offers]
 
     base_params = {"search": "alpha", "offer_type": "Erstangebot", "limit": 20}
-    by_date = client.get("/api/price-comparison/offers", params=base_params)
+    by_date = client.get(
+        "/api/price-comparison/offers", params={**base_params, "sort": "date"}
+    )
     assert by_date.status_code == 200, by_date.text
     assert [item["source"] for item in by_date.json()["offers"]] == [
         "alpha-positive-new",
@@ -498,6 +500,298 @@ def test_offer_overview_filters_counts_sorts_before_pagination_without_mutation(
     assert math.isinf(cached_offers[-3]["price_change"])
     assert math.isinf(cached_offers[-2]["price_change"])
     assert math.isnan(cached_offers[-1]["price_change"])
+
+
+def test_offer_overview_defaults_to_uploaded_sort_before_pagination_without_mutation(
+    context,
+    monkeypatch,
+):
+    client, service, _ = context
+
+    def offer(source, uploaded_at, date):
+        return {
+            "source": source,
+            "project": "Projekt",
+            "offer_number": source,
+            "date": date,
+            "uploaded_at": uploaded_at,
+            "offer_type": "Erstangebot",
+            "discount": 0,
+            "align_netto": False,
+            "position_count": 1,
+            "total_net": 100.0,
+            "price_change": 0.0,
+            "price_change_positions": 0.0,
+            "original_available": True,
+        }
+
+    cached_offers = [
+        offer("legacy-physical", "2026-01-01T10:00:00Z", "2026-12-01"),
+        offer("new-upload", "2026-05-01T10:00:00Z", "2025-01-01"),
+        offer("tie-b", "2026-04-01T10:00:00Z", "2026-02-02"),
+        offer("tie-a", "2026-04-01T10:00:00Z", "2026-02-01"),
+        offer("virtual-no-time", None, "2027-01-01"),
+        offer("invalid-time", "not-a-timestamp", "2026-03-01"),
+    ]
+    original = deepcopy(cached_offers)
+    data = SimpleNamespace(
+        snap=SimpleNamespace(revision="r" * 64),
+        warnings=[],
+    )
+    monkeypatch.setattr(service, "load", lambda: data)
+    monkeypatch.setattr(service, "offers_list", lambda received: cached_offers)
+
+    response = client.get(
+        "/api/price-comparison/offers", params={"offset": 1, "limit": 3}
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["total"] == 6
+    assert [item["source"] for item in response.json()["offers"]] == [
+        "tie-a",
+        "tie-b",
+        "legacy-physical",
+    ]
+    assert cached_offers == original
+
+
+def test_upload_timestamp_lifecycle_and_metadata_updates(context, monkeypatch):
+    client, service, _ = context
+    timestamps = iter(("2026-11-26T08:00:00+00:00", "2026-11-26T09:30:00+00:00"))
+    monkeypatch.setattr(service, "_upload_timestamp", lambda: next(timestamps))
+    seed(client)
+
+    first = snapshot(service.store)
+    first_item = first.find("offers", "Angebot.pdf")
+    assert first.state["offer_uploaded_at"] == {
+        "Angebot.pdf": {
+            "version": first_item.version,
+            "uploaded_at": "2026-11-26T08:00:00+00:00",
+        }
+    }
+    overview = client.get("/api/price-comparison/offers").json()["offers"]
+    assert overview[0]["uploaded_at"] == "2026-11-26T08:00:00+00:00"
+
+    changed = client.patch(
+        "/api/price-comparison/offers/Angebot.pdf",
+        json={"expected_revision": first.revision, "discount": 7.5},
+    )
+    assert changed.status_code == 200, changed.text
+    after_metadata = snapshot(service.store)
+    assert after_metadata.state["offer_uploaded_at"]["Angebot.pdf"] == {
+        "version": first_item.version,
+        "uploaded_at": "2026-11-26T08:00:00+00:00",
+    }
+
+    service.upload(
+        "offers",
+        [("Angebot.pdf", offer_pdf(number="TEST-1", price="10,00"))],
+        after_metadata.revision,
+        confirmed_duplicates=["Angebot.pdf"],
+    )
+    replaced = snapshot(service.store)
+    replaced_item = replaced.find("offers", "Angebot.pdf")
+    assert replaced.state["offer_uploaded_at"]["Angebot.pdf"] == {
+        "version": replaced_item.version,
+        "uploaded_at": "2026-11-26T09:30:00+00:00",
+    }
+
+    deleted = client.delete(
+        "/api/price-comparison/files/offers/Angebot.pdf",
+        params={"expected_revision": replaced.revision},
+    )
+    assert deleted.status_code == 200, deleted.text
+    assert "Angebot.pdf" not in snapshot(service.store).state["offer_uploaded_at"]
+
+
+def test_uploaded_at_falls_back_to_physical_modified_and_not_offer_date_for_virtual(
+    context,
+):
+    client, service, _ = context
+    seed(client)
+    service.store.write("offers", "Extra.pdf", offer_pdf(number="EXTRA-1"), None)
+    legacy = snapshot(service.store)
+    legacy.state["offer_uploaded_at"] = {}
+    save_state(service.store, legacy)
+    install_online_import(service)
+    current = snapshot(service.store)
+    physical = current.find("offers", "Angebot.pdf")
+
+    response = client.get("/api/price-comparison/offers")
+
+    assert response.status_code == 200, response.text
+    by_source = {offer["source"]: offer for offer in response.json()["offers"]}
+    assert pd.Timestamp(by_source["Angebot.pdf"]["uploaded_at"]) == pd.Timestamp(
+        physical.modified
+    )
+    assert by_source["Virtual.pdf"]["uploaded_at"] is None
+    assert [offer["source"] for offer in response.json()["offers"]] == [
+        "Angebot.pdf",
+        "Virtual.pdf",
+    ]
+
+
+def test_external_offer_replacement_uses_new_file_modified_fallback(context, monkeypatch):
+    client, service, _ = context
+    monkeypatch.setattr(
+        service, "_upload_timestamp", lambda: "2020-01-01T00:00:00+00:00"
+    )
+    seed(client)
+    before = snapshot(service.store)
+    previous = before.find("offers", "Angebot.pdf")
+
+    externally_replaced = service.store.write(
+        "offers",
+        "Angebot.pdf",
+        offer_pdf(number="TEST-1", price="11,00"),
+        previous,
+    )
+    response = client.get("/api/price-comparison/offers")
+
+    assert response.status_code == 200, response.text
+    offer = response.json()["offers"][0]
+    assert pd.Timestamp(offer["uploaded_at"]) == pd.Timestamp(externally_replaced.modified)
+    assert offer["uploaded_at"] != "2020-01-01T00:00:00+00:00"
+
+
+def test_normal_upload_lost_state_response_restores_original_upload_state(
+    context,
+    monkeypatch,
+):
+    client, service, _ = context
+    seed(client)
+    before = snapshot(service.store)
+    original_state = deepcopy(before.state)
+    original_write = service.store.write
+    failed = False
+
+    def persist_state_then_fail(kind, name, raw, previous):
+        nonlocal failed
+        result = original_write(kind, name, raw, previous)
+        if kind == "cache" and name == STATE_NAME and not failed:
+            failed = True
+            raise RuntimeError("simulated lost state-write response")
+        return result
+
+    monkeypatch.setattr(service.store, "write", persist_state_then_fail)
+    with pytest.raises(RuntimeError, match="lost state-write response"):
+        service.upload(
+            "offers",
+            [("Added.pdf", offer_pdf(number="ADDED-1"))],
+            before.revision,
+            confirmed_duplicates=[],
+        )
+
+    current = snapshot(service.store)
+    assert "Added.pdf" not in {
+        item.name for item in current.files if item.kind == "offers"
+    }
+    assert current.state == original_state
+
+
+def test_rollback_never_overwrites_concurrent_legacy_settings_without_state_file(
+    context,
+):
+    _, service, _ = context
+    legacy = service.store.write(
+        "cache", "rabatte.json", b'{"Angebot.pdf": 1}', None
+    )
+    original = snapshot(service.store)
+    assert original.state_file is None
+    attempted = deepcopy(original.state)
+    attempted["discounts"] = {"Attempted.pdf": 2}
+
+    service.store.write(
+        "cache", "rabatte.json", b'{"Attempted.pdf": 2}', legacy
+    )
+    with pytest.raises(RuntimeError, match="anderweitig geändert"):
+        service._restore_import_bindings(
+            original_state_file=None,
+            original_state=original.state,
+            attempted_state=attempted,
+            restored_versions=[],
+        )
+
+    current = snapshot(service.store)
+    assert current.state_file is None
+    assert current.state["discounts"] == {"Attempted.pdf": 2}
+
+
+def test_delete_rollback_binds_legacy_modified_time_to_restored_version(
+    context,
+    monkeypatch,
+):
+    client, service, _ = context
+    seed(client)
+    legacy = snapshot(service.store)
+    legacy.state["offer_uploaded_at"] = {}
+    save_state(service.store, legacy)
+    before = snapshot(service.store)
+    original_item = before.find("offers", "Angebot.pdf")
+    original_bytes = service.store.read(original_item)
+    original_write = service.store.write
+    failed = False
+
+    def persist_state_then_fail(kind, name, raw, previous):
+        nonlocal failed
+        result = original_write(kind, name, raw, previous)
+        if kind == "cache" and name == STATE_NAME and not failed:
+            failed = True
+            raise RuntimeError("simulated lost delete-state response")
+        return result
+
+    monkeypatch.setattr(service.store, "write", persist_state_then_fail)
+    with pytest.raises(RuntimeError, match="lost delete-state response"):
+        service.delete_file("offers", "Angebot.pdf", before.revision)
+
+    current = snapshot(service.store)
+    restored = current.find("offers", "Angebot.pdf")
+    assert service.store.read(restored) == original_bytes
+    assert current.state["offer_uploaded_at"]["Angebot.pdf"] == {
+        "version": restored.version,
+        "uploaded_at": original_item.modified,
+    }
+
+
+def test_rebuild_rollback_rebinds_preserved_upload_time(context, monkeypatch):
+    client, service, _ = context
+    seed(client)
+    duplicate = service.store.write(
+        "offers", "Duplicate.pdf", offer_pdf(number="TEST-1"), None
+    )
+    configured = snapshot(service.store)
+    configured.state["offer_uploaded_at"]["Duplicate.pdf"] = {
+        "version": duplicate.version,
+        "uploaded_at": "2026-11-26T07:00:00+00:00",
+    }
+    save_state(service.store, configured)
+    before = snapshot(service.store)
+    preview = service.rebuild_preview(before.revision)
+    removed_name = preview["duplicates"][0]["remove"]
+    original_record = deepcopy(before.state["offer_uploaded_at"][removed_name])
+    original_bytes = service.store.read(before.find("offers", removed_name))
+    original_write = service.store.write
+    failed = False
+
+    def persist_state_then_fail(kind, name, raw, previous):
+        nonlocal failed
+        result = original_write(kind, name, raw, previous)
+        if kind == "cache" and name == STATE_NAME and not failed:
+            failed = True
+            raise RuntimeError("simulated lost rebuild-state response")
+        return result
+
+    monkeypatch.setattr(service.store, "write", persist_state_then_fail)
+    with pytest.raises(RuntimeError, match="lost rebuild-state response"):
+        service.rebuild(before.revision, [removed_name])
+
+    current = snapshot(service.store)
+    restored = current.find("offers", removed_name)
+    assert service.store.read(restored) == original_bytes
+    assert current.state["offer_uploaded_at"][removed_name] == {
+        "version": restored.version,
+        "uploaded_at": original_record["uploaded_at"],
+    }
 
 
 @pytest.mark.parametrize(
@@ -1233,7 +1527,7 @@ def test_upload_rolls_back_replacements_and_duplicate_removal_when_state_save_fa
         return original_write(kind, name, raw, previous)
 
     monkeypatch.setattr(service.store, "write", failing_write)
-    with pytest.raises(RuntimeError, match="injected state failure"):
+    with pytest.raises(RuntimeError, match="manuell prüfen"):
         service.upload(
             "offers",
             [("replacement.pdf", offer_pdf(price="10,00"))],
@@ -1262,7 +1556,7 @@ def test_delete_rolls_back_source_when_state_save_fails(context, monkeypatch):
         return original_write(kind, name, raw, previous)
 
     monkeypatch.setattr(service.store, "write", failing_write)
-    with pytest.raises(RuntimeError, match="injected state failure"):
+    with pytest.raises(RuntimeError, match="manuell prüfen"):
         service.delete_file("offers", "Angebot.pdf", before.revision)
 
     after = snapshot(service.store)

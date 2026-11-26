@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 import fcntl
 import hashlib
@@ -620,12 +620,27 @@ class PriceComparisonService:
             totals = pd.to_numeric(frame.get("Gesamt (netto)"), errors="coerce")
             net = totals.max() if isinstance(totals, pd.Series) else None
             calculated = calculated_metrics.get(source.name, {})
+            uploaded_at = None
+            recorded_upload = data.snap.state.get("offer_uploaded_at", {}).get(
+                source.name
+            )
+            if (
+                source.item is not None
+                and isinstance(recorded_upload, dict)
+                and recorded_upload.get("version") == source.item.version
+            ):
+                uploaded_at = self._normalized_offer_timestamp(
+                    recorded_upload.get("uploaded_at")
+                )
+            if uploaded_at is None and source.item is not None:
+                uploaded_at = self._normalized_offer_timestamp(source.item.modified)
             result.append(
                 {
                     "source": source.name,
                     "project": str(row.get("Projekt") or "—"),
                     "offer_number": str(row.get("Angebot") or ""),
                     "date": date.date().isoformat() if pd.notna(date) else None,
+                    "uploaded_at": uploaded_at,
                     "offer_type": data.snap.state["offer_types"].get(source.name, "Erstangebot"),
                     "discount": data.snap.state["discounts"].get(source.name, 0),
                     "align_netto": bool(data.snap.state["align_netto"].get(source.name, False)),
@@ -683,8 +698,27 @@ class PriceComparisonService:
             source,
         )
 
+    @staticmethod
+    def _normalized_offer_timestamp(value):
+        if not isinstance(value, str) or not value.strip():
+            return None
+        timestamp = pd.to_datetime(value, errors="coerce", utc=True)
+        return None if pd.isna(timestamp) else timestamp.isoformat()
+
+    @staticmethod
+    def _offer_upload_sort_key(offer):
+        value = pd.to_datetime(offer.get("uploaded_at"), errors="coerce", utc=True)
+        timestamp = None if pd.isna(value) else int(value.value)
+        source = str(offer.get("source") or "")
+        return (
+            timestamp is None,
+            -timestamp if timestamp is not None else 0,
+            source.casefold(),
+            source,
+        )
+
     def offers(
-        self, *, search="", offer_type="", price_level="all", sort="date",
+        self, *, search="", offer_type="", price_level="all", sort="uploaded",
         offset=0, limit=20,
     ):
         data = self.load()
@@ -717,7 +751,11 @@ class PriceComparisonService:
         if price_level != "all":
             classified = [item for item in classified if item[2] == price_level]
 
-        if sort == "date":
+        if sort == "uploaded":
+            classified = sorted(
+                classified, key=lambda item: self._offer_upload_sort_key(item[0])
+            )
+        elif sort == "date":
             classified = sorted(
                 classified, key=lambda item: self._offer_date_sort_key(item[0])
             )
@@ -1018,6 +1056,7 @@ class PriceComparisonService:
             "align_netto",
             "deleted_articles",
             "frozen_metrics",
+            "offer_uploaded_at",
         ):
             state[key].pop(source, None)
         state["manual_prices"] = {
@@ -1025,6 +1064,10 @@ class PriceComparisonService:
             for key, value in state["manual_prices"].items()
             if not key.startswith(source + "||")
         }
+
+    @staticmethod
+    def _upload_timestamp() -> str:
+        return datetime.now(UTC).isoformat()
 
     @staticmethod
     def _same_stored_file(left: StoredFile | None, right: StoredFile | None) -> bool:
@@ -1044,8 +1087,6 @@ class PriceComparisonService:
         attempted_state: dict,
         restored_versions: list[tuple[StoredFile, StoredFile]],
     ) -> None:
-        if not original_state.get("online_import"):
-            return
         try:
             current = snapshot(self.store)
         except Exception as exc:
@@ -1054,10 +1095,13 @@ class PriceComparisonService:
                 "Preisvergleich-Zustand konnte nicht sicher geprüft werden. "
                 "Bitte den Preisvergleich vor weiteren Änderungen manuell prüfen."
             ) from exc
-        state_unchanged = self._same_stored_file(
+        state_file_unchanged = self._same_stored_file(
             original_state_file, current.state_file
         )
-        state_is_our_attempt = current.state == attempted_state
+        state_unchanged = state_file_unchanged and current.state == original_state
+        state_is_our_attempt = (
+            not state_file_unchanged and current.state == attempted_state
+        )
         if not state_unchanged and not state_is_our_attempt:
             raise RollbackRecoveryError(
                 "Preisdateien wurden wiederhergestellt, aber calendar_state.json "
@@ -1070,9 +1114,13 @@ class PriceComparisonService:
             return
 
         current.state = deepcopy(original_state)
-        config = current.state["online_import"]
+        config = current.state.get("online_import")
         for previous, restored in restored_versions:
-            binding = config["offer_bindings"].get(previous.name)
+            binding = (
+                config["offer_bindings"].get(previous.name)
+                if config is not None
+                else None
+            )
             if (
                 previous.kind == "offers"
                 and isinstance(binding, dict)
@@ -1080,7 +1128,7 @@ class PriceComparisonService:
             ):
                 binding["version"] = restored.version
                 binding["modified"] = restored.modified
-            datanorm_binding = config.get("datanorm_binding")
+            datanorm_binding = config.get("datanorm_binding") if config else None
             if (
                 previous.kind == "datanorm"
                 and isinstance(datanorm_binding, dict)
@@ -1088,6 +1136,18 @@ class PriceComparisonService:
                 and datanorm_binding.get("version") == previous.version
             ):
                 datanorm_binding["version"] = restored.version
+            if previous.kind == "offers":
+                recorded_upload = current.state["offer_uploaded_at"].get(previous.name)
+                uploaded_at = (
+                    recorded_upload.get("uploaded_at")
+                    if isinstance(recorded_upload, dict)
+                    and recorded_upload.get("version") == previous.version
+                    else previous.modified
+                )
+                current.state["offer_uploaded_at"][previous.name] = {
+                    "version": restored.version,
+                    "uploaded_at": uploaded_at,
+                }
         try:
             save_state(self.store, current)
         except Exception as exc:
@@ -1278,6 +1338,13 @@ class PriceComparisonService:
                         snap.state["active_datanorm"] = target_name
                     else:
                         snap.state["deleted_articles"].pop(target_name, None)
+                if kind == "offers" and changed:
+                    uploaded_at = self._upload_timestamp()
+                    for updated, _backup, _previous in changed:
+                        snap.state["offer_uploaded_at"][updated.name] = {
+                            "version": updated.version,
+                            "uploaded_at": uploaded_at,
+                        }
                 for item in remove_items:
                     self.store.delete(item)
                     removed.append(item)
@@ -1355,6 +1422,7 @@ class PriceComparisonService:
                     "align_netto",
                     "deleted_articles",
                     "frozen_metrics",
+                    "offer_uploaded_at",
                 ):
                     snap.state[key].pop(name, None)
                 snap.state["manual_prices"] = {
@@ -1451,7 +1519,10 @@ class PriceComparisonService:
                     content = self.store.read(item)
                     self.store.delete(item)
                     removed.append((item, content))
-                    for key in ("discounts", "offer_types", "align_netto", "frozen_metrics"):
+                    for key in (
+                        "discounts", "offer_types", "align_netto", "frozen_metrics",
+                        "offer_uploaded_at",
+                    ):
                         state[key].pop(name, None)
                     state["manual_prices"] = {
                         k: v

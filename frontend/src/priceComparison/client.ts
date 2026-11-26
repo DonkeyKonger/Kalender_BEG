@@ -42,7 +42,7 @@ export type ReferencePresets = {
 
 export type OfferType = "Erstangebot" | "Folgeangebot" | "Verhandeltes Angebot";
 export type OfferPriceLevel = "all" | "below" | "above" | "none";
-export type OfferSort = "date" | "price_asc" | "price_desc";
+export type OfferSort = "uploaded" | "date" | "price_asc" | "price_desc";
 export type OfferComparisonUnavailableReason =
   | "insufficient_references"
   | "insufficient_coverage"
@@ -71,6 +71,7 @@ export type OfferSummary = {
   project: string;
   offer_number: string;
   date: string | null;
+  uploaded_at?: string | null;
   offer_type: OfferType;
   discount: number;
   align_netto: boolean;

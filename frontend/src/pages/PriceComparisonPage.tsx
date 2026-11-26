@@ -113,6 +113,7 @@ const offerTypeFilterOptions = [
   ...offerTypeOptions,
 ];
 const offerSortOptions = [
+  { value: "uploaded", label: "Zuletzt hochgeladen" },
   { value: "date", label: "Neueste zuerst" },
   { value: "price_asc", label: "Günstigste zuerst" },
   { value: "price_desc", label: "Teuerste zuerst" },
@@ -881,7 +882,7 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation }: { uploadRevi
   const [search, setSearch] = useState("");
   const [offerType, setOfferType] = useState("");
   const [priceLevel, setPriceLevel] = useState<OfferPriceLevel>("all");
-  const [sort, setSort] = useState<OfferSort>("date");
+  const [sort, setSort] = useState<OfferSort>("uploaded");
   const [infoOpen, setInfoOpen] = useState(false);
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState<OffersResult | null>(null);
