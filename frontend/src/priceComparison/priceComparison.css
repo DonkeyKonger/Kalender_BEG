@@ -636,7 +636,8 @@
 .offer-overview-info p + p { margin-top: 6px; }
 .offer-level-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .offer-level-filter { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 7px 10px; border: 1px solid var(--price-border-strong); border-radius: 1px; background: #fff; color: var(--price-navy); font-size: 0.75rem; font-weight: 650; }
-.offer-level-filter-count { font-size: 0.85rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.offer-level-filter-label { min-width: 0; line-height: 1.35; }
+.offer-level-filter-count { flex-shrink: 0; font-size: 0.85rem; font-weight: 750; font-variant-numeric: tabular-nums; }
 .offer-level-filter.is-below :is(svg, .offer-level-filter-count) { color: #187252; }
 .offer-level-filter.is-above :is(svg, .offer-level-filter-count) { color: #9c5c14; }
 .offer-level-filter[aria-pressed="true"] { border-color: var(--price-blue); background: var(--price-blue); color: #fff; }
@@ -678,7 +679,7 @@
 .offer-list-primary strong { color: #173b60; font-size: 0.79rem; }
 .offer-list-meta { align-items: center; flex-wrap: wrap; gap: 5px 8px; color: var(--price-muted); font-size: 0.69rem; }
 .offer-list-meta > span:not(.offer-type-badge) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.offer-list-meta .offer-type-badge { padding: 1px 5px; }
+.offer-list-meta .offer-type-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 5.5rem; width: 5.5rem; white-space: nowrap; padding: 1px 5px; }
 .offer-list-price { flex-direction: column; align-items: flex-end; gap: 4px; font-variant-numeric: tabular-nums; }
 .offer-list-price strong { color: #183b61; font-size: 0.79rem; }
 .offer-list-price small { color: var(--price-muted); font-size: 0.69rem; }

@@ -933,16 +933,16 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
       </div>
       <div className="offer-level-filters" role="group" aria-label="Angebote nach Preisniveau filtern">
         <button className="offer-level-filter" type="button" title="Enthält auch Angebote ohne Abweichung (0 %)" disabled={loading} aria-pressed={priceLevel === "all"} onClick={() => { setPriceLevel("all"); setOffset(0); }}>
-          Alle Angebote <b className="offer-level-filter-count">{formatInteger(levelCounts.all)}</b>
+          <span className="offer-level-filter-label">Alle Angebote</span> <b className="offer-level-filter-count">{formatInteger(levelCounts.all)}</b>
         </button>
         <button className="offer-level-filter is-below" type="button" disabled={loading} aria-pressed={priceLevel === "below"} onClick={() => { setPriceLevel("below"); setOffset(0); }}>
-          <TrendingDown size={15} aria-hidden="true" /> Unter Vergleich <b className="offer-level-filter-count">{formatInteger(levelCounts.below)}</b>
+          <TrendingDown size={15} aria-hidden="true" /> <span className="offer-level-filter-label">Günstiger als Durchschnitt</span> <b className="offer-level-filter-count">{formatInteger(levelCounts.below)}</b>
         </button>
         <button className="offer-level-filter is-above" type="button" disabled={loading} aria-pressed={priceLevel === "above"} onClick={() => { setPriceLevel("above"); setOffset(0); }}>
-          <TrendingUp size={15} aria-hidden="true" /> Über Vergleich <b className="offer-level-filter-count">{formatInteger(levelCounts.above)}</b>
+          <TrendingUp size={15} aria-hidden="true" /> <span className="offer-level-filter-label">Teurer als Durchschnitt</span> <b className="offer-level-filter-count">{formatInteger(levelCounts.above)}</b>
         </button>
         <button className="offer-level-filter" type="button" disabled={loading} aria-pressed={priceLevel === "none"} onClick={() => { setPriceLevel("none"); setOffset(0); }}>
-          <CircleMinus size={15} aria-hidden="true" /> Ohne Vergleich <b className="offer-level-filter-count">{formatInteger(levelCounts.none)}</b>
+          <CircleMinus size={15} aria-hidden="true" /> <span className="offer-level-filter-label">Kein Vergleich</span> <b className="offer-level-filter-count">{formatInteger(levelCounts.none)}</b>
         </button>
       </div>
       <form className="price-filter-bar price-offer-filters" onSubmit={(event) => {
@@ -975,7 +975,6 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
 
       <div className={`offers-layout${selectedSource ? " has-detail" : ""}`}>
         <DataPanel loading={loading} empty={!data?.offers.length} emptyText={hasFilters ? "Keine Angebote für den aktuellen Filter gefunden." : "Noch keine Angebote eingelesen."}>
-          <TableCaption count={data?.total ?? 0} />
           <div ref={offerListRef} className="offer-list" role="list">
             <div className="offer-list-header" aria-hidden="true">
               <span>Projekt / Angebot</span>
