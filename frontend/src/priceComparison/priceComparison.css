@@ -859,6 +859,8 @@
 .offer-position-table col.offer-column-rating { width: 6.5%; }
 .offer-position-table th { padding: 7px 8px; white-space: normal; vertical-align: middle; }
 .offer-position-table td { padding: 7px 8px; vertical-align: middle; }
+.offer-position-table td.offer-column-price,
+.offer-position-table td.offer-column-minimum { font-weight: 700; }
 .offer-position-table td.is-description { width: auto; min-width: 0; max-width: none; overflow: hidden; }
 .offer-article-description { display: grid; gap: 2px; min-width: 0; line-height: 1.3; }
 .offer-article-description > * { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
