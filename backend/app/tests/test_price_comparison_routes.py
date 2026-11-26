@@ -3,6 +3,7 @@ from copy import deepcopy
 import hashlib
 import io
 import json
+import math
 from threading import Lock
 from time import sleep
 from types import SimpleNamespace
@@ -350,6 +351,162 @@ def test_real_parsers_upload_views_and_original_download(context):
     assert downloaded.content == original
     assert "attachment" in downloaded.headers["content-disposition"]
     assert snapshot(service.store).state["manual_prices"] == {}
+
+
+def test_offer_overview_filters_counts_sorts_before_pagination_without_mutation(
+    context,
+    monkeypatch,
+):
+    client, service, _ = context
+
+    def offer(source, price_change, date, *, project="Alpha", offer_type="Erstangebot"):
+        return {
+            "source": source,
+            "project": project,
+            "offer_number": source,
+            "date": date,
+            "offer_type": offer_type,
+            "discount": 0,
+            "align_netto": False,
+            "position_count": 1,
+            "total_net": 100.0,
+            "price_change": price_change,
+            "price_change_positions": price_change,
+            "original_available": True,
+        }
+
+    cached_offers = [
+        offer("alpha-negative-old", -5.0, "2026-01-01"),
+        offer("alpha-positive-new", 8.0, "2026-05-01"),
+        offer("alpha-zero", 0.0, "2026-04-01"),
+        offer("alpha-none", None, "2026-03-01"),
+        offer("alpha-negative-new", -2.0, "2026-02-01"),
+        offer("alpha-positive-tie-b", 3.0, "2026-02-15"),
+        offer("alpha-positive-tie-a", 3.0, "2026-02-15"),
+        offer(
+            "beta-infinity", float("inf"), "2026-06-03", project="Beta", offer_type="Folgeangebot"
+        ),
+        offer(
+            "beta-negative-infinity",
+            float("-inf"),
+            "2026-06-02",
+            project="Beta",
+            offer_type="Folgeangebot",
+        ),
+        offer("beta-nan", float("nan"), "2026-06-01", project="Beta", offer_type="Folgeangebot"),
+    ]
+    data = SimpleNamespace(
+        snap=SimpleNamespace(revision="r" * 64),
+        warnings=["keine Neuberechnung"],
+    )
+    calls = []
+    monkeypatch.setattr(service, "load", lambda: data)
+
+    def offers_list(received):
+        calls.append(received)
+        return cached_offers
+
+    monkeypatch.setattr(service, "offers_list", offers_list)
+    original_order = [item["source"] for item in cached_offers]
+
+    base_params = {"search": "alpha", "offer_type": "Erstangebot", "limit": 20}
+    by_date = client.get("/api/price-comparison/offers", params=base_params)
+    assert by_date.status_code == 200, by_date.text
+    assert [item["source"] for item in by_date.json()["offers"]] == [
+        "alpha-positive-new",
+        "alpha-zero",
+        "alpha-none",
+        "alpha-positive-tie-a",
+        "alpha-positive-tie-b",
+        "alpha-negative-new",
+        "alpha-negative-old",
+    ]
+    assert by_date.json()["price_level_counts"] == {
+        "all": 7,
+        "below": 2,
+        "above": 3,
+        "none": 1,
+    }
+
+    second_below = client.get(
+        "/api/price-comparison/offers",
+        params={
+            **base_params,
+            "price_level": "below",
+            "sort": "price_asc",
+            "offset": 1,
+            "limit": 1,
+        },
+    )
+    assert second_below.status_code == 200, second_below.text
+    assert second_below.json()["total"] == 2
+    assert second_below.json()["offers"][0]["source"] == "alpha-negative-new"
+    assert second_below.json()["price_level_counts"] == by_date.json()["price_level_counts"]
+
+    price_ascending = client.get(
+        "/api/price-comparison/offers",
+        params={**base_params, "sort": "price_asc"},
+    ).json()
+    assert [item["source"] for item in price_ascending["offers"]] == [
+        "alpha-negative-old",
+        "alpha-negative-new",
+        "alpha-zero",
+        "alpha-positive-tie-a",
+        "alpha-positive-tie-b",
+        "alpha-positive-new",
+        "alpha-none",
+    ]
+    price_descending = client.get(
+        "/api/price-comparison/offers",
+        params={**base_params, "sort": "price_desc"},
+    ).json()
+    assert [item["source"] for item in price_descending["offers"]] == [
+        "alpha-positive-new",
+        "alpha-positive-tie-a",
+        "alpha-positive-tie-b",
+        "alpha-zero",
+        "alpha-negative-new",
+        "alpha-negative-old",
+        "alpha-none",
+    ]
+
+    nonfinite = client.get(
+        "/api/price-comparison/offers",
+        params={
+            "search": "beta",
+            "offer_type": "Folgeangebot",
+            "price_level": "none",
+            "sort": "date",
+        },
+    )
+    assert nonfinite.status_code == 200, nonfinite.text
+    assert nonfinite.json()["price_level_counts"] == {
+        "all": 3,
+        "below": 0,
+        "above": 0,
+        "none": 3,
+    }
+    assert [item["price_change"] for item in nonfinite.json()["offers"]] == [None] * 3
+    assert [item["price_change_positions"] for item in nonfinite.json()["offers"]] == [None] * 3
+
+    assert calls == [data] * 5
+    assert [item["source"] for item in cached_offers] == original_order
+    assert math.isinf(cached_offers[-3]["price_change"])
+    assert math.isinf(cached_offers[-2]["price_change"])
+    assert math.isnan(cached_offers[-1]["price_change"])
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"price_level": "cheap"},
+        {"sort": "project"},
+    ],
+)
+def test_offer_overview_rejects_unknown_literal_parameters(context, params):
+    client, _, _ = context
+    response = client.get("/api/price-comparison/offers", params=params)
+    assert response.status_code == 422
 
 
 def test_exact_online_import_preserves_frames_virtual_source_and_file_visibility(context):

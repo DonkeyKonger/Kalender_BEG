@@ -42,6 +42,8 @@ Revision = Annotated[str, Field(min_length=64, max_length=64, pattern=r"^[a-f0-9
 Offset = Annotated[int, Query(ge=0, le=1_000_000)]
 Limit = Annotated[int, Query(ge=1, le=500)]
 Search = Annotated[str, Query(max_length=300)]
+PriceLevel = Annotated[Literal["all", "below", "above", "none"], Query()]
+OfferSort = Annotated[Literal["date", "price_asc", "price_desc"], Query()]
 
 
 class Payload(BaseModel):
@@ -133,8 +135,19 @@ def delete_preset(name: str, expected_revision: str, service: Service, db: Datab
 
 
 @router.get("/offers")
-def offers(service: Service, search: Search = "", offer_type: Search = "", offset: Offset = 0, limit: Limit = 20):
-    return service.offers(search=search, offer_type=offer_type, offset=offset, limit=limit)
+def offers(
+    service: Service,
+    search: Search = "",
+    offer_type: Search = "",
+    price_level: PriceLevel = "all",
+    sort: OfferSort = "date",
+    offset: Offset = 0,
+    limit: Limit = 20,
+):
+    return service.offers(
+        search=search, offer_type=offer_type, price_level=price_level, sort=sort,
+        offset=offset, limit=limit,
+    )
 
 
 @router.get("/offers/{source}/positions")

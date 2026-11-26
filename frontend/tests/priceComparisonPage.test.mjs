@@ -39,7 +39,15 @@ test("all four native workspaces and guarded duplicate workflows remain present"
   assert.match(page, /offset: nextOffset, limit: suggestionLimit/);
   assert.match(page, /Median 24 Monate/);
   assert.match(page, /price_change_positions/);
-  assert.match(page, /Projektwert/);
+  assert.match(page, /Preisniveau/);
+  assert.match(page, /Ø Positionsabweichung/);
+  assert.match(page, /price_level: query\.priceLevel/);
+  assert.match(page, /sort: query\.sort/);
+  assert.match(page, /offerQueryRef\.current = offerQuery/);
+  assert.match(page, /const query = offerQueryRef\.current/);
+  assert.match(page, /query === offerQueryRef\.current/);
+  assert.match(page, /offerInfoRef\.current\?\.contains/);
+  assert.match(page, /event\.key !== "Escape"/);
   assert.match(page, /Cluster-Sicherheit/);
   assert.match(page, /Zur Datanorm/);
   assert.match(page, /new Date\(b\.date\).*new Date\(a\.date\)/);

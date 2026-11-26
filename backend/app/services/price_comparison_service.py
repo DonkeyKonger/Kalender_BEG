@@ -626,9 +626,32 @@ class PriceComparisonService:
             daily=True,
         )
 
-    def offers(self, *, search="", offer_type="", offset=0, limit=20):
+    @staticmethod
+    def _finite_offer_value(value):
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        return value if math.isfinite(value) else None
+
+    @staticmethod
+    def _offer_date_sort_key(offer):
+        value = pd.to_datetime(offer.get("date"), errors="coerce")
+        timestamp = None if pd.isna(value) else int(value.value)
+        source = str(offer.get("source") or "")
+        return (
+            timestamp is None,
+            -timestamp if timestamp is not None else 0,
+            source.casefold(),
+            source,
+        )
+
+    def offers(
+        self, *, search="", offer_type="", price_level="all", sort="date",
+        offset=0, limit=20,
+    ):
         data = self.load()
-        offers = self.offers_list(data)
+        offers = list(self.offers_list(data))
         if offer_type:
             offers = [o for o in offers if o["offer_type"] == offer_type]
         if search.strip():
@@ -636,9 +659,61 @@ class PriceComparisonService:
             offers = [
                 o for o in offers if needle in " ".join(str(v) for v in o.values()).casefold()
             ]
+
+        price_levels = {"all": len(offers), "below": 0, "above": 0, "none": 0}
+        classified = []
+        for offer in offers:
+            value = self._finite_offer_value(offer.get("price_change"))
+            level = (
+                "none" if value is None
+                else "below" if value < 0
+                else "above" if value > 0
+                else None
+            )
+            if level is not None:
+                price_levels[level] += 1
+            classified.append((offer, value, level))
+
+        if price_level != "all":
+            classified = [item for item in classified if item[2] == price_level]
+
+        if sort == "date":
+            classified = sorted(
+                classified, key=lambda item: self._offer_date_sort_key(item[0])
+            )
+        elif sort == "price_asc":
+            classified = sorted(
+                classified,
+                key=lambda item: (
+                    item[1] is None,
+                    item[1] if item[1] is not None else 0.0,
+                    *self._offer_date_sort_key(item[0]),
+                ),
+            )
+        else:
+            classified = sorted(
+                classified,
+                key=lambda item: (
+                    item[1] is None,
+                    -item[1] if item[1] is not None else 0.0,
+                    *self._offer_date_sort_key(item[0]),
+                ),
+            )
+
+        # Fresh dictionaries prevent response normalization from mutating the
+        # revision-bound cached offer list.
+        result = []
+        for offer, value, _level in classified[offset : offset + limit]:
+            item = dict(offer)
+            item["price_change"] = value
+            item["price_change_positions"] = self._finite_offer_value(
+                item.get("price_change_positions")
+            )
+            result.append(item)
         return {
-            "offers": offers[offset : offset + limit],
-            "total": len(offers),
+            "offers": result,
+            "total": len(classified),
+            "price_level_counts": price_levels,
             "revision": data.snap.revision,
             "warnings": data.warnings,
         }

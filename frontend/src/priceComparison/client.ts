@@ -41,6 +41,8 @@ export type ReferencePresets = {
 };
 
 export type OfferType = "Erstangebot" | "Folgeangebot" | "Verhandeltes Angebot";
+export type OfferPriceLevel = "all" | "below" | "above" | "none";
+export type OfferSort = "date" | "price_asc" | "price_desc";
 
 export type OfferSummary = {
   source: string;
@@ -60,6 +62,7 @@ export type OfferSummary = {
 export type OffersResult = {
   offers: OfferSummary[];
   total: number;
+  price_level_counts: Record<OfferPriceLevel, number>;
   warnings?: string[];
   revision: string;
 };

@@ -4,12 +4,14 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleMinus,
   Download,
   Ellipsis,
   FileArchive,
   FileSpreadsheet,
   FileText,
   FolderSync,
+  Info,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -17,6 +19,8 @@ import {
   Save,
   Search,
   Trash2,
+  TrendingDown,
+  TrendingUp,
   Upload,
   X,
 } from "lucide-react";
@@ -45,6 +49,8 @@ import {
   type ArticleDetailResult,
   type FilesResult,
   type OfferPositionsResult,
+  type OfferPriceLevel,
+  type OfferSort,
   type OffersResult,
   type OfferType,
   type PriceComparisonStatus,
@@ -65,6 +71,8 @@ import {
   useArticleSearchIndex,
 } from "../priceComparison/articleSearch";
 import { articleWeightLabel, summarizeArticleDescription } from "../priceComparison/articleSummary";
+import { clampPageOffset, LatestRequestGate } from "../priceComparison/latestRequest";
+import { offerPriceLevelDisplayValue, offerPriceLevelPresentation } from "../priceComparison/offerPriceLevel";
 import "../priceComparison/priceComparison.css";
 
 type ViewKey = "datanorm" | "offers" | "articles" | "files";
@@ -98,6 +106,11 @@ const offerTypes: OfferType[] = ["Erstangebot", "Folgeangebot", "Verhandeltes An
 const offerTypeFilterOptions = [
   { value: "", label: "Alle Angebotsarten" },
   ...offerTypes.map((type) => ({ value: type, label: type })),
+];
+const offerSortOptions = [
+  { value: "date", label: "Neueste zuerst" },
+  { value: "price_asc", label: "Günstigste zuerst" },
+  { value: "price_desc", label: "Teuerste zuerst" },
 ];
 const currencyFormatter = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const percentFormatter = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 2, signDisplay: "exceptZero" });
@@ -788,36 +801,62 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
   const [queryInput, setQueryInput] = useState("");
   const [search, setSearch] = useState("");
   const [offerType, setOfferType] = useState("");
+  const [priceLevel, setPriceLevel] = useState<OfferPriceLevel>("all");
+  const [sort, setSort] = useState<OfferSort>("date");
+  const [infoOpen, setInfoOpen] = useState(false);
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState<OffersResult | null>(null);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const offerDetailRef = useRef<HTMLElement>(null);
+  const offerInfoRef = useRef<HTMLDivElement>(null);
+  const offerInfoButtonRef = useRef<HTMLButtonElement>(null);
+  const offerListRequests = useRef<LatestRequestGate | null>(null);
+  if (!offerListRequests.current) offerListRequests.current = new LatestRequestGate();
+  const infoId = useId();
   const limit = 20;
+  const offerQuery = useMemo(() => ({ search, offerType, priceLevel, sort, offset, limit }), [offerType, offset, priceLevel, search, sort]);
+  const offerQueryRef = useRef(offerQuery);
+  offerQueryRef.current = offerQuery;
 
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const load = useCallback(async () => {
+    const query = offerQueryRef.current;
+    const request = offerListRequests.current!.begin();
+    const isCurrent = () => request.isCurrent() && query === offerQueryRef.current;
+    let redirectedToValidPage = false;
     setLoading(true);
     setError(null);
     try {
-      setData(await priceRequest<OffersResult>(queryPath("/price-comparison/offers", {
-        search,
-        offer_type: offerType,
-        offset,
-        limit,
-      }), { signal }));
+      const result = await priceRequest<OffersResult>(queryPath("/price-comparison/offers", {
+        search: query.search,
+        offer_type: query.offerType,
+        price_level: query.priceLevel,
+        sort: query.sort,
+        offset: query.offset,
+        limit: query.limit,
+      }), { signal: request.signal });
+      if (isCurrent()) {
+        const validOffset = clampPageOffset(query.offset, result.total, query.limit);
+        if (validOffset !== query.offset) {
+          redirectedToValidPage = true;
+          setOffset(validOffset);
+        } else {
+          setData(result);
+        }
+      }
     } catch (loadError) {
-      if (!isAbortError(loadError)) setError(errorMessage(loadError));
+      if (isCurrent() && !isAbortError(loadError)) setError(errorMessage(loadError));
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (isCurrent() && !redirectedToValidPage) setLoading(false);
+      request.finish();
     }
-  }, [offerType, offset, search]);
+  }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load, uploadRevision]);
+    void load();
+    return () => offerListRequests.current?.invalidate();
+  }, [load, offerQuery, uploadRevision]);
 
   useEffect(() => {
     if (!selectedSource || !window.matchMedia("(max-width: 1180px)").matches) return;
@@ -828,9 +867,68 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
     return () => window.cancelAnimationFrame(frame);
   }, [selectedSource]);
 
+  useEffect(() => {
+    if (!infoOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!offerInfoRef.current?.contains(event.target as Node)) setInfoOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setInfoOpen(false);
+      offerInfoButtonRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [infoOpen]);
+
+  const levelCounts = data?.price_level_counts ?? { all: 0, below: 0, above: 0, none: 0 };
+  const hasFilters = Boolean(search || offerType || priceLevel !== "all");
+
   return (
     <div className="price-workspace is-offers">
-      <ViewHeading icon={<FileArchive size={19} />} title="Angebote OBO" description="Projektangebote prüfen, korrigieren und in Bestellformate exportieren." />
+      <div className="offer-overview-heading" ref={offerInfoRef}>
+        <ViewHeading
+          icon={<FileArchive size={19} />}
+          title="Angebote OBO"
+          description={<>Preisniveau gegenüber <strong>früheren Erstangeboten</strong>.</>}
+        />
+        <button
+          ref={offerInfoButtonRef}
+          className="price-icon-button"
+          type="button"
+          title="Vergleichsbasis erläutern"
+          aria-label="Vergleichsbasis erläutern"
+          aria-expanded={infoOpen}
+          aria-controls={infoId}
+          onClick={() => setInfoOpen((open) => !open)}
+        >
+          <Info size={18} aria-hidden="true" />
+        </button>
+        {infoOpen ? (
+          <div className="offer-overview-info" id={infoId}>
+            <p><strong>Was bedeutet das Preisniveau?</strong> Es ist der gespeicherte, wertgewichtete Mittelwert der Preisabweichungen vergleichbarer Positionen.</p>
+            <p>Die Referenz bilden frühere Erstangebote je Artikel, die zum Berechnungszeitpunkt im 365-Tage-Fenster lagen. Die Netto-Gesamtsumme ist keine Preisbewertung. Positionen ohne gültige Referenz oder mit mehr als ±100 % Abweichung fließen nicht ein. Angebote ohne Abweichung (0 %) sind unter „Alle Angebote“ enthalten. Grün kennzeichnet niedrigere Preise, warme Farben höhere Preise; ab +10 % wird der Akzent kräftiger.</p>
+          </div>
+        ) : null}
+      </div>
+      <div className="offer-level-filters" role="group" aria-label="Angebote nach Preisniveau filtern">
+        <button className="offer-level-filter" type="button" title="Enthält auch Angebote ohne Abweichung (0 %)" disabled={loading} aria-pressed={priceLevel === "all"} onClick={() => { setPriceLevel("all"); setOffset(0); }}>
+          Alle Angebote <b className="offer-level-filter-count">{formatInteger(levelCounts.all)}</b>
+        </button>
+        <button className="offer-level-filter is-below" type="button" disabled={loading} aria-pressed={priceLevel === "below"} onClick={() => { setPriceLevel("below"); setOffset(0); }}>
+          <TrendingDown size={15} aria-hidden="true" /> Unter Vergleich <b className="offer-level-filter-count">{formatInteger(levelCounts.below)}</b>
+        </button>
+        <button className="offer-level-filter is-above" type="button" disabled={loading} aria-pressed={priceLevel === "above"} onClick={() => { setPriceLevel("above"); setOffset(0); }}>
+          <TrendingUp size={15} aria-hidden="true" /> Über Vergleich <b className="offer-level-filter-count">{formatInteger(levelCounts.above)}</b>
+        </button>
+        <button className="offer-level-filter" type="button" disabled={loading} aria-pressed={priceLevel === "none"} onClick={() => { setPriceLevel("none"); setOffset(0); }}>
+          <CircleMinus size={15} aria-hidden="true" /> Ohne Vergleich <b className="offer-level-filter-count">{formatInteger(levelCounts.none)}</b>
+        </button>
+      </div>
       <form className="price-filter-bar price-offer-filters" onSubmit={(event) => {
         event.preventDefault(); setOffset(0); setSearch(queryInput.trim());
       }}>
@@ -846,34 +944,51 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
             onChange={(value) => { setOfferType(value); setOffset(0); }}
           />
         </div>
+        <div className="price-offer-sort-filter">
+          <MapFilterSelect
+            label="Sortierung"
+            value={sort}
+            options={offerSortOptions}
+            onChange={(value) => { setSort(value as OfferSort); setOffset(0); }}
+          />
+        </div>
         <button className="price-button is-primary" type="submit"><Search size={16} /> Suchen</button>
-        {(search || offerType) ? <button className="price-button is-quiet" type="button" onClick={() => { setQueryInput(""); setSearch(""); setOfferType(""); setOffset(0); }}><X size={16} /> Filter löschen</button> : null}
+        {hasFilters ? <button className="price-button is-quiet" type="button" onClick={() => { setQueryInput(""); setSearch(""); setOfferType(""); setPriceLevel("all"); setOffset(0); }}><X size={16} /> Filter löschen</button> : null}
       </form>
       {error ? <InlineNotice tone="error" action={<RetryButton onClick={() => load()} />}>{error}</InlineNotice> : null}
       <WarningList warnings={data?.warnings} />
 
       <div className={`offers-layout${selectedSource ? " has-detail" : ""}`}>
-        <DataPanel loading={loading} empty={!data?.offers.length} emptyText={search || offerType ? "Keine Angebote für den aktuellen Filter gefunden." : "Noch keine Angebote eingelesen."}>
+        <DataPanel loading={loading} empty={!data?.offers.length} emptyText={hasFilters ? "Keine Angebote für den aktuellen Filter gefunden." : "Noch keine Angebote eingelesen."}>
           <TableCaption count={data?.total ?? 0} />
           <div className="offer-list" role="list">
+            <div className="offer-list-header" aria-hidden="true">
+              <span>Projekt / Angebot</span>
+              <span>Gesamtsumme netto</span>
+              <span>Preisniveau <small>−20 % · 0 · +20 %</small></span>
+              <span />
+            </div>
             {(data?.offers ?? []).map((offer) => (
-              <button
-                key={offer.source}
-                type="button"
-                role="listitem"
-                disabled={loading}
-                className={`offer-list-item${selectedSource === offer.source ? " is-selected" : ""}`}
-                onClick={() => setSelectedSource(offer.source)}
-              >
-                <span className="offer-list-primary"><strong>{offer.project || "Ohne Projekt"}</strong><span>{offer.offer_number || offer.source}</span></span>
-                <span className="offer-list-meta"><OfferTypeBadge type={offer.offer_type} /><span>{formatDate(offer.date)}</span><span>{formatInteger(offer.position_count)} Pos.</span></span>
-                <span className="offer-list-price">
-                  <strong>{formatCurrency(offer.total_net)}</strong>
-                  <small>Projektwert <b>{formatPercent(offer.price_change)}</b></small>
-                  <small>Positionen <b>{formatPercent(offer.price_change_positions)}</b></small>
-                </span>
-                <ChevronRight size={17} aria-hidden="true" />
-              </button>
+              <div key={offer.source} role="listitem">
+                <button
+                  type="button"
+                  disabled={loading}
+                  aria-pressed={selectedSource === offer.source}
+                  className={`offer-list-item${selectedSource === offer.source ? " is-selected" : ""}`}
+                  onClick={() => setSelectedSource(offer.source)}
+                >
+                  <span className="offer-list-primary">
+                    <strong title={offer.project || "Ohne Projekt"}>{offer.project || "Ohne Projekt"}</strong>
+                    <span className="offer-list-meta"><span title={offer.offer_number || offer.source}>{offer.offer_number || offer.source}</span><span aria-hidden="true">·</span><span>{formatDate(offer.date)}</span><OfferTypeBadge type={offer.offer_type} /></span>
+                  </span>
+                  <span className="offer-list-price">
+                    <strong>{formatCurrency(offer.total_net)}</strong>
+                    <small>{formatInteger(offer.position_count)} Positionen</small>
+                  </span>
+                  <OfferPriceLevel value={offer.price_change} />
+                  <ChevronRight className="offer-list-arrow" size={17} aria-hidden="true" />
+                </button>
+              </div>
             ))}
           </div>
           <Pagination offset={offset} limit={limit} total={data?.total ?? 0} disabled={loading} onChange={setOffset} />
@@ -1070,7 +1185,7 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
           <span className="price-kicker">Angebot bearbeiten</span>
           <h3>{data?.offer.project || "Angebot"}</h3>
           <p>{data?.offer.offer_number || source}</p>
-          {data ? <div className="offer-detail-comparison"><span>Projektwert <strong>{formatPercent(data.offer.price_change)}</strong></span><span>Positionen <strong>{formatPercent(data.offer.price_change_positions)}</strong></span></div> : null}
+          {data ? <div className="offer-detail-comparison"><span>Preisniveau <strong>{formatPercent(data.offer.price_change)}</strong></span><span>Ø Positionsabweichung <strong>{formatPercent(data.offer.price_change_positions)}</strong></span></div> : null}
         </div>
         <button className="price-icon-button" type="button" aria-label="Angebotsdetails schließen" title="Schließen" disabled={saving || uploading} onClick={onClose}><X size={18} /></button>
       </header>
@@ -1930,7 +2045,7 @@ function FileSection({ title, description, files, loading, busy, upload, onDownl
   );
 }
 
-function ViewHeading({ icon, title, description, actions }: { icon: ReactNode; title: string; description: string; actions?: ReactNode }) {
+function ViewHeading({ icon, title, description, actions }: { icon: ReactNode; title: string; description: ReactNode; actions?: ReactNode }) {
   return <div className="price-view-heading"><div className="price-view-heading-copy"><span className="price-view-icon">{icon}</span><div><h2>{title}</h2><p>{description}</p></div></div>{actions ? <div className="price-view-actions">{actions}</div> : null}</div>;
 }
 
@@ -1999,6 +2114,32 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
 
 function OfferTypeBadge({ type }: { type: OfferType }) {
   return <span className={`offer-type-badge is-${offerTypeClass(type)}`}>{shortOfferType(type)}</span>;
+}
+
+function OfferPriceLevel({ value }: { value: number | null }) {
+  const presentation = offerPriceLevelPresentation(value);
+  const displayValue = offerPriceLevelDisplayValue(value, formatPercent(value));
+  const title = presentation.tone === "none"
+    ? "Keine gültige historische Vergleichsbasis"
+    : `Preisniveau ${displayValue} gegenüber früheren Erstangeboten`;
+
+  return (
+    <span className={`offer-price-level is-${presentation.tone}`} title={title}>
+      {presentation.tone === "none" ? (
+        <><CircleMinus size={16} aria-hidden="true" /><span className="offer-price-level-label">{presentation.label}</span></>
+      ) : (
+        <>
+          <span className="offer-price-level-top">
+            <strong className="offer-price-level-value">{displayValue}</strong>
+            <span className="offer-price-level-label">{presentation.label}</span>
+          </span>
+          <span className="offer-price-meter" aria-hidden="true">
+            <span className="offer-price-meter-fill" style={{ left: `${presentation.meter?.left ?? 50}%`, width: `${presentation.meter?.width ?? 0}%` }} />
+          </span>
+        </>
+      )}
+    </span>
+  );
 }
 
 function visibleColumns(columns: string[]): string[] {
