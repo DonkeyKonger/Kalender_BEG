@@ -810,6 +810,8 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const offerDetailRef = useRef<HTMLElement>(null);
+  const offerListRef = useRef<HTMLDivElement>(null);
+  const overviewReturnRef = useRef<{ button: HTMLButtonElement; listScroll: number; pageX: number; pageY: number } | null>(null);
   const offerInfoRef = useRef<HTMLDivElement>(null);
   const offerInfoButtonRef = useRef<HTMLButtonElement>(null);
   const offerListRequests = useRef<LatestRequestGate | null>(null);
@@ -858,6 +860,20 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
     return () => offerListRequests.current?.invalidate();
   }, [load, offerQuery, uploadRevision]);
 
+  useLayoutEffect(() => {
+    if (selectedSource) {
+      offerDetailRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    const previous = overviewReturnRef.current;
+    if (!previous) return;
+    overviewReturnRef.current = null;
+    const target = previous.button.isConnected && !previous.button.disabled ? previous.button : offerInfoButtonRef.current;
+    target?.focus({ preventScroll: true });
+    if (offerListRef.current) offerListRef.current.scrollTop = previous.listScroll;
+    window.scrollTo({ left: previous.pageX, top: previous.pageY, behavior: "instant" });
+  }, [selectedSource]);
+
   useEffect(() => {
     if (!selectedSource || !window.matchMedia("(max-width: 1180px)").matches) return;
     const frame = window.requestAnimationFrame(() => offerDetailRef.current?.scrollIntoView({
@@ -889,7 +905,7 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
   const hasFilters = Boolean(search || offerType || priceLevel !== "all");
 
   return (
-    <div className="price-workspace is-offers">
+    <div className={`price-workspace is-offers${selectedSource ? " has-selected-offer" : ""}`}>
       <div className="offer-overview-heading" ref={offerInfoRef}>
         <ViewHeading
           icon={<FileArchive size={19} />}
@@ -956,12 +972,11 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
         {hasFilters ? <button className="price-button is-quiet" type="button" onClick={() => { setQueryInput(""); setSearch(""); setOfferType(""); setPriceLevel("all"); setOffset(0); }}><X size={16} /> Filter löschen</button> : null}
       </form>
       {error ? <InlineNotice tone="error" action={<RetryButton onClick={() => load()} />}>{error}</InlineNotice> : null}
-      <WarningList warnings={data?.warnings} />
 
       <div className={`offers-layout${selectedSource ? " has-detail" : ""}`}>
         <DataPanel loading={loading} empty={!data?.offers.length} emptyText={hasFilters ? "Keine Angebote für den aktuellen Filter gefunden." : "Noch keine Angebote eingelesen."}>
           <TableCaption count={data?.total ?? 0} />
-          <div className="offer-list" role="list">
+          <div ref={offerListRef} className="offer-list" role="list">
             <div className="offer-list-header" aria-hidden="true">
               <span>Projekt / Angebot</span>
               <span>Gesamtsumme netto</span>
@@ -975,7 +990,11 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
                   disabled={loading}
                   aria-pressed={selectedSource === offer.source}
                   className={`offer-list-item${selectedSource === offer.source ? " is-selected" : ""}`}
-                  onClick={() => setSelectedSource(offer.source)}
+                  onClick={(event) => {
+                    overviewReturnRef.current = { button: event.currentTarget, listScroll: offerListRef.current?.scrollTop ?? 0, pageX: window.scrollX, pageY: window.scrollY };
+                    setInfoOpen(false);
+                    setSelectedSource(offer.source);
+                  }}
                 >
                   <span className="offer-list-primary">
                     <strong title={offer.project || "Ohne Projekt"}>{offer.project || "Ohne Projekt"}</strong>
@@ -1179,7 +1198,7 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
   }
 
   return (
-    <section ref={detailRef} className="offer-detail" aria-label="Angebotsdetails">
+    <section ref={detailRef} className="offer-detail" aria-label="Angebotsdetails" tabIndex={-1}>
       <header className="offer-detail-header">
         <div>
           <span className="price-kicker">Angebot bearbeiten</span>
@@ -1187,7 +1206,9 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
           <p>{data?.offer.offer_number || source}</p>
           {data ? <div className="offer-detail-comparison"><span>Preisniveau <strong>{formatPercent(data.offer.price_change)}</strong></span><span>Ø Positionsabweichung <strong>{formatPercent(data.offer.price_change_positions)}</strong></span></div> : null}
         </div>
-        <button className="price-icon-button" type="button" aria-label="Angebotsdetails schließen" title="Schließen" disabled={saving || uploading} onClick={onClose}><X size={18} /></button>
+        <button className="price-icon-button" type="button" aria-label="Angebotsdetails schließen" title="Schließen" disabled={saving || uploading} onClick={() => {
+          if (!hasUnsavedChanges || window.confirm("Ungespeicherte Angebotsänderungen verwerfen und zur Übersicht zurückkehren?")) onClose();
+        }}><X size={18} /></button>
       </header>
       {uploadRevision !== acknowledgedUpload ? <InlineNotice tone="info" action={<button className="price-button" type="button" disabled={saving || loading || uploading} onClick={() => {
         if (!hasUnsavedChanges || window.confirm("Die Angebotsdaten neu laden und Ihre ungespeicherten Änderungen verwerfen?")) void load();
@@ -1196,7 +1217,6 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
       {loading && !data ? <LoadingState label="Angebotspositionen werden geladen" /> : data ? (
         <>
           {loading ? <LoadingState label="Angebotspositionen werden aktualisiert" compact /> : null}
-          <WarningList warnings={data.warnings} />
           <div className="offer-settings-grid">
             <label><span>Angebotsart</span><select value={offerType} disabled={saving || loading || uploading} onChange={(event) => setOfferType(event.target.value as OfferType)}>{offerTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
             <label><span>Rabatt in %</span><input inputMode="decimal" value={discount} disabled={saving || loading || uploading} onChange={(event) => setDiscount(event.target.value)} /></label>
