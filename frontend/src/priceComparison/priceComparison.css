@@ -655,8 +655,7 @@
 }
 .offer-list-header { position: sticky; top: 0; z-index: 1; padding: 9px 12px; border-bottom: 1px solid var(--price-border-strong); background: #edf3f8; color: #3d5872; font-size: 0.69rem; font-weight: 700; }
 .offer-list-header > :nth-child(2) { text-align: right; }
-.offer-list-header > :nth-child(3) { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; }
-.offer-list-header small { font-size: 0.69rem; font-weight: 400; color: var(--price-muted); white-space: nowrap; }
+.offer-list-header > :nth-child(3) { text-align: right; }
 .offer-list-item {
   width: 100%;
   min-height: 64px;
@@ -684,18 +683,15 @@
 .offer-list-price strong { color: #183b61; font-size: 0.79rem; }
 .offer-list-price small { color: var(--price-muted); font-size: 0.69rem; }
 .offer-list-arrow { color: var(--price-muted); }
-.offer-price-level { --offer-level-color: #66768a; display: flex; flex-direction: column; min-width: 0; gap: 7px; color: var(--offer-level-color); }
+.offer-price-level { --offer-level-color: #66768a; display: flex; flex-direction: column; align-items: flex-end; min-width: 0; gap: 7px; color: var(--offer-level-color); text-align: right; }
 .offer-price-level.is-below { --offer-level-color: #187252; }
 .offer-price-level.is-above { --offer-level-color: #9c5c14; }
 .offer-price-level.is-high { --offer-level-color: #b54838; }
-.offer-price-level-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 6px; }
+.offer-price-level-top { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .offer-price-level-value { font-size: 1rem; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .offer-price-level-label { font-size: 0.69rem; }
-.offer-price-level.is-none { flex-direction: row; align-items: center; font-size: .75rem; }
+.offer-price-level.is-none { flex-direction: row; align-items: center; justify-content: flex-end; font-size: .75rem; }
 .offer-price-level.is-none svg { flex-shrink: 0; }
-.offer-price-meter { display: block; position: relative; height: 6px; border-radius: 1px; background: linear-gradient(to right, #eaf6ef 0%, #eaf6ef 50%, #fff5e7 50%, #fff5e7 100%); }
-.offer-price-meter::after { content: ""; position: absolute; left: 50%; top: -3px; width: 1px; height: 12px; background: #8795a5; }
-.offer-price-meter-fill { position: absolute; top: 0; height: 100%; border-radius: 1px; background: var(--offer-level-color); }
 .offer-list-footer { padding: 8px 12px; color: var(--price-muted); border-top: 1px solid var(--price-border); font-size: .69rem; }
 
 /* Keep the offer workspace stable while rows, selection and loading change. */

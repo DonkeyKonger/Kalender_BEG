@@ -980,7 +980,7 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
             <div className="offer-list-header" aria-hidden="true">
               <span>Projekt / Angebot</span>
               <span>Gesamtsumme netto</span>
-              <span>Preisniveau <small>−20 % · 0 · +20 %</small></span>
+              <span>Preisniveau</span>
               <span />
             </div>
             {(data?.offers ?? []).map((offer) => (
@@ -2149,15 +2149,10 @@ function OfferPriceLevel({ value }: { value: number | null }) {
       {presentation.tone === "none" ? (
         <><CircleMinus size={16} aria-hidden="true" /><span className="offer-price-level-label">{presentation.label}</span></>
       ) : (
-        <>
-          <span className="offer-price-level-top">
-            <strong className="offer-price-level-value">{displayValue}</strong>
-            <span className="offer-price-level-label">{presentation.label}</span>
-          </span>
-          <span className="offer-price-meter" aria-hidden="true">
-            <span className="offer-price-meter-fill" style={{ left: `${presentation.meter?.left ?? 50}%`, width: `${presentation.meter?.width ?? 0}%` }} />
-          </span>
-        </>
+        <span className="offer-price-level-top">
+          <strong className="offer-price-level-value">{displayValue}</strong>
+          <span className="offer-price-level-label">{presentation.label}</span>
+        </span>
       )}
     </span>
   );
