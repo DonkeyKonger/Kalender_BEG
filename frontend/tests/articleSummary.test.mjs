@@ -1,7 +1,57 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { articleWeightLabel, summarizeArticleDescription } from "../src/priceComparison/articleSummary.ts";
+import {
+  articleWeightLabel,
+  offerDescriptionLines,
+  summarizeArticleDescription,
+} from "../src/priceComparison/articleSummary.ts";
+
+test("offer rows separate the real short name and preserve every remaining source line", () => {
+  assert.deepEqual(offerDescriptionLines([
+    "Unterflurkanal, 2-teilig 3-zügig 2000x35",
+    "S3 35048-2",
+    "3-zügig",
+    "Dimension:2000x350x48",
+    "Farbe:",
+    "Oberfl.: bandverzinkt",
+    "Mat.: Stahl",
+    "Gewicht: 561,705 per 100",
+  ].join("\n")), {
+    shortName: "S3 35048-2",
+    description: "Unterflurkanal, 2-teilig 3-zügig 2000x35 · 3-zügig · Dimension:2000x350x48 · Farbe: · Oberfl.: bandverzinkt · Mat.: Stahl · Gewicht: 561,705 per 100",
+  });
+});
+
+test("offer rows prefer an explicit short name and remove only its matching stored line", () => {
+  assert.deepEqual(
+    offerDescriptionLines("Beschreibung\r\n  INTERN   S3  \r\nDimension: 20x30\r\nGewicht: 4 per 100", "intern s3"),
+    {
+      shortName: "intern s3",
+      description: "Beschreibung · Dimension: 20x30 · Gewicht: 4 per 100",
+    },
+  );
+
+  assert.deepEqual(offerDescriptionLines("Beschreibung\nEingebetteter Typ\nFarbe: rot", "Separater Typ"), {
+    shortName: "Separater Typ",
+    description: "Beschreibung · Eingebetteter Typ · Farbe: rot",
+  });
+});
+
+test("offer row fallbacks never discard a single or missing description", () => {
+  assert.deepEqual(offerDescriptionLines("Nur hinterlegter Beschreibungstext"), {
+    shortName: "Ohne Kurzbezeichnung",
+    description: "Nur hinterlegter Beschreibungstext",
+  });
+  assert.deepEqual(offerDescriptionLines("Beschreibung ohne Typ", "Expliziter Typ"), {
+    shortName: "Expliziter Typ",
+    description: "Beschreibung ohne Typ",
+  });
+  assert.deepEqual(offerDescriptionLines(null), {
+    shortName: "Ohne Kurzbezeichnung",
+    description: "",
+  });
+});
 
 test("header weight uses kg and one decimal while preserving the quantity basis", () => {
   for (const [source, expected] of [

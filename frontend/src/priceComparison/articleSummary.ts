@@ -4,6 +4,11 @@ export type ArticleListSummary = {
   quality: string;
 };
 
+export type OfferDescriptionLines = {
+  shortName: string;
+  description: string;
+};
+
 const FALLBACK_SHORT_NAME = "Ohne Kurzbezeichnung";
 const FALLBACK_DESCRIPTION = "Keine Kurzbeschreibung";
 const MATERIAL_LABELS = new Set(["mat", "material", "werkstoff"]);
@@ -54,6 +59,38 @@ const HIDDEN_METADATA_LABELS = new Set([
 ]);
 
 const weightFormatter = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** Keep every stored Datanorm line while separating its B-record short name. */
+export function offerDescriptionLines(
+  value: unknown,
+  explicitShortName?: unknown,
+): OfferDescriptionLines {
+  const lines = typeof value === "string"
+    ? value.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trim()).filter(Boolean)
+    : [];
+  const explicit = typeof explicitShortName === "string" ? explicitShortName.trim() : "";
+  let shortName = explicit;
+  let shortNameIndex = -1;
+
+  if (explicit) {
+    const explicitKey = comparableLine(explicit);
+    shortNameIndex = lines[1] && comparableLine(lines[1]) === explicitKey
+      ? 1
+      : lines.findIndex((line) => comparableLine(line) === explicitKey);
+  } else if (lines.length > 1) {
+    shortName = lines[1];
+    shortNameIndex = 1;
+  }
+
+  return {
+    shortName: shortName || FALLBACK_SHORT_NAME,
+    description: lines.filter((_, index) => index !== shortNameIndex).join(" · "),
+  };
+}
+
+function comparableLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLocaleLowerCase("de-DE");
+}
 
 /** Display the agreed kg unit without changing the source's quantity basis. */
 export function articleWeightLabel(value: unknown): string | null {

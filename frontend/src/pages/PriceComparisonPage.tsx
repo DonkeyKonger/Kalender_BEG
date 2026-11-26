@@ -70,7 +70,7 @@ import {
   searchArticleIndex,
   useArticleSearchIndex,
 } from "../priceComparison/articleSearch";
-import { articleWeightLabel, summarizeArticleDescription } from "../priceComparison/articleSummary";
+import { articleWeightLabel, offerDescriptionLines, summarizeArticleDescription } from "../priceComparison/articleSummary";
 import { clampPageOffset, LatestRequestGate } from "../priceComparison/latestRequest";
 import { offerPriceLevelDisplayValue, offerPriceLevelPresentation } from "../priceComparison/offerPriceLevel";
 import "../priceComparison/priceComparison.css";
@@ -103,9 +103,10 @@ const articleHistoryColumnWidths: Record<string, string> = {
 };
 
 const offerTypes: OfferType[] = ["Erstangebot", "Folgeangebot", "Verhandeltes Angebot"];
+const offerTypeOptions = offerTypes.map((type) => ({ value: type, label: type }));
 const offerTypeFilterOptions = [
   { value: "", label: "Alle Angebotsarten" },
-  ...offerTypes.map((type) => ({ value: type, label: type })),
+  ...offerTypeOptions,
 ];
 const offerSortOptions = [
   { value: "date", label: "Neueste zuerst" },
@@ -1203,7 +1204,7 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
           <span className="price-kicker">Angebot bearbeiten</span>
           <h3>{data?.offer.project || "Angebot"}</h3>
           <p>{data?.offer.offer_number || source}</p>
-          {data ? <div className="offer-detail-comparison"><span>Preisniveau <strong>{formatPercent(data.offer.price_change)}</strong></span><span>Ø Positionsabweichung <strong>{formatPercent(data.offer.price_change_positions)}</strong></span></div> : null}
+          {data ? <div className="offer-detail-comparison"><span>Preisniveau <strong className={signedDeviationClass(data.offer.price_change)}>{formatPercent(data.offer.price_change)}</strong></span><span>Ø Positionsabweichung <strong className={signedDeviationClass(data.offer.price_change_positions)}>{formatPercent(data.offer.price_change_positions)}</strong></span></div> : null}
         </div>
         <button className="price-icon-button" type="button" aria-label="Angebotsdetails schließen" title="Schließen" disabled={saving || uploading} onClick={() => {
           if (!hasUnsavedChanges || window.confirm("Ungespeicherte Angebotsänderungen verwerfen und zur Übersicht zurückkehren?")) onClose();
@@ -1217,15 +1218,16 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
         <>
           {loading ? <LoadingState label="Angebotspositionen werden aktualisiert" compact /> : null}
           <div className="offer-settings-grid">
-            <label><span>Angebotsart</span><select value={offerType} disabled={saving || loading || uploading} onChange={(event) => setOfferType(event.target.value as OfferType)}>{offerTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
+            <div className="offer-settings-type"><MapFilterSelect label="Angebotsart" value={offerType} options={offerTypeOptions} disabled={saving || loading || uploading} onChange={(value) => setOfferType(value as OfferType)} /></div>
             <label><span>Rabatt in %</span><input inputMode="decimal" value={discount} disabled={saving || loading || uploading} onChange={(event) => setDiscount(event.target.value)} /></label>
-            <label className="price-check"><input type="checkbox" checked={alignNetto} disabled={saving || loading || uploading} onChange={(event) => setAlignNetto(event.target.checked)} /><span><strong>Nettoabgleich</strong><small>Höhere Preise auf Datanorm-Netto begrenzen</small></span></label>
+            <label className="offer-net-align" title="Nettoabgleich: Höhere Preise auf Datanorm-Netto begrenzen"><input type="checkbox" aria-label="Nettoabgleich: Höhere Preise auf Datanorm-Netto begrenzen" checked={alignNetto} disabled={saving || loading || uploading} onChange={(event) => setAlignNetto(event.target.checked)} /></label>
             <button className="price-button is-primary" type="button" disabled={saving || loading || uploading} onClick={() => void saveChanges()}>{saving ? <LoaderCircle className="is-spinning" size={16} /> : <Save size={16} />} Änderungen speichern</button>
           </div>
 
           <div className="offer-position-table-wrap">
             <table className="price-table offer-position-table">
-              <thead><tr><th className="price-select-cell"><span className="sr-only">Auswahl</span></th>{offerColumns.map((column) => <th key={column}>{columnLabel(column, "offer")}</th>)}<th>Manueller Preis</th></tr></thead>
+              <colgroup><col className="offer-column-select" />{offerColumns.map((column) => <col key={column} className={offerColumnClass(column)} />)}<col className="offer-column-manual" /></colgroup>
+              <thead><tr><th className="price-select-cell"><span className="sr-only">Auswahl</span></th>{offerColumns.map((column) => <th key={column} className={offerColumnClass(column)}>{columnLabel(column, "offer")}</th>)}<th>Manueller Preis</th></tr></thead>
               <tbody>{data.rows.map((row, index) => {
                 const articleNumber = String(row.Artikelnummer ?? row.article_number ?? "");
                 return (
@@ -1233,7 +1235,7 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
                     <td className="price-select-cell"><input type="checkbox" aria-label={`${articleNumber || `Position ${index + 1}`} zum Löschen auswählen`} checked={selectedArticles.has(articleNumber)} disabled={saving || loading || uploading || !articleNumber} onChange={(event) => setSelectedArticles((current) => {
                       const next = new Set(current); if (event.target.checked) next.add(articleNumber); else next.delete(articleNumber); return next;
                     })} /></td>
-                    {offerColumns.map((column) => <td key={column} className={cellClass(column, row[column])}>{formatCell(column, row[column])}</td>)}
+                    {offerColumns.map((column) => <td key={column} className={[cellClass(column, row[column]), offerColumnClass(column)].filter(Boolean).join(" ")}>{column === "Bezeichnung" ? <OfferDescription row={row} /> : formatCell(column, row[column])}</td>)}
                     <td className="manual-price-cell"><input aria-label={`Manueller Preis ${articleNumber}`} inputMode="decimal" placeholder="unverändert" value={manualPrices[articleNumber] ?? ""} disabled={saving || loading || uploading || !articleNumber} onChange={(event) => setManualPrices((current) => ({ ...current, [articleNumber]: event.target.value }))} /></td>
                   </tr>
                 );
@@ -2176,6 +2178,7 @@ function tableColumns(columns: string[], variant: PriceTableVariant): string[] {
 }
 
 function columnLabel(column: string, variant: PriceTableVariant): string {
+  if (variant === "offer" && column === "Nettopreis") return "Nettopreis";
   const shared: Record<string, string> = {
     "Preis-Typ": "Preistyp",
     Nettopreis: "Datanorm-Netto",
@@ -2190,11 +2193,29 @@ function columnLabel(column: string, variant: PriceTableVariant): string {
   if (offerPrice) return `Angebot ${offerPrice[1]}`;
   if (column === "Preisvergleich") return "Bewertung";
   if (variant === "offer" && column === "Preis") return "Angebotspreis";
-  if (variant === "offer" && column === "Preis_min") return "Vergleich min.";
-  if (variant === "offer" && column === "Preis_max") return "Vergleich max.";
+  if (variant === "offer" && column === "Preis_min") return "Minimaler Angebotspreis";
+  if (variant === "offer" && column === "Preis_max") return "Maximaler Angebotspreis";
   if (variant === "article" && column === "Preis") return "Angebotspreis";
   if (variant === "article" && column === "Quelle") return "Original-PDF";
   return column;
+}
+
+function signedDeviationClass(value: number | null): string | undefined {
+  if (value === null || !Number.isFinite(value) || value === 0) return undefined;
+  return value > 0 ? "is-positive" : "is-negative";
+}
+
+function OfferDescription({ row }: { row: Record<string, unknown> }) {
+  const { shortName, description } = offerDescriptionLines(row.Bezeichnung, row.Kurzbezeichnung);
+  return <span className="offer-article-description" title={[shortName, description].filter(Boolean).join("\n")}><strong>{shortName}</strong><span>{description || "—"}</span></span>;
+}
+
+function offerColumnClass(column: string): string | undefined {
+  const columns: Record<string, string> = {
+    Artikelnummer: "article", Bezeichnung: "description", Menge: "quantity", Nettopreis: "net",
+    Preis: "price", Preis_min: "minimum", Preis_max: "maximum", Preisvergleich: "rating",
+  };
+  return columns[column] ? `offer-column-${columns[column]}` : undefined;
 }
 
 function articleHistoryColumns(columns: string[]): string[] {
