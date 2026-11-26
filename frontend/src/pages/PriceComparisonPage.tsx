@@ -41,6 +41,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { MapFilterSelect } from "../components/MapFilterSelect";
+import { formatGermanDateKey } from "../lib/formatters";
 import { acquireMobileModalLock } from "../lib/mobileModalScrollLock";
 import { uploadPriceFiles, validateOfferFiles, type OfferUploadJob } from "../priceComparison/uploads";
 import { getPriceChartDomain } from "../priceComparison/chartDomain";
@@ -1076,7 +1077,7 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation }: { uploadRevi
                 >
                   <span className="offer-list-primary">
                     <strong title={offer.project || "Ohne Projekt"}>{offer.project || "Ohne Projekt"}</strong>
-                    <span className="offer-list-meta"><span title={offer.offer_number || offer.source}>{offer.offer_number || offer.source}</span><span aria-hidden="true">·</span><span>{formatDate(offer.date)}</span><OfferTypeBadge type={offer.offer_type} /></span>
+                    <span className="offer-list-meta"><span title={offer.offer_number || offer.source}>{offer.offer_number || offer.source}</span><span aria-hidden="true">·</span><span>{offer.date ? formatGermanDateKey(offer.date, "numeric") : "—"}</span><OfferTypeBadge type={offer.offer_type} /></span>
                   </span>
                   <span className="offer-list-price">
                     <strong>{formatCurrency(offer.total_net)}</strong>
