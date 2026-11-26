@@ -380,3 +380,47 @@ def test_cached_offer_meta_and_article_statistics_are_defensively_copied(
     first_article["statistics"]["nested"]["ok"] = False
     assert service.article("100")["statistics"]["nested"]["ok"] is True
 
+
+
+def test_offer_metrics_cache_is_version_day_revision_bound_and_defensive(monkeypatch, tmp_path):
+    service = PriceComparisonService(DummyStore(), cache_dir=tmp_path)
+    data = fake_price_data(make_snapshot("r1"), cacheable=True)
+    day = "2026-11-26"
+    monkeypatch.setattr(service, "_metrics_day", lambda: day)
+    calls = []
+
+    def calculate(prices, datanorm, **kwargs):
+        calls.append(kwargs)
+        return {"offer.pdf": {"comparison_quality": {"status": "reliable"}}}
+
+    monkeypatch.setattr(service_module.metrics, "offer_price_metrics", calculate)
+    first = service.offer_metrics(data)
+    first["offer.pdf"]["comparison_quality"]["status"] = "corrupted"
+    assert service.offer_metrics(data)["offer.pdf"]["comparison_quality"]["status"] == "reliable"
+    assert len(calls) == 1
+    day = "2026-11-27"
+    service.offer_metrics(data)
+    assert len(calls) == 2
+    data.snap.revision = "r2"
+    service.offer_metrics(data)
+    assert len(calls) == 3
+    data.cacheable = False
+    service.offer_metrics(data)
+    service.offer_metrics(data)
+    assert len(calls) == 5
+
+
+def test_legacy_corrupt_price_guard_preserves_sources_and_manual_corrections():
+    raw = pd.DataFrame([
+        {"Quelle": "x.pdf", "Artikelnummer": "6288704", "Preis": 628870420.001, "Menge": 20},
+        {"Quelle": "x.pdf", "Artikelnummer": "6000054", "Preis": 10., "Menge": 3},
+    ], index=[7, 7])
+    before = raw.copy(deep=True)
+    guarded = PriceComparisonService._validated_raw_prices(raw)
+    pd.testing.assert_frame_equal(raw, before)
+    assert pd.isna(guarded.iloc[0]["Preis"])
+    assert guarded.iloc[0]["Preis_validiert"] == False  # noqa: E712
+    assert guarded.iloc[1]["Preis"] == 10
+    prepared = service_module.core.prepare_prices(guarded, pd.DataFrame(), {}, {}, {"x.pdf||6288704": 2.5}, {})
+    assert prepared.iloc[0]["Preis"] == 2.5
+    assert bool(prepared.iloc[0]["Preis_manuell"])

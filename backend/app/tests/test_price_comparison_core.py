@@ -150,7 +150,7 @@ def _datanorm_frame() -> pd.DataFrame:
     )
 
 
-def test_pdf_parser_is_byte_identical_and_parses_synthetic_pdf() -> None:
+def test_pdf_parser_matches_audited_revision_and_parses_synthetic_pdf() -> None:
     parser_path = Path(core.__file__).with_name("price_comparison_pdf_parser.py")
     digest = hashlib.sha256(parser_path.read_bytes()).hexdigest()
     assert digest == core.SOURCE_PROVENANCE["pdf_parser_sha256"]

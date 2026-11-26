@@ -20,6 +20,7 @@ from app.api.routes.price_comparison import price_service, router
 from app.core.database import get_db
 from app.models.enums import UserRole
 from app.services import price_comparison_core as core
+from app.services import price_comparison_metrics as metrics
 from app.services.price_comparison_service import PriceComparisonService
 from app.services.price_comparison_storage import (
     ONLINE_IMPORT_NAME,
@@ -89,7 +90,10 @@ def install_online_import(
     physical = snap.find("offers", physical_name)
     excluded = snap.find("offers", excluded_name)
     datanorm_item = snap.find("datanorm", "preise.dat")
-    physical_frame = service.parsed(physical).copy()
+    # Exact online imports retain their original 13-column snapshot schema.
+    physical_frame = service.parsed(physical).drop(
+        columns=["Preiseinheit (PDF)", "Preis_validiert"], errors="ignore",
+    ).copy()
     physical_frame["Preis"] = 7.25
     virtual_frame = physical_frame.copy()
     virtual_frame["Quelle"] = virtual_name
@@ -231,16 +235,16 @@ def install_online_import(
     return payload
 
 
-def offer_pdf(number="TEST-1", price="12,34"):
+def offer_pdf(number="TEST-1", price="12,34", date="01.05.2026", unit="Stück"):
     buffer = io.BytesIO()
     pdf = canvas.Canvas(buffer)
     for i, line in enumerate(
         [
-            "01.05.2026",
+            date,
             f"Angebot: {number}",
             f"Projektname: Testprojekt Angebot: {number}",
             "OBO Bettermann",
-            f"6047611 RKSM 620 FS 100,00 Stück {price} 1",
+            f"6047611 RKSM 620 FS 100,00 {unit} {price} 1",
             "Gesamt netto 1.234,00 EUR",
         ]
     ):
@@ -1007,90 +1011,73 @@ def test_datanorm_export_uses_original_tab1_schema_and_filename(context):
     ]
 
 
-def test_legacy_missing_offer_metrics_are_calculated_without_shared_write(context, monkeypatch):
+def test_legacy_offer_metrics_are_recalculated_without_shared_write(context, monkeypatch):
     client, service, _ = context
     seed(client)
     legacy = snapshot(service.store)
-    legacy.state["frozen_metrics"] = {}
+    legacy.state["frozen_metrics"] = {"Angebot.pdf": {
+        "PV_avg_pct_pos": -90.0, "PV_avg_pct_wert": -90.0,
+    }}
     save_state(service.store, legacy)
     before = snapshot(service.store)
     calls = []
 
-    def calculated_metrics(_prices, window_days=365, sources=None):
-        calls.append(sources)
-        return pd.DataFrame(
-            [
-                {
-                    "Quelle": "Angebot.pdf",
-                    "PV_avg_pct_pos": 4.5,
-                    "PV_avg_pct_wert": 6.25,
-                }
-            ]
-        )
+    def calculated_metrics(_prices, _datanorm, **kwargs):
+        calls.append(kwargs)
+        return {"Angebot.pdf": {
+            "PV_avg_pct_pos": 4.5, "PV_avg_pct_wert": 6.25,
+            "comparison_quality": {"status": "reliable"},
+        }}
 
-    monkeypatch.setattr(core, "offer_percent_metrics", calculated_metrics)
+    monkeypatch.setattr(metrics, "offer_price_metrics", calculated_metrics)
     response = client.get("/api/price-comparison/offers")
-
     assert response.status_code == 200, response.text
-    assert calls == [["Angebot.pdf"]]
+    assert len(calls) == 1
     assert response.json()["offers"][0]["price_change"] == 6.25
+    assert response.json()["offers"][0]["comparison_quality"]["status"] == "reliable"
     after = snapshot(service.store)
     assert after.revision == before.revision
-    assert after.state["frozen_metrics"] == {}
-
-    # Explicitly persisted NA is a completed calculation, not missing legacy
-    # metadata, and therefore must not trigger the fallback again.
-    after.state["frozen_metrics"] = {
-        "Angebot.pdf": {
-            "Quelle": "Angebot.pdf",
-            "PV_avg_pct_pos": None,
-            "PV_avg_pct_wert": None,
-        }
+    assert after.state["frozen_metrics"] == before.state["frozen_metrics"]
+    # Even explicit legacy NA cannot hide a newly sufficient reference base.
+    after.state["frozen_metrics"]["Angebot.pdf"] = {
+        "PV_avg_pct_pos": None, "PV_avg_pct_wert": None,
     }
     save_state(service.store, after)
     calls.clear()
     explicit_na = client.get("/api/price-comparison/offers")
-    assert explicit_na.status_code == 200, explicit_na.text
-    assert calls == []
-    assert explicit_na.json()["offers"][0]["price_change"] is None
+    assert explicit_na.status_code == 200
+    assert len(calls) == 1
+    assert explicit_na.json()["offers"][0]["price_change"] == 6.25
 
 
-@pytest.mark.parametrize(
-    "patch",
-    [
-        {"discount": 10},
-        {"align_netto": True},
-        {"manual_prices": {"6047611": 7.5}},
-        {"reset_manual_prices": True},
-    ],
-)
-def test_price_affecting_offer_updates_refresh_only_edited_source(context, monkeypatch, patch):
+@pytest.mark.parametrize("patch", [
+    {"discount": 10}, {"align_netto": True},
+    {"manual_prices": {"6047611": 7.5}}, {"reset_manual_prices": True},
+    {"delete_articles": ["6047611"]},
+])
+def test_price_affecting_offer_updates_refresh_all_sources(context, monkeypatch, patch):
     client, service, _ = context
     seed(client)
+    upload(client, "Angebot-2.pdf", offer_pdf(number="TEST-2"), "offers")
     calls = []
 
-    def calculated_metrics(_prices, window_days=365, sources=None):
-        calls.append(sources)
-        return pd.DataFrame(
-            [
-                {
-                    "Quelle": "Angebot.pdf",
-                    "PV_avg_pct_pos": 2.0,
-                    "PV_avg_pct_wert": 3.0,
-                }
-            ]
-        )
+    def calculated_metrics(prices, _datanorm, **kwargs):
+        calls.append(kwargs)
+        return {str(name): {"PV_avg_pct_pos": 2.0, "PV_avg_pct_wert": 3.0}
+                for name in prices["Quelle"].dropna().unique()}
 
-    monkeypatch.setattr(core, "offer_percent_metrics", calculated_metrics)
-    revision = snapshot(service.store).revision
-    response = client.patch(
-        "/api/price-comparison/offers/Angebot.pdf",
-        json={"expected_revision": revision, **patch},
-    )
-
+    monkeypatch.setattr(metrics, "offer_price_metrics", calculated_metrics)
+    response = client.patch("/api/price-comparison/offers/Angebot.pdf", json={
+        "expected_revision": snapshot(service.store).revision, **patch,
+    })
     assert response.status_code == 200, response.text
-    assert calls == [["Angebot.pdf"]]
-    assert snapshot(service.store).state["frozen_metrics"]["Angebot.pdf"]["PV_avg_pct_wert"] == 3.0
+    assert calls == []  # Mutation does not calculate the entire history twice.
+    assert snapshot(service.store).state["frozen_metrics"] == {}
+    response = client.get("/api/price-comparison/offers")
+    assert response.status_code == 200
+    assert calls == [{"as_of": service._metrics_day()}]
+    later = next(o for o in response.json()["offers"] if o["source"] == "Angebot-2.pdf")
+    assert later["price_change"] == 3.0
 
 
 def test_offer_type_change_and_upload_refresh_all_offer_metrics(context, monkeypatch):
@@ -1098,37 +1085,28 @@ def test_offer_type_change_and_upload_refresh_all_offer_metrics(context, monkeyp
     seed(client)
     calls = []
 
-    def calculated_metrics(prices, window_days=365, sources=None):
-        calls.append(sources)
-        names = prices["Quelle"].dropna().astype(str).unique().tolist()
-        return pd.DataFrame(
-            [
-                {
-                    "Quelle": name,
-                    "PV_avg_pct_pos": 1.0,
-                    "PV_avg_pct_wert": 1.5,
-                }
-                for name in names
-            ]
-        )
+    def calculated_metrics(prices, _datanorm, **kwargs):
+        calls.append(kwargs)
+        return {str(name): {"PV_avg_pct_pos": 1.0, "PV_avg_pct_wert": 1.5}
+                for name in prices["Quelle"].dropna().unique()}
 
-    monkeypatch.setattr(core, "offer_percent_metrics", calculated_metrics)
-    revision = snapshot(service.store).revision
-    changed_type = client.patch(
-        "/api/price-comparison/offers/Angebot.pdf",
-        json={"expected_revision": revision, "offer_type": "Folgeangebot"},
-    )
+    monkeypatch.setattr(metrics, "offer_price_metrics", calculated_metrics)
+    changed_type = client.patch("/api/price-comparison/offers/Angebot.pdf", json={
+        "expected_revision": snapshot(service.store).revision, "offer_type": "Folgeangebot",
+    })
     assert changed_type.status_code == 200, changed_type.text
-    assert calls == [None]
-
+    assert calls == []
+    assert snapshot(service.store).state["frozen_metrics"] == {}
     calls.clear()
     added = upload(client, "Angebot-2.pdf", offer_pdf(number="TEST-2"), "offers")
     assert added.status_code == 200, added.text
-    assert calls == [None]
-    assert set(snapshot(service.store).state["frozen_metrics"]) == {
-        "Angebot.pdf",
-        "Angebot-2.pdf",
-    }
+    assert calls == []
+    assert snapshot(service.store).state["frozen_metrics"] == {}
+    response = client.get("/api/price-comparison/offers")
+    assert response.status_code == 200
+    assert calls == [{"as_of": service._metrics_day()}]
+    assert {o["source"] for o in response.json()["offers"]} == {"Angebot.pdf", "Angebot-2.pdf"}
+    assert all(o["price_change"] == 1.5 for o in response.json()["offers"])
 
 
 def test_manual_prices_roundtrip_and_stale_revision_conflict(context):
@@ -1517,3 +1495,62 @@ def test_presets_use_original_weighted_reference_schema(context):
         client.get("/api/price-comparison/reference-presets").json()["presets"]["Test"][0]["weight"]
         == 2.5
     )
+
+
+def test_historic_metrics_follow_reference_edits_deletions_and_day_boundary(context, monkeypatch):
+    client, service, _ = context
+    day = "2026-11-26"
+    monkeypatch.setattr(service, "_metrics_day", lambda: day)
+    seed(client)
+    # Actual parsed PDFs, a matching DATANORM unit, and three distinct references.
+    for i in range(3):
+        response = upload(client, f"Ref-{i}.pdf", offer_pdf(
+            number=f"REF-{i}", price="10,00", date="26.11.2023", unit="m",
+        ), "offers")
+        assert response.status_code == 200, response.text
+    response = upload(client, "Current.pdf", offer_pdf(
+        number="CURRENT", price="12,00", date="01.11.2026", unit="m",
+    ), "offers")
+    assert response.status_code == 200, response.text
+
+    def current():
+        response = client.get("/api/price-comparison/offers/Current.pdf/positions")
+        assert response.status_code == 200, response.text
+        return response.json()["offer"]
+
+    assert current()["price_change"] == pytest.approx(20)
+    assert current()["comparison_quality"]["matched_positions"] == 1
+    assert current()["comparison_quality"]["value_coverage_pct"] == 100
+    # Two corrected historical prices move the median and every affected later offer.
+    for i in range(2):
+        response = client.patch(f"/api/price-comparison/offers/Ref-{i}.pdf", json={
+            "expected_revision": snapshot(service.store).revision,
+            "manual_prices": {"6047611": 20},
+        })
+        assert response.status_code == 200, response.text
+    assert current()["price_change"] == pytest.approx(-40)
+    # Same storage revision, next Berlin date: the oldest references expire.
+    revision = snapshot(service.store).revision
+    day = "2026-11-27"
+    assert current()["price_change"] is None
+    assert snapshot(service.store).revision == revision
+    day = "2026-11-26"
+    assert current()["price_change"] == pytest.approx(-40)
+    # Deleting one article makes the three-reference requirement fail.
+    response = client.patch("/api/price-comparison/offers/Ref-0.pdf", json={
+        "expected_revision": snapshot(service.store).revision,
+        "delete_articles": ["6047611"],
+    })
+    assert response.status_code == 200, response.text
+    assert current()["price_change"] is None
+    assert current()["comparison_quality"]["reason"] == "insufficient_references"
+
+
+def test_quality_metadata_is_not_part_of_offer_text_search(context):
+    client, _, _ = context
+    seed(client)
+    assert client.get("/api/price-comparison/offers", params={"search": "Testprojekt"}).json()["total"] == 1
+    for term in ("matched-basket-v2", "unavailable", "invalid_prices", "value_coverage_pct"):
+        result = client.get("/api/price-comparison/offers", params={"search": term})
+        assert result.status_code == 200
+        assert result.json()["total"] == 0

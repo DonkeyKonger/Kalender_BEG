@@ -41,6 +41,13 @@ test("all four native workspaces and guarded duplicate workflows remain present"
   assert.match(page, /price_change_positions/);
   assert.match(page, /Preisniveau/);
   assert.match(page, /Ø Positionsabweichung/);
+  assert.match(page, /36 Kalendermonate/);
+  assert.match(page, /drei unterschiedlichen Erstangeboten/);
+  assert.match(page, /mindestens 60 % Abdeckung des prüfbaren Positionswerts/);
+  assert.doesNotMatch(page, /365-Tage-Fenster/);
+  assert.match(page, /offer\.comparison_quality/);
+  assert.match(page, /offer-price-quality/);
+  assert.match(page, /offer-detail-quality/);
   assert.match(page, /price_level: query\.priceLevel/);
   assert.match(page, /sort: query\.sort/);
   assert.match(page, /offerQueryRef\.current = offerQuery/);
@@ -70,4 +77,17 @@ test("price downloads reuse the shared authenticated request with refresh", () =
   assert.match(client, /import \{ authenticatedFetch \} from "\.\.\/lib\/api"/);
   assert.match(client, /return authenticatedFetch\(path, options, retry\)/);
   assert.match(api, /export function authenticatedFetch/);
+});
+
+test("offer summaries accept the strict comparison quality contract as optional metadata", () => {
+  const client = read("priceComparison/client.ts");
+
+  for (const field of ["method_version", "as_of", "window_start", "total_positions", "eligible_positions", "matched_positions", "excluded_positions", "reference_offer_count", "value_coverage_pct", "position_coverage_pct"]) {
+    assert.match(client, new RegExp(`${field}:`));
+  }
+  assert.match(client, /status: "reliable" \| "unavailable"/);
+  assert.match(client, /comparison_quality\?: OfferComparisonQuality \| null/);
+  for (const reason of ["insufficient_references", "insufficient_coverage", "invalid_prices", "invalid_date", "no_comparable_positions"]) {
+    assert.match(client, new RegExp(reason));
+  }
 });

@@ -478,8 +478,20 @@ def test_completion_marker_failure_wakes_waiters_and_recovers(
     with ThreadPoolExecutor(max_workers=2) as executor:
         owner = executor.submit(cache.read, store, tmp_path)
         assert source.started.wait(timeout=2)
+        entry = next(iter(cache._entries.values()))
+        assert entry.flight is not None
+        flight = entry.flight
+        original_wait = flight.event.wait
+        waiter_joined_flight = Event()
+
+        def observe_wait(*args, **kwargs):
+            waiter_joined_flight.set()
+            return original_wait(*args, **kwargs)
+
+        monkeypatch.setattr(flight.event, "wait", observe_wait)
         waiter = executor.submit(cache.read, store, tmp_path)
         assert waiter_checked_marker.wait(timeout=2)
+        assert waiter_joined_flight.wait(timeout=2)
         source.release.set()
         with pytest.raises(OSError, match="marker unavailable"):
             owner.result(timeout=2)

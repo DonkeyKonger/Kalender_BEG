@@ -92,6 +92,10 @@ können vergleichen, Preise bearbeiten, Dateien verwalten und exportieren.
 
 ## Fachlicher Nachweis
 
+Die folgenden Paritätsnachweise dokumentieren den ursprünglichen Integrationsstand.
+Die am 26.11.2026 freigegebene Parserkorrektur und neue Preisniveau-Berechnung
+sind in [price-comparison-metrics.md](price-comparison-metrics.md) beschrieben.
+
 - PDF-Parser bytegleich mit der Quelle; SHA-256:
   `700fd43a366ed4e8b4a6e116c56eae2a147aaec13aa566cf9f6a763ee8b1e139`.
 - Alle 162 lokalen PDF-Dateien mit Original und Integration eingelesen:

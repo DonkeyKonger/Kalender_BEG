@@ -49,6 +49,7 @@ import {
   PriceComparisonError,
   type ArticleDetailResult,
   type FilesResult,
+  type OfferComparisonQuality,
   type OfferPositionsResult,
   type OfferPriceLevel,
   type OfferSort,
@@ -73,7 +74,7 @@ import {
 } from "../priceComparison/articleSearch";
 import { articleWeightLabel, offerDescriptionLines, summarizeArticleDescription } from "../priceComparison/articleSummary";
 import { clampPageOffset, LatestRequestGate } from "../priceComparison/latestRequest";
-import { offerPriceLevelDisplayValue, offerPriceLevelPresentation } from "../priceComparison/offerPriceLevel";
+import { offerComparisonQualityPresentation, offerPriceLevelDisplayValue, offerPriceLevelPresentation } from "../priceComparison/offerPriceLevel";
 import "../priceComparison/priceComparison.css";
 
 type ViewKey = "datanorm" | "offers" | "articles" | "files";
@@ -928,8 +929,8 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
         </button>
         {infoOpen ? (
           <div className="offer-overview-info" id={infoId}>
-            <p><strong>Was bedeutet das Preisniveau?</strong> Es ist der gespeicherte, wertgewichtete Mittelwert der Preisabweichungen vergleichbarer Positionen.</p>
-            <p>Die Referenz bilden frühere Erstangebote je Artikel, die zum Berechnungszeitpunkt im 365-Tage-Fenster lagen. Die Netto-Gesamtsumme ist keine Preisbewertung. Positionen ohne gültige Referenz oder mit mehr als ±100 % Abweichung fließen nicht ein. Angebote ohne Abweichung (0 %) sind unter „Alle Angebote“ enthalten. Grün kennzeichnet niedrigere Preise, warme Farben höhere Preise; ab +10 % wird der Akzent kräftiger.</p>
+            <p><strong>Was bedeutet das Preisniveau?</strong> Es bewertet denselben Warenkorb zweimal: einmal mit den aktuellen Angebotsmengen und Angebotspreisen, einmal mit denselben Mengen und dem Median der gültigen Referenzpreise je Artikel. Die prozentuale Differenz zeigt, ob das Angebot insgesamt günstiger oder teurer liegt.</p>
+            <p>Als Referenzen zählen ausschließlich Erstangebote mit Datum vor dem Zielangebot, die im heutigen Fenster der letzten 36 Kalendermonate liegen. Ein Artikel wird erst ab drei unterschiedlichen Erstangeboten berücksichtigt. Ein Angebot erhält nur bei mindestens 60 % Abdeckung des prüfbaren Positionswerts ein Preisniveau. Die Netto-Gesamtsumme allein ist keine Preisbewertung; Angebote mit exakt 0 % bleiben unter „Alle Angebote“.</p>
           </div>
         ) : null}
       </div>
@@ -1005,7 +1006,7 @@ function OffersView({ uploadRevision, uploading, onUploadBlock, onOperation }: {
                     <strong>{formatCurrency(offer.total_net)}</strong>
                     <small>{formatInteger(offer.position_count)} Positionen</small>
                   </span>
-                  <OfferPriceLevel value={offer.price_change} />
+                  <OfferPriceLevel value={offer.price_change} quality={offer.comparison_quality} />
                   <ChevronRight className="offer-list-arrow" size={17} aria-hidden="true" />
                 </button>
               </div>
@@ -1199,6 +1200,8 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
     }
   }
 
+  const comparisonQuality = offerComparisonQualityPresentation(data?.offer.comparison_quality);
+
   return (
     <section ref={detailRef} className="offer-detail" aria-label="Angebotsdetails" tabIndex={-1}>
       <header className="offer-detail-header">
@@ -1206,7 +1209,7 @@ function OfferDetails({ detailRef, source, onClose, onMutation, uploadRevision, 
           <span className="price-kicker">Angebot bearbeiten</span>
           <h3>{data?.offer.project || "Angebot"}</h3>
           <p>{data?.offer.offer_number || source}</p>
-          {data ? <div className="offer-detail-comparison"><span>Preisniveau <strong className={signedDeviationClass(data.offer.price_change)}>{formatPercent(data.offer.price_change)}</strong></span><span>Ø Positionsabweichung <strong className={signedDeviationClass(data.offer.price_change_positions)}>{formatPercent(data.offer.price_change_positions)}</strong></span></div> : null}
+          {data ? <div className="offer-detail-comparison"><span>Preisniveau <strong className={signedDeviationClass(data.offer.price_change)}>{formatPercent(data.offer.price_change)}</strong></span><span>Ø Positionsabweichung <strong className={signedDeviationClass(data.offer.price_change_positions)}>{formatPercent(data.offer.price_change_positions)}</strong></span>{comparisonQuality.summary ? <small className="offer-detail-quality" tabIndex={0} title={comparisonQuality.tooltip ?? undefined} aria-label={comparisonQuality.tooltip ?? undefined}>{comparisonQuality.summary}</small> : null}</div> : null}
         </div>
         <button className="price-icon-button" type="button" aria-label="Angebotsdetails schließen" title="Schließen" disabled={saving || uploading} onClick={() => {
           if (!hasUnsavedChanges || window.confirm("Ungespeicherte Angebotsänderungen verwerfen und zur Übersicht zurückkehren?")) onClose();
@@ -2180,23 +2183,25 @@ function OfferTypeBadge({ type }: { type: OfferType }) {
   return <span className={`offer-type-badge is-${offerTypeClass(type)}`}>{shortOfferType(type)}</span>;
 }
 
-function OfferPriceLevel({ value }: { value: number | null }) {
+function OfferPriceLevel({ value, quality }: { value: number | null; quality?: OfferComparisonQuality | null }) {
   const presentation = offerPriceLevelPresentation(value);
+  const qualityPresentation = offerComparisonQualityPresentation(quality);
   const displayValue = offerPriceLevelDisplayValue(value, formatPercent(value));
   const title = presentation.tone === "none"
-    ? "Keine gültige historische Vergleichsbasis"
-    : `Preisniveau ${displayValue} gegenüber früheren Erstangeboten`;
+    ? qualityPresentation.tooltip ?? "Keine gültige historische Vergleichsbasis"
+    : [`Preisniveau ${displayValue} gegenüber früheren Erstangeboten`, qualityPresentation.tooltip].filter(Boolean).join(" · ");
 
   return (
     <span className={`offer-price-level is-${presentation.tone}`} title={title}>
       {presentation.tone === "none" ? (
-        <><CircleMinus size={16} aria-hidden="true" /><span className="offer-price-level-label">{presentation.label}</span></>
+        <span className="offer-price-level-top"><CircleMinus size={16} aria-hidden="true" /><span className="offer-price-level-label">{qualityPresentation.unavailableLabel}</span></span>
       ) : (
         <span className="offer-price-level-top">
           <strong className="offer-price-level-value">{displayValue}</strong>
           <span className="offer-price-level-label">{presentation.label}</span>
         </span>
       )}
+      {qualityPresentation.summary ? <small className="offer-price-quality" title={qualityPresentation.tooltip ?? undefined} aria-label={qualityPresentation.tooltip ?? undefined}>{qualityPresentation.summary}</small> : null}
     </span>
   );
 }

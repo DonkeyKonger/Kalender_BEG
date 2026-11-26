@@ -47,9 +47,9 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint.per-file-ignores]
-# Verbatim original parser, verified by SHA-256 and real-file parity tests.
-# Its unused legacy helper contains an unresolved name; the exercised entrypoint
-# is retained byte-for-byte at the user's request instead of being reformatted.
+# Original parser with audited material-price validation fixes.
+# Unrelated legacy formatting/helpers are retained; parser provenance and
+# synthetic plus real-file regressions verify the authorized changes.
 "app/services/price_comparison_pdf_parser.py" = ["E701", "E702", "F821", "F841"]
 
 [tool.setuptools.packages.find]

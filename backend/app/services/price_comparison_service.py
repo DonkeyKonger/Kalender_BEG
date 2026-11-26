@@ -6,6 +6,8 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import fcntl
 import hashlib
 import json
@@ -20,6 +22,7 @@ import pandas as pd
 
 from app.core.config import settings
 from app.services import price_comparison_core as core
+from app.services import price_comparison_metrics as metrics
 from app.services.price_comparison_online_import import (
     OnlineImportFrames,
     load_online_import,
@@ -46,7 +49,7 @@ from app.services.price_comparison_storage import (
 
 SOURCE_VERSION = "4ed988f"
 OFFER_TYPES = ("Erstangebot", "Folgeangebot", "Verhandeltes Angebot")
-CACHE_VERSION = "4ed988f-v1"
+CACHE_VERSION = "4ed988f-validated-pdf-v2"
 MAX_PARSE_WORKERS = 4
 
 
@@ -401,6 +404,33 @@ class PriceComparisonService:
             datanorm = imported.datanorm.copy() if use_import else self.parsed(active, force=force)
         return datanorm
 
+    @staticmethod
+    def _validated_raw_prices(raw):
+        """Suppress the proven merged-cell parser corruption in legacy frames.
+
+        Imported snapshots remain immutable. Only the calculation copy changes;
+        manual corrections are still applied afterwards by prepare_prices.
+        """
+        if raw.empty or not {"Artikelnummer", "Preis"}.issubset(raw.columns):
+            return raw
+        result = raw.copy()
+        column = "Preis_raw" if "Preis_raw" in result else "Preis"
+        values = pd.to_numeric(result[column], errors="coerce")
+        articles = result["Artikelnummer"].astype(str).map(core.clean_artnr)
+        corrupt = pd.Series([
+            bool(article and pd.notna(value) and math.isfinite(value)
+                 and value > 1_000_000 and str(int(value)).startswith(article))
+            for article, value in zip(articles, values)
+        ], index=result.index)
+        if corrupt.any():
+            for price_column in ("Preis", "Preis_raw"):
+                if price_column in result:
+                    result.loc[corrupt, price_column] = float("nan")
+            if "Preis_validiert" not in result:
+                result["Preis_validiert"] = pd.Series(pd.NA, index=result.index, dtype=object)
+            result.loc[corrupt, "Preis_validiert"] = False
+        return result
+
     def _load_snapshot(self, snap: Snapshot, *, force: bool, cacheable: bool) -> PriceData:
         imported = self.import_frames(snap)
         datanorm = self._datanorm_frame(snap, imported, force=force)
@@ -471,6 +501,7 @@ class PriceComparisonService:
             # Preserve the original viewer/calendar algorithm, including its
             # default pandas sorting implementation, for non-imported data.
             raw = raw.sort_values("Datum", ascending=False)
+        raw = self._validated_raw_prices(raw)
         prices = core.prepare_prices(
             raw,
             datanorm,
@@ -545,33 +576,14 @@ class PriceComparisonService:
             unavailable_sources=data.unavailable_sources,
         )
 
-    def _offers_list_uncached(self, data):
+    def _offers_list_uncached(self, data, *, as_of=None):
         raw = data.raw_prices
         if raw.empty:
             return []
-        frozen_metrics = data.snap.state["frozen_metrics"]
-        readable_sources = raw["Quelle"].dropna().astype(str).unique().tolist()
-        missing_sources = [
-            source
-            for source in readable_sources
-            if not isinstance(frozen_metrics.get(source), dict)
-            or not {"PV_avg_pct_pos", "PV_avg_pct_wert"}.issubset(frozen_metrics[source])
-        ]
-        missing_source_set = set(missing_sources)
-        # Legacy installations do not have calendar_state frozen metrics yet.
-        # Calculate only those missing values from the already prepared prices
-        # for this response; ordinary reads must not write shared state.
-        fallback_metrics = {
-            source: {
-                "Quelle": source,
-                "PV_avg_pct_pos": None,
-                "PV_avg_pct_wert": None,
-            }
-            for source in missing_sources
-        }
-        if missing_sources:
-            calculated = core.offer_percent_metrics(data.prices, sources=missing_sources)
-            fallback_metrics.update({str(row["Quelle"]): row for row in records(calculated)})
+        # Frozen legacy percentages used a different formula and cannot be
+        # trusted after reference edits or a new calendar day. Reads derive the
+        # current result without changing source files or shared state.
+        calculated_metrics = self.offer_metrics(data, as_of=as_of)
         result = []
         offer_sources = data.offer_sources
         if data.snap.state.get("online_import") is None:
@@ -592,11 +604,7 @@ class PriceComparisonService:
             date = pd.to_datetime(frame["Datum"], errors="coerce").max()
             totals = pd.to_numeric(frame.get("Gesamt (netto)"), errors="coerce")
             net = totals.max() if isinstance(totals, pd.Series) else None
-            frozen = frozen_metrics.get(source.name)
-            if source.name in missing_source_set:
-                frozen = fallback_metrics[source.name]
-            if not isinstance(frozen, dict):
-                frozen = {}
+            calculated = calculated_metrics.get(source.name, {})
             result.append(
                 {
                     "source": source.name,
@@ -608,22 +616,36 @@ class PriceComparisonService:
                     "align_netto": bool(data.snap.state["align_netto"].get(source.name, False)),
                     "position_count": int(frame["Artikelnummer"].nunique()),
                     "total_net": float(net) if pd.notna(net) else None,
-                    "price_change": frozen.get("PV_avg_pct_wert"),
-                    "price_change_positions": frozen.get("PV_avg_pct_pos"),
+                    "price_change": calculated.get("PV_avg_pct_wert"),
+                    "price_change_positions": calculated.get("PV_avg_pct_pos"),
+                    "comparison_quality": calculated.get("comparison_quality"),
                     "original_available": source.original_available,
                 }
             )
         return result
 
+    @staticmethod
+    def _metrics_day():
+        return datetime.now(ZoneInfo("Europe/Berlin")).date().isoformat()
+
+    def offer_metrics(self, data, *, as_of=None):
+        day = as_of or self._metrics_day()
+        return self._derived(
+            data,
+            "offer-metrics",
+            lambda: metrics.offer_price_metrics(data.prices, data.datanorm, as_of=day),
+            metrics.METRICS_VERSION,
+            day,
+        )
+
     def offers_list(self, data):
-        # Legacy fallback percentages use a rolling 12-month window.  Frozen
-        # metrics are stable, but the day key also keeps old installations
-        # correct when metadata is missing.
+        day = self._metrics_day()
         return self._derived(
             data,
             "offers-list",
-            lambda: self._offers_list_uncached(data),
-            daily=True,
+            lambda: self._offers_list_uncached(data, as_of=day),
+            metrics.METRICS_VERSION,
+            day,
         )
 
     @staticmethod
@@ -657,7 +679,10 @@ class PriceComparisonService:
         if search.strip():
             needle = search.strip().casefold()
             offers = [
-                o for o in offers if needle in " ".join(str(v) for v in o.values()).casefold()
+                o for o in offers if needle in " ".join(
+                    str(o.get(key) or "")
+                    for key in ("source", "project", "offer_number", "offer_type")
+                ).casefold()
             ]
 
         price_levels = {"all": len(offers), "below": 0, "above": 0, "none": 0}
@@ -933,22 +958,12 @@ class PriceComparisonService:
                 for article in deleted:
                     state["manual_prices"].pop(core.manual_price_key(source, article), None)
 
-            if "offer_type" in patch:
-                # Erstangebote are the global comparison base, so changing one
-                # type invalidates every offer header metric.
+            if any(key in patch for key in (
+                "offer_type", "discount", "align_netto", "manual_prices",
+                "reset_manual_prices", "delete_articles",
+            )):
+                # Every changed reference can affect later offers as well.
                 self.refresh_metrics(snap)
-            elif any(
-                key in patch
-                for key in (
-                    "discount",
-                    "align_netto",
-                    "manual_prices",
-                    "reset_manual_prices",
-                )
-            ):
-                # These original viewer actions intentionally refresh only the
-                # edited offer's frozen header values.
-                self.refresh_metrics(snap, sources=[source])
 
         return self.mutate(expected_revision, apply, db)
 
@@ -969,24 +984,11 @@ class PriceComparisonService:
         return self.mutate(expected_revision, apply, db)
 
     def refresh_metrics(self, snap, *, sources=None):
-        data = self.load(snap)
-        target_sources = (
-            [str(source) for source in sources]
-            if sources is not None
-            else [source.name for source in data.offer_sources]
-        )
-        target_sources = list(dict.fromkeys(target_sources))
-        for source in target_sources:
-            # An explicitly calculated NA result must remain distinguishable
-            # from absent legacy metadata and must replace a stale value.
-            snap.state["frozen_metrics"][source] = {
-                "Quelle": source,
-                "PV_avg_pct_pos": None,
-                "PV_avg_pct_wert": None,
-            }
-        frame = core.offer_percent_metrics(data.prices, sources=sources)
-        for row in records(frame):
-            snap.state["frozen_metrics"][row["Quelle"]] = row
+        # Percentages are now derived once for the next revision/day on read.
+        # Remove obsolete frozen results instead of calculating the complete
+        # history here and a second time immediately after saving the revision.
+        # Keeping the existing state key preserves the storage schema.
+        snap.state["frozen_metrics"] = {}
 
     @staticmethod
     def _offer_number(frame: pd.DataFrame) -> str | None:

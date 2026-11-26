@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 
+from collections import Counter
 import re
 from decimal import Decimal
 from pathlib import Path
@@ -45,11 +46,11 @@ HEADER_SYNONYMS = {
     "Einheit": [
         "einheit", "me", "eh", "unit"
     ],
-    "Preis": [
-        "preis", "betrag", "kosten", "netto", "brutto", "ep"
-    ],
     "Gesamt": [
         "gesamt", "summe", "gesamtpreis", "blocksumme"
+    ],
+    "Preis": [
+        "preis", "betrag", "kosten", "netto", "brutto", "ep"
     ],
     # 🔥 NEU für OBO-Angebote:
     "Material": [
@@ -95,6 +96,189 @@ def smart_float(x):
         return float(s2)
     except Exception:
         return None
+
+
+_PDF_NUMBER_DE = r"(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?"
+_PDF_COMPACT_QTY_DE = r"(?:\d{1,3}(?:\.\d{3})+|\d+),\d+"
+_PDF_MONEY_DE = r"(?:\d{1,3}(?:\.\d{3})+|\d+)[.,]\d{2}"
+_PDF_UNIT = r"(?:Stück|Stueck|Stk\.?|STCK|Meter|Kilogramm?|Paar|VPE|lfm|mtr|MTR|kg|m)"
+_PDF_QTY_UNIT_RE = re.compile(
+    rf"(?<![\w.,+−-])(?P<qty>{_PDF_COMPACT_QTY_DE})\s*(?P<unit>{_PDF_UNIT})(?=\s|$)",
+    flags=re.IGNORECASE,
+)
+_PDF_MATERIAL_PER_RE = re.compile(
+    rf"^\s*(?P<material>{_PDF_MONEY_DE})\s+(?P<per>\d{{1,5}})"
+    r"(?=\s+(?:EUR\b|[A-Za-zÄÖÜäöüß])|\s*$)",
+    flags=re.IGNORECASE,
+)
+_PDF_CURRENCY_MATERIAL_PER_RE = re.compile(
+    rf"^\s*(?:EUR|€)\s*(?P<material>{_PDF_MONEY_DE})\s+(?P<per>\d{{1,5}})"
+    r"(?=\s+(?:[A-Za-zÄÖÜäöüß])|\s*$)",
+    flags=re.IGNORECASE,
+)
+_PDF_PER_ONLY_RE = re.compile(
+    r"^\s*(?P<per>\d{1,5})\s+EUR\b",
+    flags=re.IGNORECASE,
+)
+_PDF_CURRENCY_ONLY_RE = re.compile(r"^\s*(?:EUR|€)\b", flags=re.IGNORECASE)
+_PDF_UNIT_MATERIAL_PER_RE = re.compile(
+    rf"(?<!\w)(?P<unit>{_PDF_UNIT})(?=\s)\s+"
+    rf"(?P<material>{_PDF_MONEY_DE})\s+(?P<per>\d{{1,5}})\s+(?:EUR|€)\b",
+    flags=re.IGNORECASE,
+)
+_PDF_UNIT_PER_ONLY_RE = re.compile(
+    rf"(?P<unit>{_PDF_UNIT})(?=\s)\s+(?P<per>\d{{1,5}})\s+(?:EUR|€)\b",
+    flags=re.IGNORECASE,
+)
+_PDF_ZERO_MATERIAL_PER_RE = re.compile(
+    r"(?<![\d.,])(?P<material>0[.,]00)\s+(?P<per>\d{1,5})\s+(?:EUR|€)\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _normalize_pdf_unit(value: object) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    key = raw.casefold().rstrip(".")
+    if key in {"stück", "stueck", "stk", "stck"}:
+        return "Stück"
+    if key in {"m", "meter", "lfm", "mtr"}:
+        return "Meter"
+    if key in {"kg", "kilogram", "kilogramm"}:
+        return "Kilogramm"
+    if key == "paar":
+        return "Paar"
+    if key == "vpe":
+        return "VPE"
+    return raw
+
+
+def _validated_per(value: object) -> int | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        number = float(value)
+        if pd.notna(number) and number.is_integer() and 1 <= number <= 10000:
+            return int(number)
+        return None
+    raw = str(value or "").strip()
+    if not re.fullmatch(r"\d{1,5}", raw):
+        return None
+    result = int(raw)
+    return result if 1 <= result <= 10000 else None
+
+
+def _validated_money(value: object) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        result = float(value)
+        return result if pd.notna(result) else None
+    raw = re.sub(r"\s*(?:EUR|€)\s*$", "", str(value or "").strip(), flags=re.IGNORECASE)
+    if not re.fullmatch(_PDF_MONEY_DE, raw):
+        return None
+    return smart_float(raw)
+
+
+def _parse_obo_compact_line(line: object) -> dict | None:
+    """Parse one merged OBO row without ever treating its quantity as material."""
+
+    text = re.sub(r"\s+", " ", str(line or "")).strip()
+    if not text or SUM_ROW_PAT.search(text):
+        return None
+    article_match = ARTNR_RE.search(text)
+    if not article_match:
+        return None
+
+    article = clean_artnr(article_match.group(0))
+    segments = (text[article_match.end():], text[:article_match.start()])
+    incomplete = None
+    for segment in segments:
+        for anchor in _PDF_QTY_UNIT_RE.finditer(segment):
+            quantity = smart_float(anchor.group("qty"))
+            unit = _normalize_pdf_unit(anchor.group("unit"))
+            remainder = segment[anchor.end():]
+            material_per = _PDF_MATERIAL_PER_RE.match(
+                remainder
+            ) or _PDF_CURRENCY_MATERIAL_PER_RE.match(remainder)
+            if material_per:
+                material = _validated_money(material_per.group("material"))
+                per = _validated_per(material_per.group("per"))
+                if material is not None and per is not None:
+                    return {
+                        "art": article,
+                        "qty": quantity,
+                        "unit": unit,
+                        "material": material,
+                        "per": per,
+                        "price": material / per,
+                        "price_validated": True,
+                    }
+            per_only = _PDF_PER_ONLY_RE.match(remainder)
+            if per_only:
+                incomplete = {
+                    "art": article,
+                    "qty": quantity,
+                    "unit": unit,
+                    "material": None,
+                    "per": _validated_per(per_only.group("per")),
+                    "price": None,
+                    "price_validated": False,
+                }
+            elif _PDF_CURRENCY_ONLY_RE.match(remainder):
+                incomplete = {
+                    "art": article,
+                    "qty": quantity,
+                    "unit": unit,
+                    "material": None,
+                    "per": None,
+                    "price": None,
+                    "price_validated": False,
+                }
+    if incomplete:
+        return incomplete
+
+    for segment in segments:
+        unit_material = _PDF_UNIT_MATERIAL_PER_RE.search(segment)
+        if unit_material:
+            material = _validated_money(unit_material.group("material"))
+            per = _validated_per(unit_material.group("per"))
+            if material is not None and per is not None:
+                return {
+                    "art": article,
+                    "qty": None,
+                    "unit": _normalize_pdf_unit(unit_material.group("unit")),
+                    "material": material,
+                    "per": per,
+                    "price": material / per,
+                    "price_validated": True,
+                }
+
+    for segment in segments:
+        unit_per = _PDF_UNIT_PER_ONLY_RE.search(segment)
+        if unit_per:
+            return {
+                "art": article,
+                "qty": None,
+                "unit": _normalize_pdf_unit(unit_per.group("unit")),
+                "material": None,
+                "per": _validated_per(unit_per.group("per")),
+                "price": None,
+                "price_validated": False,
+            }
+
+    for segment in segments:
+        zero_material = _PDF_ZERO_MATERIAL_PER_RE.search(segment)
+        if zero_material:
+            per = _validated_per(zero_material.group("per"))
+            if per is not None:
+                return {
+                    "art": article,
+                    "qty": None,
+                    "unit": None,
+                    "material": 0.0,
+                    "per": per,
+                    "price": 0.0,
+                    "price_validated": True,
+                }
+    return None
 
 def _clean_project_name(s: str) -> str:
     if not s:
@@ -263,55 +447,107 @@ def _extract_project_from_fixed_region(pdf_path: Path,
 
 def parse_row_text_fallback(s: str):
     """
-    Fallback-Zeilenparser:
-    - findet Preis(e) in der Zeile
-    - sucht direkt RECHTS davon nach einer ganzen Zahl ('per') und teilt ggf. Preis/per
-    - wählt dabei das Paar mit dem größten 'per' (>1), damit 'Material 18,12 100  Gesamt 18,12 1'
-      korrekt zu 0,1812 wird (18,12/100) statt 18,12/1
+    Parse only an anchored OBO position: quantity, unit, material and ``per``.
+
+    A quantity such as ``95,00 Stück`` is deliberately never accepted as a
+    material price when the following material field is empty.
     """
-    if not s:
+    parsed = _parse_obo_compact_line(s)
+    if not parsed:
         return None, None
+    return parsed["art"], parsed["price"] if parsed["price_validated"] else None
 
-    line = s.replace("\n", " ")
-    if SUM_ROW_PAT.search(line):
-        return None, None
 
-    # Artikelnummer
-    m_art = ARTNR_RE.search(line)
-    art = clean_artnr(m_art.group(0)) if m_art else None
+def _first_non_empty(series: pd.Series):
+    values = series.dropna().astype(str).str.strip()
+    values = values[values != ""]
+    return values.iloc[0] if len(values) else pd.NA
 
-    # 1) Preis/per-Paare direkt aus der Zeile herausfischen
-    #    Muster: "<Preis mit 2 Dezimalstellen> <ganze Zahl>"
-    pair_re = re.compile(r"(\d{1,3}(?:[.\s]?\d{3})*(?:[.,]\d{2}))\s+(\d{1,5})\b")
-    pairs = []
-    for m in pair_re.finditer(line):
-        p_raw, per_raw = m.group(1), m.group(2)
-        p = smart_float(p_raw)
-        try:
-            per_val = int(per_raw)
-        except ValueError:
-            per_val = None
-        if p is not None and per_val is not None and per_val > 1 and per_val <= 10000:
-            pairs.append((p, per_val, m.start(), m.end()))
 
-    if pairs:
-        # Nimm das Paar mit dem größten 'per' (typisch: 100 schlägt 1 von 'Gesamt per')
-        p, per_val, _, _ = max(pairs, key=lambda t: t[1])
-        return art, (p / per_val)
+def _aggregate_parsed_positions(frame: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate repeated article/unit rows without keeping an arbitrary price."""
 
-    # 2) Kein Paar gefunden? Dann wie bisher den (letzten) Preis nehmen
-    price = None
-    last_match = None
-    for m in PRICE_RE_DE.finditer(line):
-        last_match = m
-    if last_match:
-        price = float(last_match.group(0).replace(".", "").replace(",", "."))
-    if price is None:
-        ms = re.findall(r"\d{1,3}(?:[.,]\d{2})", line)
-        if ms:
-            price = smart_float(ms[-1])
+    if frame.empty or "PDF_Order" not in frame.columns:
+        return frame
+    result = frame.sort_values("PDF_Order", kind="stable").copy()
+    result["Preis"] = pd.to_numeric(result.get("Preis"), errors="coerce")
+    result["Menge"] = pd.to_numeric(result.get("Menge"), errors="coerce")
+    result["_unit_group"] = (
+        result.get("Einheit (PDF)", pd.Series(index=result.index, dtype=object))
+        .fillna("")
+        .astype(str)
+        .map(lambda value: value.strip().casefold())
+    )
+    result["_price_valid_group"] = result.get(
+        "Preis_validiert",
+        pd.Series(False, index=result.index),
+    ).fillna(False).astype(bool) & result["Preis"].notna()
+    result["Preis_validiert"] = result["_price_valid_group"]
 
-    return art, price
+    group_columns = ["Artikelnummer", "Quelle", "_unit_group", "_price_valid_group"]
+    grouped = result.groupby(group_columns, sort=False, dropna=False)
+    differing_prices = grouped["Preis"].transform("nunique").gt(1)
+    missing_quantities = grouped["Menge"].transform(lambda values: values.isna().any())
+    negative_quantities = grouped["Menge"].transform(lambda values: values.lt(0).any())
+    nonpositive_quantity_sum = grouped["Menge"].transform("sum").le(0)
+    cannot_weight = differing_prices & (
+        missing_quantities | negative_quantities | nonpositive_quantity_sum
+    )
+    result["_aggregation_group"] = ""
+    result.loc[cannot_weight, "_aggregation_group"] = [
+        f"row-{index}" for index in result.index[cannot_weight]
+    ]
+
+    def weighted_price(prices: pd.Series):
+        numeric = pd.to_numeric(prices, errors="coerce").dropna()
+        if numeric.empty:
+            return pd.NA
+        if numeric.nunique() == 1:
+            return float(numeric.iloc[0])
+        quantities = pd.to_numeric(result.loc[numeric.index, "Menge"], errors="coerce")
+        if quantities.notna().all() and quantities.ge(0).all() and quantities.sum() > 0:
+            return float((numeric * quantities).sum() / quantities.sum())
+        return pd.NA
+
+    def summed_quantity(quantities: pd.Series):
+        return pd.to_numeric(quantities, errors="coerce").sum(min_count=1)
+
+    def unique_per(values: pd.Series):
+        numeric = pd.to_numeric(values, errors="coerce").dropna().unique()
+        return int(numeric[0]) if len(numeric) == 1 else pd.NA
+
+    aggregations = {
+        "PDF_Order": ("PDF_Order", "min"),
+        "Preis": ("Preis", weighted_price),
+        "Bezeichnung (PDF)": ("Bezeichnung (PDF)", _first_non_empty),
+        "Menge": ("Menge", summed_quantity),
+        "Einheit (PDF)": ("Einheit (PDF)", _first_non_empty),
+        "Preiseinheit (PDF)": ("Preiseinheit (PDF)", unique_per),
+        "Preis_validiert": ("Preis_validiert", lambda values: bool(values.fillna(False).all())),
+        "Datum": ("Datum", "first"),
+        "Angebot": ("Angebot", "first"),
+        "Anbieter": ("Anbieter", "first"),
+        "Projekt": ("Projekt", "first"),
+        "Gesamt (netto)": ("Gesamt (netto)", "first"),
+        "Gesamt (brutto)": ("Gesamt (brutto)", "first"),
+    }
+    aggregations = {
+        name: spec
+        for name, spec in aggregations.items()
+        if spec[0] in result.columns
+    }
+    result = result.groupby(
+        [*group_columns, "_aggregation_group"],
+        as_index=False,
+        sort=False,
+        dropna=False,
+    ).agg(**aggregations)
+    return result.drop(
+        columns=["_unit_group", "_price_valid_group", "_aggregation_group"]
+    ).sort_values(
+        "PDF_Order",
+        kind="stable",
+    )
 
 
 
@@ -343,6 +579,8 @@ def extract_prices_from_pdf(pdf_source, cache_sig: str | None = None, source_nam
         "Bezeichnung (PDF)",
         "Menge",
         "Einheit (PDF)",
+        "Preiseinheit (PDF)",
+        "Preis_validiert",
         "Datum","Angebot","Anbieter","Projekt",
         "Gesamt (netto)","Gesamt (brutto)"
     ]
@@ -362,10 +600,10 @@ def extract_prices_from_pdf(pdf_source, cache_sig: str | None = None, source_nam
         if cell is None:
             return None
         raw = str(cell).strip()
-        if not raw:
+        if not raw or not re.fullmatch(_PDF_NUMBER_DE, raw):
             return None
 
-        q = to_float(raw)
+        q = smart_float(raw)
         if q is None:
             return None
 
@@ -374,135 +612,7 @@ def extract_prices_from_pdf(pdf_source, cache_sig: str | None = None, source_nam
 
 
     def parse_obo_compact_line(line: str):
-        """
-        OBO-Compact-Fallback:
-        - komplette Zeile steckt oft in row[0]
-        - wir ziehen: ArtNr, Menge (erste passende Zahl rechts nach ArtNr), Einheit (nur als Anker),
-          sowie Material/per (für Einzelpreis)
-        Regel Menge:
-          - bevorzugt Muster "<Menge> <Einheit>"
-          - sonst: erste Zahl (mit Komma oder Punkt) rechts nach ArtNr, die NICHT wie ein Preisblock wirkt
-        """
-        if not line:
-            return None
-
-        s = str(line).replace("\n", " ").lstrip().strip()
-        if not s:
-            return None
-
-        # ------------------------------------------------------------
-        # NEU: OBO-PDF hat in row[0] oft Summenzeilen (fett):
-        # "Preis pro Einheit", "Blocksumm(e)" etc.
-        # Diese enthalten Mengen wie "120,00 Stück" und dürfen NICHT als Artikelmenge zählen.
-        # => alles ab diesen Markern abschneiden.
-        # ------------------------------------------------------------
-        cut_markers = [
-            "preis pro einheit",
-            "blocksumme",
-            "blockssumme",   # falls OCR/Extraktion Mist baut
-            "blocksumm",     # deckt auch "Blocksummme" ab
-            "pos.lv."
-        ]
-        s_lower = s.lower()
-        cut_pos = None
-        for mk in cut_markers:
-            p = s_lower.find(mk)
-            if p != -1:
-                cut_pos = p if cut_pos is None else min(cut_pos, p)
-
-        if cut_pos is not None:
-            s = s[:cut_pos].strip()
-            if not s:
-                return None
-
-        # Artikelnummer
-        m_art = re.search(r"\b(\d{6,9})\b", s)
-        if not m_art:
-            return None
-        art = m_art.group(1)
-
-        # ------------------------------------------------------------
-        # NEU: OBO-Zeilen haben oft die Artikelnummer AM ZEILENENDE.
-        # Dann stehen Menge/ME/Preis/per direkt davor, z.B.:
-        # "LCIS 610 3 FT 100,00  Meter 20,03 1  6209719"
-        # -> wir parsen die letzten Tokens robust.
-        # ------------------------------------------------------------
-        m_end = re.search(
-            r"(\d{1,3}(?:[.\s]?\d{3})*(?:,\d+)?)\s+"
-            r"(Stück|Stk\.?|Meter|m|lfm|Lfm|mtr|Mtr)\s+"
-            r"(\d{1,3}(?:[.\s]?\d{3})*(?:[.,]\d{2}))\s+"
-            r"(\d{1,5})\s+"
-            + re.escape(art) + r"\s*$",
-            s,
-            flags=re.IGNORECASE
-        )
-        if m_end:
-            qty = parse_qty_cell(m_end.group(1))
-            unit_raw = m_end.group(2) or ""
-            u = unit_raw.lower().rstrip(".")
-            if u.startswith("stk") or u in ("stück", "stueck"):
-                unit = "Stück"
-            elif u in ("m", "meter", "lfm", "mtr"):
-                unit = "Meter"
-            else:
-                unit = unit_raw
-
-            material = to_float(m_end.group(3))
-            try:
-                per = int(to_float(m_end.group(4)) or 0)
-            except Exception:
-                per = None
-
-            return {"art": art, "qty": qty, "unit": unit, "material": material, "per": per}
-
-        # tail = alles rechts von der ArtNr (Anker-Fall wenn ArtNr NICHT am Ende steht)
-        tail = s[m_art.end():]
-
-        # Einheit (ME) – nur als Anker/Hilfe, nicht „zwingend“
-        unit_pat = r"(Stück|Stk\.?|Meter|m|lfm|Lfm|mtr|Mtr)"
-        unit = None
-        qty = None
-
-        # 1) stärkster Treffer: "<Menge> <Einheit>" irgendwo rechts nach ArtNr
-        m_qu = re.search(
-            # FIX: KEIN \s als Tausendertrenner, sonst wird "A2 450,00" zu "2 450,00" => 2450,00
-            r"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s+" + unit_pat + r"\b",
-            tail,
-            flags=re.IGNORECASE
-        )
-        if m_qu:
-            qty = parse_qty_cell(m_qu.group(1))
-            unit_raw = m_qu.group(2) or ""
-            u = unit_raw.lower().rstrip(".")
-            if u.startswith("stk") or u in ("stück", "stueck"):
-                unit = "Stück"
-            elif u in ("m", "meter", "lfm", "mtr"):
-                unit = "Meter"
-            else:
-                unit = unit_raw
-
-        # 2) Material/per-Paare: "<Preis> <per>"
-        pair_re = re.compile(r"(\d{1,3}(?:[.\s]?\d{3})*(?:[.,]\d{2}))\s+(\d{1,5})\b")
-        pairs = []
-        for m in pair_re.finditer(tail):
-            p_raw, per_raw = m.group(1), m.group(2)
-            p = to_float(p_raw)
-            try:
-                per_val = int(per_raw)
-            except Exception:
-                continue
-            if p is not None and 1 <= per_val <= 10000:
-                pairs.append((float(p), int(per_val)))
-
-        material = None
-        per = None
-        if pairs:
-            # bevorzugt große per (>1), sonst letztes Paar
-            gt1 = [x for x in pairs if x[1] > 1]
-            material, per = max(gt1, key=lambda t: t[1]) if gt1 else pairs[-1]
-
-        return {"art": art, "qty": qty, "unit": unit, "material": material, "per": per}
-
+        return _parse_obo_compact_line(line)
 
 
     def find_artikelnummer_in_row(row):
@@ -515,33 +625,128 @@ def extract_prices_from_pdf(pdf_source, cache_sig: str | None = None, source_nam
                 break
         return best
 
-    def find_preis_in_row(row):
-        preis = None; preis_col_idx = None
-        for i in range(len(row)-1, -1, -1):
-            val = str(row[i] or '')
-            if re.search(r'\d[\d\.,]*[\.,]\d{2}', val):
-                p = to_float(val)
-                if p is not None:
-                    preis = p; preis_col_idx = i; break
-        return preis, preis_col_idx
+    def parse_table_position(row, col_map):
+        cells = list(row or [])
+        joined = " ".join(str(cell or "").replace("\n", " ") for cell in cells)
+        compact = parse_obo_compact_line(joined)
+        art = find_artikelnummer_in_row(cells) or (compact or {}).get("art")
+        if not art:
+            return None
 
-    def find_per_qty_in_row(row, preis_col_idx):
-        candidates = []
-        for j in range((preis_col_idx or -1)+1, len(row)):
-            q   = to_float(row[j])
-            txt = str(row[j] or '')
-            has_dec = bool(re.search(r'[\.,]\d{2}\b', txt))
-            if q is not None and not has_dec and q > 1 and q <= 10000:
-                candidates.append(int(q))
-        if candidates: return candidates[-1]
-        all_ints = []
-        for j, v in enumerate(row):
-            q   = to_float(v)
-            txt = str(v or '')
-            has_dec = bool(re.search(r'[\.,]\d{2}\b', txt))
-            if q is not None and not has_dec and q > 1 and q <= 10000:
-                all_ints.append(int(q))
-        return all_ints[-1] if all_ints else None
+        indices = {canon: index for index, canon in col_map.items()}
+        qty_idx = indices.get("Menge")
+        unit_idx = indices.get("Einheit")
+        desc_idx = indices.get("Bezeichnung")
+        mat_idx = indices.get("Material")
+        per_idx = indices.get("per")
+        price_idx = indices.get("Preis")
+
+        qty = parse_qty_cell(cells[qty_idx]) if qty_idx is not None and qty_idx < len(cells) else None
+        unit = (
+            _normalize_pdf_unit(cells[unit_idx])
+            if unit_idx is not None and unit_idx < len(cells)
+            else None
+        )
+        if qty is None and unit_idx is not None and 0 < unit_idx < len(cells):
+            qty = parse_qty_cell(cells[unit_idx - 1])
+        if compact:
+            if compact.get("qty") is not None:
+                qty = compact.get("qty")
+            if compact.get("unit") is not None:
+                unit = compact.get("unit")
+
+        price = None
+        per = None
+        invalid_explicit_price_per = False
+        if price_idx is not None and price_idx < len(cells):
+            price = _validated_money(cells[price_idx])
+            if price is not None:
+                raw_per = (
+                    cells[per_idx]
+                    if per_idx is not None and per_idx < len(cells)
+                    else None
+                )
+                has_explicit_per = raw_per is not None and bool(str(raw_per).strip())
+                explicit_per = _validated_per(raw_per) if has_explicit_per else None
+                if has_explicit_per and explicit_per is None:
+                    invalid_explicit_price_per = True
+                    price = None
+                else:
+                    per = explicit_per or 1
+                    price /= per
+
+        if price is None and mat_idx is not None and mat_idx < len(cells):
+            material_cell = cells[mat_idx]
+            material = _validated_money(material_cell)
+            explicit_per = (
+                _validated_per(cells[per_idx])
+                if per_idx is not None and per_idx < len(cells)
+                else None
+            )
+            if explicit_per is not None:
+                per = explicit_per
+            if material is not None and explicit_per is not None:
+                price = material / explicit_per
+            elif material is None:
+                combined = re.fullmatch(
+                    rf"\s*(?P<material>{_PDF_MONEY_DE})\s+(?P<per>\d{{1,5}})\s*",
+                    str(material_cell or ""),
+                )
+                if combined:
+                    material = _validated_money(combined.group("material"))
+                    explicit_per = _validated_per(combined.group("per"))
+                    if material is not None and explicit_per is not None:
+                        price = material / explicit_per
+                        per = explicit_per
+
+        if (
+            price is None
+            and not invalid_explicit_price_per
+            and compact
+            and compact.get("price_validated")
+        ):
+            price = compact.get("price")
+            per = compact.get("per")
+
+        if price is None:
+            if compact:
+                per = compact.get("per")
+            if qty is None or unit is None:
+                return None
+
+        description = None
+        if desc_idx is not None and desc_idx < len(cells):
+            description = str(cells[desc_idx] or "").strip() or None
+
+        return {
+            "Artikelnummer": clean_artnr(art),
+            "Preis": float(price) if price is not None else None,
+            "Bezeichnung (PDF)": description,
+            "Menge": qty,
+            "Einheit (PDF)": unit,
+            "Preiseinheit (PDF)": per,
+            "Preis_validiert": price is not None,
+        }
+
+    def position_fingerprint(position):
+        quantity = position.get("Menge")
+        price = position.get("Preis")
+        per = position.get("Preiseinheit (PDF)")
+        return (
+            str(position.get("Artikelnummer") or ""),
+            None if price is None else round(float(price), 8),
+            None if quantity is None else round(float(quantity), 8),
+            str(position.get("Einheit (PDF)") or "").casefold(),
+            None if per is None else int(per),
+        )
+
+    def position_identity(position):
+        quantity = position.get("Menge")
+        return (
+            str(position.get("Artikelnummer") or ""),
+            None if quantity is None else round(float(quantity), 8),
+            str(position.get("Einheit (PDF)") or "").casefold(),
+        )
 
     try:
         with pdfplumber.open(pdf_input) as pdf:
@@ -577,197 +782,84 @@ def extract_prices_from_pdf(pdf_source, cache_sig: str | None = None, source_nam
                     txt_meta = ""
                 text_all_parts.append(txt_meta)
 
+                table_fingerprints = Counter()
+                validated_table_identities = Counter()
                 for tbl in tables:
-                    # Header finden
-                    header_row = None; header_idx = 0
-                    for idx, r in enumerate(tbl or []):
-                        if r and any(str(c or '').strip() for c in r):
-                            header_row = r; header_idx = idx; break
-                    # [ANCHOR: pdf-table-parse - AFTER]
-                    # [ANCHOR: pdf-table-parse - AFTER]
-                    mat_idx = per_idx = None
-                    desc_idx = None  # <— Index für "Bezeichnung"
-                    qty_idx  = None  # <— NEU: Index für "Menge"
-                    unit_idx = None  # <— NEU: Index für "Einheit"
-                    if header_row:
-                        col_map = _map_headers(header_row)
-                        for i, canon in col_map.items():
-                            c = str(canon).strip().lower()
-                            if c == "material" and mat_idx is None:
-                                mat_idx = i
-                            elif c == "per" and per_idx is None:
-                                per_idx = i
-                            elif c == "bezeichnung" and desc_idx is None:
-                                desc_idx = i
-                            elif c == "menge" and qty_idx is None:
-                                qty_idx = i
-                            elif c == "einheit" and unit_idx is None:
-                                unit_idx = i
-
-
-
-                    if mat_idx is not None and per_idx is not None:
-                        # Material / per -> Einzelpreis
-                        for row in (tbl or [])[header_idx+1:]:
-                            if not row: continue
-                            art = find_artikelnummer_in_row(row)
-                            if not art: continue
-                            material = to_float(row[mat_idx]) if mat_idx < len(row) else None
-                            per_qty  = to_float(row[per_idx])  if per_idx  < len(row) else None
-
-                            # NEU: falls Spalten leer sind (oft bei OBO), aus row[0] parsen
-                            compact = None
-                            if material is None or per_qty is None:
-                                compact = parse_obo_compact_line(row[0] if len(row) > 0 else "")
-                                if compact:
-                                    if material is None and compact.get("material") is not None:
-                                        material = float(compact["material"])
-                                    if (per_qty is None or not per_qty) and compact.get("per") is not None:
-                                        per_qty = float(compact.get("per") or 1)
-
-                        
-
-                            if material is None:
-                                continue
-                            if not per_qty or per_qty <= 0:
-                                per_qty = 1.0
-
-                            preis = float(material) / float(per_qty)
-
-                            seq += 1
-                            qty_val = None
-                            unit_val = None
-
-                            # Einheit lesen (wenn erkannt)
-                            if unit_idx is not None and unit_idx < len(row):
-                                unit_val = str(row[unit_idx] or "").strip() or None
-
-                            # Menge: bei OBO steht sie in der Praxis fast immer direkt links von der Einheit (ME)
-                            qty_val = None
-
-                            # 1) bevorzugt: links von der Einheit
-                            if unit_idx is not None and unit_idx > 0 and unit_idx < len(row):
-                                qty_val = parse_qty_cell(row[unit_idx - 1])
-
-                            # 2) fallback: qty_idx aus Header-Mapping (nur wenn links von Einheit nichts parsebar war)
-                            if qty_val is None and qty_idx is not None and qty_idx < len(row):
-                                qty_val = parse_qty_cell(row[qty_idx])
-
-                            # Bezeichnung (wenn erkannt)
-                            bez_pdf = None
-                            if desc_idx is not None and desc_idx < len(row):
-                                bez_pdf = str(row[desc_idx] or "").strip() or None
-
-                            # ✅ NEU: Wenn Menge/Einheit (oder Bezeichnung) fehlen → compact-line Parser nutzen
-                            if (qty_val is None) or (unit_val is None) or (bez_pdf is None):
-                                compact2 = parse_obo_compact_line(row[0] if len(row) > 0 else "")
-                                if compact2:
-                                    if qty_val is None:
-                                        qty_val = compact2.get("qty")
-                                    if unit_val is None:
-                                        unit_val = compact2.get("unit")
-                                    if bez_pdf is None:
-                                        # optional: nicht zwingend, aber schadet nicht
-                                        bez_pdf = None  # compact parser liefert aktuell keine Bezeichnung
-
-                            results.append({
-                                "Artikelnummer": art,
-                                "Preis": preis,
-                                "Quelle": pdf_name,
-                                "PDF_Order": int(seq),
-                                "Bezeichnung (PDF)": bez_pdf,
-                                "Menge": qty_val,            # <— NEU
-                                "Einheit (PDF)": unit_val,   # <— optional, schadet nicht
-                            })
-
-                    else:
-                        # Fallback: Preis + „per“ rechts davon
-                        for row in (tbl or []):
-                            compact = None  # <-- NEU: pro Zeile initialisieren
-                            if not row: 
-                                continue
-                            art, (preis, preis_col_idx) = find_artikelnummer_in_row(row), find_preis_in_row(row)
-
-                            if art and (preis is not None):
-                                # NEU: Bezeichnung (wenn Header existiert und Index bekannt)
-                                bez_pdf = None
-                                if desc_idx is not None and desc_idx < len(row):
-                                    bez_pdf = str(row[desc_idx] or "").strip() or None
-
-                                qty_val = None
-                                unit_val = None
-
-                                # Menge: bei OBO bevorzugt links von der Einheit (ME)
-                                qty_val = None
-
-                                if unit_idx is not None and unit_idx > 0 and unit_idx < len(row):
-                                    qty_val = parse_qty_cell(row[unit_idx - 1])
-
-                                if qty_val is None and qty_idx is not None and qty_idx < len(row):
-                                    qty_val = parse_qty_cell(row[qty_idx])
-
-                                # NEU: wenn Menge/Einheit in Spalten nicht kommt, aus compact ziehen
-                                if (qty_val is None or unit_val is None):
-                                    if compact is None:
-                                        compact = parse_obo_compact_line(row[0] if len(row) > 0 else "")
-                                    if compact:
-                                        if qty_val is None:
-                                            qty_val = compact.get("qty")
-                                        if unit_val is None:
-                                            unit_val = compact.get("unit")
-
-
-                                # Menge primär über qty_idx
-                                if qty_idx is not None and qty_idx < len(row):
-                                    qty_val = parse_qty_cell(row[qty_idx])
-
-                                # Fallback: wenn keine Menge erkannt, aber Einheit existiert -> Menge steht meist links davon
-                                if qty_val is None and unit_idx is not None and unit_idx > 0 and unit_idx < len(row):
-                                    qty_val = parse_qty_cell(row[unit_idx - 1])
-
-
-                                results.append({
-                                    "Artikelnummer": art,
-                                    "Preis": preis,
-                                    "Quelle": pdf_name,
-                                    "PDF_Order": int(seq),
-                                    "Bezeichnung (PDF)": bez_pdf,
-                                    "Menge": qty_val,            # <— NEU
-                                    "Einheit (PDF)": unit_val,   # <— optional, schadet nicht
-                                })
-
+                    header_row = None
+                    header_idx = 0
+                    for idx, row in enumerate(tbl or []):
+                        if row and any(str(cell or "").strip() for cell in row):
+                            header_row = row
+                            header_idx = idx
+                            break
+                    col_map = _map_headers(header_row) if header_row else {}
+                    rows = (tbl or [])[header_idx + 1:] if col_map else (tbl or [])
+                    for row in rows:
+                        position = parse_table_position(row, col_map)
+                        if position is None:
+                            continue
+                        seq += 1
+                        position["Quelle"] = pdf_name
+                        position["PDF_Order"] = int(seq)
+                        results.append(position)
+                        table_fingerprints[position_fingerprint(position)] += 1
+                        if position.get("Preis_validiert"):
+                            validated_table_identities[position_identity(position)] += 1
 
                 # Text-Fallback pro Zeile
                 try:
                     txt = page.extract_text() or ""
                 except Exception:
                     txt = ""
+                text_positions = []
                 for ln in (txt.splitlines() if txt else []):
                     ln = (ln or "").strip()
                     if not ln:
                         continue
+                    compact = parse_obo_compact_line(ln)
+                    if not compact:
+                        continue
+                    position = {
+                        "Artikelnummer": compact["art"],
+                        "Preis": (
+                            float(compact["price"])
+                            if compact.get("price_validated")
+                            else None
+                        ),
+                        "Quelle": pdf_name,
+                        "Bezeichnung (PDF)": None,
+                        "Menge": compact.get("qty"),
+                        "Einheit (PDF)": compact.get("unit"),
+                        "Preiseinheit (PDF)": compact.get("per"),
+                        "Preis_validiert": bool(compact.get("price_validated")),
+                    }
+                    text_positions.append(position)
 
-                    art, pr = parse_row_text_fallback(ln)
-                    if art and (pr is not None):
-                        seq += 1
+                skipped_text_positions = set()
+                for index, position in enumerate(text_positions):
+                    fingerprint = position_fingerprint(position)
+                    if table_fingerprints[fingerprint] > 0:
+                        table_fingerprints[fingerprint] -= 1
+                        if (
+                            position.get("Preis_validiert")
+                            and validated_table_identities[position_identity(position)] > 0
+                        ):
+                            validated_table_identities[position_identity(position)] -= 1
+                        skipped_text_positions.add(index)
 
-                        qty_val = None
-                        unit_val = None
-
-                        # ✅ Menge/Einheit aus der Zeile ziehen (OBO-Compact Parser)
-                        compact = parse_obo_compact_line(ln)
-                        if compact:
-                            qty_val = compact.get("qty")
-                            unit_val = compact.get("unit")
-
-                        results.append({
-                            "Artikelnummer": art,
-                            "Preis": pr,
-                            "Quelle": pdf_name,
-                            "PDF_Order": int(seq),
-                            "Menge": qty_val,
-                            "Einheit (PDF)": unit_val,
-                        })
+                for index, position in enumerate(text_positions):
+                    if index in skipped_text_positions:
+                        continue
+                    identity = position_identity(position)
+                    if (
+                        not position.get("Preis_validiert")
+                        and validated_table_identities[identity] > 0
+                    ):
+                        validated_table_identities[identity] -= 1
+                        continue
+                    seq += 1
+                    position["PDF_Order"] = int(seq)
+                    results.append(position)
 
 
             # Projekt bestimmen (fixe Region > strikter Scan > Fallback)
@@ -800,39 +892,7 @@ def extract_prices_from_pdf(pdf_source, cache_sig: str | None = None, source_nam
             df["Gesamt (brutto)"] = (total_gross if (total_gross is not None) else pd.NA)
 
             if not df.empty:
-                if "PDF_Order" in df.columns:
-                    df = df.sort_values(["PDF_Order"]).copy()
-
-                # Menge numerisch machen (damit sum sauber klappt)
-                if "Menge" in df.columns:
-                    df["Menge"] = pd.to_numeric(df["Menge"], errors="coerce")
-
-                def _first_non_empty(s: pd.Series):
-                    s2 = s.dropna().astype(str).str.strip()
-                    s2 = s2[s2 != ""]
-                    return (s2.iloc[0] if len(s2) else pd.NA)
-
-                agg = {
-                    "PDF_Order": ("PDF_Order", "min"),
-                    "Preis": ("Preis", "first"),
-                    "Bezeichnung (PDF)": ("Bezeichnung (PDF)", _first_non_empty),
-                    "Menge": ("Menge", "sum"),
-                    "Einheit (PDF)": ("Einheit (PDF)", _first_non_empty),
-                    "Datum": ("Datum", "first"),
-                    "Angebot": ("Angebot", "first"),
-                    "Anbieter": ("Anbieter", "first"),
-                    "Projekt": ("Projekt", "first"),
-                    "Gesamt (netto)": ("Gesamt (netto)", "first"),
-                    "Gesamt (brutto)": ("Gesamt (brutto)", "first"),
-                }
-
-                # nur Spalten aggregieren, die existieren
-                agg = {k: v for k, v in agg.items() if k in df.columns}
-
-                df = df.groupby(["Artikelnummer", "Quelle"], as_index=False).agg(**agg)
-
-                if "PDF_Order" in df.columns:
-                    df = df.sort_values(["PDF_Order"])
+                df = _aggregate_parsed_positions(df)
 
 
             # fehlende Spalten nachziehen, Reihenfolge vereinheitlichen
@@ -863,31 +923,7 @@ def extract_prices_from_pdf(pdf_source, cache_sig: str | None = None, source_nam
         df["Gesamt (brutto)"] = (total_gross if (total_gross is not None) else pd.NA)
 
         if not df.empty and "PDF_Order" in df.columns:
-            # Statt Duplikate zu droppen: je Artikel im Angebot Mengen aufsummieren
-            df = df.sort_values(["PDF_Order"]).copy()
-
-            # Menge numerisch ziehen (falls irgendwo Text/NA drin ist)
-            if "Menge" in df.columns:
-                df["Menge"] = pd.to_numeric(df["Menge"], errors="coerce")
-
-            def _first_non_empty(s: pd.Series):
-                s2 = s.dropna().astype(str).str.strip()
-                s2 = s2[s2 != ""]
-                return (s2.iloc[0] if len(s2) else pd.NA)
-
-            agg = {
-                "PDF_Order": ("PDF_Order", "min"),
-                "Preis": ("Preis", "first"),
-                "Bezeichnung (PDF)": ("Bezeichnung (PDF)", _first_non_empty),
-                "Menge": ("Menge", "sum"),
-                "Einheit (PDF)": ("Einheit (PDF)", _first_non_empty),
-            }
-
-            # Nur Spalten aggregieren, die auch wirklich existieren
-            agg = {k: v for k, v in agg.items() if k in df.columns}
-
-            df = df.groupby(["Artikelnummer", "Quelle"], as_index=False).agg(**agg)
-            df = df.sort_values(["PDF_Order"])
+            df = _aggregate_parsed_positions(df)
 
 
         # fehlende Spalten nachziehen, Reihenfolge vereinheitlichen

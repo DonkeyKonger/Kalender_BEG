@@ -43,6 +43,27 @@ export type ReferencePresets = {
 export type OfferType = "Erstangebot" | "Folgeangebot" | "Verhandeltes Angebot";
 export type OfferPriceLevel = "all" | "below" | "above" | "none";
 export type OfferSort = "date" | "price_asc" | "price_desc";
+export type OfferComparisonUnavailableReason =
+  | "insufficient_references"
+  | "insufficient_coverage"
+  | "invalid_prices"
+  | "invalid_date"
+  | "no_comparable_positions";
+
+export type OfferComparisonQuality = {
+  method_version: string;
+  as_of: string;
+  window_start: string;
+  status: "reliable" | "unavailable";
+  reason?: OfferComparisonUnavailableReason | null;
+  total_positions: number;
+  eligible_positions: number;
+  matched_positions: number;
+  excluded_positions: number;
+  reference_offer_count: number;
+  value_coverage_pct: number;
+  position_coverage_pct: number;
+};
 
 export type OfferSummary = {
   source: string;
@@ -57,6 +78,7 @@ export type OfferSummary = {
   total_net: number | null;
   price_change: number | null;
   price_change_positions: number | null;
+  comparison_quality?: OfferComparisonQuality | null;
 };
 
 export type OffersResult = {
