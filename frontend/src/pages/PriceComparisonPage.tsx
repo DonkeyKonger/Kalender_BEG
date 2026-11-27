@@ -141,7 +141,7 @@ export function PriceComparisonPage() {
     setPendingOperations((count) => Math.max(0, count + (started ? 1 : -1)));
   }, []);
   const [uploadRevision, setUploadRevision] = useState<string | null>(null);
-  const articleSearch = useArticleSearchIndex(user?.id ?? null);
+  const articleSearch = useArticleSearchIndex(user?.id ?? null, activeView === "articles");
   const statusRequest = useRef(0);
   const statusController = useRef<AbortController | null>(null);
 
@@ -246,7 +246,14 @@ export function PriceComparisonPage() {
 
       <div className="price-view-content" role="tabpanel">
         {activeView === "datanorm" ? <DatanormView onOperation={onOperation} uploadRevision={uploadRevision} /> : null}
-        {activeView === "offers" ? <OffersView onOperation={onOperation} uploadRevision={uploadRevision} onUploadBlock={setUploadBlockReason} onBackgroundMutation={setUploadRevision} /> : null}
+        <RetainedOffersView
+          active={activeView === "offers"}
+          sessionKey={user?.id ?? null}
+          onOperation={onOperation}
+          uploadRevision={uploadRevision}
+          onUploadBlock={setUploadBlockReason}
+          onBackgroundMutation={setUploadRevision}
+        />
         {activeView === "articles" ? <ArticlesView articleSearch={articleSearch} uploadRevision={uploadRevision} /> : null}
         {activeView === "files" ? <FilesView onOperation={onOperation} uploadRevision={uploadRevision} status={status} onMutation={syncStatusFromFiles} /> : null}
       </div>
@@ -877,7 +884,36 @@ function NetPriceCalculator({
   );
 }
 
-function OffersView({ uploadRevision, onUploadBlock, onOperation, onBackgroundMutation }: { uploadRevision: string | null; onUploadBlock: (reason: string | null) => void; onOperation: (started: boolean) => void; onBackgroundMutation: (revision: string) => void }) {
+function RetainedOffersView({ active, sessionKey, uploadRevision, onUploadBlock, onOperation, onBackgroundMutation }: {
+  active: boolean;
+  sessionKey: number | string | null;
+  uploadRevision: string | null;
+  onUploadBlock: (reason: string | null) => void;
+  onOperation: (started: boolean) => void;
+  onBackgroundMutation: (revision: string) => void;
+}) {
+  const [visit, setVisit] = useState(() => ({ sessionKey, visited: active }));
+  const visited = visit.sessionKey === sessionKey && visit.visited;
+
+  useEffect(() => {
+    if (!active || visited) return;
+    setVisit({ sessionKey, visited: true });
+  }, [active, sessionKey, visited]);
+
+  if (!active && !visited) return null;
+  return (
+    <OffersView
+      key={String(sessionKey)}
+      active={active}
+      uploadRevision={uploadRevision}
+      onUploadBlock={onUploadBlock}
+      onOperation={onOperation}
+      onBackgroundMutation={onBackgroundMutation}
+    />
+  );
+}
+
+function OffersView({ active, uploadRevision, onUploadBlock, onOperation, onBackgroundMutation }: { active: boolean; uploadRevision: string | null; onUploadBlock: (reason: string | null) => void; onOperation: (started: boolean) => void; onBackgroundMutation: (revision: string) => void }) {
   const [queryInput, setQueryInput] = useState("");
   const [search, setSearch] = useState("");
   const [offerType, setOfferType] = useState("");
@@ -898,6 +934,7 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation, onBackgroundMu
   const overviewReturnRef = useRef<{ button: HTMLButtonElement; listScroll: number; pageX: number; pageY: number } | null>(null);
   const offerInfoRef = useRef<HTMLDivElement>(null);
   const offerInfoButtonRef = useRef<HTMLButtonElement>(null);
+  const wasActive = useRef(active);
   const offerListRequests = useRef<LatestRequestGate | null>(null);
   if (!offerListRequests.current) offerListRequests.current = new LatestRequestGate();
   const infoId = useId();
@@ -949,9 +986,15 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation, onBackgroundMu
     return () => { offersMounted.current = false; };
   }, []);
 
+  useEffect(() => {
+    const becameActive = active && !wasActive.current;
+    wasActive.current = active;
+    if (becameActive) void load();
+  }, [active, load]);
+
   useLayoutEffect(() => {
     const source = typeFocusAfterSave.current;
-    if (!source || savingTypeSource || loading) return;
+    if (!active || !source || savingTypeSource || loading) return;
     typeFocusAfterSave.current = null;
     // A disabled native select loses focus while saving. Restore it unless the
     // user has already moved to another control, or the refresh failed.
@@ -959,7 +1002,7 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation, onBackgroundMu
     const selects = Array.from(offerListRef.current?.querySelectorAll<HTMLSelectElement>("select[data-offer-source]") ?? []);
     const target = selects.find((select) => select.dataset.offerSource === source) ?? selects[0];
     (target ?? offerInfoButtonRef.current)?.focus({ preventScroll: true });
-  }, [savingTypeSource, loading, error]);
+  }, [active, savingTypeSource, loading, error]);
 
   async function changeOfferType(source: string, nextType: OfferType) {
     const offer = data?.offers.find((item) => item.source === source);
@@ -1013,7 +1056,7 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation, onBackgroundMu
   }, [selectedSource]);
 
   useEffect(() => {
-    if (!infoOpen) return;
+    if (!active || !infoOpen) return;
     const closeOutside = (event: PointerEvent) => {
       if (!offerInfoRef.current?.contains(event.target as Node)) setInfoOpen(false);
     };
@@ -1028,13 +1071,13 @@ function OffersView({ uploadRevision, onUploadBlock, onOperation, onBackgroundMu
       document.removeEventListener("pointerdown", closeOutside);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [infoOpen]);
+  }, [active, infoOpen]);
 
   const levelCounts = data?.price_level_counts ?? { all: 0, below: 0, above: 0, none: 0 };
   const hasFilters = Boolean(search || offerType || priceLevel !== "all");
 
   return (
-    <div className={`price-workspace is-offers${selectedSource ? " has-selected-offer" : ""}`}>
+    <div hidden={!active} className={`price-workspace is-offers${selectedSource ? " has-selected-offer" : ""}`}>
       <div className="offer-overview-heading" ref={offerInfoRef}>
         <ViewHeading
           icon={<FileArchive size={19} />}

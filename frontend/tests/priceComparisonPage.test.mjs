@@ -61,6 +61,8 @@ test("all four native workspaces and guarded duplicate workflows remain present"
   assert.match(page, /scrollIntoView/);
   assert.match(page, /prefers-reduced-motion: reduce/);
   assert.match(page, /initialDetailScrollDone\.current/);
+  assert.match(page, /if \(!active \|\| !source \|\| savingTypeSource \|\| loading\) return;/);
+  assert.match(page, /if \(!active \|\| !infoOpen\) return;/);
 });
 
 test("price tabs stay visible without vertical or narrow-screen overflow", () => {

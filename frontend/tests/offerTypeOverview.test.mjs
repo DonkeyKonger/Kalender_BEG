@@ -7,6 +7,7 @@ import { build } from "esbuild";
 
 const pagePath = fileURLToPath(new URL("../src/pages/PriceComparisonPage.tsx", import.meta.url));
 const pageSource = readFileSync(pagePath, "utf8");
+const priceCssSource = readFileSync(new URL("../src/priceComparison/priceComparison.css", import.meta.url), "utf8");
 const stubModules = new Map([
   ["react", `
     export const memo = component => component;
@@ -59,7 +60,7 @@ const stubModules = new Map([
 
 const bundled = await build({
   stdin: {
-    contents: `${pageSource}\nexport { OffersView, OfferTypeSelect, PriceComparisonError as OfferTypePriceComparisonError };`,
+    contents: `${pageSource}\nexport { RetainedOffersView, OffersView, OfferTypeSelect, PriceComparisonError as OfferTypePriceComparisonError };`,
     resolveDir: dirname(pagePath),
     sourcefile: "PriceComparisonPage.offer-type.test.tsx",
     loader: "tsx",
@@ -86,7 +87,7 @@ const bundled = await build({
 });
 const componentModule = { exports: {} };
 new Function("module", "exports", bundled.outputFiles[0].text)(componentModule, componentModule.exports);
-const { OffersView, OfferTypeSelect, OfferTypePriceComparisonError } = componentModule.exports;
+const { RetainedOffersView, OffersView, OfferTypeSelect, OfferTypePriceComparisonError } = componentModule.exports;
 
 function deferred() {
   let resolvePromise;
@@ -130,7 +131,7 @@ function queuedRequester() {
   };
 }
 
-function createHarness(t, requester) {
+function createHarness(t, requester, component = OffersView, propertyOverrides = {}) {
   const originals = new Map([
     ["window", Object.getOwnPropertyDescriptor(globalThis, "window")],
     ["document", Object.getOwnPropertyDescriptor(globalThis, "document")],
@@ -200,10 +201,12 @@ function createHarness(t, requester) {
   const operations = [];
   const backgroundMutations = [];
   const properties = {
+    active: true,
     uploadRevision: null,
     onUploadBlock() {},
     onOperation: (started) => operations.push(started),
     onBackgroundMutation: (revision) => backgroundMutations.push(revision),
+    ...propertyOverrides,
   };
   const flushEffects = () => {
     const effects = pendingEffects;
@@ -212,7 +215,7 @@ function createHarness(t, requester) {
   };
   const render = (flush = true) => {
     cursor = 0;
-    const tree = OffersView(properties);
+    const tree = component(properties);
     if (flush) flushEffects();
     return tree;
   };
@@ -228,7 +231,13 @@ function createHarness(t, requester) {
     unmount();
     originals.forEach((descriptor, name) => restore(name, descriptor));
   });
-  return { render, unmount, operations, backgroundMutations };
+  return {
+    render,
+    unmount,
+    operations,
+    backgroundMutations,
+    setProperties(next) { Object.assign(properties, next); },
+  };
 }
 
 function visit(node, callback, ancestors = []) {
@@ -276,6 +285,84 @@ async function loadInitialOffers(harness, requester, data) {
   await settle();
   return harness.render();
 }
+
+test("the offers view mounts on first use, survives tab changes, and never crosses sessions", (t) => {
+  const requester = queuedRequester();
+  const harness = createHarness(t, requester, RetainedOffersView, {
+    active: false,
+    sessionKey: "user-a",
+  });
+
+  assert.equal(harness.render(), null, "an unvisited hidden view does no work");
+  assert.equal(requester.requests.length, 0);
+
+  harness.setProperties({ active: true });
+  let retained = harness.render();
+  assert.equal(retained.type, OffersView);
+  assert.equal(retained.props.active, true);
+
+  harness.setProperties({ active: false });
+  retained = harness.render();
+  assert.equal(retained.type, OffersView, "the visited view remains mounted in the same session");
+  assert.equal(retained.props.active, false);
+
+  harness.setProperties({ sessionKey: "user-b" });
+  assert.equal(harness.render(), null, "another account cannot receive the retained view");
+});
+
+test("the hidden retained panel cannot be restored by workspace display rules", () => {
+  assert.match(pageSource, /<div hidden=\{!active\} className=\{`price-workspace is-offers/);
+  assert.match(priceCssSource, /\.price-workspace\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
+});
+
+test("a hidden offers view always revalidates on return without blanking cached rows", async (t) => {
+  const requester = queuedRequester();
+  const harness = createHarness(t, requester);
+  let tree = await loadInitialOffers(harness, requester, offersResult("revision-a", [offer("Cached.pdf")]));
+  assert.equal(offerTypeControls(tree)[0].props.source, "Cached.pdf");
+
+  harness.setProperties({ active: false });
+  harness.render();
+  assert.equal(requester.requests.length, 1, "hidden cached offers do not compete with the active tab");
+
+  harness.setProperties({ active: true });
+  tree = harness.render();
+  assert.equal(offerTypeControls(tree)[0].props.source, "Cached.pdf", "cached rows remain available during revalidation");
+  assert.equal(requester.requests.length, 2);
+  requester.requests[1].pending.resolve(offersResult("revision-b", [offer("Fresh.pdf")]));
+  await settle();
+  tree = harness.render();
+  assert.equal(offerTypeControls(tree)[0].props.source, "Fresh.pdf");
+
+  harness.setProperties({ active: false });
+  harness.render();
+  harness.setProperties({ active: true });
+  harness.render();
+  assert.equal(requester.requests.length, 3, "every return checks for external OneDrive or other-user changes");
+  requester.requests[2].pending.resolve(offersResult("revision-c", [offer("External.pdf")]));
+  await settle();
+  tree = harness.render();
+  assert.equal(offerTypeControls(tree)[0].props.source, "External.pdf");
+});
+
+test("returning to a cached offers view retries its last failed refresh", async (t) => {
+  const requester = queuedRequester();
+  const harness = createHarness(t, requester);
+  harness.render();
+  requester.requests[0].pending.reject(new Error("Zeitüberschreitung"));
+  await settle();
+  harness.render();
+
+  harness.setProperties({ active: false });
+  harness.render();
+  harness.setProperties({ active: true });
+  harness.render();
+  assert.equal(requester.requests.length, 2);
+  requester.requests[1].pending.resolve(offersResult("revision-recovered", [offer("Recovered.pdf")]));
+  await settle();
+  const recovered = harness.render();
+  assert.equal(offerTypeControls(recovered)[0].props.source, "Recovered.pdf");
+});
 
 test("changing a type PATCHes only offer_type with the current revision, locks duplicates and reloads", async (t) => {
   const requester = queuedRequester();

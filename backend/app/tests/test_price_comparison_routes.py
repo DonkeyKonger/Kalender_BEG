@@ -404,13 +404,13 @@ def test_offer_overview_filters_counts_sorts_before_pagination_without_mutation(
         warnings=["keine Neuberechnung"],
     )
     calls = []
-    monkeypatch.setattr(service, "load", lambda: data)
+    monkeypatch.setattr(service, "_read_snapshot", lambda: data.snap)
 
-    def offers_list(received):
+    def overview(received):
         calls.append(received)
-        return cached_offers
+        return {"offers": cached_offers, "warnings": data.warnings}
 
-    monkeypatch.setattr(service, "offers_list", offers_list)
+    monkeypatch.setattr(service, "_offer_overview", overview)
     original_order = [item["source"] for item in cached_offers]
 
     base_params = {"search": "alpha", "offer_type": "Erstangebot", "limit": 20}
@@ -495,7 +495,7 @@ def test_offer_overview_filters_counts_sorts_before_pagination_without_mutation(
     assert [item["price_change"] for item in nonfinite.json()["offers"]] == [None] * 3
     assert [item["price_change_positions"] for item in nonfinite.json()["offers"]] == [None] * 3
 
-    assert calls == [data] * 5
+    assert calls == [data.snap] * 5
     assert [item["source"] for item in cached_offers] == original_order
     assert math.isinf(cached_offers[-3]["price_change"])
     assert math.isinf(cached_offers[-2]["price_change"])
@@ -538,8 +538,10 @@ def test_offer_overview_defaults_to_uploaded_sort_before_pagination_without_muta
         snap=SimpleNamespace(revision="r" * 64),
         warnings=[],
     )
-    monkeypatch.setattr(service, "load", lambda: data)
-    monkeypatch.setattr(service, "offers_list", lambda received: cached_offers)
+    monkeypatch.setattr(service, "_read_snapshot", lambda: data.snap)
+    monkeypatch.setattr(service, "_offer_overview", lambda received: {
+        "offers": cached_offers, "warnings": data.warnings,
+    })
 
     response = client.get(
         "/api/price-comparison/offers", params={"offset": 1, "limit": 3}

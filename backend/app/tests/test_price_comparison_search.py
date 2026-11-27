@@ -100,3 +100,26 @@ def test_mutations_invalidate_read_snapshots_before_and_after_even_on_failure(co
     with pytest.raises(RuntimeError):
         service.mutate(service.status()["revision"], lambda snap: (_ for _ in ()).throw(RuntimeError("failed")))
     assert calls == ["invalidate", "invalidate"]
+
+
+def test_offer_only_changes_keep_browser_index_revision_and_skip_rebuild(context, monkeypatch):
+    from app.services import price_comparison_service as module
+    from app.services.price_comparison_storage import save_state, snapshot
+    from app.tests.test_price_comparison_routes import offer_pdf
+
+    client, service, _ = context
+    seed(client)
+    initial = service.article_search_index()
+    def unexpected(*args, **kwargs):
+        pytest.fail("offer-only change rebuilt article index")
+    monkeypatch.setattr(module, "build_article_search_index", unexpected)
+    service.store.write("offers", "Additional.pdf", offer_pdf(number="ADDED"), None)
+    current = snapshot(service.store)
+    current.state["offer_types"]["Angebot.pdf"] = "Folgeangebot"
+    current.state["discounts"]["Angebot.pdf"] = 7
+    current.state["manual_prices"]["Angebot.pdf||6047611"] = 8.5
+    save_state(service.store, current)
+    assert service.article_search_index(initial["revision"]) == {
+        "revision": initial["revision"], "unchanged": True,
+    }
+    assert service.article_search_index()["rows"] == initial["rows"]

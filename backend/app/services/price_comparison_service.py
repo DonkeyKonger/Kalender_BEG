@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from contextvars import copy_context
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -11,6 +12,7 @@ from zoneinfo import ZoneInfo
 import fcntl
 import hashlib
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -27,6 +29,8 @@ from app.services.price_comparison_online_import import (
     OnlineImportFrames,
     load_online_import,
 )
+from app.services.price_comparison_disk_cache import PriceOverviewDiskCache
+from app.services.price_comparison_timing import price_timing, record_cache_hit, record_cache_miss
 from app.services.price_comparison_performance_cache import (
     calendar_day_key,
     price_comparison_cache,
@@ -51,6 +55,9 @@ SOURCE_VERSION = "4ed988f"
 OFFER_TYPES = ("Erstangebot", "Folgeangebot", "Verhandeltes Angebot")
 CACHE_VERSION = "4ed988f-validated-pdf-v3"
 MAX_PARSE_WORKERS = 4
+OVERVIEW_VERSION = "offers-overview-v1"
+ARTICLE_INDEX_VERSION = "datanorm-search-v1"
+logger = logging.getLogger(__name__)
 
 
 class RollbackRecoveryError(RuntimeError):
@@ -152,18 +159,28 @@ class PriceComparisonService:
         self._cache_scope = store_cache_scope(store, self.cache_dir)
 
     def _read_snapshot(self):
-        if isinstance(self.store, GraphPriceStorage):
-            return read_snapshot(self.store, self.cache_dir)
-        return snapshot(self.store)
+        with price_timing("snapshot"):
+            if isinstance(self.store, GraphPriceStorage):
+                return read_snapshot(self.store, self.cache_dir)
+            return snapshot(self.store)
 
     @contextmanager
     def _mutation_lock(self, db):
-        with self.store.lock(db):
-            invalidate_read_snapshots(self.store, self.cache_dir)
-            try:
-                yield
-            finally:
+        try:
+            with self.store.lock(db):
                 invalidate_read_snapshots(self.store, self.cache_dir)
+                try:
+                    yield
+                finally:
+                    invalidate_read_snapshots(self.store, self.cache_dir)
+        finally:
+            # Preparation runs after the shared write lock is released. It must
+            # never extend the mutation or replace its result/exception.
+            from app.services.price_comparison_prewarm import schedule_overview_prewarm
+            try:
+                schedule_overview_prewarm(self.store, self.cache_dir)
+            except Exception:
+                logger.warning("Price overview preparation could not be scheduled")
 
     def _derived(
         self,
@@ -346,6 +363,7 @@ class PriceComparisonService:
         if path.exists() and not force:
             cached = cached_frame()
             if cached is not None:
+                record_cache_hit("parsed", "disk")
                 return cached
 
         # Fast reads stay lock-free.  On the first fill the second check keeps
@@ -355,18 +373,21 @@ class PriceComparisonService:
             if path.exists() and not force:
                 cached = cached_frame()
                 if cached is not None:
+                    record_cache_hit("parsed", "disk")
                     return cached
 
+            record_cache_miss("parsed", "disk")
             content = raw if raw is not None else self.store.read(item)
             try:
-                if item.kind == "offers":
-                    frame = core.extract_prices_from_pdf(
-                        content,
-                        source_name=item.name,
-                        cache_sig=key,
-                    )
-                else:
-                    frame = core.parse_datanorm_bytes(content)
+                with price_timing("parsing"):
+                    if item.kind == "offers":
+                        frame = core.extract_prices_from_pdf(
+                            content,
+                            source_name=item.name,
+                            cache_sig=key,
+                        )
+                    else:
+                        frame = core.parse_datanorm_bytes(content)
             except Exception as exc:
                 raise HTTPException(
                     422,
@@ -394,7 +415,10 @@ class PriceComparisonService:
             current = snap if snap is not None else snapshot(self.store)
             return self._load_snapshot(current, force=force, cacheable=False)
 
-        current = self._read_snapshot()
+        return self._load_read_snapshot(self._read_snapshot())
+
+    def _load_read_snapshot(self, current: Snapshot):
+        """Reuse exactly the already verified revision, without a second Graph read."""
         key = (*self._cache_scope, "price-data", current.revision)
         canonical = price_comparison_cache.get_or_compute(
             key,
@@ -492,11 +516,13 @@ class PriceComparisonService:
                 max_workers=min(MAX_PARSE_WORKERS, len(live_sources)),
                 thread_name_prefix="price-parse",
             ) as executor:
-                parsed_offers = list(executor.map(parse_offer, live_sources))
+                futures = [executor.submit(copy_context().run, parse_offer, source)
+                           for source in live_sources]
+                parsed_offers = [future.result() for future in futures]
         else:
             parsed_offers = [parse_offer(source) for source in live_sources]
 
-        # executor.map preserves the snapshot order, matching the former
+        # Consume futures in snapshot order, matching the former
         # sequential concatenation while allowing bounded first-load parsing.
         for frame, warning in parsed_offers:
             if warning is not None:
@@ -517,14 +543,15 @@ class PriceComparisonService:
             # default pandas sorting implementation, for non-imported data.
             raw = raw.sort_values("Datum", ascending=False)
         raw = self._validated_raw_prices(raw)
-        prices = core.prepare_prices(
-            raw,
-            datanorm,
-            snap.state["discounts"],
-            snap.state["align_netto"],
-            snap.state["manual_prices"],
-            snap.state["offer_types"],
-        )
+        with price_timing("prepare"):
+            prices = core.prepare_prices(
+                raw,
+                datanorm,
+                snap.state["discounts"],
+                snap.state["align_netto"],
+                snap.state["manual_prices"],
+                snap.state["offer_types"],
+            )
         unavailable = [source.name for source in offer_sources if not source.original_available]
         return PriceData(
             snap,
@@ -660,23 +687,59 @@ class PriceComparisonService:
 
     def offer_metrics(self, data, *, as_of=None):
         day = as_of or self._metrics_day()
+
+        def calculate():
+            with price_timing("metrics"):
+                return metrics.offer_price_metrics(data.prices, data.datanorm, as_of=day)
+
         return self._derived(
             data,
             "offer-metrics",
-            lambda: metrics.offer_price_metrics(data.prices, data.datanorm, as_of=day),
+            calculate,
             metrics.METRICS_VERSION,
             day,
         )
 
     def offers_list(self, data):
-        day = self._metrics_day()
-        return self._derived(
-            data,
-            "offers-list",
-            lambda: self._offers_list_uncached(data, as_of=day),
-            metrics.METRICS_VERSION,
-            day,
+        if not data.cacheable:
+            return self._offers_list_uncached(data, as_of=self._metrics_day())
+        return self._offer_overview(data.snap, data=data)["offers"]
+
+    @staticmethod
+    def _valid_overview(value):
+        return (
+            isinstance(value, dict)
+            and set(value) == {"offers", "warnings"}
+            and isinstance(value["offers"], list)
+            and all(isinstance(row, dict) and isinstance(row.get("source"), str)
+                    and isinstance(row.get("project"), str)
+                    and isinstance(row.get("position_count"), int)
+                    and "comparison_quality" in row for row in value["offers"])
+            and isinstance(value["warnings"], list)
+            and all(isinstance(warning, str) for warning in value["warnings"])
         )
+
+    def _offer_overview(self, snap: Snapshot, *, data=None):
+        day = self._metrics_day()
+        key = (*self._cache_scope, OVERVIEW_VERSION, CACHE_VERSION,
+               metrics.METRICS_VERSION, snap.revision, day)
+
+        def build():
+            current = data if data is not None else self._load_read_snapshot(snap)
+            return {"offers": self._offers_list_uncached(current, as_of=day),
+                    "warnings": current.warnings}
+
+        with price_timing("overview"):
+            canonical = price_comparison_cache.get_or_compute(
+                key, lambda: PriceOverviewDiskCache(self.cache_dir).get_or_compute(
+                    key, build, validate=self._valid_overview,
+                ),
+            )
+        return deepcopy(canonical)
+
+    def prewarm_overview(self):
+        """Prepare only the summary; all source freshness checks still apply."""
+        self._offer_overview(self._read_snapshot())
 
     @staticmethod
     def _finite_offer_value(value):
@@ -721,8 +784,9 @@ class PriceComparisonService:
         self, *, search="", offer_type="", price_level="all", sort="uploaded",
         offset=0, limit=20,
     ):
-        data = self.load()
-        offers = list(self.offers_list(data))
+        snap = self._read_snapshot()
+        overview = self._offer_overview(snap)
+        offers = overview["offers"]
         if offer_type:
             offers = [o for o in offers if o["offer_type"] == offer_type]
         if search.strip():
@@ -792,8 +856,8 @@ class PriceComparisonService:
             "offers": result,
             "total": len(classified),
             "price_level_counts": price_levels,
-            "revision": data.snap.revision,
-            "warnings": data.warnings,
+            "revision": snap.revision,
+            "warnings": overview["warnings"],
         }
 
     def positions(self, source):
@@ -829,22 +893,37 @@ class PriceComparisonService:
         index = self._article_index(snap)
         return {"articles": search_article_index(index, search, limit), "revision": snap.revision}
 
-    def _article_index(self, snap):
+    def _article_index_revision(self, snap):
+        active_name = snap.state["active_datanorm"]
+        active = snap.find("datanorm", active_name) if active_name else None
+        config = snap.state.get("online_import") if active is not None else None
+        imported = None
+        if config is not None:
+            payload = snap.find_cache(config["payload_name"])
+            imported = (payload.version, config["payload_sha256"],
+                        config["datanorm_frame_active"], config.get("datanorm_binding"))
+        identity = (*self._cache_scope, ARTICLE_INDEX_VERSION, CACHE_VERSION,
+                    (active.name, active.version) if active is not None else None, imported)
+        return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+
+    def _article_index(self, snap, *, revision=None):
         def build():
             imported = self.import_frames(snap) if snap.state["active_datanorm"] else None
             return build_article_search_index(self._datanorm_frame(snap, imported))
         # Every retained element is immutable; no large PriceData deepcopy or
         # offer parsing is necessary for a DATANORM-only article search.
         return price_comparison_cache.get_or_compute(
-            (*self._cache_scope, "article-search", snap.revision), build,
+            (*self._cache_scope, "article-search", revision or self._article_index_revision(snap)),
+            build,
         )
 
     def article_search_index(self, known_revision=""):
         snap = self._read_snapshot()
-        if known_revision == snap.revision:
-            return {"revision": snap.revision, "unchanged": True}
-        return {"revision": snap.revision,
-                "rows": [row.browser_row() for row in self._article_index(snap)],
+        revision = self._article_index_revision(snap)
+        if known_revision == revision:
+            return {"revision": revision, "unchanged": True}
+        return {"revision": revision,
+                "rows": [row.browser_row() for row in self._article_index(snap, revision=revision)],
                 "casefold": dict(unicode_casefold_items())}
 
     def article(self, article_number, *, offer_types=None):

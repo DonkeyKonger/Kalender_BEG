@@ -53,6 +53,27 @@ Mobile Aufmaß- und Stundenzettel-PDFs werden versioniert zwischengespeichert, d
 DOCUMENT_PDF_CACHE_DIR=/tmp/kalender_beg_document_pdfs
 ```
 
+## Laufzeitcache des Preisvergleichs
+
+Der lokale Preisvergleich verwendet standardmaessig
+`/tmp/kalender_beg_price_comparison`. In Azure App Service erkennt das Backend
+die von Azure gesetzten Variablen `WEBSITE_INSTANCE_ID` beziehungsweise
+`WEBSITE_SITE_NAME` und verwendet ohne weitere Konfiguration den persistenten
+Pfad `/home/data/kalender_beg_price_comparison`. Dadurch ueberstehen die
+abgeleiteten, jederzeit neu aufbaubaren Preisvergleichs-Caches einen
+Prozessneustart. Original-PDFs, DATANORM und fachlicher Zustand bleiben weiterhin
+in ihren bestehenden Speichern.
+
+Ein explizites App Setting behaelt immer Vorrang:
+
+```env
+PRICE_COMPARISON_CACHE_DIR=/home/data/kalender_beg_price_comparison
+```
+
+Der Pfad wird beim Backendstart mit privaten Verzeichnisrechten angelegt. Lokal,
+im Testkalender und bei expliziter Konfiguration aendert sich der bisherige Pfad
+nicht.
+
 ## Manueller E-Mail-Versand
 
 Der mobile Versand fuer Stundenzettel/Zusatzauftraege nutzt aktuell SMTP. Microsoft Graph wird hierfuer noch nicht verwendet. Ohne SMTP-Host und Absenderadresse bricht das Backend bewusst mit `E-Mail-Versand ist noch nicht konfiguriert.` ab.

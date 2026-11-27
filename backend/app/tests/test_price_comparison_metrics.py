@@ -5,7 +5,12 @@ from datetime import date, datetime, timezone
 import pandas as pd
 import pytest
 
-from app.services.price_comparison_metrics import METRICS_VERSION, offer_price_metrics
+from app.services import price_comparison_metrics as metrics_module
+from app.services.price_comparison_metrics import (
+    MAX_COMPARISON_CANDIDATES,
+    METRICS_VERSION,
+    offer_price_metrics,
+)
 
 
 AS_OF = date(2026, 11, 26)
@@ -378,3 +383,150 @@ def test_source_filter_returns_only_requested_sources() -> None:
     ]
     result = offer_price_metrics(pd.DataFrame(rows), dn("A"), as_of=AS_OF, sources=["two.pdf"])
     assert list(result) == ["two.pdf"]
+
+
+def test_batched_sources_preserve_dates_self_exclusion_coverage_and_order(monkeypatch) -> None:
+    # Force these two valid target baskets into separate batches.  The result
+    # remains the frozen legacy expectation below, including source order and
+    # distinct reference-offer counts.
+    monkeypatch.setattr(metrics_module, "MAX_COMPARISON_CANDIDATES", 5)
+    rows = [
+        row("early.pdf", "A", 10, 1, "2025-06-01", "EARLY"),
+        row("late.pdf", "A", 15, 1, "2026-06-01", "LATE"),
+        row("late.pdf", "B", 15, 1, "2026-06-01", "LATE"),
+        row("future.pdf", "A", 15, 1, "2026-11-27", "FUTURE"),
+        *refs(
+            "A",
+            (8, 10, 12, 14),
+            dates=("2024-01-01", "2024-06-01", "2025-01-01", "2026-01-01"),
+            offers=("R1", "R2", "R3", "R4"),
+            sources=("r1.pdf", "r2.pdf", "r3.pdf", "r4.pdf"),
+        ),
+        row("late-copy.pdf", "A", 100, 1, "2026-02-01", "LATE"),
+        *refs(
+            "B",
+            (14, 16),
+            dates=("2025-02-01", "2025-03-01"),
+            offers=("B1", "B2"),
+            sources=("b1.pdf", "b2.pdf"),
+        ),
+    ]
+    result = offer_price_metrics(
+        pd.DataFrame(rows),
+        dn("A", "B"),
+        as_of=AS_OF,
+        sources=["late.pdf", "early.pdf", "future.pdf", "missing.pdf"],
+    )
+
+    assert list(result) == ["late.pdf", "early.pdf", "future.pdf", "missing.pdf"]
+    assert result["early.pdf"]["PV_avg_pct_wert"] == pytest.approx(0.0)
+    assert result["early.pdf"]["comparison_quality"]["reference_offer_count"] == 3
+
+    late = result["late.pdf"]
+    # The earlier target is itself an earlier first offer.  Together with the
+    # four R offers its article median is 10; the LATE copy is self-excluded.
+    assert late["PV_avg_pct_wert"] == pytest.approx(50.0)
+    assert late["PV_avg_pct_pos"] == pytest.approx(50.0)
+    assert late["comparison_quality"] == {
+        "method_version": METRICS_VERSION,
+        "as_of": "2026-11-26",
+        "window_start": "2023-11-26",
+        "status": "reliable",
+        "reason": None,
+        "total_positions": 2,
+        "eligible_positions": 2,
+        "matched_positions": 1,
+        "excluded_positions": 0,
+        "reference_offer_count": 7,
+        "value_coverage_pct": 50.0,
+        "position_coverage_pct": 50.0,
+    }
+    assert result["future.pdf"]["comparison_quality"]["reason"] == "invalid_date"
+    assert result["missing.pdf"]["comparison_quality"]["reason"] == "invalid_prices"
+
+
+def test_historic_groupby_count_is_bounded_across_many_target_sources(monkeypatch) -> None:
+    target_sources = [f"target-{index:03d}.pdf" for index in range(80)]
+    rows = [
+        row(source, "A", 10 + index / 100, 1, "2026-06-01", f"TARGET-{index:03d}")
+        for index, source in enumerate(target_sources)
+    ]
+    rows += refs(
+        "A",
+        (9, 10, 11),
+        dates=("2024-01-01", "2025-01-01", "2026-01-01"),
+        offers=("REF-1", "REF-2", "REF-3"),
+        sources=("ref-1.pdf", "ref-2.pdf", "ref-3.pdf"),
+    )
+
+    calls = 0
+    original_groupby = pd.DataFrame.groupby
+
+    def counted_groupby(frame, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_groupby(frame, *args, **kwargs)
+
+    monkeypatch.setattr(pd.DataFrame, "groupby", counted_groupby)
+    result = offer_price_metrics(
+        pd.DataFrame(rows),
+        dn("A"),
+        as_of=AS_OF,
+        sources=target_sources,
+    )
+
+    assert len(result) == len(target_sources)
+    assert all(
+        item["comparison_quality"]["status"] == "reliable" for item in result.values()
+    )
+    # The legacy source-by-source loop performed two aggregations per target
+    # (163 calls for this fixture).  The batched implementation has a fixed
+    # number of input/reference aggregations independent of source count.
+    assert calls <= 9
+
+
+def test_popular_article_join_is_batched_for_more_than_one_thousand_offers(
+    monkeypatch,
+) -> None:
+    target_sources = [f"large-{index:04d}.pdf" for index in range(1_001)]
+    rows = [
+        row(source, "POPULAR", 10, 1, "2026-06-01", f"TARGET-{index:04d}")
+        for index, source in enumerate(target_sources)
+    ]
+    rows += refs(
+        "POPULAR",
+        (9, 10, 11),
+        dates=("2024-01-01", "2025-01-01", "2026-01-01"),
+        offers=("REF-1", "REF-2", "REF-3"),
+        sources=("ref-1.pdf", "ref-2.pdf", "ref-3.pdf"),
+    )
+
+    comparison_merge_rows = []
+    original_merge = pd.DataFrame.merge
+
+    def measured_merge(frame, right, *args, **kwargs):
+        result = original_merge(frame, right, *args, **kwargs)
+        if "_target_date" in frame and "_reference_price" in right:
+            comparison_merge_rows.append(len(result))
+        return result
+
+    monkeypatch.setattr(pd.DataFrame, "merge", measured_merge)
+    result = offer_price_metrics(
+        pd.DataFrame(rows),
+        dn("POPULAR"),
+        as_of=AS_OF,
+        sources=target_sources,
+    )
+
+    assert len(comparison_merge_rows) > 1
+    assert max(comparison_merge_rows) <= MAX_COMPARISON_CANDIDATES
+    assert sum(comparison_merge_rows) == 1_001 * 1_004
+    assert len(result) == 1_001
+    assert list(result) == target_sources
+    assert all(
+        item["comparison_quality"]["status"] == "reliable"
+        and item["comparison_quality"]["reference_offer_count"] == 3
+        and item["PV_avg_pct_wert"] == pytest.approx(0.0)
+        and item["PV_avg_pct_pos"] == pytest.approx(0.0)
+        for item in result.values()
+    )

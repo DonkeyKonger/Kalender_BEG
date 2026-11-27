@@ -355,6 +355,8 @@ def test_cached_offer_meta_and_article_statistics_are_defensively_copied(
     )
     service = PriceComparisonService(DummyStore(), cache_dir=tmp_path)
     monkeypatch.setattr(service, "load", lambda: data)
+    monkeypatch.setattr(service, "_read_snapshot", lambda: snap)
+    monkeypatch.setattr(service, "_load_read_snapshot", lambda received: data)
 
     first_offers = service.offers()
     first_offers["offers"][0]["project"] = "poisoned"

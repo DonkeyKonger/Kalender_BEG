@@ -16,6 +16,8 @@ from typing import Any, Callable, Hashable, TypeVar, cast
 
 import pandas as pd
 
+from app.services.price_comparison_timing import record_cache_hit, record_cache_miss
+
 
 T = TypeVar("T")
 _MISSING = object()
@@ -98,11 +100,13 @@ class RevisionBoundCache:
         with self._lock:
             cached = self._entries.get(key)
             if cached is not None:
+                record_cache_hit("derived", "memory")
                 self._entries.move_to_end(key)
                 return cast(T, cached.value)
             flight = self._inflight.get(key)
             owner = flight is None
             if owner:
+                record_cache_miss("derived", "memory")
                 flight = _Flight(Event())
                 self._inflight[key] = flight
 

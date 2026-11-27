@@ -1,5 +1,102 @@
 # Ladezeiten im Preisvergleich
 
+## Stand 27.11.2026: Kalter Start und Laufzeitdiagnose
+
+### Wiederverwendbare Angebotsübersicht
+
+- Die Kennzahlen werden für alle Quellen gemeinsam vorbereitet, statt den ganzen
+  Preisbestand je Angebot erneut zu filtern und zu gruppieren. Größere Bestände
+  werden anhand von 250.000 erwarteten Vergleichszeilen in Teilmengen aufgeteilt;
+  ein einzelner Quellenkorb bleibt immer zusammen. Preisformel, Erstangebote,
+  historischer Stichtag, 36 Monate, drei Referenzen je Artikel und 50 %
+  Wertabdeckung bleiben unverändert.
+- Die fertige Übersicht wird als prüfsummengeschütztes JSON atomar gespeichert
+  und zwischen Backend-Workern geteilt. Der Schlüssel enthält Speicheridentität,
+  vollständige geprüfte Revision, Parser-/Kennzahlenversion und Berliner Tag.
+  Ein Treffer benötigt keine erneute DataFrame-Aufbereitung. Ein Prozess-Lock
+  verhindert doppelte Berechnungen; maximal 32 Einträge beziehungsweise 64 MiB
+  werden behalten. Defekte/fehlende Einträge werden neu aufgebaut. Originale,
+  Parserdateien und fremde Dateien werden vom Cleanup nicht angefasst.
+- Vor jedem Abruf bleibt die vorhandene Snapshot-Prüfung bestehen. Explizite
+  mutable Snapshots aus Schreibvorgängen umgehen den Übersichtscache. Neustarts
+  und Kalenderänderungen stoßen eine zusammengefasste Hintergrundvorbereitung
+  an, ohne den API-Start oder den abgeschlossenen Schreibvorgang darauf warten
+  zu lassen. Fehler der Vorbereitung verhindern keine spätere reguläre Abfrage.
+- Die Angebotsansicht bleibt innerhalb der geöffneten Preisvergleichsseite beim
+  Tabwechsel erhalten. Bei Rückkehr bleiben Zeilen und Filter sichtbar, während
+  eine Hintergrundabfrage auch Änderungen anderer Nutzer erfasst. Der große
+  Artikelsuchindex wird nur im Artikel-Tab angefragt; reine Angebotsänderungen
+  verändern seine DATANORM-spezifische Revision nicht mehr. Sitzungstrennung,
+  Rechteprüfung und sofortige Mutationsinvalidierung bleiben erhalten.
+
+### Abschlussmessung und Prüfung
+
+Lokaler isolierter Linux-Prozess, 164 lesbare Angebote, 9.204 Preiszeilen und
+12.050 DATANORM-Artikel; Originalvolumes nur lesbar, Cachekopie in `/tmp`.
+Diese Werte enthalten keine OneDrive- oder Browser-Netzwerklatenz:
+
+| Abruf | Vorher | Neuer Stand |
+| --- | ---: | ---: |
+| Übersicht ohne vorbereitete Übersicht, mit Parsercache | 1,283 s | 0,660–0,828 s |
+| Erster Abruf eines neuen Prozesses, Übersicht auf Disk vorhanden | vollständiger Aufbau | 0,044 s |
+| Wiederholter Abruf | ca. 0,035 s | 0,032–0,042 s |
+| Artikelindex, Revision unverändert | 0,003 s | 0,005 s |
+
+Der neue Prozess wurde für die Disk-Messung absichtlich so abgesichert, dass
+jeder DataFrame-Neuaufbau den Test abbricht. Die Kennzahlen stimmen im gesamten
+Realdatenbestand und in 200 deterministischen Differentialfällen exakt mit der
+bisherigen Implementierung überein. Zusätzlich wurden erzwungene Teilmengen und
+1.001 Angebote geprüft. Gemessener zusätzlicher RSS bei der Kennzahlenberechnung:
+rund 27 MiB; der reale Join benötigt 105.840 Kandidaten und bleibt eine Teilmenge.
+
+Vollständige Backend-Suite: 2.905 bestanden, 18 übersprungen; abschließende
+Preisvergleichsregressionen: 369 bestanden, zwei übersprungen. Frontend: 1.182
+Tests bestanden, Produktionsbuild und betroffene ESLint-Dateien erfolgreich.
+Visuelle Prüfung bei Desktop-, Tablet- und Mobilbreite: Suche, Tabwechsel mit
+erhaltenen Filtern, Angebotsdetails und Artikelvergleich ohne sichtbare
+versteckte Panels oder neue Browserfehler. Globale Frontend-Lintfehler in
+unveränderten Bereichen sind vorbestehend.
+
+### Azure und Diagnose
+
+Der abgeleitete Preisvergleichs-Cache bleibt lokal standardmaessig unter
+`/tmp/kalender_beg_price_comparison`. Erkennt das Backend eine Azure-App-Service-
+Laufzeit anhand von `WEBSITE_INSTANCE_ID` oder `WEBSITE_SITE_NAME`, liegt der
+Default unter `/home/data/kalender_beg_price_comparison` und damit im
+persistenten App-Service-Bereich. `PRICE_COMPARISON_CACHE_DIR` ueberschreibt den
+Default weiterhin explizit. Das Verzeichnis wird beim Backendstart mit privaten
+Rechten angelegt. Original-PDFs, DATANORM, Importe und der gemeinsame fachliche
+Zustand werden dadurch weder verschoben noch umgeschrieben.
+
+Kann das Cacheverzeichnis beim Start nicht angelegt werden, protokolliert das
+Backend nur eine feste Warnung ohne Pfad oder Exceptiondetails und startet den
+Kalender trotzdem. Der Cache bleibt eine Optimierung; betroffene
+Preisvergleichsaufrufe liefern bei einem weiterhin nicht nutzbaren Pfad ihre
+bereits vorhandene fachliche Fehlermeldung, ohne andere Kalenderbereiche zu
+blockieren.
+
+Preisvergleichs-Requests liefern schlanke `Server-Timing`-Werte fuer die
+Gesamtdauer sowie instrumentierte Stufen wie Snapshot, Parsing,
+Datenaufbereitung und Kennzahlen. Cachetreffer und -fehlschlaege werden nur als
+Zaehler fester Cacheklassen ausgegeben. Die korrespondierenden Serverlogs
+enthalten ausschliesslich HTTP-Methode, statischen Routennamen, Status,
+Zeitstufen und Zaehler. Dateinamen, Artikelnummern, Suchparameter, URLs, Tokens
+und Headerwerte werden nicht protokolliert. Die Messkontexte sind pro Request
+isoliert und koennen bei parallelen Requests nicht vermischt werden.
+
+Diese Diagnose veraendert weder Cacheaktualitaet noch Schreib-, Revisions- oder
+Datei-I/O-Regeln. Die folgenden historischen Messwerte bleiben deshalb als
+Vergleichsdokumentation erhalten; neue Azure-Laufzeiten muessen nach dem
+Deployment separat erhoben werden.
+
+Der Prewarm-Worker verwirft beim geordneten Herunterfahren noch nicht begonnene
+Vorbereitungen. Eine bereits laufende Vorbereitung darf wie ein aktiver
+Upload-Worker fertiglaufen; erst danach werden gemeinsamer Snapshotcache und
+Graph-HTTP-Runtime geschlossen. Der von Gunicorn vorgegebene Graceful-Shutdown-
+Zeitraum bleibt die harte Prozessgrenze. Ein erzwungener Abbruch verliert keine
+Fachdaten, weil nur abgeleitete Cachewerte vorbereitet werden und der naechste
+Prozess sie bei Bedarf neu erzeugt.
+
 ## Stand 26.11.2026: Angebotsimport und Warteschlange
 
 Die Angebotsübersicht startet mit **Zuletzt hochgeladen**. Neue erfolgreiche

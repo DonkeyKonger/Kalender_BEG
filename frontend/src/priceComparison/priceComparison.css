@@ -197,6 +197,8 @@
 
 .price-view-content { min-width: 0; }
 
+.price-workspace[hidden] { display: none !important; }
+
 .price-workspace {
   display: grid;
   gap: 16px;

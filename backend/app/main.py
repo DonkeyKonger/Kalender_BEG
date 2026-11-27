@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,7 +30,7 @@ from app.api.routes import (
     users,
     vehicle_database,
 )
-from app.core.config import settings
+from app.core.config import ensure_price_comparison_cache_dir, settings
 from app.core.database import SessionLocal, engine
 from app.seed_admin import seed_admin
 from app.services.ctrack_scheduler import (
@@ -37,11 +39,19 @@ from app.services.ctrack_scheduler import (
 )
 from app.services.material_order_graph_runtime import close_material_order_graph_runtime
 from app.services.price_comparison_snapshot_cache import close_read_snapshot_cache
+from app.services.price_comparison_timing import PriceComparisonTimingMiddleware
+from app.services.price_comparison_prewarm import (
+    start_price_comparison_prewarm,
+    stop_price_comparison_prewarm,
+)
 from app.services.price_comparison_upload_queue import (
     start_price_comparison_upload_worker,
     stop_price_comparison_upload_worker,
 )
 from app.services.push_scheduler import start_push_plan_scheduler, stop_push_plan_scheduler
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def ensure_site_status_enum_values() -> None:
@@ -67,8 +77,9 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["Content-Disposition"],
+        expose_headers=["Content-Disposition", "Server-Timing"],
     )
+    app.add_middleware(PriceComparisonTimingMiddleware)
 
     app.include_router(auth.router, prefix="/api")
     app.include_router(admin_ctrack.router, prefix="/api")
@@ -99,6 +110,12 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def ensure_startup_state() -> None:
+        try:
+            ensure_price_comparison_cache_dir(settings.price_comparison_cache_dir)
+        except OSError:
+            LOGGER.warning(
+                "Price comparison cache directory could not be prepared; startup continues"
+            )
         ensure_site_status_enum_values()
         if settings.admin_username and settings.admin_password:
             with SessionLocal() as db:
@@ -106,10 +123,12 @@ def create_app() -> FastAPI:
         start_ctrack_sync_scheduler()
         start_push_plan_scheduler()
         start_price_comparison_upload_worker()
+        start_price_comparison_prewarm()
 
     @app.on_event("shutdown")
     async def stop_background_tasks() -> None:
         await stop_price_comparison_upload_worker()
+        await stop_price_comparison_prewarm()
         await stop_ctrack_sync_scheduler()
         await stop_push_plan_scheduler()
         close_read_snapshot_cache()

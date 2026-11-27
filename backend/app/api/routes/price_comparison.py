@@ -31,6 +31,7 @@ from app.services.price_comparison_upload_queue import (
     job_to_api,
     wake_price_comparison_upload_worker,
 )
+from app.services.price_comparison_timing import price_timing
 
 router = APIRouter(prefix="/price-comparison", tags=["price-comparison"],
     dependencies=[Depends(require_roles(UserRole.ADMIN, UserRole.PROJECT_MANAGER))])
@@ -187,8 +188,10 @@ def articles(service: Service, search: Search = "", limit: Limit = 50):
 
 @router.get("/article-search-index")
 def article_search_index(service: Service, request: Request, known_revision: Search = ""):
-    payload = json.dumps(service.article_search_index(known_revision), ensure_ascii=False,
-                         allow_nan=False, separators=(",", ":")).encode("utf-8")
+    result = service.article_search_index(known_revision)
+    with price_timing("serialization"):
+        payload = json.dumps(result, ensure_ascii=False,
+                             allow_nan=False, separators=(",", ":")).encode("utf-8")
     headers = {"Cache-Control": "private, no-store", "Vary": "Accept-Encoding"}
     # Avoid FastAPI recursively copying thousands of already JSON-safe rows.
     # Compression is scoped to this large index, not unrelated calendar APIs.
@@ -200,7 +203,8 @@ def article_search_index(service: Service, request: Request, known_revision: Sea
         except ValueError:
             encodings[name] = 0.0
     if len(payload) >= 1024 and encodings.get("gzip", encodings.get("*", 0)) > 0:
-        payload = gzip.compress(payload, compresslevel=1, mtime=0)
+        with price_timing("serialization"):
+            payload = gzip.compress(payload, compresslevel=1, mtime=0)
         headers["Content-Encoding"] = "gzip"
     return Response(payload, media_type="application/json", headers=headers)
 

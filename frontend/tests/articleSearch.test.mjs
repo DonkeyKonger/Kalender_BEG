@@ -147,9 +147,9 @@ function createHookHarness(t, requester, initialVisibility = "visible") {
     pendingEffects = [];
     effects.forEach((effect) => effect());
   };
-  const render = (sessionKey, flush = true) => {
+  const render = (sessionKey, flush = true, enabled = true) => {
     cursor = 0;
-    const result = useArticleSearchIndex(sessionKey);
+    const result = useArticleSearchIndex(sessionKey, enabled);
     if (flush) flushEffects();
     return result;
   };
@@ -208,6 +208,38 @@ test("literal index search covers arbitrary Datanorm values and preserves server
   assert.deepEqual(searchArticleIndex(snapshot, "Sonderwert [A+B]").map((row) => row.article_number), ["A-52"]);
   assert.deepEqual(searchArticleIndex(snapshot, "", 50).map((row) => row.article_number), rows.slice(0, 50).map((row) => row[0]));
   assert.deepEqual(searchArticleIndex(snapshot, "A-", 0), []);
+});
+
+test("the index stays dormant outside the article tab and revalidates its RAM snapshot on return", async (t) => {
+  const requester = queuedRequester();
+  const hook = createHookHarness(t, requester);
+
+  assert.equal(hook.render(7, true, false).snapshot, null);
+  assert.equal(requester.requests.length, 0);
+  assert.equal(hook.intervals.size, 0);
+  hook.mutate();
+  assert.equal(requester.requests.length, 0, "offer-side mutations must not download the article index while disabled");
+
+  hook.render(7, true, true);
+  assert.equal(requester.requests.length, 1);
+  requester.requests[0].pending.resolve(snapshot("index-rev-1"));
+  await settle();
+  const loaded = hook.render(7, true, true).snapshot;
+
+  const disabled = hook.render(7, true, false);
+  assert.strictEqual(disabled.snapshot, loaded, "tab changes retain the in-memory index");
+  assert.equal(hook.intervals.size, 0);
+  hook.mutate();
+  assert.equal(requester.requests.length, 1);
+
+  const returning = hook.render(7, true, true);
+  assert.strictEqual(returning.snapshot, loaded);
+  assert.equal(requester.requests.length, 2);
+  assert.match(requester.requests[1].path, /known_revision=index-rev-1/);
+  assert.equal(hook.render(7, true, true).stale, true);
+  requester.requests[1].pending.resolve({ revision: "index-rev-1", unchanged: true });
+  await settle();
+  assert.equal(hook.render(7, true, true).stale, false);
 });
 
 test("the hook pauses while hidden and checks immediately when the page becomes visible", async (t) => {
@@ -326,6 +358,7 @@ test("the page-owned index polls only in memory and reacts to visibility and mut
   assert.match(source, /stale:\s*Boolean\(current\.snapshot\)/);
   assert.match(source, /currentRequest !== requestId\.current/);
   assert.match(source, /sessionKey/);
+  assert.match(pageSource, /useArticleSearchIndex\(user\?\.id \?\? null, activeView === "articles"\)/);
   assert.doesNotMatch(source, /localStorage|indexedDB|sessionStorage/);
 });
 

@@ -1,7 +1,27 @@
 from functools import lru_cache
+import os
+from pathlib import Path
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+LOCAL_PRICE_COMPARISON_CACHE_DIR = "/tmp/kalender_beg_price_comparison"
+AZURE_PRICE_COMPARISON_CACHE_DIR = "/home/data/kalender_beg_price_comparison"
+
+
+def default_price_comparison_cache_dir() -> str:
+    """Keep local behavior while using App Service's persistent ``/home``."""
+
+    if os.getenv("WEBSITE_INSTANCE_ID") or os.getenv("WEBSITE_SITE_NAME"):
+        return AZURE_PRICE_COMPARISON_CACHE_DIR
+    return LOCAL_PRICE_COMPARISON_CACHE_DIR
+
+
+def ensure_price_comparison_cache_dir(value: str | Path) -> Path:
+    directory = Path(value)
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return directory
 
 
 class Settings(BaseSettings):
@@ -47,7 +67,8 @@ class Settings(BaseSettings):
         default=None, alias="PRICE_COMPARISON_LOCAL_ROOT"
     )
     price_comparison_cache_dir: str = Field(
-        default="/tmp/kalender_beg_price_comparison", alias="PRICE_COMPARISON_CACHE_DIR"
+        default_factory=default_price_comparison_cache_dir,
+        alias="PRICE_COMPARISON_CACHE_DIR",
     )
     document_thumbnail_cache_dir: str = Field(
         default="/tmp/kalender_beg_document_thumbnails",

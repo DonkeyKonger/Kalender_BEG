@@ -56,6 +56,12 @@ ADMIN_DISPLAY_NAME=Administrator
 SEED_DEFAULT_PASSWORD=DEMO-PASSWORT
 ```
 
+`PRICE_COMPARISON_CACHE_DIR` kann in App Service weggelassen werden. Das Backend
+verwendet dort automatisch den persistenten Pfad
+`/home/data/kalender_beg_price_comparison`. Falls das Setting explizit gesetzt
+wird, hat sein Wert Vorrang. Der Cache enthaelt nur abgeleitete, neu aufbaubare
+Preisvergleichsdaten; die fachlichen Quelldateien werden dadurch nicht verlegt.
+
 Hinweis: `startup.sh` fuehrt fuer diese fruehe Staging-Version `alembic upgrade head` aus und startet danach FastAPI mit Gunicorn/Uvicorn.
 
 ## 3. Frontend Static Web Apps

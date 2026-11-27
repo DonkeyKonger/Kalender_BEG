@@ -65,7 +65,10 @@ export function searchArticleIndex(snapshot: ArticleSearchIndexSnapshot, query: 
   return result;
 }
 
-export function useArticleSearchIndex(sessionKey: number | string | null): ArticleSearchIndex {
+export function useArticleSearchIndex(
+  sessionKey: number | string | null,
+  enabled = true,
+): ArticleSearchIndex {
   const [state, setState] = useState<ArticleSearchIndexState>(() => initialArticleSearchState(sessionKey));
   const stateRef = useRef(state);
   const requestId = useRef(0);
@@ -133,6 +136,14 @@ export function useArticleSearchIndex(sessionKey: number | string | null): Artic
 
   useEffect(() => {
     updateState(() => initialArticleSearchState(sessionKey));
+    cancelRequest();
+  }, [cancelRequest, sessionKey, updateState]);
+
+  useEffect(() => {
+    if (!enabled) {
+      cancelRequest();
+      return;
+    }
     let pollTimer: number | null = null;
     const stopPolling = () => {
       if (pollTimer !== null) window.clearInterval(pollTimer);
@@ -145,6 +156,9 @@ export function useArticleSearchIndex(sessionKey: number | string | null): Artic
     };
     const refreshVisible = () => {
       if (document.visibilityState !== "visible") return;
+      updateState((current) => current.snapshot && !current.stale
+        ? { ...current, stale: true }
+        : current);
       void refresh(true);
       startPolling();
     };
@@ -171,7 +185,7 @@ export function useArticleSearchIndex(sessionKey: number | string | null): Artic
       window.removeEventListener(PRICE_COMPARISON_DATA_CHANGED_EVENT, onPriceDataChanged);
       cancelRequest();
     };
-  }, [cancelRequest, refresh, sessionKey, updateState]);
+  }, [cancelRequest, enabled, refresh, sessionKey, updateState]);
 
   const retry = useCallback(() => void refresh(true), [refresh]);
   const publishedState = state.sessionKey === sessionKey ? state : initialArticleSearchState(sessionKey);

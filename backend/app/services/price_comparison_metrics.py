@@ -21,6 +21,7 @@ METRICS_VERSION = "matched-basket-v3"
 MIN_REFERENCE_OFFERS = 3
 MIN_VALUE_COVERAGE_PCT = 50.0
 MAX_LINE_TO_OFFER_TOTAL_RATIO = 10.0
+MAX_COMPARISON_CANDIDATES = 250_000
 _BERLIN = ZoneInfo("Europe/Berlin")
 
 _UNIT_ALIASES = {
@@ -341,14 +342,143 @@ def offer_price_metrics(
     else:
         target_sources = list(dict.fromkeys(_source(value) for value in sources if _source(value)))
 
+    # Build every target basket once.  The original implementation filtered
+    # the full price frame and repeated the same article aggregation for every
+    # source.  Keeping source metadata and article baskets in maps preserves
+    # the source-local rules while making that work linear in the input size.
+    source_contexts: dict[str, dict[str, Any]] = {}
+    target_articles_by_source: dict[str, pd.DataFrame] = {}
+    eligible_values: dict[str, float] = {}
+    if not frame.empty:
+        for source_name, target in frame.groupby("_source", sort=False):
+            source_contexts[source_name] = {
+                "total_positions": int(target["_article"].replace("", pd.NA).nunique()),
+                "dates": {value for value in target["_date"] if value is not None},
+                "offer_keys": tuple(target["_offer_key"].drop_duplicates()),
+            }
+
+        valid_targets = frame[frame["_valid"]]
+        if not valid_targets.empty:
+            all_target_articles = valid_targets.groupby(
+                ["_source", "_article"], as_index=False, sort=False
+            ).agg(_quantity=("_quantity", "sum"), _current_value=("_current_value", "sum"))
+            all_target_articles["_price"] = (
+                all_target_articles["_current_value"] / all_target_articles["_quantity"]
+            )
+            for source_name, articles in all_target_articles.groupby("_source", sort=False):
+                basket = articles.drop(columns="_source").reset_index(drop=True)
+                target_articles_by_source[source_name] = basket
+                eligible_values[source_name] = float(basket["_current_value"].sum())
+
+    # Join reference observations to all eligible target baskets in one pass.
+    # The date and self-offer filters remain source-specific, but the expensive
+    # historic article statistics are now two batched group-bys instead of two
+    # full-frame scans/group-bys for every offer.
+    comparison_targets: list[tuple[str, pd.DataFrame, int]] = []
+    target_source_set = set(target_sources)
+    reference_rows_by_article = (
+        reference_votes["_article"].value_counts(sort=False).to_dict()
+        if not reference_votes.empty
+        else {}
+    )
+    for source_name, target_articles in target_articles_by_source.items():
+        if source_name not in target_source_set:
+            continue
+        context = source_contexts[source_name]
+        target_dates = context["dates"]
+        eligible_value = eligible_values[source_name]
+        if (
+            len(target_dates) == 1
+            and next(iter(target_dates)) <= as_of_day
+            and math.isfinite(eligible_value)
+            and eligible_value > 0
+        ):
+            projected_rows = sum(
+                reference_rows_by_article.get(article, 0)
+                for article in target_articles["_article"]
+            )
+            if projected_rows == 0:
+                continue
+            lookup = target_articles[["_article"]].copy()
+            lookup.insert(0, "_source", source_name)
+            lookup["_target_date"] = next(iter(target_dates))
+            comparison_targets.append((source_name, lookup, projected_rows))
+
+    # A popular article can occur in almost every target and reference offer.
+    # Bound that many-to-many join without splitting an individual source's
+    # basket; source-local medians and distinct-offer counts therefore retain
+    # exactly the same inputs as the unbatched calculation.
+    comparison_batches: list[list[tuple[str, pd.DataFrame, int]]] = []
+    current_batch: list[tuple[str, pd.DataFrame, int]] = []
+    current_rows = 0
+    for target in comparison_targets:
+        projected_rows = target[2]
+        if current_batch and current_rows + projected_rows > MAX_COMPARISON_CANDIDATES:
+            comparison_batches.append(current_batch)
+            current_batch = []
+            current_rows = 0
+        current_batch.append(target)
+        current_rows += projected_rows
+    if current_batch:
+        comparison_batches.append(current_batch)
+
+    reference_offer_counts: dict[str, int] = {}
+    reference_stats_by_source: dict[str, pd.DataFrame] = {}
+    for comparison_batch in comparison_batches:
+        candidates = pd.concat(
+            [lookup for _source, lookup, _rows in comparison_batch],
+            ignore_index=True,
+        ).merge(
+            reference_votes,
+            on="_article",
+            how="inner",
+            sort=False,
+        )
+        candidates = candidates[candidates["_date"].lt(candidates["_target_date"])]
+        if not candidates.empty:
+            own_offer_keys = pd.DataFrame(
+                [
+                    (source_name, offer_key)
+                    for source_name, _lookup, _rows in comparison_batch
+                    for offer_key in source_contexts[source_name]["offer_keys"]
+                ],
+                columns=["_source", "_offer_key"],
+            )
+            own_offer_keys["_own_offer"] = True
+            candidates = candidates.merge(
+                own_offer_keys,
+                on=["_source", "_offer_key"],
+                how="left",
+                sort=False,
+            )
+            candidates = candidates[candidates["_own_offer"].isna()]
+        if not candidates.empty:
+            reference_offer_counts.update(
+                {
+                    source_name: int(count)
+                    for source_name, count in candidates.groupby("_source", sort=False)[
+                        "_offer_key"
+                    ].nunique().items()
+                }
+            )
+            all_reference_stats = candidates.groupby(
+                ["_source", "_article"], as_index=False, sort=False
+            ).agg(
+                _reference_price=("_reference_price", "median"),
+                _reference_count=("_offer_key", "nunique"),
+            )
+            all_reference_stats = all_reference_stats[
+                all_reference_stats["_reference_count"].ge(MIN_REFERENCE_OFFERS)
+            ]
+            for source_name, stats in all_reference_stats.groupby("_source", sort=False):
+                reference_stats_by_source[source_name] = stats.drop(
+                    columns="_source"
+                ).reset_index(drop=True)
+
     results: dict[str, dict[str, Any]] = {}
     for source_name in target_sources:
-        target = (
-            frame[frame["_source"].eq(source_name)].copy() if not frame.empty else pd.DataFrame()
-        )
-        total_positions = (
-            int(target["_article"].replace("", pd.NA).nunique()) if not target.empty else 0
-        )
+        context = source_contexts.get(source_name)
+        total_positions = context["total_positions"] if context is not None else 0
 
         base_quality = dict(
             as_of=as_of_day,
@@ -360,32 +490,26 @@ def offer_price_metrics(
             value_coverage_pct=0.0,
             position_coverage_pct=0.0,
         )
-        if target.empty:
+        if context is None:
             results[source_name] = _result(
                 _quality(status="unavailable", reason="invalid_prices", **base_quality)
             )
             continue
 
-        target_dates = {value for value in target["_date"] if value is not None}
+        target_dates = context["dates"]
         if len(target_dates) != 1 or next(iter(target_dates)) > as_of_day:
             results[source_name] = _result(
                 _quality(status="unavailable", reason="invalid_date", **base_quality)
             )
             continue
-        target_date = next(iter(target_dates))
-
-        valid_target = target[target["_valid"]].copy()
-        if valid_target.empty:
+        target_articles = target_articles_by_source.get(source_name)
+        if target_articles is None or target_articles.empty:
             results[source_name] = _result(
                 _quality(status="unavailable", reason="invalid_prices", **base_quality)
             )
             continue
-        target_articles = valid_target.groupby("_article", as_index=False, sort=False).agg(
-            _quantity=("_quantity", "sum"), _current_value=("_current_value", "sum")
-        )
-        target_articles["_price"] = target_articles["_current_value"] / target_articles["_quantity"]
         eligible_positions = len(target_articles)
-        eligible_value = float(target_articles["_current_value"].sum())
+        eligible_value = eligible_values[source_name]
         base_quality["eligible_positions"] = eligible_positions
         if not math.isfinite(eligible_value) or eligible_value <= 0:
             results[source_name] = _result(
@@ -393,26 +517,16 @@ def offer_price_metrics(
             )
             continue
 
-        own_offer_keys = set(target["_offer_key"])
-        votes = reference_votes[
-            reference_votes["_date"].lt(target_date)
-            & ~reference_votes["_offer_key"].isin(own_offer_keys)
-            & reference_votes["_article"].isin(set(target_articles["_article"]))
-        ].copy()
-        if votes.empty:
+        reference_offer_count = reference_offer_counts.get(source_name, 0)
+        if reference_offer_count == 0:
             results[source_name] = _result(
                 _quality(status="unavailable", reason="no_comparable_positions", **base_quality)
             )
             continue
 
-        reference_offer_count = int(votes["_offer_key"].nunique())
         base_quality["reference_offer_count"] = reference_offer_count
-        stats = votes.groupby("_article", as_index=False, sort=False).agg(
-            _reference_price=("_reference_price", "median"),
-            _reference_count=("_offer_key", "nunique"),
-        )
-        stats = stats[stats["_reference_count"].ge(MIN_REFERENCE_OFFERS)]
-        if stats.empty:
+        stats = reference_stats_by_source.get(source_name)
+        if stats is None or stats.empty:
             results[source_name] = _result(
                 _quality(status="unavailable", reason="insufficient_references", **base_quality)
             )
