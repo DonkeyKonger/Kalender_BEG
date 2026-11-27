@@ -29,8 +29,8 @@ SOURCE_PROVENANCE = {
     "source_file": "viewer.py",
     "source_date": "2026-05-13",
     "original_pdf_parser_sha256": "700fd43a366ed4e8b4a6e116c56eae2a147aaec13aa566cf9f6a763ee8b1e139",
-    "pdf_parser_revision": "validated-material-v3",
-    "pdf_parser_sha256": "f8b7ddf67d1336128680b92381d75615e28becae72f51f54d9f264f7465a7dca",
+    "pdf_parser_revision": "validated-material-v3-offer-identity-v1",
+    "pdf_parser_sha256": "2d082db01105fd6086018abab79b140be61aa32337e9045a7fb186be53fb113c",
 }
 
 # Filled with hashes of the AST-extracted original function source.  The map is

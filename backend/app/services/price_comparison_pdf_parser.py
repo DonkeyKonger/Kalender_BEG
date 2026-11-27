@@ -343,8 +343,18 @@ def _detect_pdf_meta(text_all: str):
     m_date = DATE_RE.search(text_all)
     datum = pd.to_datetime(m_date.group(0), dayfirst=True, errors="coerce") if m_date else None
 
-    m_offer = re.search(r"Angebot\s*[:\-]?\s*([0-9A-Za-z\-\/]+)", text_all, re.IGNORECASE)
-    angebot_nr = m_offer.group(1).strip() if m_offer else None
+    # Match the standalone field, never the suffix in "Jahresangebot BEG".
+    # Prose such as "Unser Angebot bezieht sich ..." is not an identifier.
+    # Keep the complete suffix: 47172428-001 and 47172428-002 are distinct offers.
+    offer_candidates = re.finditer(
+        r"\bAngebot\b\s*[:\-]?\s*([0-9A-Za-z][0-9A-Za-z\-\/]*)",
+        text_all,
+        re.IGNORECASE,
+    )
+    angebot_nr = next(
+        (match.group(1) for match in offer_candidates if re.search(r"[0-9]", match.group(1))),
+        None,
+    )
 
     # Projekt ausschließlich aus explizitem 'Projektname:' ziehen
     projekt = None

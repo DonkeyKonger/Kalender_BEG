@@ -17,6 +17,7 @@ import math
 import os
 from pathlib import Path
 import pickle
+import re
 import tempfile
 
 from fastapi import HTTPException
@@ -53,7 +54,7 @@ from app.services.price_comparison_storage import (
 
 SOURCE_VERSION = "4ed988f"
 OFFER_TYPES = ("Erstangebot", "Folgeangebot", "Verhandeltes Angebot")
-CACHE_VERSION = "4ed988f-validated-pdf-v3"
+CACHE_VERSION = "4ed988f-validated-pdf-v4"
 MAX_PARSE_WORKERS = 4
 OVERVIEW_VERSION = "offers-overview-v1"
 ARTICLE_INDEX_VERSION = "datanorm-search-v1"
@@ -1125,7 +1126,15 @@ class PriceComparisonService:
     @staticmethod
     def _offer_number(frame: pd.DataFrame) -> str | None:
         numbers = frame.get("Angebot", pd.Series(dtype=object)).dropna().astype(str)
-        return next((number.strip() for number in numbers if number.strip()), None)
+        unique = {number.strip() for number in numbers if number.strip()}
+        if len(unique) != 1:
+            return None
+        number = next(iter(unique))
+        # Legacy imports can still contain bad metadata such as "BEG". Neither
+        # words nor mixed identifiers justify replacing another source file.
+        if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z\-/]*", number) or not re.search(r"[0-9]", number):
+            return None
+        return number
 
     @staticmethod
     def _remove_offer_settings(state: dict, source: str) -> None:
@@ -1559,8 +1568,7 @@ class PriceComparisonService:
                     raise
                 warnings.append(str(exc.detail))
                 continue
-            numbers = frame["Angebot"].dropna().astype(str) if "Angebot" in frame else []
-            number = next((n.strip() for n in numbers if n.strip()), None)
+            number = self._offer_number(frame)
             if number is None:
                 continue
             if number in seen:

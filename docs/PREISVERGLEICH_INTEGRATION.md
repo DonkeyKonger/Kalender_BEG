@@ -90,6 +90,38 @@ muss auch beim Ausführen noch aktuell sein. Dasselbe gilt für ersetzende Uploa
 Administrationsaktionen sind zusätzlich auf Admins beschränkt; Projektleiter
 können vergleichen, Preise bearbeiten, Dateien verwalten und exportieren.
 
+### Angebotsnummern bei Jahresangeboten (27.11.2026)
+
+Die bisherige Metadatenerkennung konnte `Angebot` innerhalb von
+`Jahresangebot BEG …` finden und dadurch `BEG` für mehrere eigenständige
+Angebote übernehmen. Jetzt wird ausschließlich das eigenständige Feld
+`Angebot` mit einem Kennzeichen ausgewertet, das mindestens eine Ziffer
+enthält. Die vollständige Nummer einschließlich Suffix bleibt erhalten:
+`47172428-001` und `47172428-010` sind unterschiedliche Angebote.
+
+Upload und Bereinigung verwenden dieselbe zusätzliche Prüfung: Nur eine
+eindeutige vollständige Kennung darf eine Dublette nach Angebotsnummer
+begründen. Alte Metadaten wie `BEG` oder widersprüchliche Nummern führen nicht
+zur Entfernung anderer Dateien. Ersetzungen identischer Dateinamen und
+tatsächlich identischer Angebotsnummern benötigen weiterhin die explizite
+Bestätigung der aktuellen Dateiliste.
+
+Parser- und abgeleitete Ansichtscaches verwenden Version
+`4ed988f-validated-pdf-v4`; bestehende PDFs werden dadurch einmal neu gelesen.
+Quelldateien und Einstellungen werden bei diesem Versionswechsel nicht
+verändert. Bereits entfernte PDFs werden dadurch nicht wiederhergestellt;
+ausstehende Ersetzungsbestätigungen aus dem fehlerhaften Stand müssen nach
+dem Update erneut geprüft werden.
+
+Nachweis: Die zehn Original-PDFs des Jahresangebots 2027 wurden in einer
+isolierten Ablage vollständig verglichen. Alle 1.690 Positionen einschließlich
+Mengen, Preisen und übrigen Metadaten sind gegenüber dem vorherigen Parser
+identisch; ausschließlich die Angebotsnummer ist korrigiert. Alle zehn
+Quelldateien bleiben bytegleich erhalten, erscheinen getrennt und erzeugen
+keine Dubletten. Automatisierte Regressionstests prüfen außerdem Sammelupload,
+zehn wartende Einzelaufträge, echte Dubletten, alte `BEG`-Metadaten und die
+Invalidierung alter Parser-Caches.
+
 ## Fachlicher Nachweis
 
 Die folgenden Paritätsnachweise dokumentieren den ursprünglichen Integrationsstand.
